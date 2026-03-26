@@ -1,0 +1,73 @@
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MoreVertical, Reply, Trash2, Copy } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast";
+import { ReactionPicker } from "./ReactionPicker";
+
+interface MessageActionsProps {
+  messageId: string;
+  messageText: string;
+  onReply: () => void;
+  onDelete: () => void;
+  onReact: (emoji: string) => void;
+  isClient: boolean;
+}
+
+export const MessageActions = ({ 
+  messageId, 
+  messageText, 
+  onReply, 
+  onDelete,
+  onReact,
+  isClient 
+}: MessageActionsProps) => {
+  
+  const handleCopy = () => {
+    navigator.clipboard.writeText(messageText);
+    toast({
+      title: "Texto copiado",
+      description: "O texto da mensagem foi copiado para a área de transferência.",
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <ReactionPicker onReactionSelect={onReact} />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={onReply}>
+          <Reply className="h-4 w-4 mr-2" />
+          Responder
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handleCopy}>
+          <Copy className="h-4 w-4 mr-2" />
+          Copiar
+        </DropdownMenuItem>
+        {!isClient && (
+          <DropdownMenuItem 
+            onClick={onDelete}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Apagar
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+    </div>
+  );
+};
