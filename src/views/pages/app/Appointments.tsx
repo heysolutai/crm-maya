@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAppointments } from '@/hooks/useAppointments';
 import { useClients } from '@/hooks/useClients';
+import { useTeam } from '@/hooks/useTeam';
 import { useEffectiveCompanyId } from '@/hooks/useEffectiveCompanyId';
 import { supabase } from '@/lib/supabase/client';
 import { invokeFn } from '@/lib/supabase-functions-adapter';
@@ -29,7 +30,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
-import { Plus, Calendar as CalendarIcon, Pencil, Trash2, CheckCircle, List, ArrowLeft, MessageCircle, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Plus, Calendar as CalendarIcon, Pencil, Trash2, CheckCircle, List, ArrowLeft, MessageCircle, Search, ChevronLeft, ChevronRight, UserCog } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
@@ -59,6 +67,7 @@ const getClientName = (appointment: any): string => {
 export default function Appointments() {
   const { appointments, loading, createAppointment, updateAppointment, deleteAppointment } = useAppointments();
   const { clients } = useClients();
+  const { teamMembers } = useTeam();
   const { effectiveCompanyId } = useEffectiveCompanyId();
   const router = useRouter();
   const { toast } = useToast();
@@ -74,6 +83,7 @@ export default function Appointments() {
     title: '',
     description: '',
     client_id: '',
+    assigned_to: '',
     scheduled_for: '',
     duration_minutes: 60,
     location: '',
@@ -125,9 +135,11 @@ export default function Appointments() {
           return;
         }
       } else {
+        const { assigned_to, ...restFormData } = formData;
         const { data, error } = await invokeFn('create-appointment', {
             company_id: effectiveCompanyId,
-            ...formData,
+            ...restFormData,
+            ...(assigned_to ? { assigned_to } : {}),
             scheduled_for: scheduledDate.toISOString(),
           });
 
@@ -161,7 +173,7 @@ export default function Appointments() {
   };
 
   const resetForm = () => {
-    setFormData({ title: '', description: '', client_id: '', scheduled_for: '', duration_minutes: 60, location: '', notes: '' });
+    setFormData({ title: '', description: '', client_id: '', assigned_to: '', scheduled_for: '', duration_minutes: 60, location: '', notes: '' });
     setEditingAppointment(null);
     setSelectedDate(undefined);
   };
@@ -174,6 +186,7 @@ export default function Appointments() {
       title: appointment.title || '',
       description: appointment.description || '',
       client_id: appointment.client_id || '',
+      assigned_to: appointment.assigned_to || '',
       scheduled_for: appointment.scheduled_for ? format(appointmentDate!, "yyyy-MM-dd'T'HH:mm") : '',
       duration_minutes: appointment.duration_minutes || 60,
       location: appointment.location || '',
@@ -328,6 +341,26 @@ export default function Appointments() {
                     <ClientCombobox clients={clients} value={formData.client_id} onChange={(value) => setFormData({ ...formData, client_id: value })} placeholder="Buscar cliente..." />
                   </div>
                   <div className="grid gap-2">
+                    <Label htmlFor="assigned_to">Profissional</Label>
+                    <Select
+                      value={formData.assigned_to || '_none'}
+                      onValueChange={(value) => setFormData({ ...formData, assigned_to: value === '_none' ? '' : value, scheduled_for: '' })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Qualquer profissional" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Qualquer profissional</SelectItem>
+                        {(teamMembers || []).map((member: any) => (
+                          <SelectItem key={member.id} value={member.id}>
+                            {member.full_name || member.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">Selecione o profissional responsável pelo atendimento</p>
+                  </div>
+                  <div className="grid gap-2">
                     <Label htmlFor="duration_minutes">Duração (min)</Label>
                     <Input
                       id="duration_minutes"
@@ -361,6 +394,7 @@ export default function Appointments() {
                           <AvailableSlotsPicker
                             date={selectedDate}
                             durationMinutes={formData.duration_minutes}
+                            assignedTo={formData.assigned_to || undefined}
                             onSelectSlot={handleSlotSelected}
                             selectedSlot={formData.scheduled_for ? new Date(formData.scheduled_for).toISOString() : undefined}
                           />
@@ -504,6 +538,7 @@ export default function Appointments() {
               <TableRow>
                 <TableHead>Título</TableHead>
                 <TableHead>Cliente</TableHead>
+                <TableHead>Profissional</TableHead>
                 <TableHead>Data/Hora</TableHead>
                 <TableHead>Duração</TableHead>
                 <TableHead>Local</TableHead>
@@ -514,17 +549,22 @@ export default function Appointments() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">Carregando...</TableCell>
+                  <TableCell colSpan={8} className="text-center py-8">Carregando...</TableCell>
                 </TableRow>
               ) : filteredAppointments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">Nenhum agendamento encontrado</TableCell>
+                  <TableCell colSpan={8} className="text-center py-8">Nenhum agendamento encontrado</TableCell>
                 </TableRow>
               ) : (
                 paginatedAppointments.map((appointment: any) => (
                     <TableRow key={appointment.id}>
                       <TableCell className="font-medium">{appointment.title}</TableCell>
                       <TableCell>{getClientName(appointment)}</TableCell>
+                      <TableCell>
+                        {appointment.assigned_to
+                          ? (teamMembers || []).find((m: any) => m.id === appointment.assigned_to)?.full_name || '-'
+                          : '-'}
+                      </TableCell>
                       <TableCell>{format(new Date(appointment.scheduled_for), 'dd/MM/yyyy HH:mm')}</TableCell>
                       <TableCell>{appointment.duration_minutes}min</TableCell>
                       <TableCell>{appointment.location || '-'}</TableCell>

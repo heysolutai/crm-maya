@@ -49,5 +49,6 @@ export interface WhatsAppInstance {
 
 export interface AuthResult {
   agentId: string | null;
-  companyId: string;
+  companyId: string | null;
+  isSuperAdmin?: boolean;
 }

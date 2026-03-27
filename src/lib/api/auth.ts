@@ -3,7 +3,6 @@ import type { AuthResult } from './types';
 
 /**
  * Validates internal service-to-service calls using INTERNAL_API_SECRET.
- * Returns true if the request carries a valid internal key.
  */
 export function isInternalRequest(req: Request): boolean {
   const internalKey = req.headers.get('x-internal-key');
@@ -11,6 +10,10 @@ export function isInternalRequest(req: Request): boolean {
   return !!secret && !!internalKey && internalKey === secret;
 }
 
+/**
+ * Authenticate a request via Bearer token or x-api-key.
+ * Super admins are allowed through without a company_id.
+ */
 export async function authenticate(req: Request): Promise<AuthResult> {
   const supabase = createAdminClient();
 
@@ -19,6 +22,7 @@ export async function authenticate(req: Request): Promise<AuthResult> {
 
   let agentId: string | null = null;
   let companyId: string | null = null;
+  let isSuperAdmin = false;
 
   if (authHeader) {
     const token = authHeader.replace('Bearer ', '');
@@ -30,6 +34,19 @@ export async function authenticate(req: Request): Promise<AuthResult> {
 
     agentId = user.id;
 
+    // Check if super_admin
+    const { data: roles } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', agentId)
+      .eq('role', 'super_admin')
+      .maybeSingle();
+
+    if (roles) {
+      isSuperAdmin = true;
+    }
+
+    // Get company_id (may be null for super_admin)
     const { data: userData } = await supabase
       .from('users')
       .select('company_id')
@@ -62,5 +79,5 @@ export async function authenticate(req: Request): Promise<AuthResult> {
     throw new Error('Authentication required: provide Authorization token or x-api-key header');
   }
 
-  return { agentId, companyId };
+  return { agentId, companyId, isSuperAdmin };
 }

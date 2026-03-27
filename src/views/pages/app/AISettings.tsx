@@ -1,33 +1,25 @@
 import { useState, useMemo } from 'react';
-import { Bot, Loader2, MessageSquareText, Zap, Link2, BookOpen, Key, Settings, FlaskConical } from 'lucide-react';
+import { Bot, Loader2, MessageSquareText, BookOpen, Key, Settings, FlaskConical } from 'lucide-react';
 import { AIPromptsEditor } from '@/components/ai';
-import { FollowUpsSubTab } from '@/components/super-admin/company-details/ai-config/FollowUpsSubTab';
 import { SettingsSubTab } from '@/components/super-admin/company-details/ai-config/SettingsSubTab';
 import { APIKeysSubTab } from '@/components/super-admin/company-details/ai-config/APIKeysSubTab';
 import { FAQManager } from '@/components/settings/FAQManager';
-import { ApiKeysTab } from '@/components/super-admin/company-details/ApiKeysTab';
 import { PlaygroundChat } from '@/components/ai/PlaygroundChat';
-import { WhatsAppConfigCard } from '@/components/super-admin/company-details/WhatsAppConfigCard';
-import { GoogleCalendarConfig } from '@/components/settings/GoogleCalendarConfig';
 import { useEffectiveCompanyId } from '@/hooks/useEffectiveCompanyId';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import type { AIPermissionKey } from '@/components/super-admin/company-details/AIPermissionsConfig';
 
 // These tabs are always visible for clients
 const fixedMenuItems = [
   { id: 'prompts', label: 'Prompts', icon: MessageSquareText, permKey: 'prompts' as AIPermissionKey },
-  { id: 'follow-ups', label: 'Automações', icon: Zap, permKey: 'follow_ups' as AIPermissionKey },
-  { id: 'conexoes', label: 'Conexões', icon: Link2, permKey: 'connections' as AIPermissionKey },
   { id: 'faq', label: 'FAQ', icon: BookOpen, permKey: 'faq' as AIPermissionKey },
 ];
 
 // These tabs only appear if enabled by super admin
 const restrictedMenuItems = [
   { id: 'integrations', label: 'Integrações', icon: Key, permKey: 'integrations' as AIPermissionKey },
-  { id: 'api-keys', label: 'API Keys', icon: Key, permKey: 'api_keys' as AIPermissionKey },
   { id: 'settings', label: 'Ajustes', icon: Settings, permKey: 'settings' as AIPermissionKey },
   { id: 'playground', label: 'Playground', icon: FlaskConical, permKey: 'playground' as AIPermissionKey },
 ];
@@ -90,27 +82,10 @@ export default function AppAISettings() {
             showVariablesCard={true}
           />
         );
-      case 'follow-ups':
-        return <FollowUpsSubTab companyId={companyId} />;
-      case 'conexoes':
-        return (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold">🔗 Conexões</h3>
-              <p className="text-sm text-muted-foreground">
-                Conecte o WhatsApp e o Google Calendar à sua empresa
-              </p>
-            </div>
-            <WhatsAppConfigCard companyId={companyId} />
-            <GoogleCalendarConfig />
-          </div>
-        );
       case 'faq':
         return <FAQManager companyId={companyId} />;
       case 'integrations':
         return <APIKeysSubTab companyId={companyId} />;
-      case 'api-keys':
-        return <ApiKeysTab companyId={companyId} />;
       case 'settings':
         return <SettingsSubTab companyId={companyId} />;
       case 'playground':

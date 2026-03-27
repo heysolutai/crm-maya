@@ -41,6 +41,7 @@ import {
   LifeBuoy,
   BookOpen,
   ChevronsUpDown,
+  Building2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -88,6 +89,7 @@ const navGroups: NavGroup[] = [
     label: 'Administração',
     items: [
       { name: 'Equipe', href: '/app/team', icon: UserCog, roles: ['company_admin'] },
+      { name: 'Departamentos', href: '/app/departments', icon: Building2, roles: ['company_admin'] },
       { name: 'IA', href: '/app/ai-settings', icon: Bot, roles: ['company_admin'] },
       { name: 'Prompts', href: '/app/prompt-library', icon: BookOpen, roles: ['viewer', 'agent', 'manager', 'company_admin'] },
       { name: 'API Docs', href: '/app/api-docs', icon: Code, roles: ['manager', 'company_admin'] },
