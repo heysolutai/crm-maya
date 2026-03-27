@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+supabase/supabase/.temp/cli-latest
+supabase/supabase/.temp/gotrue-version
+supabase/supabase/.temp/postgres-version
+supabase/supabase/.temp/project-ref
+supabase/supabase/.temp/pooler-url
+supabase/supabase/.temp/rest-version
+supabase/supabase/.temp/storage-migration
+supabase/supabase/.temp/storage-version
