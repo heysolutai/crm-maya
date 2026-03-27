@@ -58,7 +58,7 @@ export async function authenticate(req: Request): Promise<AuthResult> {
       .eq('id', keyData.id);
   }
 
-  if (!companyId) {
+  if (!agentId && !companyId) {
     throw new Error('Authentication required: provide Authorization token or x-api-key header');
   }
 

@@ -56,7 +56,15 @@ export async function middleware(request: NextRequest) {
   // Redirect authenticated users away from auth pages
   if (user && isAuthPage) {
     const url = request.nextUrl.clone()
-    url.pathname = '/app/dashboard'
+
+    // Check if user is super_admin to redirect correctly
+    const { data: roles } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+
+    const isSuperAdmin = roles?.some(r => r.role === 'super_admin')
+    url.pathname = isSuperAdmin ? '/super-admin/dashboard' : '/app/dashboard'
     return NextResponse.redirect(url)
   }
 
