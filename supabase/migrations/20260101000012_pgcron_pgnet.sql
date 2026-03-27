@@ -1,0 +1,33 @@
+-- ============================================
+-- Migration 012: Scheduled Jobs (Informational)
+-- ============================================
+-- ALL CRON JOBS ARE NOW HANDLED BY BULLMQ WORKERS IN NEXT.JS
+--
+-- The following scheduled tasks run automatically when the Next.js
+-- server starts (via instrumentation.ts → startAllWorkers):
+--
+--   1. Reminders Processing     → every 60s  (cron-reminders worker)
+--   2. Follow-ups Processing    → every 60s  (cron-follow-ups worker)
+--   3. WhatsApp Status Check    → every 5min (cron-whatsapp-status worker)
+--   4. Cleanup Presence         → every 2min (cron-cleanup-presence worker)
+--
+-- Manual trigger via API (secured by INTERNAL_API_SECRET):
+--   POST /api/cron/process-reminders
+--   POST /api/cron/process-follow-ups
+--   POST /api/cron/whatsapp-status
+--   POST /api/cron/cleanup-presence
+--
+-- Requirements:
+--   - Redis (REDIS_URL env var) must be available
+--   - Workers start automatically on server boot
+--
+-- pg_cron and pg_net are NO LONGER REQUIRED for these tasks.
+-- If you previously had pg_cron jobs, you can remove them:
+--   SELECT cron.unschedule('process-follow-ups');
+--   SELECT cron.unschedule('process-reminders');
+--   SELECT cron.unschedule('whatsapp-status-check');
+-- ============================================
+
+-- This migration is intentionally empty.
+-- All scheduled processing is handled by BullMQ workers in the application layer.
+-- See: src/lib/queue/workers/cron-*.worker.ts

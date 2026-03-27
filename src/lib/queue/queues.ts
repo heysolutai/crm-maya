@@ -64,6 +64,11 @@ export interface OutboundMediaJob {
   messageId?: string
 }
 
+// Cron job types (no payload — workers poll Supabase directly)
+export interface CronTickJob {
+  triggeredAt: string
+}
+
 // ============================================================
 // Queue names
 // ============================================================
@@ -74,6 +79,10 @@ export const QUEUE_NAMES = {
   MEDIA_PROCESSING: 'media-processing',
   OUTBOUND_MESSAGE: 'outbound-message',
   OUTBOUND_MEDIA: 'outbound-media',
+  CRON_REMINDERS: 'cron-reminders',
+  CRON_FOLLOW_UPS: 'cron-follow-ups',
+  CRON_WHATSAPP_STATUS: 'cron-whatsapp-status',
+  CRON_CLEANUP_PRESENCE: 'cron-cleanup-presence',
 } as const
 
 // ============================================================
