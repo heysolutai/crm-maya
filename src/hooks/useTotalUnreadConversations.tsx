@@ -19,7 +19,7 @@ export function useTotalUnreadConversations() {
       return data.count || 0;
     },
     enabled: !!effectiveCompanyId,
-    refetchInterval: 15000, // Poll every 15 seconds (replaces realtime)
+    refetchInterval: 3000, // Poll every 3 seconds for near-realtime badge
     staleTime: 10000,
   });
 }

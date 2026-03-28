@@ -189,7 +189,7 @@ export function useConversations(filters?: ConversationFilters) {
           }).catch(() => { /* ignore polling errors */ });
         }
       });
-    }, 10000); // Poll every 10 seconds
+    }, 3000); // Poll every 3 seconds for near-realtime chat
 
     return () => {
       if (pollingIntervalRef.current) {

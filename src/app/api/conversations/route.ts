@@ -21,6 +21,9 @@ export async function GET(req: NextRequest) {
     if (endDate) where.startedAt = { ...where.startedAt, lte: new Date(endDate) }
     if (assignedTo) where.transferredTo = assignedTo
 
+    const limit = parseInt(req.nextUrl.searchParams.get('limit') || '100')
+    const offset = parseInt(req.nextUrl.searchParams.get('offset') || '0')
+
     const conversations = await prisma.conversation.findMany({
       where,
       include: {
@@ -36,6 +39,8 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: [{ updatedAt: 'desc' }, { startedAt: 'desc' }],
+      take: limit,
+      skip: offset,
     })
 
     return NextResponse.json(conversations)
