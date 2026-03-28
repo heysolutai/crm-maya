@@ -44,7 +44,10 @@ export async function middleware(request: NextRequest) {
   const isAuthPage =
     request.nextUrl.pathname === '/auth' ||
     request.nextUrl.pathname === '/super-admin/auth'
-  const isPublicPage = request.nextUrl.pathname === '/'
+  const isPublicPage = request.nextUrl.pathname === '/' ||
+    request.nextUrl.pathname === '/preview' ||
+    request.nextUrl.pathname === '/privacy' ||
+    request.nextUrl.pathname === '/terms'
 
   // Redirect unauthenticated users from protected routes to /auth
   if (!user && !isAuthPage && !isPublicPage) {

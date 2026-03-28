@@ -12,8 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Building2, Workflow, Plus, Trash2, Clock, Shield, Plug, Smartphone, Loader2, Eye, EyeOff, Copy, RefreshCw, QrCode, ExternalLink, ChevronRight, Zap, Key } from 'lucide-react';
+import { Building2, Workflow, Plus, Trash2, Clock, Shield, Plug, Smartphone, Loader2, Eye, EyeOff, Copy, RefreshCw, QrCode, ExternalLink, Zap, Key } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { AppointmentSettingsConfig } from '@/components/appointments/AppointmentSettingsConfig';
@@ -25,17 +24,44 @@ import { ApiKeysTab } from '@/components/super-admin/company-details/ApiKeysTab'
 import { useEffectiveCompanyId } from '@/hooks/useEffectiveCompanyId';
 import { cn } from '@/lib/utils';
 
-const menuItems = [
-  { id: 'company', label: 'Empresa', icon: Building2, description: 'Dados e configurações gerais' },
-  { id: 'connections', label: 'Conexões', icon: Plug, description: 'WhatsApp e integrações' },
-  { id: 'automations', label: 'Automações', icon: Zap, description: 'Follow-ups e lembretes automáticos' },
-  { id: 'api-keys', label: 'API Keys', icon: Key, description: 'Chaves de acesso à API' },
-  { id: 'appointments', label: 'Horários', icon: Clock, description: 'Agendamentos e lembretes' },
-  { id: 'funnel', label: 'Funil', icon: Workflow, description: 'Etapas do funil de vendas' },
-  { id: 'permissions', label: 'Permissões', icon: Shield, description: 'Roles e assinaturas' },
-] as const;
+interface MenuItem {
+  id: string;
+  label: string;
+  icon: any;
+  description: string;
+}
 
-type SectionId = (typeof menuItems)[number]['id'];
+interface MenuGroup {
+  label: string;
+  items: MenuItem[];
+}
+
+const menuGroups: MenuGroup[] = [
+  {
+    label: 'Geral',
+    items: [
+      { id: 'company', label: 'Empresa', icon: Building2, description: 'Dados e configurações gerais' },
+      { id: 'permissions', label: 'Permissões', icon: Shield, description: 'Roles e assinaturas' },
+    ],
+  },
+  {
+    label: 'Integrações',
+    items: [
+      { id: 'connections', label: 'Conexões', icon: Plug, description: 'WhatsApp e integrações' },
+      { id: 'automations', label: 'Automações', icon: Zap, description: 'Follow-ups automáticos' },
+      { id: 'api-keys', label: 'API Keys', icon: Key, description: 'Chaves de acesso à API' },
+    ],
+  },
+  {
+    label: 'Vendas',
+    items: [
+      { id: 'appointments', label: 'Horários', icon: Clock, description: 'Agendamentos e lembretes' },
+      { id: 'funnel', label: 'Funil', icon: Workflow, description: 'Etapas do funil de vendas' },
+    ],
+  },
+];
+
+const allMenuItems = menuGroups.flatMap(g => g.items);
 
 export default function Settings() {
   const { company, updateCompany } = useCompanySettings();
@@ -58,7 +84,7 @@ export default function Settings() {
   const isMobile = useIsMobile();
   const { effectiveCompanyId } = useEffectiveCompanyId();
 
-  const [activeSection, setActiveSection] = useState<SectionId>('company');
+  const [activeSection, setActiveSection] = useState('company');
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
@@ -142,50 +168,71 @@ export default function Settings() {
     setStageForm({ name: '', description: '', color: '#0066cc', is_final: false });
   };
 
-  // ─── Sidebar nav ───
-  const SidebarNav = () => (
-    <nav className={cn(
-      'flex gap-1',
-      isMobile ? 'flex-row overflow-x-auto pb-2 -mx-4 px-4' : 'flex-col'
-    )}>
-      {menuItems.map((item) => {
-        const Icon = item.icon;
-        const isActive = activeSection === item.id;
-        return (
-          <button
-            key={item.id}
-            onClick={() => setActiveSection(item.id)}
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors w-full',
-              isMobile && 'min-w-fit whitespace-nowrap',
-              isActive
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            <div className={cn('flex-1 min-w-0', isMobile && 'hidden sm:block')}>
-              <p className="font-medium truncate">{item.label}</p>
-              {!isMobile && (
-                <p className={cn(
-                  'text-xs truncate mt-0.5',
-                  isActive ? 'text-primary-foreground/70' : 'text-muted-foreground'
-                )}>
-                  {item.description}
-                </p>
-              )}
-            </div>
-            {!isMobile && (
-              <ChevronRight className={cn(
-                'h-4 w-4 shrink-0 transition-transform',
-                isActive ? 'text-primary-foreground/70' : 'text-muted-foreground/50'
-              )} />
-            )}
-            {isMobile && <span className="sm:hidden">{item.label}</span>}
-          </button>
-        );
-      })}
+  // ─── Sidebar nav item ───
+  const NavButton = ({ item }: { item: MenuItem }) => {
+    const Icon = item.icon;
+    const isActive = activeSection === item.id;
+    return (
+      <button
+        onClick={() => setActiveSection(item.id)}
+        className={cn(
+          'flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm cursor-pointer w-full',
+          'transition-colors duration-150 ease-in-out',
+          isActive
+            ? 'bg-primary text-primary-foreground font-medium'
+            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+        )}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="truncate flex-1">{item.label}</span>
+      </button>
+    );
+  };
+
+  // ─── Desktop sidebar ───
+  const DesktopSidebar = () => (
+    <nav className="space-y-4">
+      {menuGroups.map((group) => (
+        <div key={group.label}>
+          <p className="px-3 mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            {group.label}
+          </p>
+          <div className="space-y-0.5">
+            {group.items.map((item) => (
+              <NavButton key={item.id} item={item} />
+            ))}
+          </div>
+        </div>
+      ))}
     </nav>
+  );
+
+  // ─── Mobile horizontal nav ───
+  const MobileNav = () => (
+    <div className="overflow-x-auto -mx-4 px-4 pb-1">
+      <div className="flex gap-1.5 w-max">
+        {allMenuItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeSection === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveSection(item.id)}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-medium cursor-pointer',
+                'transition-colors duration-150 ease-in-out whitespace-nowrap border',
+                isActive
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background text-muted-foreground border-border hover:bg-accent'
+              )}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 
   // ─── Section content ───
@@ -264,7 +311,7 @@ export default function Settings() {
     }
   };
 
-  const activeItem = menuItems.find(m => m.id === activeSection);
+  const activeItem = allMenuItems.find(m => m.id === activeSection);
 
   return (
     <div className="space-y-6">
@@ -274,9 +321,9 @@ export default function Settings() {
       </div>
 
       {isMobile ? (
-        // Mobile: horizontal scroll menu + content below
+        // Mobile: pill nav + content below
         <div className="space-y-4">
-          <SidebarNav />
+          <MobileNav />
           <div>
             <div className="mb-4">
               <h2 className="text-lg font-semibold">{activeItem?.label}</h2>
@@ -286,11 +333,11 @@ export default function Settings() {
           </div>
         </div>
       ) : (
-        // Desktop: sidebar left + content right
-        <div className="flex gap-6 items-start">
-          <div className="w-56 shrink-0">
+        // Desktop: grouped sidebar + content
+        <div className="flex gap-8 items-start">
+          <div className="w-52 shrink-0">
             <div className="sticky top-6">
-              <SidebarNav />
+              <DesktopSidebar />
             </div>
           </div>
           <div className="flex-1 min-w-0">

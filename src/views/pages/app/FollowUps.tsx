@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -42,17 +41,18 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCompanies } from '@/hooks/useCompanies';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  Ban, 
-  TrendingUp, 
+import {
+  Clock,
+  CheckCircle,
+  XCircle,
+  Ban,
+  TrendingUp,
   Search,
   Calendar as CalendarIcon,
   MoreVertical,
   Eye,
   RefreshCw,
+  Send,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -60,19 +60,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { StatCards, type StatItem } from '@/components/ui/stat-cards';
+import { TableSkeleton, CardListSkeleton } from '@/components/ui/table-skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 
-const statusColors = {
-  pending: 'bg-yellow-500',
-  sent: 'bg-green-500',
-  failed: 'bg-red-500',
-  cancelled: 'bg-gray-500',
-};
-
-const statusLabels = {
-  pending: 'Pendente',
-  sent: 'Enviado',
-  failed: 'Falhou',
-  cancelled: 'Cancelado',
+const statusConfig = {
+  pending: { color: 'bg-amber-500', dot: 'bg-amber-500', label: 'Pendente', textColor: 'text-amber-700 dark:text-amber-400', bgLight: 'bg-amber-500/10' },
+  sent: { color: 'bg-emerald-500', dot: 'bg-emerald-500', label: 'Enviado', textColor: 'text-emerald-700 dark:text-emerald-400', bgLight: 'bg-emerald-500/10' },
+  failed: { color: 'bg-red-500', dot: 'bg-red-500', label: 'Falhou', textColor: 'text-red-700 dark:text-red-400', bgLight: 'bg-red-500/10' },
+  cancelled: { color: 'bg-gray-500', dot: 'bg-gray-400', label: 'Cancelado', textColor: 'text-gray-700 dark:text-gray-400', bgLight: 'bg-gray-500/10' },
 };
 
 export default function FollowUps() {
@@ -99,8 +95,16 @@ export default function FollowUps() {
 
   const selectedJobData = jobs?.find(j => j.id === selectedJob);
 
+  const statItems: StatItem[] = [
+    { label: 'Pendentes', value: stats.pending, icon: Clock, color: 'yellow' },
+    { label: 'Enviados', value: stats.sent, icon: CheckCircle, color: 'green' },
+    { label: 'Falhados', value: stats.failed, icon: XCircle, color: 'red' },
+    { label: 'Taxa de Sucesso', value: `${stats.successRate}%`, icon: TrendingUp, color: 'cyan' },
+  ];
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold">Follow-ups</h1>
         <p className="text-muted-foreground">
@@ -108,264 +112,202 @@ export default function FollowUps() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pendentes</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <div className="text-2xl font-bold">{stats.pending}</div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Stat Cards */}
+      <StatCards items={statItems} loading={isLoading} />
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Enviados</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <div className="text-2xl font-bold">{stats.sent}</div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <div className="flex-1 min-w-[200px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por cliente ou telefone..."
+              value={clientSearch}
+              onChange={(e) => setClientSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Falhados</CardTitle>
-            <XCircle className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <div className="text-2xl font-bold">{stats.failed}</div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="flex gap-1">
+          {[
+            { key: 'all', label: 'Todos' },
+            { key: 'pending', label: 'Pendentes' },
+            { key: 'sent', label: 'Enviados' },
+            { key: 'failed', label: 'Falhados' },
+          ].map(({ key, label }) => (
+            <Button
+              key={key}
+              variant={statusFilter === key ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setStatusFilter(key)}
+              className="text-xs"
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Cancelados</CardTitle>
-            <Ban className="h-4 w-4 text-gray-500" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <div className="text-2xl font-bold">{stats.cancelled}</div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Taxa de Sucesso</CardTitle>
-            <TrendingUp className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <div className="text-2xl font-bold">{stats.successRate}%</div>
-            )}
-          </CardContent>
-        </Card>
+        {isSuperAdmin && (
+          <Select value={companyFilter || "all"} onValueChange={(v) => setCompanyFilter(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Todas as empresas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              {companies?.map((company) => (
+                <SelectItem key={company.id} value={company.id}>
+                  {company.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por cliente ou telefone..."
-                  value={clientSearch}
-                  onChange={(e) => setClientSearch(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="pending">Pendentes</SelectItem>
-                <SelectItem value="sent">Enviados</SelectItem>
-                <SelectItem value="failed">Falhados</SelectItem>
-                <SelectItem value="cancelled">Cancelados</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {isSuperAdmin && (
-              <Select value={companyFilter || "all"} onValueChange={(v) => setCompanyFilter(v === "all" ? "" : v)}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Todas as empresas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {companies?.map((company) => (
-                    <SelectItem key={company.id} value={company.id}>
-                      {company.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Jobs de Follow-up</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          ) : jobs && jobs.length > 0 ? (
-            <>
-              {/* Desktop table */}
-              <div className="hidden md:block border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Cliente</TableHead>
-                      {isSuperAdmin && <TableHead>Empresa</TableHead>}
-                      <TableHead>Etapa</TableHead>
-                      <TableHead>Agendado Para</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Tentativas</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {jobs.map((job) => (
-                      <TableRow key={job.id}>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium">
-                              {job.client?.first_name} {job.client?.last_name || ''}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {job.client?.phone}
-                            </span>
-                          </div>
-                        </TableCell>
-                        {isSuperAdmin && (
-                          <TableCell>
-                            <span className="text-sm">{job.company?.name}</span>
-                          </TableCell>
-                        )}
-                        <TableCell>
-                          <Badge variant="outline">Follow-up {job.stage_order}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm">
-                              {format(new Date(job.scheduled_for), "dd/MM/yyyy 'às' HH:mm", {
-                                locale: ptBR,
-                              })}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={`${statusColors[job.status]} text-white border-0`}
-                          >
-                            {statusLabels[job.status]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm">{job.attempts}/3</span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setSelectedJob(job.id);
-                                  setDetailsOpen(true);
-                                }}
-                              >
-                                <Eye className="h-4 w-4 mr-2" />
-                                Ver Detalhes
-                              </DropdownMenuItem>
-                              {job.status === 'pending' && (
-                                <>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      setSelectedJob(job.id);
-                                      setNewScheduledDate(
-                                        format(new Date(job.scheduled_for), "yyyy-MM-dd'T'HH:mm")
-                                      );
-                                      setRescheduleDialogOpen(true);
-                                    }}
-                                  >
-                                    <RefreshCw className="h-4 w-4 mr-2" />
-                                    Reagendar
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      setSelectedJob(job.id);
-                                      setCancelDialogOpen(true);
-                                    }}
-                                    className="text-destructive"
-                                  >
-                                    <Ban className="h-4 w-4 mr-2" />
-                                    Cancelar
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                              {job.status === 'failed' && (
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setSelectedJob(job.id);
-                                    setNewScheduledDate(
-                                      format(new Date(), "yyyy-MM-dd'T'HH:mm")
-                                    );
-                                    setRescheduleDialogOpen(true);
-                                  }}
-                                >
+      {/* Table / Content */}
+      <div className="hidden md:block">
+        {isLoading ? (
+          <TableSkeleton
+            columns={isSuperAdmin ? 7 : 6}
+            rows={8}
+            headers={[
+              'Cliente',
+              ...(isSuperAdmin ? ['Empresa'] : []),
+              'Etapa',
+              'Agendado Para',
+              'Status',
+              'Tentativas',
+              'Ações',
+            ]}
+          />
+        ) : !jobs || jobs.length === 0 ? (
+          <EmptyState
+            icon={Send}
+            title={statusFilter !== 'all' || clientSearch ? 'Nenhum resultado encontrado' : 'Nenhum follow-up'}
+            description={
+              statusFilter !== 'all' || clientSearch
+                ? 'Tente ajustar os filtros ou o termo de busca.'
+                : 'Os jobs de follow-up aparecerão aqui quando forem criados automaticamente.'
+            }
+          />
+        ) : (
+          <div className="border rounded-lg">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cliente</TableHead>
+                  {isSuperAdmin && <TableHead>Empresa</TableHead>}
+                  <TableHead>Etapa</TableHead>
+                  <TableHead>Agendado Para</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Tentativas</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {jobs.map((job) => {
+                  const sc = statusConfig[job.status];
+                  return (
+                    <TableRow key={job.id} className="group">
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium">
+                            {job.client?.first_name} {job.client?.last_name || ''}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{job.client?.phone}</span>
+                        </div>
+                      </TableCell>
+                      {isSuperAdmin && (
+                        <TableCell className="text-sm text-muted-foreground">{job.company?.name}</TableCell>
+                      )}
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">Follow-up {job.stage_order}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-sm">
+                            {format(new Date(job.scheduled_for), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${sc.bgLight} ${sc.textColor}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${sc.dot}`} />
+                          {sc.label}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: 3 }).map((_, i) => (
+                            <span
+                              key={i}
+                              className={`h-1.5 w-4 rounded-full ${i < job.attempts ? sc.color : 'bg-muted'}`}
+                            />
+                          ))}
+                          <span className="text-xs text-muted-foreground ml-1">{job.attempts}/3</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => { setSelectedJob(job.id); setDetailsOpen(true); }}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              Ver Detalhes
+                            </DropdownMenuItem>
+                            {job.status === 'pending' && (
+                              <>
+                                <DropdownMenuItem onClick={() => { setSelectedJob(job.id); setNewScheduledDate(format(new Date(job.scheduled_for), "yyyy-MM-dd'T'HH:mm")); setRescheduleDialogOpen(true); }}>
                                   <RefreshCw className="h-4 w-4 mr-2" />
-                                  Reprocessar
+                                  Reagendar
                                 </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                                <DropdownMenuItem onClick={() => { setSelectedJob(job.id); setCancelDialogOpen(true); }} className="text-destructive">
+                                  <Ban className="h-4 w-4 mr-2" />
+                                  Cancelar
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            {job.status === 'failed' && (
+                              <DropdownMenuItem onClick={() => { setSelectedJob(job.id); setNewScheduledDate(format(new Date(), "yyyy-MM-dd'T'HH:mm")); setRescheduleDialogOpen(true); }}>
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Reprocessar
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
 
-              {/* Mobile cards */}
-              <div className="md:hidden space-y-3">
-                {jobs.map((job) => (
-                  <div key={job.id} className="border rounded-lg p-4 space-y-2">
+      {/* Mobile cards */}
+      <div className="md:hidden">
+        {isLoading ? (
+          <CardListSkeleton count={5} />
+        ) : !jobs || jobs.length === 0 ? (
+          <EmptyState
+            icon={Send}
+            title="Nenhum follow-up"
+            description="Os jobs aparecerão aqui automaticamente."
+          />
+        ) : (
+          <div className="space-y-3">
+            {jobs.map((job) => {
+              const sc = statusConfig[job.status];
+              return (
+                <Card key={job.id}>
+                  <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="font-medium truncate">
@@ -374,12 +316,10 @@ export default function FollowUps() {
                         <p className="text-xs text-muted-foreground">{job.client?.phone}</p>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <Badge
-                          variant="outline"
-                          className={`${statusColors[job.status]} text-white border-0 text-[10px]`}
-                        >
-                          {statusLabels[job.status]}
-                        </Badge>
+                        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${sc.bgLight} ${sc.textColor}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${sc.dot}`} />
+                          {sc.label}
+                        </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -409,39 +349,32 @@ export default function FollowUps() {
                         </DropdownMenu>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 text-sm">
+                    <div className="flex items-center gap-3 mt-2">
                       <Badge variant="outline" className="text-xs">Follow-up {job.stage_order}</Badge>
-                      <span className="text-xs text-muted-foreground">{job.attempts}/3 tentativas</span>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <span key={i} className={`h-1.5 w-3 rounded-full ${i < job.attempts ? sc.color : 'bg-muted'}`} />
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
                       <CalendarIcon className="h-3.5 w-3.5" />
                       {format(new Date(job.scheduled_for), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                     </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Clock className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Nenhum job encontrado</h3>
-              <p className="text-muted-foreground">
-                {statusFilter !== 'all'
-                  ? `Não há jobs com status "${statusLabels[statusFilter as keyof typeof statusLabels]}"`
-                  : 'Nenhum job de follow-up foi criado ainda'}
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
+      {/* Details Dialog */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Detalhes do Job</DialogTitle>
-            <DialogDescription>
-              Informações completas sobre o job de follow-up
-            </DialogDescription>
+            <DialogDescription>Informações completas sobre o job de follow-up</DialogDescription>
           </DialogHeader>
           {selectedJobData && (
             <div className="space-y-4">
@@ -459,12 +392,10 @@ export default function FollowUps() {
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground">Status</h4>
-                  <Badge
-                    variant="outline"
-                    className={`${statusColors[selectedJobData.status]} text-white border-0`}
-                  >
-                    {statusLabels[selectedJobData.status]}
-                  </Badge>
+                  <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[selectedJobData.status].bgLight} ${statusConfig[selectedJobData.status].textColor}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${statusConfig[selectedJobData.status].dot}`} />
+                    {statusConfig[selectedJobData.status].label}
+                  </div>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground">Tentativas</h4>
@@ -472,19 +403,11 @@ export default function FollowUps() {
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground">Agendado Para</h4>
-                  <p className="text-sm">
-                    {format(new Date(selectedJobData.scheduled_for), "dd/MM/yyyy 'às' HH:mm", {
-                      locale: ptBR,
-                    })}
-                  </p>
+                  <p className="text-sm">{format(new Date(selectedJobData.scheduled_for), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground">Criado em</h4>
-                  <p className="text-sm">
-                    {format(new Date(selectedJobData.created_at), "dd/MM/yyyy 'às' HH:mm", {
-                      locale: ptBR,
-                    })}
-                  </p>
+                  <p className="text-sm">{format(new Date(selectedJobData.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
                 </div>
               </div>
 
@@ -507,11 +430,7 @@ export default function FollowUps() {
               {selectedJobData.last_attempt_at && (
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground">Última Tentativa</h4>
-                  <p className="text-sm">
-                    {format(new Date(selectedJobData.last_attempt_at), "dd/MM/yyyy 'às' HH:mm", {
-                      locale: ptBR,
-                    })}
-                  </p>
+                  <p className="text-sm">{format(new Date(selectedJobData.last_attempt_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
                 </div>
               )}
             </div>
@@ -519,6 +438,7 @@ export default function FollowUps() {
         </DialogContent>
       </Dialog>
 
+      {/* Cancel Dialog */}
       <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -531,12 +451,7 @@ export default function FollowUps() {
           <AlertDialogFooter>
             <AlertDialogCancel>Voltar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                if (selectedJob) {
-                  cancelJob(selectedJob);
-                  setCancelDialogOpen(false);
-                }
-              }}
+              onClick={() => { if (selectedJob) { cancelJob(selectedJob); setCancelDialogOpen(false); } }}
               className="bg-destructive hover:bg-destructive/90"
             >
               Sim, cancelar
@@ -545,13 +460,12 @@ export default function FollowUps() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Reschedule Dialog */}
       <Dialog open={rescheduleDialogOpen} onOpenChange={setRescheduleDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reagendar Job</DialogTitle>
-            <DialogDescription>
-              Escolha uma nova data e horário para este follow-up
-            </DialogDescription>
+            <DialogDescription>Escolha uma nova data e horário para este follow-up</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -571,10 +485,7 @@ export default function FollowUps() {
             <Button
               onClick={() => {
                 if (selectedJob && newScheduledDate) {
-                  rescheduleJob({
-                    jobId: selectedJob,
-                    newDate: new Date(newScheduledDate).toISOString(),
-                  });
+                  rescheduleJob({ jobId: selectedJob, newDate: new Date(newScheduledDate).toISOString() });
                   setRescheduleDialogOpen(false);
                 }
               }}

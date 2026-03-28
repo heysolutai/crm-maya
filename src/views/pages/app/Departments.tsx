@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useDepartments, type Department } from '@/hooks/useDepartments';
 import { useTeam } from '@/hooks/useTeam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,7 +38,21 @@ import {
   UserMinus,
   Users,
   Building2,
+  Layers,
 } from 'lucide-react';
+import { StatCards, type StatItem } from '@/components/ui/stat-cards';
+import { EmptyState } from '@/components/ui/empty-state';
+
+const avatarColors = [
+  'bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-amber-500',
+  'bg-rose-500', 'bg-cyan-500', 'bg-indigo-500', 'bg-pink-500',
+];
+
+function getAvatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return avatarColors[Math.abs(hash) % avatarColors.length];
+}
 
 export default function Departments() {
   const {
@@ -69,6 +83,22 @@ export default function Departments() {
     description: '',
     color: '#6366f1',
   });
+
+  const stats = useMemo((): StatItem[] => {
+    const totalMembers = departments.reduce(
+      (sum, d) => sum + (d.department_members?.length || 0), 0
+    );
+    const avgMembers = departments.length > 0
+      ? (totalMembers / departments.length).toFixed(1)
+      : '0';
+
+    return [
+      { label: 'Departamentos', value: departments.length, icon: Building2, color: 'blue' },
+      { label: 'Total Membros', value: totalMembers, icon: Users, color: 'green' },
+      { label: 'Média por Depto', value: avgMembers, icon: Layers, color: 'purple' },
+      { label: 'Equipe Disponível', value: teamMembers?.length || 0, icon: UserPlus, color: 'cyan' },
+    ];
+  }, [departments, teamMembers]);
 
   const handleCreate = async () => {
     const result = await createDepartment(createForm);
@@ -124,7 +154,6 @@ export default function Departments() {
     }
   };
 
-  // Members already in a department (for filtering the add member dropdown)
   const getMemberIds = (dept: Department) =>
     (dept.department_members || []).map(m => m.user_id);
 
@@ -137,22 +166,6 @@ export default function Departments() {
     const member = (teamMembers || []).find((m: any) => m.id === userId);
     return member?.full_name || member?.email || 'Desconhecido';
   };
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Departamentos</h1>
-          <p className="text-muted-foreground text-sm">Gerencie os departamentos e seus membros</p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map(i => (
-            <Skeleton key={i} className="h-48 rounded-lg" />
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -211,109 +224,143 @@ export default function Departments() {
         </Dialog>
       </div>
 
+      {/* Stat Cards */}
+      <StatCards items={stats} loading={loading} />
+
+      {/* Loading */}
+      {loading && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map(i => (
+            <Card key={i}>
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-4 w-4 rounded-full" />
+                  <Skeleton className="h-5 w-32" />
+                </div>
+                <Skeleton className="h-4 w-20" />
+                <div className="space-y-2">
+                  <Skeleton className="h-8 w-full rounded-md" />
+                  <Skeleton className="h-8 w-full rounded-md" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
       {/* Empty state */}
-      {departments.length === 0 && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <Building2 className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-semibold">Nenhum departamento</h3>
-            <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-              Crie departamentos para organizar sua equipe e distribuir atendimentos.
-            </p>
-          </CardContent>
-        </Card>
+      {!loading && departments.length === 0 && (
+        <EmptyState
+          icon={Building2}
+          title="Nenhum departamento"
+          description="Crie departamentos para organizar sua equipe e distribuir atendimentos."
+          actionLabel="Criar Departamento"
+          onAction={() => setIsCreateOpen(true)}
+        />
       )}
 
       {/* Department cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {departments.map(dept => (
-          <Card key={dept.id} className="relative">
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-4 h-4 rounded-full shrink-0"
-                    style={{ backgroundColor: dept.color }}
-                  />
-                  <div>
-                    <CardTitle className="text-base">{dept.name}</CardTitle>
-                    {dept.description && (
-                      <CardDescription className="text-xs mt-0.5">
-                        {dept.description}
-                      </CardDescription>
-                    )}
-                  </div>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => openEdit(dept)}>
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Editar
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => openAddMember(dept)}>
-                      <UserPlus className="mr-2 h-4 w-4" />
-                      Adicionar Membro
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleDelete(dept)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Desativar
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2 mb-3">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">
-                  {dept.department_members?.length || 0} membros
-                </span>
-              </div>
-              <div className="space-y-2">
-                {(dept.department_members || []).length === 0 && (
-                  <p className="text-xs text-muted-foreground italic">Nenhum membro ainda</p>
-                )}
-                {(dept.department_members || []).map(member => (
-                  <div
-                    key={member.id}
-                    className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md bg-muted/50"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Avatar className="h-6 w-6">
-                        <AvatarFallback className="text-[10px]">
-                          {getMemberName(member.user_id).charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm truncate">{getMemberName(member.user_id)}</span>
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                        {member.role}
-                      </Badge>
+      {!loading && departments.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {departments.map(dept => {
+            const memberCount = dept.department_members?.length || 0;
+            return (
+              <Card key={dept.id} className="relative group">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-3 h-8 rounded-full shrink-0"
+                        style={{ backgroundColor: dept.color }}
+                      />
+                      <div>
+                        <CardTitle className="text-base">{dept.name}</CardTitle>
+                        {dept.description && (
+                          <CardDescription className="text-xs mt-0.5">
+                            {dept.description}
+                          </CardDescription>
+                        )}
+                      </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 shrink-0"
-                      onClick={() =>
-                        handleRemoveMember(dept.id, member.user_id, getMemberName(member.user_id))
-                      }
-                    >
-                      <UserMinus className="h-3 w-3" />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEdit(dept)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openAddMember(dept)}>
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          Adicionar Membro
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(dept)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Desativar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      {memberCount} {memberCount === 1 ? 'membro' : 'membros'}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {memberCount === 0 && (
+                      <button
+                        onClick={() => openAddMember(dept)}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-md border border-dashed border-muted-foreground/30 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        Adicionar primeiro membro
+                      </button>
+                    )}
+                    {(dept.department_members || []).map(member => {
+                      const name = getMemberName(member.user_id);
+                      return (
+                        <div
+                          key={member.id}
+                          className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-md bg-muted/50 group/member"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Avatar className="h-6 w-6">
+                              <AvatarFallback className={`${getAvatarColor(name)} text-white text-[10px]`}>
+                                {name.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm truncate">{name}</span>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                              {member.role}
+                            </Badge>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 shrink-0 opacity-0 group-hover/member:opacity-100 transition-opacity"
+                            onClick={() => handleRemoveMember(dept.id, member.user_id, name)}
+                          >
+                            <UserMinus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Edit Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -324,28 +371,16 @@ export default function Departments() {
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
               <Label>Nome *</Label>
-              <Input
-                value={editForm.name}
-                onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-              />
+              <Input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
             </div>
             <div className="space-y-2">
               <Label>Descrição</Label>
-              <Textarea
-                value={editForm.description}
-                onChange={e => setEditForm({ ...editForm, description: e.target.value })}
-                rows={3}
-              />
+              <Textarea value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} rows={3} />
             </div>
             <div className="space-y-2">
               <Label>Cor</Label>
               <div className="flex items-center gap-3">
-                <Input
-                  type="color"
-                  value={editForm.color}
-                  onChange={e => setEditForm({ ...editForm, color: e.target.value })}
-                  className="w-12 h-10 p-1 cursor-pointer"
-                />
+                <Input type="color" value={editForm.color} onChange={e => setEditForm({ ...editForm, color: e.target.value })} className="w-12 h-10 p-1 cursor-pointer" />
                 <span className="text-sm text-muted-foreground">{editForm.color}</span>
               </div>
             </div>

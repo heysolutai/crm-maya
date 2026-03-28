@@ -8,11 +8,20 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useImpersonation } from '@/hooks/useImpersonation';
 import { useTotalUnreadConversations } from '@/hooks/useTotalUnreadConversations';
+import { useSidebarCounts } from '@/hooks/useSidebarCounts';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useWhatsAppStatus } from '@/hooks/useWhatsAppStatus';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,10 +51,15 @@ import {
   BookOpen,
   ChevronsUpDown,
   Building2,
+  ChevronRight,
+  Wifi,
+  WifiOff,
+  Search,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { WhatsAppStatusIndicator } from '@/components/WhatsAppStatusIndicator';
+import { cn } from '@/lib/utils';
 
 interface NavItem {
   name: string;
@@ -54,6 +68,7 @@ interface NavItem {
   roles: string[];
   requirePermission?: string;
   impersonationOnly?: boolean;
+  countKey?: 'unread' | 'appointmentsToday' | 'pendingFollowUps';
 }
 
 interface NavGroup {
@@ -66,7 +81,7 @@ const navGroups: NavGroup[] = [
     label: 'Principal',
     items: [
       { name: 'Dashboard', href: '/app/dashboard', icon: LayoutDashboard, roles: ['viewer', 'agent', 'manager', 'company_admin'] },
-      { name: 'Conversas', href: '/app/conversations', icon: MessageSquare, roles: ['agent', 'manager', 'company_admin'] },
+      { name: 'Conversas', href: '/app/conversations', icon: MessageSquare, roles: ['agent', 'manager', 'company_admin'], countKey: 'unread' },
       { name: 'CRM', href: '/app/crm', icon: Kanban, roles: ['agent', 'manager', 'company_admin'] },
     ],
   },
@@ -75,8 +90,8 @@ const navGroups: NavGroup[] = [
     items: [
       { name: 'Clientes', href: '/app/clients', icon: Users, roles: ['viewer', 'agent', 'manager', 'company_admin'], requirePermission: 'can_access_crm' },
       { name: 'Produtos', href: '/app/products', icon: Package, roles: ['agent', 'manager', 'company_admin'] },
-      { name: 'Agenda', href: '/app/appointments', icon: Calendar, roles: ['agent', 'manager', 'company_admin'] },
-      { name: 'Follow-ups', href: '/app/follow-ups', icon: Clock, roles: ['manager', 'company_admin'] },
+      { name: 'Agenda', href: '/app/appointments', icon: Calendar, roles: ['agent', 'manager', 'company_admin'], countKey: 'appointmentsToday' },
+      { name: 'Follow-ups', href: '/app/follow-ups', icon: Clock, roles: ['manager', 'company_admin'], countKey: 'pendingFollowUps' },
     ],
   },
   {
@@ -99,13 +114,33 @@ const navGroups: NavGroup[] = [
   },
 ];
 
-// Flat map for page title lookup
 const allNavItems = navGroups.flatMap(g => g.items);
 
 function getPageTitle(pathname: string): string {
   const item = allNavItems.find(i => pathname.startsWith(i.href));
   return item?.name || '';
 }
+
+function getBreadcrumb(pathname: string): { label: string; href: string }[] {
+  for (const group of navGroups) {
+    const item = group.items.find(i => pathname.startsWith(i.href));
+    if (item) {
+      return [
+        { label: group.label, href: '' },
+        { label: item.name, href: item.href },
+      ];
+    }
+  }
+  return [];
+}
+
+const roleDisplayNames: Record<string, string> = {
+  company_admin: 'Administrador',
+  manager: 'Gerente',
+  agent: 'Agente',
+  viewer: 'Visualizador',
+  super_admin: 'Super Admin',
+};
 
 export default function CompanyLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -114,6 +149,8 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
   const { permissions } = useUserPermissions();
   const { isImpersonating, impersonatedCompanyId, impersonatedCompanyName, stopImpersonation } = useImpersonation();
   const { data: unreadCount = 0 } = useTotalUnreadConversations();
+  const { appointmentsToday, pendingFollowUps } = useSidebarCounts();
+  const { status: whatsAppStatus } = useWhatsAppStatus();
   const isMobile = useIsMobile();
   const [companyName, setCompanyName] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -129,16 +166,12 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
 
   const fetchCompanyName = async () => {
     if (!effectiveCompanyId) return;
-
     const { data, error } = await supabase
       .from('companies')
       .select('name')
       .eq('id', effectiveCompanyId)
       .single();
-
-    if (data && !error) {
-      setCompanyName(data.name);
-    }
+    if (data && !error) setCompanyName(data.name);
   };
 
   const handleStopImpersonation = () => {
@@ -151,9 +184,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
+    if (isMobile) setSidebarOpen(false);
   }, [pathname, isMobile]);
 
   const filterNavItem = (item: NavItem): boolean => {
@@ -167,10 +198,24 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
     return true;
   };
 
+  const getCountForItem = (item: NavItem): number => {
+    if (!item.countKey) return 0;
+    if (item.countKey === 'unread') return unreadCount;
+    if (item.countKey === 'appointmentsToday') return appointmentsToday;
+    if (item.countKey === 'pendingFollowUps') return pendingFollowUps;
+    return 0;
+  };
+
   const pageTitle = getPageTitle(pathname);
+  const breadcrumb = getBreadcrumb(pathname);
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || '';
+  const userInitials = userName
+    ? userName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
+    : user?.email?.charAt(0).toUpperCase() || '?';
 
   return (
     <div className="flex h-screen flex-col bg-background">
+      {/* Impersonation banner */}
       {isImpersonating && (
         <div className="flex items-center justify-between bg-amber-500 px-3 md:px-4 py-2 text-amber-950 gap-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -202,100 +247,217 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
           />
         )}
 
-        {/* Sidebar */}
-        <aside className={`
-          ${isMobile
-            ? `fixed inset-y-0 left-0 z-50 w-60 transform transition-transform duration-200 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`
-            : 'w-60'
-          } border-r border-sidebar-border bg-sidebar flex flex-col
-        `}>
-          {/* Logo + Company name */}
-          <div className="flex items-center gap-3 border-b border-sidebar-border px-4 h-14 shrink-0 pt-[env(safe-area-inset-top)]">
-            <Image
-              src="/logo-mileto.png"
-              alt="MiletoIA"
-              width={28}
-              height={28}
-              className="shrink-0 rounded"
-            />
-            <span className="text-sm font-semibold text-sidebar-foreground truncate flex-1">
-              {effectiveCompanyName || 'MiletoIA'}
-            </span>
-            {isMobile && (
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-sidebar-foreground" onClick={() => setSidebarOpen(false)}>
-                <X className="h-4 w-4" />
-              </Button>
-            )}
+        {/* ───────── SIDEBAR ───────── */}
+        <aside className={cn(
+          'border-r border-sidebar-border bg-sidebar flex flex-col',
+          isMobile
+            ? `fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-200 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`
+            : 'w-64'
+        )}>
+          {/* ── Company Header ── */}
+          <div className="px-3 pt-[env(safe-area-inset-top)]">
+            <div className="flex items-center gap-3 px-1 py-4">
+              <div className="relative shrink-0">
+                <Image
+                  src="/logo-mileto.png"
+                  alt="MiletoIA"
+                  width={32}
+                  height={32}
+                  className="rounded-lg"
+                />
+                {/* WhatsApp status dot on logo */}
+                <span className={cn(
+                  'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-sidebar',
+                  whatsAppStatus === 'connected' ? 'bg-emerald-500' :
+                  whatsAppStatus === 'connecting' ? 'bg-amber-500 animate-pulse' :
+                  'bg-gray-400'
+                )} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-sidebar-foreground truncate">
+                  {effectiveCompanyName || 'MiletoIA'}
+                </p>
+                <p className="text-[11px] text-sidebar-foreground/50 truncate">
+                  {whatsAppStatus === 'connected' ? 'WhatsApp conectado' :
+                   whatsAppStatus === 'connecting' ? 'Conectando...' :
+                   whatsAppStatus === 'no_instance' ? 'WhatsApp não configurado' :
+                   'WhatsApp desconectado'}
+                </p>
+              </div>
+              {isMobile && (
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-sidebar-foreground" onClick={() => setSidebarOpen(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
 
-          {/* Navigation */}
-          <ScrollArea className="flex-1 py-2">
-            {navGroups.map((group) => {
-              const visibleItems = group.items.filter(filterNavItem);
-              if (visibleItems.length === 0) return null;
+          <Separator className="bg-sidebar-border" />
 
-              return (
-                <div key={group.label} className="mb-1">
-                  <p className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
-                    {group.label}
-                  </p>
-                  <nav className="space-y-0.5 px-2">
-                    {visibleItems.map((item) => {
-                      const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-                      return (
-                        <Link
-                          key={item.name}
-                          href={item.href}
-                          className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                            isActive
-                              ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                              : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-                          }`}
-                        >
-                          <item.icon className="h-4 w-4 shrink-0" />
-                          <span className="flex-1 truncate">{item.name}</span>
-                          {item.name === 'Conversas' && unreadCount > 0 && (
-                            <Badge
-                              variant="destructive"
-                              className="ml-auto h-5 min-w-[20px] px-1.5 rounded-full text-[10px] font-semibold"
-                            >
-                              {unreadCount > 99 ? '99+' : unreadCount}
-                            </Badge>
-                          )}
-                        </Link>
-                      );
-                    })}
-                  </nav>
-                </div>
-              );
-            })}
+          {/* ── Navigation ── */}
+          <ScrollArea className="flex-1 py-3">
+            <TooltipProvider delayDuration={0}>
+              {navGroups.map((group, groupIndex) => {
+                const visibleItems = group.items.filter(filterNavItem);
+                if (visibleItems.length === 0) return null;
+
+                return (
+                  <div key={group.label} className={cn(groupIndex > 0 && 'mt-4')}>
+                    <p className="px-4 mb-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                      {group.label}
+                    </p>
+                    <nav className="space-y-0.5 px-2">
+                      {visibleItems.map((item) => {
+                        const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                        const count = getCountForItem(item);
+
+                        return (
+                          <Tooltip key={item.name}>
+                            <TooltipTrigger asChild>
+                              <Link
+                                href={item.href}
+                                className={cn(
+                                  'group/nav flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
+                                  isActive
+                                    ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
+                                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                                )}
+                              >
+                                <item.icon className={cn(
+                                  'h-4 w-4 shrink-0 transition-colors',
+                                  isActive
+                                    ? 'text-sidebar-primary-foreground'
+                                    : 'text-sidebar-foreground/50 group-hover/nav:text-sidebar-accent-foreground'
+                                )} />
+                                <span className="flex-1 truncate">{item.name}</span>
+
+                                {/* Count badges */}
+                                {count > 0 && (
+                                  <span className={cn(
+                                    'ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums',
+                                    isActive
+                                      ? 'bg-sidebar-primary-foreground/20 text-sidebar-primary-foreground'
+                                      : item.countKey === 'unread'
+                                        ? 'bg-destructive text-destructive-foreground'
+                                        : 'bg-sidebar-foreground/10 text-sidebar-foreground/70'
+                                  )}>
+                                    {count > 99 ? '99+' : count}
+                                  </span>
+                                )}
+                              </Link>
+                            </TooltipTrigger>
+                            {count > 0 && (
+                              <TooltipContent side="right" className="text-xs">
+                                {item.countKey === 'unread' && `${count} conversa(s) não lida(s)`}
+                                {item.countKey === 'appointmentsToday' && `${count} agendamento(s) hoje`}
+                                {item.countKey === 'pendingFollowUps' && `${count} follow-up(s) pendente(s)`}
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        );
+                      })}
+                    </nav>
+                  </div>
+                );
+              })}
+            </TooltipProvider>
           </ScrollArea>
 
-          {/* User section at bottom */}
-          <div className="border-t border-sidebar-border p-2 pb-[env(safe-area-inset-bottom)]">
+          <Separator className="bg-sidebar-border" />
+
+          {/* ── User Footer ── */}
+          <div className="p-2 pb-[env(safe-area-inset-bottom)]">
+            {/* Quick actions */}
+            <div className="flex items-center gap-1 px-1 mb-2">
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                      onClick={() => router.push('/app/settings')}
+                    >
+                      <Settings className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">Configurações</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                      onClick={() => router.push('/app/support')}
+                    >
+                      <LifeBuoy className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">Suporte</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <div className="flex-1" />
+              <ThemeToggle />
+            </div>
+
+            {/* User card */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent cursor-pointer">
-                  <Avatar className="h-8 w-8 shrink-0">
-                    <AvatarFallback className="text-xs bg-sidebar-primary text-sidebar-primary-foreground">
-                      {user?.email?.charAt(0).toUpperCase()}
+                <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-sidebar-accent cursor-pointer">
+                  <Avatar className="h-9 w-9 shrink-0">
+                    <AvatarFallback className="text-xs font-semibold bg-sidebar-primary text-sidebar-primary-foreground">
+                      {userInitials}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0 text-left">
                     <p className="text-sm font-medium text-sidebar-foreground truncate">
-                      {user?.user_metadata?.full_name || user?.email?.split('@')[0]}
+                      {userName}
                     </p>
-                    <p className="text-[11px] text-sidebar-foreground/60 capitalize truncate">
-                      {role?.replace('_', ' ')}
+                    <p className="text-[11px] text-sidebar-foreground/50 truncate">
+                      {roleDisplayNames[role || ''] || role}
                     </p>
                   </div>
-                  <ChevronsUpDown className="h-4 w-4 text-sidebar-foreground/50 shrink-0" />
+                  <ChevronsUpDown className="h-4 w-4 text-sidebar-foreground/30 shrink-0" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent side="top" align="start" className="w-56">
-                <div className="flex flex-col space-y-1 p-2">
-                  <p className="text-sm font-medium">{user?.email}</p>
-                  <p className="text-xs text-muted-foreground">{effectiveCompanyName}</p>
+              <DropdownMenuContent side="top" align="start" className="w-60">
+                <div className="flex items-center gap-3 p-3">
+                  <Avatar className="h-10 w-10 shrink-0">
+                    <AvatarFallback className="text-sm font-semibold bg-primary text-primary-foreground">
+                      {userInitials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{userName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                  </div>
+                </div>
+                <DropdownMenuSeparator />
+                <div className="px-3 py-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Empresa</span>
+                    <span className="text-xs font-medium truncate max-w-[140px]">{effectiveCompanyName}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-xs text-muted-foreground">Função</span>
+                    <span className="text-xs font-medium">{roleDisplayNames[role || ''] || role}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-xs text-muted-foreground">WhatsApp</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn(
+                        'h-1.5 w-1.5 rounded-full',
+                        whatsAppStatus === 'connected' ? 'bg-emerald-500' :
+                        whatsAppStatus === 'connecting' ? 'bg-amber-500' :
+                        'bg-red-500'
+                      )} />
+                      <span className="text-xs font-medium">
+                        {whatsAppStatus === 'connected' ? 'Online' :
+                         whatsAppStatus === 'connecting' ? 'Conectando' : 'Offline'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
                 <DropdownMenuSeparator />
                 {(isImpersonating || isSuperAdmin) && (
@@ -310,16 +472,16 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                     <DropdownMenuSeparator />
                   </>
                 )}
-                <DropdownMenuItem onClick={handleSignOut}>
+                <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
-                  Sair
+                  Sair da conta
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </aside>
 
-        {/* Main content area */}
+        {/* ───────── MAIN CONTENT ───────── */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Top header */}
           <header className="flex h-14 items-center gap-3 border-b border-border px-4 shrink-0 pt-[env(safe-area-inset-top)]">
@@ -328,17 +490,36 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                 <Menu className="h-5 w-5" />
               </Button>
             )}
-            <h1 className="text-lg font-semibold truncate">{pageTitle}</h1>
+
+            {/* Breadcrumb */}
+            <div className="flex items-center gap-1.5 min-w-0">
+              {breadcrumb.map((crumb, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />}
+                  {i === 0 ? (
+                    <span className="text-xs text-muted-foreground hidden sm:inline">{crumb.label}</span>
+                  ) : (
+                    <h1 className="text-lg font-semibold truncate">{crumb.label}</h1>
+                  )}
+                </div>
+              ))}
+              {breadcrumb.length === 0 && (
+                <h1 className="text-lg font-semibold truncate">{pageTitle}</h1>
+              )}
+            </div>
+
             <div className="flex-1" />
+
+            {/* Header right actions */}
             <WhatsAppStatusIndicator />
-            <ThemeToggle />
           </header>
 
-          <main className={`flex-1 ${
+          <main className={cn(
+            'flex-1',
             pathname === '/app/conversations'
               ? 'overflow-hidden'
               : 'overflow-y-auto p-4 md:p-6'
-          }`}>
+          )}>
             {children}
           </main>
         </div>
