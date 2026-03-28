@@ -8,7 +8,6 @@ import { Bot, Send, Loader2, Check, User, Clock, RotateCcw } from 'lucide-react'
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 
@@ -88,10 +87,11 @@ export function AIBuilderChatDialog({ open, onOpenChange, companyId }: AIBuilder
   const { data: apiKey } = useQuery({
     queryKey: ['company-api-key', companyId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('api_keys').select('key').eq('company_id', companyId).eq('is_active', true).limit(1).maybeSingle();
-      if (error) throw error;
-      return data?.key || null;
+      const res = await fetch(`/api/api-keys?companyId=${companyId}`);
+      if (!res.ok) return null;
+      const keys = await res.json();
+      const activeKey = Array.isArray(keys) ? keys.find((k: any) => k.isActive) : null;
+      return activeKey?.key || null;
     },
     enabled: !!companyId,
   });
@@ -99,10 +99,9 @@ export function AIBuilderChatDialog({ open, onOpenChange, companyId }: AIBuilder
   const { data: companyData } = useQuery({
     queryKey: ['company-builder-data', companyId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('companies').select('name, trade_name, address, settings').eq('id', companyId).maybeSingle();
-      if (error) throw error;
-      return data;
+      const res = await fetch(`/api/companies?id=${companyId}`);
+      if (!res.ok) return null;
+      return await res.json();
     },
     enabled: !!companyId,
   });
@@ -113,7 +112,7 @@ export function AIBuilderChatDialog({ open, onOpenChange, companyId }: AIBuilder
       // Pre-populate from company data
       const preAnswers: Record<string, string> = {};
       if (companyData) {
-        preAnswers.company_name = companyData.trade_name || companyData.name || '';
+        preAnswers.company_name = companyData.tradeName || companyData.trade_name || companyData.name || '';
         if (companyData.address) {
           const addr = companyData.address as Record<string, string>;
           const parts = [addr.street, addr.number, addr.neighborhood, addr.city, addr.state].filter(Boolean);

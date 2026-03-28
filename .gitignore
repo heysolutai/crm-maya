@@ -47,3 +47,5 @@ supabase/supabase/.temp/pooler-url
 supabase/supabase/.temp/rest-version
 supabase/supabase/.temp/storage-migration
 supabase/supabase/.temp/storage-version
+
+/src/generated/prisma

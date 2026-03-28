@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 
@@ -15,8 +15,6 @@ export async function OPTIONS(req: NextRequest) { return handleCors(req) || json
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createAdminClient();
-
     const { agentId, companyId: authCompanyId } = await authenticate(req);
 
     const ADMIN_TOKEN = process.env.WHATSAPP_ADMIN_TOKEN;
@@ -28,13 +26,18 @@ export async function POST(req: NextRequest) {
     // With Bearer: allow super_admin to manage any company, others only their own
     // With API key: only the company that owns the key
     if (agentId) {
-      const { data: isSuperAdmin } = await supabase.rpc('has_role', { _user_id: agentId, _role: 'super_admin' });
+      const isSuperAdmin = await prisma.userRole.findFirst({
+        where: { userId: agentId, role: 'super_admin' },
+      });
       if (!isSuperAdmin && authCompanyId !== company_id) throw new Error('Acesso negado a esta empresa');
     } else if (authCompanyId !== company_id) {
       throw new Error('Acesso negado a esta empresa');
     }
 
-    const { data: company } = await supabase.from('companies').select('name').eq('id', company_id).single();
+    const company = await prisma.company.findUnique({
+      where: { id: company_id },
+      select: { name: true },
+    });
     if (!company) throw new Error('Empresa não encontrada');
 
     const generateInstanceName = (companyName: string): string =>
@@ -42,32 +45,34 @@ export async function POST(req: NextRequest) {
 
     const instance_name = generateInstanceName(company.name);
 
-    const { data: existingInstance } = await supabase.from('whatsapp_instances').select('*').eq('company_id', company_id).single();
+    const existingInstance = await prisma.whatsappInstance.findFirst({
+      where: { companyId: company_id },
+    });
 
     if (action === 'connect') {
       if (existingInstance) {
-        if (!existingInstance.instance_api_key) throw new Error('Instância existente sem API Key. Exclua e crie novamente.');
+        if (!existingInstance.instanceApiKey) throw new Error('Instância existente sem API Key. Exclua e crie novamente.');
 
-        const reconnResponse = await fetch(`${existingInstance.api_url}/instance/connect`, {
+        const reconnResponse = await fetch(`${existingInstance.apiUrl}/instance/connect`, {
           method: 'POST',
-          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'token': existingInstance.instance_api_key },
+          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'token': existingInstance.instanceApiKey },
           body: JSON.stringify({ phone: '' }),
         });
 
         if (reconnResponse.status === 409) {
-          const statusResp = await fetch(`${existingInstance.api_url}/instance/status`, {
-            method: 'GET', headers: { 'Accept': 'application/json', 'token': existingInstance.instance_api_key },
+          const statusResp = await fetch(`${existingInstance.apiUrl}/instance/status`, {
+            method: 'GET', headers: { 'Accept': 'application/json', 'token': existingInstance.instanceApiKey },
           });
           if (statusResp.ok) {
             const statusData = await statusResp.json();
             const isConnected = statusData.status?.connected === true || statusData.status?.loggedIn === true;
             if (isConnected) {
-              await supabase.from('whatsapp_instances').update({ status: 'connected', qr_code: null, error_message: null }).eq('id', existingInstance.id);
+              await prisma.whatsappInstance.update({ where: { id: existingInstance.id }, data: { status: 'connected', qrCode: null, errorMessage: null } });
               return jsonResponse({ success: true, already_connected: true, message: 'WhatsApp já está conectado!' });
             }
             const existingQR = statusData.instance?.qrcode || statusData.qrcode;
             if (existingQR && existingQR.length > 50) {
-              await supabase.from('whatsapp_instances').update({ status: 'connecting', qr_code: existingQR, error_message: null }).eq('id', existingInstance.id);
+              await prisma.whatsappInstance.update({ where: { id: existingInstance.id }, data: { status: 'connecting', qrCode: existingQR, errorMessage: null } });
               return jsonResponse({ success: true, data: { ...existingInstance, qr_code: existingQR, status: 'connecting' }, message: 'QR Code recuperado' });
             }
           }
@@ -78,14 +83,14 @@ export async function POST(req: NextRequest) {
 
         const reconnData = await reconnResponse.json();
         if (reconnData.loggedIn === true) {
-          await supabase.from('whatsapp_instances').update({ status: 'connected', qr_code: null, metadata: reconnData }).eq('id', existingInstance.id);
+          await prisma.whatsappInstance.update({ where: { id: existingInstance.id }, data: { status: 'connected', qrCode: null, metadata: reconnData } });
           return jsonResponse({ success: true, already_connected: true, message: 'WhatsApp já está conectado!' });
         }
 
         const reconnQR = reconnData.instance?.qrcode;
         if (!reconnQR) throw new Error('QR Code não foi gerado pela API');
 
-        await supabase.from('whatsapp_instances').update({ status: 'connecting', qr_code: reconnQR, metadata: reconnData, error_message: null }).eq('id', existingInstance.id);
+        await prisma.whatsappInstance.update({ where: { id: existingInstance.id }, data: { status: 'connecting', qrCode: reconnQR, metadata: reconnData, errorMessage: null } });
         return jsonResponse({ success: true, data: { ...existingInstance, qr_code: reconnQR, status: 'connecting' }, message: 'QR Code gerado com sucesso (instância existente)', show_qr_modal: true });
       }
 
@@ -102,10 +107,11 @@ export async function POST(req: NextRequest) {
       const instanceToken = apiData.token || apiData.instance?.token;
       if (!instanceToken) throw new Error('Token não foi retornado pela API');
 
-      const { data: newInstance, error: insertError } = await supabase.from('whatsapp_instances').insert({
-        company_id, instance_name, api_url: WHATSAPP_API_URL, instance_api_key: instanceToken, status: 'connecting', qr_code: null, metadata: apiData,
-      }).select().single();
-      if (insertError) throw insertError;
+      const newInstance = await prisma.whatsappInstance.create({
+        data: {
+          companyId: company_id, instanceName: instance_name, apiUrl: WHATSAPP_API_URL, instanceApiKey: instanceToken, status: 'connecting', qrCode: null, metadata: apiData,
+        },
+      });
 
       // Configure webhook
       const appUrl = process.env.NEXT_PUBLIC_APP_URL;
@@ -128,7 +134,7 @@ export async function POST(req: NextRequest) {
         if (connectResponse.ok) {
           const connectData = await connectResponse.json();
           qrCode = connectData.instance?.qrcode;
-          if (qrCode) await supabase.from('whatsapp_instances').update({ qr_code: qrCode, status: 'connecting' }).eq('id', newInstance.id);
+          if (qrCode) await prisma.whatsappInstance.update({ where: { id: newInstance.id }, data: { qrCode, status: 'connecting' } });
         }
       } catch (e) { console.error('Connect error:', e); }
 
@@ -138,18 +144,20 @@ export async function POST(req: NextRequest) {
     if (action === 'reconnect') {
       if (!instance_id) throw new Error('instance_id é obrigatório para reconnect');
 
-      const { data: targetInstance } = await supabase.from('whatsapp_instances').select('*').eq('id', instance_id).eq('company_id', company_id).single();
+      const targetInstance = await prisma.whatsappInstance.findFirst({
+        where: { id: instance_id, companyId: company_id },
+      });
       if (!targetInstance) throw new Error('Instância não encontrada');
-      if (!targetInstance.instance_api_key) throw new Error('API Key não encontrada');
+      if (!targetInstance.instanceApiKey) throw new Error('API Key não encontrada');
 
-      const response = await fetch(`${targetInstance.api_url}/instance/connect`, {
+      const response = await fetch(`${targetInstance.apiUrl}/instance/connect`, {
         method: 'POST',
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'token': targetInstance.instance_api_key },
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'token': targetInstance.instanceApiKey },
         body: JSON.stringify({ phone: '' }),
       });
 
       if (response.status === 409) {
-        const statusResponse = await fetch(`${targetInstance.api_url}/instance/status`, { method: 'GET', headers: { 'Accept': 'application/json', 'token': targetInstance.instance_api_key } });
+        const statusResponse = await fetch(`${targetInstance.apiUrl}/instance/status`, { method: 'GET', headers: { 'Accept': 'application/json', 'token': targetInstance.instanceApiKey } });
         if (statusResponse.ok) {
           const statusData = await statusResponse.json();
           const hasStatusObject = typeof statusData.status === 'object' && statusData.status !== null;
@@ -158,39 +166,39 @@ export async function POST(req: NextRequest) {
           const shouldTreatAsConnected = hasStatusObject ? (isLoggedIn || isConnected) : (statusData.instance?.status === 'connected' || statusData.instance?.status === 'open');
 
           if (shouldTreatAsConnected) {
-            await supabase.from('whatsapp_instances').update({ status: 'connected', qr_code: null, error_message: null }).eq('id', instance_id);
+            await prisma.whatsappInstance.update({ where: { id: instance_id }, data: { status: 'connected', qrCode: null, errorMessage: null } });
             return jsonResponse({ success: true, already_connected: true, message: 'WhatsApp já está conectado!' });
           }
           const existingQR = statusData.instance?.qrcode || statusData.qrcode;
           if (existingQR && existingQR.length > 50) {
-            await supabase.from('whatsapp_instances').update({ status: 'connecting', qr_code: existingQR, error_message: null }).eq('id', instance_id);
+            await prisma.whatsappInstance.update({ where: { id: instance_id }, data: { status: 'connecting', qrCode: existingQR, errorMessage: null } });
             return jsonResponse({ success: true, data: { ...targetInstance, qr_code: existingQR, status: 'connecting' }, message: 'QR Code recuperado' });
           }
         }
 
         // Restart and retry
-        await fetch(`${targetInstance.api_url}/instance/restart`, { method: 'PUT', headers: { 'Accept': 'application/json', 'token': targetInstance.instance_api_key } });
+        await fetch(`${targetInstance.apiUrl}/instance/restart`, { method: 'PUT', headers: { 'Accept': 'application/json', 'token': targetInstance.instanceApiKey } });
         await new Promise(resolve => setTimeout(resolve, 3000));
 
-        const retryResponse = await fetch(`${targetInstance.api_url}/instance/connect`, {
-          method: 'POST', headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'token': targetInstance.instance_api_key },
+        const retryResponse = await fetch(`${targetInstance.apiUrl}/instance/connect`, {
+          method: 'POST', headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'token': targetInstance.instanceApiKey },
           body: JSON.stringify({ phone: '' }),
         });
 
         if (retryResponse.ok || retryResponse.status === 409) {
           await new Promise(resolve => setTimeout(resolve, 1000));
-          const finalStatusResponse = await fetch(`${targetInstance.api_url}/instance/status`, { method: 'GET', headers: { 'Accept': 'application/json', 'token': targetInstance.instance_api_key } });
+          const finalStatusResponse = await fetch(`${targetInstance.apiUrl}/instance/status`, { method: 'GET', headers: { 'Accept': 'application/json', 'token': targetInstance.instanceApiKey } });
           if (finalStatusResponse.ok) {
             const finalData = await finalStatusResponse.json();
             const qrCode = finalData.instance?.qrcode || finalData.qrcode;
             if (qrCode && qrCode.length > 50) {
-              await supabase.from('whatsapp_instances').update({ status: 'connecting', qr_code: qrCode, error_message: null }).eq('id', instance_id);
+              await prisma.whatsappInstance.update({ where: { id: instance_id }, data: { status: 'connecting', qrCode, errorMessage: null } });
               return jsonResponse({ success: true, data: { ...targetInstance, qr_code: qrCode, status: 'connecting' }, message: 'QR Code gerado após restart' });
             }
           }
         }
 
-        if (targetInstance.qr_code && targetInstance.qr_code.length > 50) {
+        if (targetInstance.qrCode && targetInstance.qrCode.length > 50) {
           return jsonResponse({ success: true, data: targetInstance, message: 'Usando QR Code existente' });
         }
         throw new Error('Não foi possível gerar QR Code. Tente excluir a instância e criar novamente.');
@@ -200,58 +208,56 @@ export async function POST(req: NextRequest) {
 
       const apiData = await response.json();
       if (apiData.loggedIn === true) {
-        await supabase.from('whatsapp_instances').update({ status: 'connected', qr_code: null, metadata: apiData }).eq('id', instance_id);
+        await prisma.whatsappInstance.update({ where: { id: instance_id }, data: { status: 'connected', qrCode: null, metadata: apiData } });
         return jsonResponse({ success: true, already_connected: true, message: 'WhatsApp já está conectado!' });
       }
 
       const qrCode = apiData.instance?.qrcode;
       if (!qrCode) throw new Error('QR Code não foi gerado pela API');
 
-      const { data: updatedInstance, error: updateError } = await supabase.from('whatsapp_instances')
-        .update({ status: apiData.instance?.status || 'connecting', qr_code: qrCode, metadata: apiData, error_message: null })
-        .eq('id', instance_id).select().single();
-      if (updateError) throw updateError;
+      const updatedInstance = await prisma.whatsappInstance.update({
+        where: { id: instance_id },
+        data: { status: apiData.instance?.status || 'connecting', qrCode, metadata: apiData, errorMessage: null },
+      });
 
       return jsonResponse({ success: true, data: updatedInstance, message: 'QR Code gerado com sucesso' });
     }
 
     if (action === 'disconnect') {
       if (!instance_id) throw new Error('instance_id é obrigatório para disconnect');
-      const { data: targetInstance } = await supabase.from('whatsapp_instances').select('*').eq('id', instance_id).eq('company_id', company_id).single();
+      const targetInstance = await prisma.whatsappInstance.findFirst({ where: { id: instance_id, companyId: company_id } });
       if (!targetInstance) throw new Error('Instância não encontrada');
 
-      if (targetInstance.instance_api_key) {
-        try { await fetch(`${targetInstance.api_url}/instance/logout`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'token': targetInstance.instance_api_key } }); } catch (e) { console.error('Logout error:', e); }
+      if (targetInstance.instanceApiKey) {
+        try { await fetch(`${targetInstance.apiUrl}/instance/logout`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'token': targetInstance.instanceApiKey } }); } catch (e) { console.error('Logout error:', e); }
       }
 
-      const { data: updatedInstance, error: updateError } = await supabase.from('whatsapp_instances').update({ status: 'disconnected', qr_code: null }).eq('id', instance_id).select().single();
-      if (updateError) throw updateError;
+      const updatedInstance = await prisma.whatsappInstance.update({ where: { id: instance_id }, data: { status: 'disconnected', qrCode: null } });
       return jsonResponse({ success: true, data: updatedInstance, message: 'Instância desconectada' });
     }
 
     if (action === 'delete') {
       if (!instance_id) throw new Error('instance_id é obrigatório para delete');
-      const { data: targetInstance } = await supabase.from('whatsapp_instances').select('*').eq('id', instance_id).eq('company_id', company_id).single();
+      const targetInstance = await prisma.whatsappInstance.findFirst({ where: { id: instance_id, companyId: company_id } });
       if (!targetInstance) throw new Error('Instância não encontrada');
 
-      try { await fetch(`${targetInstance.api_url}/instance`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'token': targetInstance.instance_api_key } }); } catch (e) { console.error('Delete API error:', e); }
+      try { await fetch(`${targetInstance.apiUrl}/instance`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'token': targetInstance.instanceApiKey } }); } catch (e) { console.error('Delete API error:', e); }
 
-      const { error: deleteError } = await supabase.from('whatsapp_instances').delete().eq('id', instance_id);
-      if (deleteError) throw deleteError;
+      await prisma.whatsappInstance.delete({ where: { id: instance_id } });
       return jsonResponse({ success: true, message: 'Instância excluída com sucesso' });
     }
 
     if (action === 'update') {
       if (!instance_id) throw new Error('instance_id é obrigatório para update');
-      const { data: targetInstance } = await supabase.from('whatsapp_instances').select('*').eq('id', instance_id).eq('company_id', company_id).single();
+      const targetInstance = await prisma.whatsappInstance.findFirst({ where: { id: instance_id, companyId: company_id } });
       if (!targetInstance) throw new Error('Instância não encontrada');
 
       let updatedStatus = targetInstance.status;
       let apiMetadata = targetInstance.metadata;
 
-      if (targetInstance.instance_api_key) {
+      if (targetInstance.instanceApiKey) {
         try {
-          const statusResponse = await fetch(`${targetInstance.api_url}/instance/status`, { method: 'GET', headers: { 'Accept': 'application/json', 'token': targetInstance.instance_api_key } });
+          const statusResponse = await fetch(`${targetInstance.apiUrl}/instance/status`, { method: 'GET', headers: { 'Accept': 'application/json', 'token': targetInstance.instanceApiKey } });
           if (statusResponse.ok) {
             const statusData = await statusResponse.json();
             const apiStatus = statusData.instance?.status;
@@ -279,10 +285,10 @@ export async function POST(req: NextRequest) {
         } catch (e) { console.error('Status fetch error:', e); }
       }
 
-      const { data: updatedInstance, error: updateError } = await supabase.from('whatsapp_instances')
-        .update({ status: updatedStatus, metadata: apiMetadata, ...(updatedStatus === 'connected' ? { qr_code: null } : {}) })
-        .eq('id', instance_id).select().single();
-      if (updateError) throw updateError;
+      const updatedInstance = await prisma.whatsappInstance.update({
+        where: { id: instance_id },
+        data: { status: updatedStatus, metadata: apiMetadata, ...(updatedStatus === 'connected' ? { qrCode: null } : {}) },
+      });
 
       return jsonResponse({ success: true, data: updatedInstance, message: 'Status atualizado' });
     }

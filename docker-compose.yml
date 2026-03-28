@@ -6,17 +6,33 @@ services:
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
-      # These should be set in .env or via your deployment platform:
-      # - NEXT_PUBLIC_SUPABASE_URL=
-      # - NEXT_PUBLIC_SUPABASE_ANON_KEY=
-      # - SUPABASE_SERVICE_ROLE_KEY=
-      # - N8N_AI_WEBHOOK_URL=
-      # - NEXT_PUBLIC_APP_URL=
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/crm_maya
     env_file:
       - .env.production
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - uploads_data:/app/public/uploads
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: crm_maya
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   redis:
@@ -34,4 +50,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  postgres_data:
   redis_data:
+  uploads_data:

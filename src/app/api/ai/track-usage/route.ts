@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, unauthorizedResponse, badRequestResponse } from '@/lib/api/cors';
 
@@ -66,36 +66,28 @@ export async function POST(req: NextRequest) {
       return badRequestResponse('Missing required fields: model, input_tokens, output_tokens');
     }
 
-    const supabase = createAdminClient();
     const costs = calculateCost(model, input_tokens, output_tokens);
     const totalTokens = input_tokens + output_tokens;
     const provider = model.startsWith('claude') ? 'anthropic' : 'openai';
 
-    const { data, error } = await supabase
-      .from('ai_token_usage')
-      .insert({
-        company_id: companyId,
-        conversation_id,
-        message_id,
+    const data = await prisma.aiTokenUsage.create({
+      data: {
+        companyId,
+        conversationId: conversation_id,
+        messageId: message_id,
         model,
         provider,
-        input_tokens,
-        output_tokens,
-        total_tokens: totalTokens,
-        input_cost: costs.inputCost,
-        output_cost: costs.outputCost,
-        total_cost: costs.totalCost,
-        request_type,
-        client_id,
+        inputTokens: input_tokens,
+        outputTokens: output_tokens,
+        totalTokens,
+        inputCost: costs.inputCost,
+        outputCost: costs.outputCost,
+        totalCost: costs.totalCost,
+        requestType: request_type,
+        clientId: client_id,
         metadata,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error inserting token usage:', error);
-      throw error;
-    }
+      },
+    });
 
     console.log(`[Token Usage] Tracked: ${model} | ${totalTokens} tokens | $${costs.totalCost}`);
 

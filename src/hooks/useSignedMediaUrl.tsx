@@ -1,69 +1,23 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase/client';
 
 /**
- * Extracts the file path from a stored media URL
- * Handles both old public URLs and new path-only format
- */
-function extractFilePath(mediaUrl: string): string | null {
-  if (!mediaUrl) return null;
-  
-  // If it's already just a path (new format)
-  if (!mediaUrl.startsWith('http')) {
-    return mediaUrl;
-  }
-  
-  // Extract path from public URL format
-  // Format: https://{project}.supabase.co/storage/v1/object/public/conversation-media/{path}
-  const match = mediaUrl.match(/\/storage\/v1\/object\/public\/conversation-media\/(.+)$/);
-  if (match) {
-    return match[1];
-  }
-  
-  // Fallback: try to extract anything after the bucket name
-  const fallbackMatch = mediaUrl.match(/conversation-media\/(.+)$/);
-  if (fallbackMatch) {
-    return fallbackMatch[1];
-  }
-  
-  return null;
-}
-
-/**
- * Gets a public URL for a media file
- * Since bucket is now public, no signing is needed
+ * Gets a public URL for a media file.
+ * With the move away from Supabase storage, files are now served from /uploads/
  */
 export function getPublicMediaUrl(mediaUrl: string | null): string | null {
-  if (!mediaUrl) {
-    console.log('[Media Debug] getPublicMediaUrl: mediaUrl is null/empty');
-    return null;
-  }
-  
-  console.log('[Media Debug] getPublicMediaUrl input:', mediaUrl);
-  
-  // If it's already a full URL, return as-is
-  if (mediaUrl.startsWith('http')) {
-    console.log('[Media Debug] Already a full URL, returning as-is');
+  if (!mediaUrl) return null;
+
+  // If it's already a full URL or starts with /uploads/, return as-is
+  if (mediaUrl.startsWith('http') || mediaUrl.startsWith('/uploads/')) {
     return mediaUrl;
   }
-  
-  const filePath = extractFilePath(mediaUrl);
-  console.log('[Media Debug] Extracted file path:', filePath);
-  
-  if (!filePath) {
-    console.log('[Media Debug] Could not extract file path, returning original');
-    return mediaUrl;
+
+  // If it looks like a relative path, prefix with /uploads/media/
+  if (!mediaUrl.startsWith('/')) {
+    return `/uploads/media/${mediaUrl}`;
   }
-  
-  // Generate public URL
-  const { data } = supabase.storage
-    .from('conversation-media')
-    .getPublicUrl(filePath);
-  
-  const publicUrl = data?.publicUrl || mediaUrl;
-  console.log('[Media Debug] Generated public URL:', publicUrl);
-  
-  return publicUrl;
+
+  return mediaUrl;
 }
 
 // Alias for backward compatibility
@@ -73,7 +27,6 @@ export const getSignedMediaUrl = async (mediaUrl: string | null): Promise<string
 
 /**
  * Hook to get a public URL for media files
- * Simplified since bucket is now public
  */
 export function useSignedMediaUrl(mediaUrl: string | null | undefined): {
   signedUrl: string | null;
@@ -83,13 +36,13 @@ export function useSignedMediaUrl(mediaUrl: string | null | undefined): {
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  
+
   useEffect(() => {
     if (!mediaUrl) {
       setSignedUrl(null);
       return;
     }
-    
+
     setIsLoading(true);
     try {
       const url = getPublicMediaUrl(mediaUrl);
@@ -97,12 +50,12 @@ export function useSignedMediaUrl(mediaUrl: string | null | undefined): {
       setError(null);
     } catch (err) {
       setError(err as Error);
-      setSignedUrl(mediaUrl); // Fallback
+      setSignedUrl(mediaUrl);
     } finally {
       setIsLoading(false);
     }
   }, [mediaUrl]);
-  
+
   return { signedUrl, isLoading, error };
 }
 

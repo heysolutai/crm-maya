@@ -56,7 +56,6 @@ import {
   WifiOff,
   Search,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase/client';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { WhatsAppStatusIndicator } from '@/components/WhatsAppStatusIndicator';
 import { cn } from '@/lib/utils';
@@ -166,12 +165,15 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
 
   const fetchCompanyName = async () => {
     if (!effectiveCompanyId) return;
-    const { data, error } = await supabase
-      .from('companies')
-      .select('name')
-      .eq('id', effectiveCompanyId)
-      .single();
-    if (data && !error) setCompanyName(data.name);
+    try {
+      const res = await fetch(`/api/companies?id=${effectiveCompanyId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.name) setCompanyName(data.name);
+      }
+    } catch (e) {
+      console.error('Failed to fetch company name:', e);
+    }
   };
 
   const handleStopImpersonation = () => {

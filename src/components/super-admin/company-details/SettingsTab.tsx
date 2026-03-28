@@ -6,7 +6,6 @@ import { Settings, Bot } from 'lucide-react';
 import { Company } from '@/hooks/useCompanies';
 import { WhatsAppConfigCard } from './WhatsAppConfigCard';
 
-import { supabase } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -26,21 +25,22 @@ export function SettingsTab({ company }: SettingsTabProps) {
   const handleTogglePromptEditing = async (checked: boolean) => {
     setIsUpdating(true);
     try {
-      const currentSettings = companySettings || {};
-      const newSettings = { ...currentSettings, allow_prompt_editing: checked };
-
-      const { error } = await supabase
-        .from('companies')
-        .update({ settings: newSettings })
-        .eq('id', company.id);
-
-      if (error) throw error;
+      const res = await fetch('/api/company-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId: company.id,
+          settings: { allow_prompt_editing: checked },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro');
 
       queryClient.invalidateQueries({ queryKey: ['company', company.id] });
       toast({
         title: checked ? 'Edição de prompts habilitada' : 'Edição de prompts desabilitada',
-        description: checked 
-          ? 'A empresa agora pode editar seus próprios prompts' 
+        description: checked
+          ? 'A empresa agora pode editar seus próprios prompts'
           : 'A empresa não pode mais editar prompts',
       });
     } catch (error) {

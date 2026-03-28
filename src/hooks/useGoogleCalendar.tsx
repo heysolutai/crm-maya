@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
-import { invokeFn } from '@/lib/supabase-functions-adapter';
+import { invokeFn } from '@/lib/api-functions';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { useToast } from './use-toast';
 
@@ -22,52 +21,47 @@ export function useGoogleCalendar() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Buscar conexão existente
   const { data: connection, isLoading } = useQuery({
     queryKey: ['google-calendar-connection', companyId],
     queryFn: async () => {
       if (!companyId) return null;
 
-      const { data, error } = await supabase
-        .from('google_calendar_connections')
-        .select('*')
-        .eq('company_id', companyId)
-        .maybeSingle();
+      const res = await fetch(`/api/google-calendar-connections?companyId=${companyId}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data) return null;
 
-      if (error) {
-        console.error('Error fetching Google Calendar connection:', error);
-        return null;
-      }
-
-      return data as GoogleCalendarConnection | null;
+      return {
+        ...data,
+        company_id: data.companyId || data.company_id,
+        calendar_id: data.calendarId || data.calendar_id,
+        calendar_name: data.calendarName || data.calendar_name,
+        connected_email: data.connectedEmail || data.connected_email,
+        is_active: data.isActive ?? data.is_active,
+        sync_enabled: data.syncEnabled ?? data.sync_enabled,
+        create_meet_links: data.createMeetLinks ?? data.create_meet_links,
+        created_at: data.createdAt || data.created_at,
+        updated_at: data.updatedAt || data.updated_at,
+      } as GoogleCalendarConnection;
     },
     enabled: !!companyId,
   });
 
-  // Iniciar processo de conexão
   const connectMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await invokeFn('google-calendar-auth');
-
       if (error) throw error;
       if (!data?.url) throw new Error('Failed to get auth URL');
-
       return data.url;
     },
     onSuccess: (url) => {
-      // Abrir popup de autorização
       window.open(url, '_blank', 'width=500,height=600');
     },
     onError: (error: any) => {
-      toast({
-        title: 'Erro ao conectar',
-        description: error.message || 'Não foi possível iniciar a conexão',
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro ao conectar', description: error.message || 'Não foi possível iniciar a conexão', variant: 'destructive' });
     },
   });
 
-  // Desconectar
   const disconnectMutation = useMutation({
     mutationFn: async () => {
       const { error } = await invokeFn('disconnect-google-calendar');
@@ -75,44 +69,38 @@ export function useGoogleCalendar() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['google-calendar-connection'] });
-      toast({
-        title: 'Google Calendar desconectado',
-        description: 'A integração foi removida com sucesso',
-      });
+      toast({ title: 'Google Calendar desconectado', description: 'A integração foi removida com sucesso' });
     },
     onError: (error: any) => {
-      toast({
-        title: 'Erro ao desconectar',
-        description: error.message || 'Não foi possível desconectar',
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro ao desconectar', description: error.message || 'Não foi possível desconectar', variant: 'destructive' });
     },
   });
 
-  // Atualizar configurações
   const updateSettingsMutation = useMutation({
     mutationFn: async (settings: { sync_enabled?: boolean; create_meet_links?: boolean }) => {
       if (!connection?.id) throw new Error('No connection found');
 
-      const { error } = await supabase
-        .from('google_calendar_connections')
-        .update(settings)
-        .eq('id', connection.id);
+      const res = await fetch('/api/google-calendar-connections', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: connection.id,
+          syncEnabled: settings.sync_enabled,
+          createMeetLinks: settings.create_meet_links,
+        }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update settings');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['google-calendar-connection'] });
-      toast({
-        title: 'Configurações atualizadas',
-      });
+      toast({ title: 'Configurações atualizadas' });
     },
     onError: (error: any) => {
-      toast({
-        title: 'Erro ao atualizar',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
     },
   });
 

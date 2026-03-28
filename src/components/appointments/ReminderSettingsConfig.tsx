@@ -8,9 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Bell, Clock, X, Save, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/lib/supabase/client';
 import { useEffectiveCompanyId } from '@/hooks/useEffectiveCompanyId';
-import { Json } from '@/types/database';
 
 interface ReminderOffset {
   minutes: number;
@@ -66,17 +64,11 @@ export function ReminderSettingsConfig() {
   useEffect(() => {
     const loadSettings = async () => {
       if (!companyId) return;
-      
+
       try {
-        const { data, error } = await supabase
-          .from('companies')
-          .select('settings')
-          .eq('id', companyId)
-          .single();
-
-        if (error) throw error;
-
-        const settings = data?.settings as Record<string, unknown> | null;
+        const res = await fetch(`/api/company-settings?companyId=${companyId}`);
+        if (!res.ok) throw new Error('Failed to load');
+        const settings = await res.json();
         const appointmentSettings = settings?.appointment_settings as AppointmentSettings | undefined;
 
         if (appointmentSettings) {
@@ -105,32 +97,22 @@ export function ReminderSettingsConfig() {
 
     setIsSaving(true);
     try {
-      // Buscar settings atuais
-      const { data: currentData } = await supabase
-        .from('companies')
-        .select('settings')
-        .eq('id', companyId)
-        .single();
-
-      const currentSettings = (currentData?.settings as Record<string, unknown>) || {};
-
-      // Atualizar apenas appointment_settings
-      const newSettings = {
-        ...currentSettings,
-        appointment_settings: {
-          ...(currentSettings.appointment_settings as Record<string, unknown> || {}),
-          reminder_offsets: offsets as unknown as Json,
-          reminder_message_template: messageTemplate,
-          reminder_delivery_hours: deliveryHours as unknown as Json,
-        },
-      } as Json;
-
-      const { error } = await supabase
-        .from('companies')
-        .update({ settings: newSettings })
-        .eq('id', companyId);
-
-      if (error) throw error;
+      const res = await fetch('/api/company-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId,
+          settings: {
+            appointment_settings: {
+              reminder_offsets: offsets,
+              reminder_message_template: messageTemplate,
+              reminder_delivery_hours: deliveryHours,
+            },
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro');
 
       toast({ title: 'Configurações salvas com sucesso!' });
     } catch (error) {

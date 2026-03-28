@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, notFoundResponse, unauthorizedResponse } from '@/lib/api/cors';
 
@@ -29,7 +29,6 @@ export async function POST(req: NextRequest) {
     }
     console.log('[Sync KB] Webhook URL:', knowledgeWebhookUrl.substring(0, 60) + '...');
 
-    const supabase = createAdminClient();
     const body = await req.json();
     const { company_id } = body;
 
@@ -41,7 +40,9 @@ export async function POST(req: NextRequest) {
     if (company_id !== authResult.companyId) {
       // Allow super_admin to sync any company
       if (authResult.agentId) {
-        const { data: isSuperAdmin } = await supabase.rpc('has_role', { _user_id: authResult.agentId, _role: 'super_admin' });
+        const isSuperAdmin = await prisma.userRole.findFirst({
+          where: { userId: authResult.agentId, role: 'super_admin' },
+        });
         if (!isSuperAdmin) {
           console.error('[Sync KB] ❌ company_id mismatch and not super_admin: body=', company_id, 'auth=', authResult.companyId);
           return jsonResponse({ error: 'Forbidden: company_id mismatch' }, 403);
@@ -55,26 +56,23 @@ export async function POST(req: NextRequest) {
 
     console.log('[Sync KB] Processing request for company:', company_id);
 
-    const { data: company, error: companyError } = await supabase.from('companies').select('name').eq('id', company_id).single();
-    if (companyError || !company) {
-      console.error('[Sync KB] ❌ Company not found:', companyError?.message);
+    const company = await prisma.company.findUnique({
+      where: { id: company_id },
+      select: { name: true },
+    });
+    if (!company) {
+      console.error('[Sync KB] ❌ Company not found');
       return notFoundResponse('Company not found');
     }
 
     const knowledgeName = 'know_' + normalizeCompanyName(company.name);
     console.log('[Sync KB] Generated knowledge name:', knowledgeName);
 
-    const { data: faqs, error: faqsError } = await supabase
-      .from('company_faqs')
-      .select('question, answer, keywords, category')
-      .eq('company_id', company_id)
-      .eq('is_active', true)
-      .order('order_position', { ascending: true });
-
-    if (faqsError) {
-      console.error('[Sync KB] ❌ Failed to fetch FAQs:', faqsError.message);
-      return errorResponse('Failed to fetch FAQs');
-    }
+    const faqs = await prisma.companyFaq.findMany({
+      where: { companyId: company_id, isActive: true },
+      select: { question: true, answer: true, keywords: true, category: true },
+      orderBy: { orderPosition: 'asc' },
+    });
 
     console.log('[Sync KB] Found', faqs?.length || 0, 'active FAQs');
 
@@ -92,8 +90,14 @@ export async function POST(req: NextRequest) {
 
     console.log('[Sync KB] ✅ Webhook sent successfully');
 
-    const { error: updateError } = await supabase.from('ai_configurations').update({ knowledge: knowledgeName }).eq('company_id', company_id).eq('is_active', true);
-    if (updateError) console.warn('[Sync KB] ⚠ Failed to update ai_configurations:', updateError);
+    try {
+      await prisma.aiConfiguration.updateMany({
+        where: { companyId: company_id, isActive: true },
+        data: { knowledge: knowledgeName },
+      });
+    } catch (updateError) {
+      console.warn('[Sync KB] ⚠ Failed to update ai_configurations:', updateError);
+    }
 
     console.log('[Sync KB] ✅ Done! knowledge_name:', knowledgeName, 'faqs_count:', faqs?.length || 0);
     return jsonResponse({ success: true, knowledge_name: knowledgeName, faqs_count: faqs?.length || 0 });

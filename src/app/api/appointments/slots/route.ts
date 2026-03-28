@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse } from '@/lib/api/cors';
 import {
   apiError, apiSuccess, formatWithBrazilOffset, defaultBusinessHours,
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateApiKey(req);
     if ('error' in auth) return auth.error;
-    const { supabase, company, settings } = auth;
+    const { company, settings } = auth;
     const companyId = company.id;
     const url = req.nextUrl;
 
@@ -40,22 +41,31 @@ export async function GET(req: NextRequest) {
     const dayStart = new Date(Date.UTC(year, month - 1, day, 0 - BRAZIL_OFFSET, 0, 0, 0));
     const dayEnd = new Date(Date.UTC(year, month - 1, day, 23 - BRAZIL_OFFSET, 59, 59, 999));
 
-    let query = supabase!.from('appointments')
-      .select('id, scheduled_for, duration_minutes, client:clients(first_name, last_name)')
-      .eq('company_id', companyId).gte('scheduled_for', dayStart.toISOString())
-      .lte('scheduled_for', dayEnd.toISOString()).neq('status', 'cancelled');
-    if (assignedTo) query = query.eq('assigned_to', assignedTo);
+    const whereClause: any = {
+      companyId,
+      scheduledFor: { gte: dayStart, lte: dayEnd },
+      status: { not: 'cancelled' },
+    };
+    if (assignedTo) whereClause.assignedTo = assignedTo;
 
-    const { data: existing } = await query;
+    const existing = await prisma.appointment.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        scheduledFor: true,
+        durationMinutes: true,
+        client: { select: { firstName: true, lastName: true } },
+      },
+    });
 
     const bufferMs = (apptSettings.buffer_between_appointments_minutes || 0) * 60 * 1000;
     const checkConflict = (slotStart: Date, slotEnd: Date) => {
       for (const a of existing || []) {
-        const aStart = new Date(a.scheduled_for);
-        const aEnd = new Date(aStart.getTime() + (a.duration_minutes || 60) * 60 * 1000 + bufferMs);
+        const aStart = new Date(a.scheduledFor);
+        const aEnd = new Date(aStart.getTime() + (a.durationMinutes || 60) * 60 * 1000 + bufferMs);
         if (slotStart < aEnd && slotEnd > aStart) {
           const c = a.client as any;
-          return { hasConflict: true, clientName: c ? `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Cliente' : 'Cliente' };
+          return { hasConflict: true, clientName: c ? `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Cliente' : 'Cliente' };
         }
       }
       return { hasConflict: false, clientName: null };

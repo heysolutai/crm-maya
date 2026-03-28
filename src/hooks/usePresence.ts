@@ -1,9 +1,8 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from 'react';
-import { supabase } from '@/lib/supabase/client';
 import { useAuth } from './useAuth';
-import { invokeFn } from '@/lib/supabase-functions-adapter';
+import { invokeFn } from '@/lib/api-functions';
 import React from 'react';
 
 interface PresenceContextType {
@@ -21,13 +20,14 @@ export function usePresenceContext() {
 }
 
 const HEARTBEAT_INTERVAL = 60_000; // 60 seconds
+const PRESENCE_POLL_INTERVAL = 30_000; // 30 seconds
 
 export function PresenceProvider({ children }: { children: ReactNode }) {
   const { user, companyId } = useAuth();
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
   const [isOnline, setIsOnline] = useState(false);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const setPresence = useCallback(async (action: 'online' | 'offline' | 'heartbeat') => {
     if (!user?.id) return;
@@ -50,10 +50,21 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const pollOnlineUsers = useCallback(async () => {
+    if (!companyId) return;
+    try {
+      const res = await fetch(`/api/presence-poll?companyId=${companyId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setOnlineUserIds(data.onlineUserIds || []);
+      }
+    } catch (e) {
+      console.warn('[Presence] Failed to poll online users:', e);
+    }
+  }, [companyId]);
+
   useEffect(() => {
     if (!user?.id || !companyId) return;
-
-    const channelName = `company-presence:${companyId}`;
 
     // Set online
     setPresence('online').then(() => {
@@ -61,24 +72,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
       pickupQueuedConversations();
     });
 
-    // Join presence channel
-    const channel = supabase.channel(channelName, {
-      config: { presence: { key: user.id } },
-    });
-
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
-        const ids = Object.keys(state);
-        setOnlineUserIds(ids);
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({ user_id: user.id, online_at: new Date().toISOString() });
-        }
-      });
-
-    channelRef.current = channel;
+    // Poll for online users (replaces Supabase presence channel)
+    pollOnlineUsers();
+    pollRef.current = setInterval(pollOnlineUsers, PRESENCE_POLL_INTERVAL);
 
     // Heartbeat
     heartbeatRef.current = setInterval(() => {
@@ -87,7 +83,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
     // Handle tab close / navigation away
     const handleBeforeUnload = () => {
-      // Use sendBeacon for reliable offline notification
       const payload = JSON.stringify({ action: 'offline', user_id: user.id });
       navigator.sendBeacon('/api/user/presence', payload);
     };
@@ -102,15 +97,15 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         heartbeatRef.current = null;
       }
 
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
       }
 
       setPresence('offline');
       setIsOnline(false);
     };
-  }, [user?.id, companyId, setPresence, pickupQueuedConversations]);
+  }, [user?.id, companyId, setPresence, pickupQueuedConversations, pollOnlineUsers]);
 
   return React.createElement(
     PresenceContext.Provider,

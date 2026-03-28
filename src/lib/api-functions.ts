@@ -7,8 +7,6 @@
  *   const { data, error } = await invokeFn('send-message-text', payload)
  */
 
-import { supabase } from '@/lib/supabase/client'
-
 const routeMap: Record<string, string> = {
   // WhatsApp
   'send-message-text': '/api/whatsapp/send-text',
@@ -80,17 +78,9 @@ export async function invokeFn<T = any>(
   }
 
   try {
-    // Auto-attach auth token if not explicitly provided
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...options?.headers,
-    }
-
-    if (!headers['Authorization']) {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`
-      }
     }
 
     const response = await fetch(route, {

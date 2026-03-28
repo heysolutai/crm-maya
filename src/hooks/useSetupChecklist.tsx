@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 
 export type ChecklistStatus = 'red' | 'yellow' | 'green';
 
@@ -11,106 +10,42 @@ export interface ChecklistItem {
 }
 
 export function useSetupChecklist(companyId: string | undefined) {
-  const { data: aiConfig } = useQuery({
-    queryKey: ['setup-checklist-ai', companyId],
+  const { data } = useQuery({
+    queryKey: ['setup-checklist', companyId],
     queryFn: async () => {
       if (!companyId) return null;
-      const { data } = await supabase
-        .from('ai_configurations')
-        .select('*')
-        .eq('company_id', companyId)
-        .eq('is_active', true)
-        .maybeSingle();
-      return data;
+      const res = await fetch(`/api/setup-checklist?companyId=${companyId}`);
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch checklist data');
+      return await res.json();
     },
     enabled: !!companyId,
   });
 
-  const { data: company } = useQuery({
-    queryKey: ['setup-checklist-company', companyId],
-    queryFn: async () => {
-      if (!companyId) return null;
-      const { data } = await supabase
-        .from('companies')
-        .select('settings')
-        .eq('id', companyId)
-        .maybeSingle();
-      return data;
-    },
-    enabled: !!companyId,
-  });
-
-  const { data: whatsappInstances } = useQuery({
-    queryKey: ['setup-checklist-whatsapp', companyId],
-    queryFn: async () => {
-      if (!companyId) return [];
-      const { data } = await supabase
-        .from('whatsapp_instances')
-        .select('id, status, is_active')
-        .eq('company_id', companyId);
-      return data || [];
-    },
-    enabled: !!companyId,
-  });
-
-  const { data: apiKeys } = useQuery({
-    queryKey: ['setup-checklist-apikeys', companyId],
-    queryFn: async () => {
-      if (!companyId) return [];
-      const { data } = await supabase
-        .from('api_keys')
-        .select('id, is_active')
-        .eq('company_id', companyId)
-        .eq('is_active', true);
-      return data || [];
-    },
-    enabled: !!companyId,
-  });
-
-  const { data: faqs } = useQuery({
-    queryKey: ['setup-checklist-faqs', companyId],
-    queryFn: async () => {
-      if (!companyId) return [];
-      const { data } = await supabase
-        .from('company_faqs')
-        .select('id, answer, is_active')
-        .eq('company_id', companyId)
-        .eq('is_active', true);
-      return data || [];
-    },
-    enabled: !!companyId,
-  });
-
-  const { data: googleCalendar } = useQuery({
-    queryKey: ['setup-checklist-gcal', companyId],
-    queryFn: async () => {
-      if (!companyId) return null;
-      const { data } = await supabase
-        .from('google_calendar_connections')
-        .select('id, is_active')
-        .eq('company_id', companyId)
-        .eq('is_active', true)
-        .maybeSingle();
-      return data;
-    },
-    enabled: !!companyId,
-  });
+  const aiConfig = data?.aiConfig;
+  const company = data?.company;
+  const whatsappInstances = data?.whatsappInstances || [];
+  const apiKeys = data?.apiKeys || [];
+  const faqs = data?.faqs || [];
+  const googleCalendar = data?.googleCalendar;
 
   // Build checklist
   const prompts = (aiConfig?.prompts as any) || {};
-  const apiKeysConfig = (aiConfig?.api_keys as any) || {};
-  const behaviorSettings = (aiConfig?.behavior_settings as any) || {};
+  const apiKeysConfig = (aiConfig?.apiKeys ?? aiConfig?.api_keys as any) || {};
+  const behaviorSettings = (aiConfig?.behaviorSettings ?? aiConfig?.behavior_settings as any) || {};
   const settings = (company?.settings as any) || {};
   const businessHours = settings?.business_hours;
   const appointmentSettings = settings?.appointment_settings;
-  const followUpStages = (aiConfig?.follow_up_stages as any[]) || [];
-  const followUpEnabled = aiConfig?.follow_up_enabled ?? false;
+  const followUpStages = (aiConfig?.followUpStages ?? aiConfig?.follow_up_stages as any[]) || [];
+  const followUpEnabled = aiConfig?.followUpEnabled ?? aiConfig?.follow_up_enabled ?? false;
 
-  const hasActiveWhatsapp = whatsappInstances?.some((i: any) => i.is_active) ?? false;
+  const hasActiveWhatsapp = whatsappInstances?.some((i: any) => i.isActive ?? i.is_active) ?? false;
   const hasConnectedWhatsapp = whatsappInstances?.some((i: any) => i.status === 'connected' || i.status === 'open') ?? false;
   const hasAIApiKey = !!(apiKeysConfig.openai || apiKeysConfig.anthropic || apiKeysConfig.gemini);
   const hasProtectionApiKey = (apiKeys?.length ?? 0) > 0;
-  const hasFAQsWithAnswers = faqs?.some((f: any) => f.answer && f.answer.trim().length > 0) ?? false;
+  const hasFAQsWithAnswers = faqs?.some((f: any) => {
+    const answer = f.answer;
+    return answer && answer.trim().length > 0;
+  }) ?? false;
   const hasBusinessHours = businessHours && Object.values(businessHours).some((d: any) => d?.enabled);
   const hasAppointmentSettings = !!(appointmentSettings?.default_duration_minutes);
 
@@ -119,9 +54,11 @@ export function useSetupChecklist(companyId: string | undefined) {
   const evaluate = (condition: boolean): ChecklistStatus => condition ? 'green' : 'red';
   const evaluateYellow = (condition: boolean): ChecklistStatus => condition ? 'green' : 'yellow';
 
+  const whatsappInstanceId = aiConfig?.whatsappInstanceId ?? aiConfig?.whatsapp_instance_id;
+
   const items: ChecklistItem[] = [
     // RED items (1-13)
-    { id: 1, label: 'Instância', status: evaluate(!!aiConfig?.whatsapp_instance_id), category: 'red' },
+    { id: 1, label: 'Instância', status: evaluate(!!whatsappInstanceId), category: 'red' },
     { id: 2, label: 'Persona', status: evaluate(hasText(prompts.persona)), category: 'red' },
     { id: 3, label: 'Comportamento', status: evaluate(hasText(prompts.behavior)), category: 'red' },
     { id: 4, label: 'Funil de Atendimento', status: evaluate(hasText(prompts.attendance_funnel)), category: 'red' },

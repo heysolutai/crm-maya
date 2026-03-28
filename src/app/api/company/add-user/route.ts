@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
+import bcrypt from 'bcryptjs';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, notFoundResponse } from '@/lib/api/cors';
 
@@ -9,16 +10,15 @@ export async function OPTIONS(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createAdminClient();
-
     const { agentId } = await authenticate(req);
 
     if (!agentId) {
       return errorResponse('Super admin authentication required (Bearer token)', 403);
     }
 
-    const { data: roleCheck } = await supabase
-      .rpc('has_role', { _user_id: agentId, _role: 'super_admin' });
+    const roleCheck = await prisma.userRole.findFirst({
+      where: { userId: agentId, role: 'super_admin' },
+    });
 
     if (!roleCheck) {
       return errorResponse('Only super admins can add users to companies', 403);
@@ -35,68 +35,64 @@ export async function POST(req: NextRequest) {
       return badRequestResponse('Invalid email format');
     }
 
-    const { data: company, error: companyError } = await supabase
-      .from('companies')
-      .select('id, name')
-      .eq('id', company_id)
-      .single();
+    const company = await prisma.company.findUnique({
+      where: { id: company_id },
+      select: { id: true, name: true },
+    });
 
-    if (companyError || !company) {
+    if (!company) {
       return notFoundResponse('Company not found');
     }
 
-    const { data: newUser, error: createUserError } = await supabase.auth.admin.createUser({
-      email,
-      email_confirm: true,
-      user_metadata: { full_name },
+    // Check if user already exists
+    const existingUser = await prisma.user.findFirst({
+      where: { email: email.toLowerCase() },
     });
 
-    if (createUserError) {
-      return badRequestResponse(`Failed to create user: ${createUserError.message}`);
+    if (existingUser) {
+      return badRequestResponse(`Failed to create user: User with email ${email} already exists`);
     }
 
-    const { error: insertUserError } = await supabase
-      .from('users')
-      .insert({
-        id: newUser.user.id,
-        email,
-        full_name,
-        phone: phone || null,
-        company_id,
-        is_active: true,
+    // Create user with a random password hash (user will need to set password)
+    const randomPassword = Math.random().toString(36).slice(-12);
+    const hash = await bcrypt.hash(randomPassword, 12);
+
+    let newUser;
+    try {
+      newUser = await prisma.user.create({
+        data: {
+          email,
+          fullName: full_name,
+          passwordHash: hash,
+          phone: phone || null,
+          companyId: company_id,
+          isActive: true,
+        },
       });
-
-    if (insertUserError) {
-      await supabase.auth.admin.deleteUser(newUser.user.id);
-      return errorResponse(`Failed to create user profile: ${insertUserError.message}`);
-    }
-
-    const { error: roleInsertError } = await supabase
-      .from('user_roles')
-      .insert({ user_id: newUser.user.id, role, company_id });
-
-    if (roleInsertError) {
-      await supabase.from('users').delete().eq('id', newUser.user.id);
-      await supabase.auth.admin.deleteUser(newUser.user.id);
-      return errorResponse(`Failed to assign role: ${roleInsertError.message}`);
+    } catch (createError: any) {
+      return badRequestResponse(`Failed to create user: ${createError.message}`);
     }
 
     try {
-      await supabase.auth.admin.generateLink({ type: 'recovery', email });
-    } catch (emailError) {
-      console.error('Error with password reset email:', emailError);
+      await prisma.userRole.create({
+        data: { userId: newUser.id, role, companyId: company_id },
+      });
+    } catch (roleError: any) {
+      await prisma.user.delete({ where: { id: newUser.id } });
+      return errorResponse(`Failed to assign role: ${roleError.message}`);
     }
 
-    const { data: createdUser } = await supabase
-      .from('users')
-      .select('*, user_roles!inner(role)')
-      .eq('id', newUser.user.id)
-      .single();
+    // Skip link generation (was supabase.auth.admin.generateLink)
+
+    const createdUser = await prisma.user.findUnique({
+      where: { id: newUser.id },
+      include: { userRoles: { select: { role: true } } },
+    });
 
     return jsonResponse({
       success: true,
       user: createdUser || {
-        id: newUser.user.id,
+        id: newUser.id,
         email,
         full_name,
         phone,

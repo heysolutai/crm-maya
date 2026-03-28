@@ -1,8 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
-import { invokeFn } from '@/lib/supabase-functions-adapter';
+import { invokeFn } from '@/lib/api-functions';
 import { useToast } from './use-toast';
-import { Json } from '@/types/database';
 import { getErrorMessage } from '@/utils/getErrorMessage';
 
 export interface Company {
@@ -18,7 +16,7 @@ export interface Company {
   created_at: string;
   updated_at: string;
   whatsapp_instance_name: string | null;
-  settings: Json | null;
+  settings: any | null;
   whatsapp_phone?: string | null;
 }
 
@@ -29,32 +27,21 @@ export function useCompanies() {
   const { data: companies, isLoading, error } = useQuery({
     queryKey: ['companies'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('companies')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Fetch WhatsApp connected phones
-      const { data: waInstances } = await supabase
-        .from('whatsapp_instances')
-        .select('company_id, metadata');
-
-      const phoneMap = new Map<string, string>();
-      if (waInstances) {
-        for (const inst of waInstances) {
-          const phone = (inst.metadata as any)?.connected_phone;
-          if (phone && typeof phone === 'string' && phone.length >= 10) {
-            phoneMap.set(inst.company_id, phone);
-          }
-        }
-      }
-
-      return (data as Company[]).map(c => ({
+      const res = await fetch('/api/companies');
+      if (!res.ok) throw new Error('Failed to fetch companies');
+      const data = await res.json();
+      return (data || []).map((c: any) => ({
         ...c,
-        whatsapp_phone: phoneMap.get(c.id) || null,
-      }));
+        trade_name: c.tradeName || c.trade_name,
+        subscription_status: c.subscriptionStatus || c.subscription_status,
+        trial_ends_at: c.trialEndsAt || c.trial_ends_at,
+        subscription_expires_at: c.subscriptionExpiresAt || c.subscription_expires_at,
+        is_active: c.isActive ?? c.is_active,
+        created_at: c.createdAt || c.created_at,
+        updated_at: c.updatedAt || c.updated_at,
+        whatsapp_instance_name: c.whatsappInstanceName || c.whatsapp_instance_name,
+        whatsapp_phone: c.whatsapp_phone || null,
+      })) as Company[];
     },
   });
 
@@ -66,10 +53,7 @@ export function useCompanies() {
       ownerPassword?: string;
     }) => {
       const { data, error } = await invokeFn('create-company-with-owner', params);
-
-      if (error) {
-        throw new Error(error);
-      }
+      if (error) throw new Error(error);
       return data;
     },
     onSuccess: () => {
@@ -77,57 +61,47 @@ export function useCompanies() {
       toast({ title: 'Empresa criada com sucesso!' });
     },
     onError: (error: any) => {
-      toast({
-        title: 'Erro ao criar empresa',
-        description: getErrorMessage(error),
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro ao criar empresa', description: getErrorMessage(error), variant: 'destructive' });
     },
   });
 
   const updateCompany = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Company> }) => {
-      const { data, error } = await supabase
-        .from('companies')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
+      const res = await fetch('/api/companies', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...updates }),
+      });
 
-      if (error) throw error;
-      return data;
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update company');
+      }
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       toast({ title: 'Empresa atualizada com sucesso!' });
     },
     onError: (error: any) => {
-      toast({
-        title: 'Erro ao atualizar empresa',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro ao atualizar empresa', description: error.message, variant: 'destructive' });
     },
   });
 
   const deleteCompany = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.rpc('delete_company_cascade', {
-        p_company_id: id,
-      });
-
-      if (error) throw error;
+      const res = await fetch(`/api/companies?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete company');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       toast({ title: 'Empresa excluída com sucesso!' });
     },
     onError: (error: any) => {
-      toast({
-        title: 'Erro ao excluir empresa',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro ao excluir empresa', description: error.message, variant: 'destructive' });
     },
   });
 

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase/client';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from '@/hooks/use-toast';
 
@@ -23,17 +22,22 @@ export function useFunnelStages() {
 
   const fetchStages = async () => {
     if (!companyId) return;
-    
+
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('funnel_stages')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('order_position', { ascending: true });
-
-      if (error) throw error;
-      setStages(data || []);
+      const res = await fetch(`/api/funnel-stages?companyId=${companyId}`);
+      if (!res.ok) throw new Error('Failed to fetch stages');
+      const data = await res.json();
+      // Normalize Prisma camelCase to snake_case
+      setStages((data || []).map((s: any) => ({
+        ...s,
+        company_id: s.companyId || s.company_id,
+        order_position: s.orderPosition ?? s.order_position,
+        is_default: s.isDefault ?? s.is_default,
+        is_final: s.isFinal ?? s.is_final,
+        created_at: s.createdAt || s.created_at,
+        updated_at: s.updatedAt || s.updated_at,
+      })));
     } catch (error: any) {
       toast({
         title: 'Erro ao carregar stages',
@@ -53,84 +57,63 @@ export function useFunnelStages() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('funnel_stages')
-        .insert([{ 
-          ...stageData, 
+      const res = await fetch('/api/funnel-stages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...stageData,
           company_id: companyId,
-          name: stageData.name,
-          order_position: stageData.order_position
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      toast({
-        title: 'Stage criado',
-        description: 'Stage adicionado com sucesso!',
+        }),
       });
-      
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to create stage');
+      }
+      const data = await res.json();
+
+      toast({ title: 'Stage criado', description: 'Stage adicionado com sucesso!' });
       fetchStages();
       return data;
     } catch (error: any) {
-      toast({
-        title: 'Erro ao criar stage',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro ao criar stage', description: error.message, variant: 'destructive' });
       return null;
     }
   };
 
   const updateStage = async (id: string, stageData: Partial<FunnelStage>) => {
     try {
-      const { error } = await supabase
-        .from('funnel_stages')
-        .update(stageData)
-        .eq('id', id);
-
-      if (error) throw error;
-      
-      toast({
-        title: 'Stage atualizado',
-        description: 'Alterações salvas com sucesso!',
+      const res = await fetch('/api/funnel-stages', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...stageData }),
       });
-      
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update stage');
+      }
+
+      toast({ title: 'Stage atualizado', description: 'Alterações salvas com sucesso!' });
       fetchStages();
       return true;
     } catch (error: any) {
-      toast({
-        title: 'Erro ao atualizar stage',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro ao atualizar stage', description: error.message, variant: 'destructive' });
       return false;
     }
   };
 
   const deleteStage = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('funnel_stages')
-        .delete()
-        .eq('id', id);
+      const res = await fetch(`/api/funnel-stages?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete stage');
+      }
 
-      if (error) throw error;
-      
-      toast({
-        title: 'Stage removido',
-        description: 'Stage excluído com sucesso!',
-      });
-      
+      toast({ title: 'Stage removido', description: 'Stage excluído com sucesso!' });
       fetchStages();
       return true;
     } catch (error: any) {
-      toast({
-        title: 'Erro ao remover stage',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro ao remover stage', description: error.message, variant: 'destructive' });
       return false;
     }
   };

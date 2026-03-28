@@ -7,7 +7,6 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Bell, Plus, Trash2, Save } from "lucide-react";
-import { supabase } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
 interface ReminderOffset {
@@ -47,15 +46,10 @@ export function AppointmentRemindersConfig({ companyId }: AppointmentRemindersCo
   useEffect(() => {
     async function loadSettings() {
       try {
-        const { data, error } = await supabase
-          .from('companies')
-          .select('settings')
-          .eq('id', companyId)
-          .single();
+        const res = await fetch(`/api/company-settings?companyId=${companyId}`);
+        if (!res.ok) throw new Error('Failed to load');
+        const companySettings = await res.json();
 
-        if (error) throw error;
-
-        const companySettings = data?.settings as Record<string, any> | null;
         const appointmentSettings = companySettings?.appointment_settings as AppointmentSettings | undefined;
         if (appointmentSettings) {
           setSettings({
@@ -76,28 +70,16 @@ export function AppointmentRemindersConfig({ companyId }: AppointmentRemindersCo
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // First get current settings
-      const { data: company, error: fetchError } = await supabase
-        .from('companies')
-        .select('settings')
-        .eq('id', companyId)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      // Merge with existing settings
-      const currentSettings = (company?.settings as Record<string, unknown>) || {};
-      const newSettings = {
-        ...currentSettings,
-        appointment_settings: settings as unknown,
-      };
-
-      const { error } = await supabase
-        .from('companies')
-        .update({ settings: newSettings as any })
-        .eq('id', companyId);
-
-      if (error) throw error;
+      const res = await fetch('/api/company-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId,
+          settings: { appointment_settings: settings },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro');
 
       toast.success('Configurações de lembretes salvas!');
     } catch (error) {

@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { jsonResponse, errorResponse, unauthorizedResponse } from '@/lib/api/cors';
 import { NextResponse } from 'next/server';
 
@@ -68,37 +68,40 @@ export async function authenticateApiKey(req: Request) {
   const apiKey = req.headers.get('x-api-key');
   if (!apiKey) return { error: apiError('Chave de API não fornecida.', 'API_KEY_REQUIRED', 401) };
 
-  const supabase = createAdminClient();
-  const { data: keyData, error: keyError } = await supabase
-    .from('api_keys').select('company_id, is_active, id').eq('key', apiKey).single();
+  const keyData = await prisma.apiKey.findFirst({
+    where: { key: apiKey },
+    select: { companyId: true, isActive: true, id: true },
+  });
 
-  if (keyError || !keyData || !keyData.is_active) {
+  if (!keyData || !keyData.isActive) {
     return { error: apiError('Chave de API inválida ou inativa.', 'INVALID_API_KEY', 401) };
   }
 
-  const { data: company, error: companyError } = await supabase
-    .from('companies').select('id, name, settings').eq('id', keyData.company_id).single();
+  const company = await prisma.company.findUnique({
+    where: { id: keyData.companyId },
+    select: { id: true, name: true, settings: true },
+  });
 
-  if (companyError || !company) {
+  if (!company) {
     return { error: apiError('Empresa não encontrada.', 'COMPANY_NOT_FOUND', 404) };
   }
 
-  await supabase.from('api_keys').update({ last_used_at: new Date().toISOString() }).eq('id', keyData.id);
+  await prisma.apiKey.update({
+    where: { id: keyData.id },
+    data: { lastUsedAt: new Date() },
+  });
 
-  return { supabase, company, settings: (company.settings || {}) as CompanySettings };
+  return { company, settings: (company.settings || {}) as CompanySettings };
 }
 
 export async function syncWithGoogleCalendar(companyId: string, appointmentId: string, action: 'create' | 'update' | 'delete', googleEventId?: string | null) {
-  const supabase = createAdminClient();
   try {
-    const { data: conn } = await supabase
-      .from('google_calendar_connections')
-      .select('id, sync_enabled')
-      .eq('company_id', companyId)
-      .eq('is_active', true)
-      .single();
+    const conn = await prisma.googleCalendarConnection.findFirst({
+      where: { companyId, isActive: true },
+      select: { id: true, syncEnabled: true },
+    });
 
-    if (conn?.sync_enabled && (action === 'create' || googleEventId)) {
+    if (conn?.syncEnabled && (action === 'create' || googleEventId)) {
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (process.env.INTERNAL_API_SECRET) {

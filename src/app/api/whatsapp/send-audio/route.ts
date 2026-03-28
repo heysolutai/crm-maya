@@ -1,9 +1,11 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { getWhatsAppInstance, findOrCreateConversation, saveMessage, getClientPhoneByConversationId } from '@/lib/api/database';
 import { sendToWhatsApp } from '@/lib/api/whatsapp';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
+import fs from 'fs';
+import path from 'path';
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
@@ -28,29 +30,29 @@ export async function POST(req: NextRequest) {
     const instance = await getWhatsAppInstance(companyId);
     if (!conversationId) conversationId = await findOrCreateConversation(phone, companyId);
 
-    const supabase = createAdminClient();
-
-    // Convert base64 to Uint8Array
-    const binaryString = atob(audioBase64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+    // Convert base64 to Buffer and save to filesystem
+    const buffer = Buffer.from(audioBase64, 'base64');
 
     const extension = mimeType?.includes('mp4') ? 'mp4' : mimeType?.includes('webm') ? 'webm' : mimeType?.includes('ogg') ? 'ogg' : 'webm';
     const fileName = `audio_${conversationId}_${Date.now()}.${extension}`;
-    const filePath = `audios/${companyId}/${fileName}`;
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'audios', companyId);
 
-    const { error: uploadError } = await supabase.storage.from('conversation-media').upload(filePath, bytes, { contentType: mimeType || 'audio/webm', upsert: false });
-    if (uploadError) throw new Error('Failed to upload audio file');
+    // Ensure directory exists
+    fs.mkdirSync(uploadDir, { recursive: true });
 
-    const mediaPath = filePath;
-    console.log('[send-audio-message] Audio uploaded to path:', mediaPath);
+    const filePath = path.join(uploadDir, fileName);
+    fs.writeFileSync(filePath, buffer);
 
-    const { data: signedUrlData, error: signedUrlError } = await supabase.storage.from('conversation-media').createSignedUrl(filePath, 3600);
-    if (signedUrlError) throw new Error('Failed to generate signed URL for WhatsApp');
+    const mediaPath = `audios/${companyId}/${fileName}`;
+    console.log('[send-audio-message] Audio saved to:', mediaPath);
 
-    const message = await saveMessage(conversationId, `🎤 Áudio (${duration || 0}s)`, 'audio', fromAI || false, agentId, mediaPath, { duration, file_path: filePath, mime_type: mimeType });
+    // Generate a URL for WhatsApp
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const fileUrl = `${appUrl}/uploads/${mediaPath}`;
 
-    const uazPayload = { phone, type: 'ptt', file: signedUrlData.signedUrl, fromAI: fromAI || false, company_id: companyId };
+    const message = await saveMessage(conversationId, `🎤 Áudio (${duration || 0}s)`, 'audio', fromAI || false, agentId, mediaPath, { duration, file_path: mediaPath, mime_type: mimeType });
+
+    const uazPayload = { phone, type: 'ptt', file: fileUrl, fromAI: fromAI || false, company_id: companyId };
     const { success, error: whatsappError } = await sendToWhatsApp(instance, '/send/media', uazPayload, message.id);
     if (!success) console.error('[send-audio-message] Failed to send WhatsApp audio:', whatsappError);
 
@@ -60,7 +62,7 @@ export async function POST(req: NextRequest) {
       try {
         await fetch(webhookUrl, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message_type: 'audio', audio_url: mediaPath, duration, phone, instance_name: instance.instance_name, instance_id: instance.instance_name, timestamp: new Date().toISOString() }),
+          body: JSON.stringify({ message_type: 'audio', audio_url: mediaPath, duration, phone, instance_name: (instance as any).instance_name || (instance as any).instanceName, timestamp: new Date().toISOString() }),
         });
       } catch (e) { console.error('[send-audio-message] Webhook failed:', e); }
     }

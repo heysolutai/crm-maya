@@ -1,7 +1,9 @@
 import { Worker, Job } from 'bullmq'
 import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type MediaProcessingJob, enqueueN8NWebhook } from '../queues'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { prisma } from '@/lib/db'
+import fs from 'fs'
+import path from 'path'
 
 // Download media via UazAPI /message/download endpoint (only reliable method — WhatsApp URLs are encrypted)
 async function downloadViaUazAPI(
@@ -74,14 +76,13 @@ function detectImageFormat(buffer: Buffer): string | null {
   return null
 }
 
-// Upload buffer to Supabase Storage
+// Upload buffer to local filesystem (public/uploads/)
 async function uploadToStorage(
   buffer: Buffer,
   mediaType: string,
   companyId: string,
   conversationId: string,
-  mimeType: string,
-  supabase: ReturnType<typeof createAdminClient>
+  mimeType: string
 ): Promise<string | null> {
   try {
     const baseMime = mimeType.split(';')[0].trim()
@@ -96,23 +97,18 @@ async function uploadToStorage(
     }
     const ext = extensions[baseMime] || baseMime.split('/')[1] || 'bin'
     const fileName = `${mediaType}_${conversationId}_${Date.now()}.${ext}`
-    const storagePath = `${mediaType}s/${companyId}/${fileName}`
+    const storagePath = `uploads/conversation-media/${mediaType}s/${companyId}/${fileName}`
+    const fullPath = path.join(process.cwd(), 'public', storagePath)
 
-    // Use Uint8Array — some Supabase SDK versions serialize Buffer incorrectly
-    const uint8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
-    console.log(`[Media Worker] Uploading ${storagePath} (${uint8.length} bytes, type: ${baseMime})`)
-
-    const { error } = await supabase.storage
-      .from('conversation-media')
-      .upload(storagePath, uint8, {
-        contentType: baseMime,
-        upsert: false,
-      })
-
-    if (error) {
-      console.error('[Media Worker] Upload error:', error)
-      return null
+    // Ensure directory exists
+    const dir = path.dirname(fullPath)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
     }
+
+    console.log(`[Media Worker] Uploading ${storagePath} (${buffer.length} bytes, type: ${baseMime})`)
+
+    fs.writeFileSync(fullPath, buffer)
 
     return storagePath
   } catch (error) {
@@ -130,8 +126,6 @@ async function processMedia(job: Job<MediaProcessingJob>) {
   } = job.data
 
   console.log(`[Media Worker] Processing ${mediaType} for message ${messageId}, key: ${messageKey}`)
-
-  const supabase = createAdminClient()
 
   // Download via UazAPI (only reliable method — WhatsApp URLs are encrypted)
   const mediaData = await downloadViaUazAPI(messageKey, instanceApiKey, instanceApiUrl)
@@ -165,9 +159,9 @@ async function processMedia(job: Job<MediaProcessingJob>) {
 
   console.log(`[Media Worker] Ready to upload: ${mediaType}, ${mediaData.mimeType}, ${mediaData.buffer.length} bytes`)
 
-  // Upload to Supabase Storage
+  // Upload to local filesystem
   const storagePath = await uploadToStorage(
-    mediaData.buffer, mediaType, companyId, conversationId, mediaData.mimeType, supabase
+    mediaData.buffer, mediaType, companyId, conversationId, mediaData.mimeType
   )
 
   if (!storagePath) {
@@ -175,16 +169,17 @@ async function processMedia(job: Job<MediaProcessingJob>) {
   }
 
   // Update message with storage path
-  await supabase
-    .from('messages')
-    .update({ media_url: storagePath })
-    .eq('id', messageId)
+  await prisma.message.update({
+    where: { id: messageId },
+    data: { mediaUrl: storagePath },
+  })
 
-  console.log(`[Media Worker] ✅ Uploaded to: ${storagePath}`)
+  console.log(`[Media Worker] Uploaded to: ${storagePath}`)
 
-  // Send N8N webhook with public Supabase Storage URL
+  // Send N8N webhook with public URL
   if (n8nWebhookUrl && n8nPayload) {
-    const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/conversation-media/${storagePath}`
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const publicUrl = `${baseUrl}/${storagePath}`
 
     await enqueueN8NWebhook({
       webhookUrl: n8nWebhookUrl,
@@ -196,7 +191,7 @@ async function processMedia(job: Job<MediaProcessingJob>) {
       conversationId,
       messageId,
     })
-    console.log(`[Media Worker] ✅ N8N webhook URL: ${publicUrl}`)
+    console.log(`[Media Worker] N8N webhook URL: ${publicUrl}`)
   }
 
   return { messageId, storagePath }

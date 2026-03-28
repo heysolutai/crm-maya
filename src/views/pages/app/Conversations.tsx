@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { useConversations } from '@/hooks/useConversations';
 import { useTeam } from '@/hooks/useTeam';
 import { useAuth } from '@/hooks/useAuth';
@@ -192,35 +191,29 @@ export default function Conversations() {
   useEffect(() => {
     const markMessagesAsRead = async () => {
       if (!selectedConversation || messages.length === 0) return;
-      
+
       const unreadCount = getUnreadCount(selectedConversation);
       if (unreadCount === 0) return;
-      
-      await supabase
-        .from('messages')
-        .update({ is_read: true, read_at: new Date().toISOString() })
-        .eq('conversation_id', selectedConversation)
-        .eq('sender_type', 'client')
-        .eq('is_read', false);
+
+      await fetch('/api/messages/mark-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId: selectedConversation }),
+      });
     };
-    
+
     markMessagesAsRead();
   }, [selectedConversation, messages.length, getUnreadCount]);
 
-  // Real-time listener for reactions (only when a conversation is selected)
+  // Poll for reaction updates (replaces realtime subscription)
   useEffect(() => {
     if (!companyId || !selectedConversation) return;
 
-    const channel = supabase
-      .channel(`message-reactions-${selectedConversation}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'message_reactions' },
-        () => queryClient.invalidateQueries({ queryKey: ['conversation-reactions', selectedConversation] })
-      )
-      .subscribe();
+    const interval = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ['conversation-reactions', selectedConversation] });
+    }, 10000); // poll every 10 seconds
 
-    return () => { supabase.removeChannel(channel); };
+    return () => clearInterval(interval);
   }, [companyId, selectedConversation, queryClient]);
 
   // Handle file upload - usando ref para prevenir envios duplicados

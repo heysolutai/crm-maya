@@ -1,8 +1,10 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
 import { enqueueN8NWebhook, enqueueTranscription, enqueueMediaProcessing } from '@/lib/queue';
+import fs from 'fs';
+import path from 'path';
 
 // Schema de validação para o payload da UAZapi
 const UAZapiPayloadSchema = z.object({
@@ -233,7 +235,6 @@ function validateAndAdaptPayload(rawPayload: unknown): {
     let clientName: string | undefined;
 
     if (uazPayload.message.fromMe) {
-      // MENSAGEM OUTGOING: usar chat.phone (destinatário = cliente)
       console.log('[Outgoing Message] Using chat.phone as client phone');
       const rawChatPhone = chatPhone;
       if (!rawChatPhone) {
@@ -243,47 +244,33 @@ function validateAndAdaptPayload(rawPayload: unknown): {
         };
       }
       phone = rawChatPhone.split('@')[0].replace(/\D/g, '');
-      // Para mensagens outgoing, usar APENAS chatName (nome do contato)
-      // NÃO usar senderName porque é o nome do AGENTE, não do cliente!
       clientName = chatName || undefined;
-
-      // Para mensagens outgoing, NÃO capturar sender_lid (seria o LID do agente)
-      // Cliente será identificado apenas pelo phone
-      // lidNumeric permanece undefined
 
       console.log('[Phone Final] Outgoing - phone:', phone, 'no LID capture (client identified by phone only)');
     } else {
-      // MENSAGEM INCOMING: usar sender_pn/sender_lid (remetente = cliente)
       console.log('[Incoming Message] Using sender_pn/sender_lid as client phone');
 
-      // Extrair telefone de sender_pn
       if (senderPnJid) {
         phoneFromPn = senderPnJid.split('@')[0].replace(/\D/g, '');
         console.log('[Phone Extraction] From sender_pn:', phoneFromPn);
       }
 
-      // Extrair LID numérico se existir
       if (senderLidJid) {
         lidNumeric = senderLidJid.split('@')[0].replace(/\D/g, '');
         console.log('[LID Extraction] From sender_lid:', lidNumeric);
       }
 
-      // Determinar phone final
       if (phoneFromPn) {
         phone = phoneFromPn;
         console.log('[Phone Final] Using sender_pn:', phone);
       } else if (lidNumeric) {
         phone = lidNumeric;
-
-        // Detectar se é LID (14 dígitos)
         if (phone.length === 14) {
           isLid = true;
           console.log('[LID Detection] Phone is a LID (14 digits):', phone);
         }
-
         console.log('[Phone Final] Using sender_lid number:', phone, 'isLid:', isLid);
       } else if (chatPhone) {
-        // Último fallback: limpar chat.phone
         phone = chatPhone.split('@')[0].replace(/\D/g, '');
         console.log('[Phone Final] Using chat.phone (fallback):', phone);
       } else {
@@ -296,7 +283,6 @@ function validateAndAdaptPayload(rawPayload: unknown): {
       clientName = senderName || chatName;
     }
 
-    // Validar comprimento do número limpo
     if (phone.length < 10 || phone.length > 15) {
       return {
         success: false,
@@ -304,15 +290,13 @@ function validateAndAdaptPayload(rawPayload: unknown): {
       };
     }
 
-  // whatsapp_lid = apenas o número do LID (sem @lid)
-  const whatsappLid: string | undefined = lidNumeric;
+    const whatsappLid: string | undefined = lidNumeric;
 
-  console.log('[Final Values] phone:', phone,
-              'whatsapp_lid:', whatsappLid,
-              'sender_name:', clientName,
-              'fromMe:', uazPayload.message.fromMe);
+    console.log('[Final Values] phone:', phone,
+                'whatsapp_lid:', whatsappLid,
+                'sender_name:', clientName,
+                'fromMe:', uazPayload.message.fromMe);
 
-    // ID da mensagem citada (priorizar message.quoted, fallback para quotedMsg.messageid)
     const quotedMessageId = uazPayload.message.quoted ||
                             uazPayload.message.quotedMsg?.messageid;
 
@@ -320,7 +304,6 @@ function validateAndAdaptPayload(rawPayload: unknown): {
       console.log('[Reply Detection] quoted_message_id:', quotedMessageId);
     }
 
-    // Validar URL de mídia se presente
     if (mediaUrl) {
       try {
         new URL(mediaUrl);
@@ -334,9 +317,9 @@ function validateAndAdaptPayload(rawPayload: unknown): {
       data: {
         instance_name: uazPayload.instanceName,
         type,
-      phone,
-      whatsapp_lid: whatsappLid,
-      sender_name: clientName,
+        phone,
+        whatsapp_lid: whatsappLid,
+        sender_name: clientName,
         is_lid_phone: isLid,
         real_phone: phoneFromPn,
         message: messageText,
@@ -355,7 +338,6 @@ function validateAndAdaptPayload(rawPayload: unknown): {
           sender_lid: senderLidJid,
           validated: true,
           validation_timestamp: new Date().toISOString(),
-          // Dados de localização (se houver)
           ...(messageType === 'location' && typeof uazPayload.message.content === 'object' && uazPayload.message.content !== null ? {
             latitude: (uazPayload.message.content as any).degreesLatitude || (uazPayload.message.content as any).latitude,
             longitude: (uazPayload.message.content as any).degreesLongitude || (uazPayload.message.content as any).longitude,
@@ -409,14 +391,11 @@ async function downloadMediaFromWhatsApp(
 
     const result = await response.json();
 
-    // LOG COMPLETO para debug
     console.log('[Media Download] UAZapi response:', JSON.stringify(result));
     console.log('[Media Download] Response keys:', Object.keys(result));
 
-    // Tentar múltiplos campos possíveis - base64Data é o campo correto do UAZapi
     const base64Data = result.base64Data || result.base64 || result.data || result.file || result.content;
     const mimeType = result.mimetype || result.mimeType || result.mime_type || 'application/octet-stream';
-    const fileURL = result.fileURL;  // URL pública já fornecida pelo UAZapi
 
     if (!base64Data) {
       console.error('[Media Download] No base64 data found in response');
@@ -435,25 +414,20 @@ async function downloadMediaFromWhatsApp(
 }
 
 /**
- * Upload de mídia para Supabase Storage
+ * Upload de mídia para o filesystem local (public/uploads/)
  */
 async function uploadMediaToStorage(
   base64Data: string,
   messageType: string,
   companyId: string,
   conversationId: string,
-  mimeType: string,
-  supabaseClient: any
+  mimeType: string
 ): Promise<string | null> {
   try {
     console.log('[Storage Upload] Starting upload, type:', messageType, 'mime:', mimeType);
 
-    // Converter base64 para Uint8Array
-    const binaryString = atob(base64Data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
+    // Converter base64 para Buffer
+    const buffer = Buffer.from(base64Data, 'base64');
 
     // Determinar extensão do arquivo
     const extensionMap: Record<string, string> = {
@@ -468,26 +442,19 @@ async function uploadMediaToStorage(
     };
     const extension = extensionMap[mimeType] || mimeType.split('/')[1] || 'bin';
 
-    // Caminho do arquivo no storage
+    // Caminho do arquivo no filesystem
     const fileName = `${messageType}_${conversationId}_${Date.now()}.${extension}`;
-    const filePath = `${messageType}s/${companyId}/${fileName}`;
+    const relativePath = `${messageType}s/${companyId}/${fileName}`;
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads', `${messageType}s`, companyId);
 
-    const { data, error } = await supabaseClient.storage
-      .from('conversation-media')
-      .upload(filePath, bytes, {
-        contentType: mimeType,
-        upsert: false,
-      });
+    // Ensure directory exists
+    fs.mkdirSync(uploadDir, { recursive: true });
 
-    if (error) {
-      console.error('[Storage Upload] Error:', error);
-      return null;
-    }
+    const filePath = path.join(uploadDir, fileName);
+    fs.writeFileSync(filePath, buffer);
 
-    // Return the file path (not public URL since bucket is now private)
-    // Frontend will generate signed URLs for access
-    console.log('[Storage Upload] Success, path:', filePath);
-    return filePath;
+    console.log('[Storage Upload] Success, path:', relativePath);
+    return relativePath;
   } catch (error) {
     console.error('[Storage Upload] Exception:', error);
     return null;
@@ -505,14 +472,9 @@ async function transcribeAudioWithWhisper(
   try {
     console.log('[Whisper] Starting direct transcription, mimeType:', mimeType, 'base64 length:', base64Data.length);
 
-    // Converter base64 para bytes
-    const binaryString = atob(base64Data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
+    const buffer = Buffer.from(base64Data, 'base64');
+    const bytes = new Uint8Array(buffer);
 
-    // Determinar extensão
     const extMap: Record<string, string> = {
       'audio/ogg': 'ogg',
       'audio/mpeg': 'mp3',
@@ -523,7 +485,6 @@ async function transcribeAudioWithWhisper(
     };
     const ext = extMap[mimeType] || 'ogg';
 
-    // Criar FormData para Whisper API
     const formData = new FormData();
     const blob = new Blob([bytes], { type: mimeType });
     formData.append('file', blob, `audio.${ext}`);
@@ -651,7 +612,6 @@ export async function POST(req: NextRequest) {
     console.log('[Receive] Full raw payload:', JSON.stringify(rawPayload, null, 2));
 
     // ===== FILTRO DE EVENTOS DE SISTEMA (EARLY RETURN) =====
-    // Ignorar eventos que não são mensagens para reduzir logs e processamento
     const systemEvents = ['connection', 'status', 'qrcode', 'presence', 'typing', 'connected', 'disconnected', 'connecting'];
     if (rawPayload.EventType && systemEvents.includes(rawPayload.EventType.toLowerCase())) {
       console.log(`[Receive] Ignoring system event: ${rawPayload.EventType}`);
@@ -672,18 +632,15 @@ export async function POST(req: NextRequest) {
         return jsonResponse({ status: 'ignored', reason: 'no_message_ids' });
       }
 
-      const supabase = createAdminClient();
-
       // Localizar a mensagem original pelo uaz_message_id
       let originalMessage: any = null;
 
       for (const msgId of messageIds) {
         // Tentar buscar pelo ID exato
-        const { data: exactMatch } = await supabase
-          .from('messages')
-          .select('id, conversation_id, content, metadata, sender_type')
-          .eq('uaz_message_id', msgId)
-          .maybeSingle();
+        const exactMatch = await prisma.message.findFirst({
+          where: { uazMessageId: msgId },
+          select: { id: true, conversationId: true, messageText: true, metadata: true, senderType: true },
+        });
 
         if (exactMatch) {
           originalMessage = exactMatch;
@@ -692,11 +649,11 @@ export async function POST(req: NextRequest) {
         }
 
         // Tentar buscar por sufixo (formato phone:id)
-        const { data: suffixMatches } = await supabase
-          .from('messages')
-          .select('id, conversation_id, content, metadata, sender_type')
-          .like('uaz_message_id', `%${msgId}`)
-          .limit(1);
+        const suffixMatches = await prisma.message.findMany({
+          where: { uazMessageId: { endsWith: msgId } },
+          select: { id: true, conversationId: true, messageText: true, metadata: true, senderType: true },
+          take: 1,
+        });
 
         if (suffixMatches && suffixMatches.length > 0) {
           originalMessage = suffixMatches[0];
@@ -719,67 +676,49 @@ export async function POST(req: NextRequest) {
         transcribed_at: new Date().toISOString(),
       };
 
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          content: transcriptionText,
+      await prisma.message.update({
+        where: { id: originalMessage.id },
+        data: {
+          messageText: transcriptionText,
           metadata: updatedMetadata,
-        })
-        .eq('id', originalMessage.id);
+        },
+      });
 
-      if (updateError) {
-        console.error('[TranscribedMessage] Error updating message:', updateError);
-      } else {
-        console.log('[TranscribedMessage] Message updated with transcription:', originalMessage.id);
-      }
+      console.log('[TranscribedMessage] Message updated with transcription:', originalMessage.id);
 
       // Reenviar para N8N se a mensagem era incoming (cliente enviou áudio)
-      if (originalMessage.sender_type === 'client') {
-        // Buscar conversation para pegar company_id e client_id
-        const { data: convData } = await supabase
-          .from('conversations')
-          .select('company_id, client_id, stage, friendly_id')
-          .eq('id', originalMessage.conversation_id)
-          .maybeSingle();
+      if (originalMessage.senderType === 'client') {
+        const convData = await prisma.conversation.findUnique({
+          where: { id: originalMessage.conversationId },
+          select: { companyId: true, clientId: true, stage: true, friendlyId: true },
+        });
 
         if (convData) {
-          // Buscar webhook URL
-          const { data: aiConfig } = await supabase
-            .from('ai_configurations')
-            .select('n8n_webhook_url, knowledge')
-            .eq('company_id', convData.company_id)
-            .eq('is_active', true)
-            .limit(1)
-            .maybeSingle();
+          const aiConfig = await prisma.aiConfiguration.findFirst({
+            where: { companyId: convData.companyId, isActive: true },
+            select: { n8nWebhookUrl: true, knowledge: true },
+          });
 
-          const n8nUrl = aiConfig?.n8n_webhook_url || process.env.N8N_AI_WEBHOOK_URL;
+          const n8nUrl = aiConfig?.n8nWebhookUrl || process.env.N8N_AI_WEBHOOK_URL;
 
           if (n8nUrl) {
-            // Buscar dados do cliente
-            const { data: clientData } = await supabase
-              .from('clients')
-              .select('first_name, last_name, phone, ai_paused')
-              .eq('id', convData.client_id)
-              .maybeSingle();
+            const clientData = await prisma.client.findUnique({
+              where: { id: convData.clientId },
+              select: { firstName: true, lastName: true, phone: true, aiPaused: true },
+            });
 
-            // Buscar API key
-            const { data: apiKey } = await supabase
-              .from('api_keys')
-              .select('key')
-              .eq('company_id', convData.company_id)
-              .eq('is_active', true)
-              .limit(1)
-              .maybeSingle();
+            const apiKeyRecord = await prisma.apiKey.findFirst({
+              where: { companyId: convData.companyId, isActive: true },
+              select: { key: true },
+            });
 
-            // Buscar dados da empresa
-            const { data: companyData } = await supabase
-              .from('companies')
-              .select('name, settings')
-              .eq('id', convData.company_id)
-              .maybeSingle();
+            const companyData = await prisma.company.findUnique({
+              where: { id: convData.companyId },
+              select: { name: true, settings: true },
+            });
 
             const clientName = clientData
-              ? `${clientData.first_name} ${clientData.last_name || ''}`.trim()
+              ? `${clientData.firstName} ${clientData.lastName || ''}`.trim()
               : 'Cliente';
 
             const webhookPayload = {
@@ -787,17 +726,17 @@ export async function POST(req: NextRequest) {
               conteudo: transcriptionText,
               nome_cliente: clientName,
               numero_cliente: clientData?.phone || '',
-              company_id: convData.company_id,
-              conversation_id: originalMessage.conversation_id,
-              conversation_friendly_id: convData.friendly_id || null,
-              client_id: convData.client_id,
-              fromMe: false, // Transcrição é sempre de mensagem do cliente
+              company_id: convData.companyId,
+              conversation_id: originalMessage.conversationId,
+              conversation_friendly_id: convData.friendlyId || null,
+              client_id: convData.clientId,
+              fromMe: false,
               stage: convData.stage || null,
               media_url: null,
               company_name: companyData?.name || null,
-              ai_status: clientData?.ai_paused ? 'paused' : 'active',
+              ai_status: clientData?.aiPaused ? 'paused' : 'active',
               knowledge: aiConfig?.knowledge || null,
-              api_key: apiKey?.key || null,
+              api_key: apiKeyRecord?.key || null,
               message_id: originalMessage.id,
               is_transcription_update: true,
               timestamp: new Date().toISOString(),
@@ -832,16 +771,12 @@ export async function POST(req: NextRequest) {
     }
 
     // ===== PROCESSAMENTO DE READ RECEIPTS =====
-    // Se for webhook de status de leitura, processar e retornar
     if (rawPayload.type === 'ReadReceipt' && rawPayload.event?.MessageIDs) {
       console.log('[ReadReceipt] Processing message status update...');
 
-      const supabase = createAdminClient();
-
       const messageIds = rawPayload.event.MessageIDs as string[];
-      const state = rawPayload.state; // "Delivered" ou "Read"
+      const state = rawPayload.state;
 
-      // Mapear state para read_status do banco
       let readStatus: 'sent' | 'delivered' | 'read' = 'sent';
       if (state === 'Delivered') {
         readStatus = 'delivered';
@@ -852,49 +787,43 @@ export async function POST(req: NextRequest) {
       console.log(`[ReadReceipt] Updating ${messageIds.length} messages to status: ${readStatus}`);
       console.log(`[ReadReceipt] Message IDs from webhook:`, messageIds);
 
-      // Tentar atualizar pelo ID exato primeiro
-      let { data: updatedMessages, error: updateError } = await supabase
-        .from('messages')
-        .update({
-          read_status: readStatus,
-          read_at: state === 'Read' ? new Date().toISOString() : undefined,
-        })
-        .in('uaz_message_id', messageIds)
-        .select('id, conversation_id, read_status, uaz_message_id');
+      // Try exact match first
+      const updateResult = await prisma.message.updateMany({
+        where: { uazMessageId: { in: messageIds } },
+        data: {
+          readStatus,
+          ...(state === 'Read' ? { readAt: new Date() } : {}),
+        },
+      });
 
-      // Se não encontrou nenhuma, tentar buscar por sufixo (formato phone:id)
-      if ((!updatedMessages || updatedMessages.length === 0) && messageIds.length > 0) {
+      let updatedCount = updateResult.count;
+
+      // If no exact match found, try suffix match
+      if (updatedCount === 0 && messageIds.length > 0) {
         console.log('[ReadReceipt] No exact match found, trying suffix match...');
 
-        // Buscar mensagens que terminam com o ID (ex: "5512999:3EB0ABA67E" matches "3EB0ABA67E")
         for (const msgId of messageIds) {
-          const { data: suffixMatches, error: suffixError } = await supabase
-            .from('messages')
-            .update({
-              read_status: readStatus,
-              read_at: state === 'Read' ? new Date().toISOString() : undefined,
-            })
-            .ilike('uaz_message_id', `%${msgId}`)
-            .select('id, conversation_id, read_status, uaz_message_id');
+          const suffixResult = await prisma.message.updateMany({
+            where: { uazMessageId: { endsWith: msgId } },
+            data: {
+              readStatus,
+              ...(state === 'Read' ? { readAt: new Date() } : {}),
+            },
+          });
 
-          if (!suffixError && suffixMatches && suffixMatches.length > 0) {
-            console.log(`[ReadReceipt] Found ${suffixMatches.length} messages with suffix match for ${msgId}`);
-            updatedMessages = [...(updatedMessages || []), ...suffixMatches];
+          if (suffixResult.count > 0) {
+            console.log(`[ReadReceipt] Found ${suffixResult.count} messages with suffix match for ${msgId}`);
+            updatedCount += suffixResult.count;
           }
         }
       }
 
-      if (updateError) {
-        console.error('[ReadReceipt] Error updating message status:', updateError);
-        return errorResponse(updateError.message, 500);
-      }
-
-      console.log(`[ReadReceipt] Successfully updated ${updatedMessages?.length || 0} messages:`, updatedMessages?.map(m => ({ id: m.id, uaz_id: m.uaz_message_id, status: m.read_status })));
+      console.log(`[ReadReceipt] Successfully updated ${updatedCount} messages`);
 
       return jsonResponse({
         success: true,
         message: 'Message status updated',
-        updated_count: updatedMessages?.length || 0,
+        updated_count: updatedCount,
         status: readStatus,
       });
     }
@@ -915,15 +844,11 @@ export async function POST(req: NextRequest) {
     const payload = (validationResult as { success: true; data: InternalMessagePayload }).data;
     console.log('[Receive] Validated and adapted payload:', payload);
 
-    // Criar cliente Supabase
-    const supabase = createAdminClient();
-
     // Verificar duplicata por uaz_message_id
-    const { data: existingMessage } = await supabase
-      .from('messages')
-      .select('id')
-      .eq('uaz_message_id', payload.uaz_message_id)
-      .maybeSingle();
+    const existingMessage = await prisma.message.findFirst({
+      where: { uazMessageId: payload.uaz_message_id },
+      select: { id: true },
+    });
 
     if (existingMessage) {
       console.log('Duplicate message detected:', payload.uaz_message_id);
@@ -935,28 +860,26 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Buscar company_id através da tabela whatsapp_instances
-    const { data: instance, error: instanceError } = await supabase
-      .from('whatsapp_instances')
-      .select('company_id, is_active')
-      .eq('instance_name', payload.instance_name)
-      .single();
+    const instance = await prisma.whatsappInstance.findFirst({
+      where: { instanceName: payload.instance_name },
+      select: { companyId: true, isActive: true },
+    });
 
-    if (instanceError || !instance) {
-      console.error('WhatsApp instance not found:', payload.instance_name, instanceError);
+    if (!instance) {
+      console.error('WhatsApp instance not found:', payload.instance_name);
       return jsonResponse({
         error: `WhatsApp instance "${payload.instance_name}" not found. Please check if the instance is properly configured.`
       }, 404);
     }
 
-    // Verificar se a instância está ativa
-    if (!instance.is_active) {
+    if (!instance.isActive) {
       console.warn('WhatsApp instance is inactive:', payload.instance_name);
       return jsonResponse({
         error: `WhatsApp instance "${payload.instance_name}" is inactive`
       }, 403);
     }
 
-    const companyId = instance.company_id;
+    const companyId = instance.companyId;
     console.log('Found company via WhatsApp instance:', companyId);
 
     // 2. Buscar ou criar cliente
@@ -967,71 +890,48 @@ export async function POST(req: NextRequest) {
     if (payload.is_lid_phone) {
       console.log('[LID Scenario] Phone is LID, searching by whatsapp_lid:', payload.phone);
 
-      // Buscar por whatsapp_lid usando o LID
-      const { data: clientByLid } = await supabase
-        .from('clients')
-        .select('id, first_name, phone, whatsapp_lid, avatar_url')
-        .eq('company_id', companyId)
-        .eq('whatsapp_lid', payload.phone)
-        .maybeSingle();
+      const clientByLid = await prisma.client.findFirst({
+        where: { companyId, whatsappLid: payload.phone },
+        select: { id: true, firstName: true, phone: true, whatsappLid: true, avatarUrl: true },
+      });
 
       if (clientByLid) {
         clientId = clientByLid.id;
         existingClient = clientByLid;
         console.log('[LID Scenario] Found client by LID:', clientId);
 
-        // Se temos telefone real do sender_pn, atualizar o phone do cliente
         if (payload.real_phone && payload.real_phone !== clientByLid.phone) {
-          await supabase
-            .from('clients')
-            .update({ phone: payload.real_phone })
-            .eq('id', clientId);
+          await prisma.client.update({ where: { id: clientId }, data: { phone: payload.real_phone } });
           console.log('[LID Scenario] Updated phone from LID to real phone:', payload.real_phone);
         }
 
-        // Atualizar avatar se disponível
-        if (payload.profile_picture_url && payload.profile_picture_url !== clientByLid.avatar_url) {
-          await supabase
-            .from('clients')
-            .update({ avatar_url: payload.profile_picture_url })
-            .eq('id', clientId);
+        if (payload.profile_picture_url && payload.profile_picture_url !== clientByLid.avatarUrl) {
+          await prisma.client.update({ where: { id: clientId }, data: { avatarUrl: payload.profile_picture_url } });
           console.log('[LID Scenario] Updated avatar_url');
         }
 
-        // Atualizar nome se necessário
         if (payload.sender_name &&
-            (clientByLid.first_name === clientByLid.phone ||
-             clientByLid.first_name === 'Novo Cliente' ||
-             !clientByLid.first_name)) {
-          await supabase
-            .from('clients')
-            .update({ first_name: payload.sender_name })
-            .eq('id', clientId);
+            (clientByLid.firstName === clientByLid.phone ||
+             clientByLid.firstName === 'Novo Cliente' ||
+             !clientByLid.firstName)) {
+          await prisma.client.update({ where: { id: clientId }, data: { firstName: payload.sender_name } });
           console.log('[LID Scenario] Updated name from senderName:', payload.sender_name);
         }
       } else {
-        // Cliente com esse LID não existe, criar novo
         console.log('[LID Scenario] Client not found, creating new with LID');
-
         const clientName = payload.sender_name || payload.metadata?.chat_name || payload.phone;
 
-        const { data: newClient, error: clientError } = await supabase
-          .from('clients')
-          .insert({
-            company_id: companyId,
+        const newClient = await prisma.client.create({
+          data: {
+            companyId,
             phone: payload.real_phone || payload.phone,
-            whatsapp_lid: payload.phone,
-            first_name: clientName,
+            whatsappLid: payload.phone,
+            firstName: clientName,
             source: payload.channel || 'whatsapp',
-            avatar_url: payload.profile_picture_url || null,
-          })
-          .select('id')
-          .single();
-
-        if (clientError || !newClient) {
-          console.error('[LID Scenario] Error creating client:', clientError);
-          return errorResponse('Failed to create client', 500);
-        }
+            avatarUrl: payload.profile_picture_url || null,
+          },
+          select: { id: true },
+        });
 
         clientId = newClient.id;
         existingClient = newClient;
@@ -1041,85 +941,56 @@ export async function POST(req: NextRequest) {
       // CENÁRIO 2: Phone é número normal (10-13 dígitos)
       console.log('[Normal Scenario] Phone is regular number:', payload.phone);
 
-      // Buscar cliente existente por phone OU whatsapp_lid em uma única query
-      // Usar .limit(1) + .order para evitar erro com múltiplos registros (duplicatas)
-      // Prioriza o cliente mais antigo (o original)
-      const orConditions: string[] = [`phone.eq.${payload.phone}`];
+      const orConditions: any[] = [{ phone: payload.phone }];
       if (payload.whatsapp_lid) {
-        orConditions.push(`whatsapp_lid.eq.${payload.whatsapp_lid}`);
+        orConditions.push({ whatsappLid: payload.whatsapp_lid });
       }
 
-      const { data: clients, error: clientSearchError } = await supabase
-        .from('clients')
-        .select('id, first_name, phone, whatsapp_lid, avatar_url')
-        .eq('company_id', companyId)
-        .or(orConditions.join(','))
-        .order('created_at', { ascending: true })
-        .limit(1);
+      const clients = await prisma.client.findMany({
+        where: { companyId, OR: orConditions },
+        select: { id: true, firstName: true, phone: true, whatsappLid: true, avatarUrl: true },
+        orderBy: { createdAt: 'asc' },
+        take: 1,
+      });
 
-      if (clientSearchError) {
-        console.error('[Client Search] Error:', clientSearchError);
-      }
-
-      existingClient = clients?.[0] || null;
+      existingClient = clients[0] || null;
       console.log('[Client Search] By phone/lid:', payload.phone, payload.whatsapp_lid, 'Found:', !!existingClient);
 
       if (existingClient) {
         clientId = existingClient.id;
         console.log('[Normal Scenario] Found existing client:', clientId);
 
-        // Atualizar whatsapp_lid se não estava definido
-        if (payload.whatsapp_lid && !existingClient.whatsapp_lid) {
-          await supabase
-            .from('clients')
-            .update({ whatsapp_lid: payload.whatsapp_lid })
-            .eq('id', clientId);
+        if (payload.whatsapp_lid && !existingClient.whatsappLid) {
+          await prisma.client.update({ where: { id: clientId }, data: { whatsappLid: payload.whatsapp_lid } });
           console.log('[Client Update] Added whatsapp_lid:', payload.whatsapp_lid);
         }
 
-        // Atualizar avatar se disponível
-        if (payload.profile_picture_url && payload.profile_picture_url !== existingClient.avatar_url) {
-          await supabase
-            .from('clients')
-            .update({ avatar_url: payload.profile_picture_url })
-            .eq('id', clientId);
+        if (payload.profile_picture_url && payload.profile_picture_url !== existingClient.avatarUrl) {
+          await prisma.client.update({ where: { id: clientId }, data: { avatarUrl: payload.profile_picture_url } });
           console.log('[Client Update] Updated avatar');
         }
 
-        // Atualizar nome se necessário
         if (payload.sender_name &&
-            (existingClient.first_name === existingClient.phone ||
-             existingClient.first_name === 'Novo Cliente' ||
-             !existingClient.first_name)) {
-          await supabase
-            .from('clients')
-            .update({ first_name: payload.sender_name })
-            .eq('id', clientId);
+            (existingClient.firstName === existingClient.phone ||
+             existingClient.firstName === 'Novo Cliente' ||
+             !existingClient.firstName)) {
+          await prisma.client.update({ where: { id: clientId }, data: { firstName: payload.sender_name } });
           console.log('[Client Update] Updated name from senderName:', payload.sender_name);
         }
       } else {
-        // Criar novo cliente
-        const clientName = payload.sender_name ||
-                           payload.metadata?.chat_name ||
-                           payload.phone;
+        const clientName = payload.sender_name || payload.metadata?.chat_name || payload.phone;
 
-        const { data: newClient, error: clientError } = await supabase
-          .from('clients')
-          .insert({
-            company_id: companyId,
+        const newClient = await prisma.client.create({
+          data: {
+            companyId,
             phone: payload.phone,
-            whatsapp_lid: payload.whatsapp_lid,
-            first_name: clientName,
+            whatsappLid: payload.whatsapp_lid,
+            firstName: clientName,
             source: payload.channel || 'whatsapp',
-            avatar_url: payload.profile_picture_url || null,
-          })
-          .select('id')
-          .single();
-
-        if (clientError || !newClient) {
-          console.error('[Normal Scenario] Error creating client:', clientError);
-          return errorResponse('Failed to create client', 500);
-        }
+            avatarUrl: payload.profile_picture_url || null,
+          },
+          select: { id: true },
+        });
 
         clientId = newClient.id;
         existingClient = newClient;
@@ -1131,56 +1002,50 @@ export async function POST(req: NextRequest) {
     let conversationId: string | undefined;
     let conversationReopened = false;
 
-    // Se for mensagem incoming, buscar primeiro conversa fechada mais recente
     if (payload.type === 'incoming') {
-      const { data: closedConversation } = await supabase
-        .from('conversations')
-        .select('id, status')
-        .eq('company_id', companyId)
-        .eq('client_id', clientId)
-        .eq('channel', (payload.channel || 'whatsapp') as any)
-        .eq('status', 'closed' as any)
-        .order('ended_at', { ascending: false })
-        .limit(1)
-        .single();
+      const closedConversation = await prisma.conversation.findFirst({
+        where: {
+          companyId,
+          clientId,
+          channel: (payload.channel || 'whatsapp') as any,
+          status: 'closed',
+        },
+        select: { id: true, status: true },
+        orderBy: { endedAt: 'desc' },
+      });
 
-      // Se encontrou conversa fechada, reabrir
       if (closedConversation) {
-        const { data: reopenedConv, error: reopenError } = await supabase
-          .from('conversations')
-          .update({
+        const reopenedConv = await prisma.conversation.update({
+          where: { id: closedConversation.id },
+          data: {
             status: 'active',
-            ended_at: null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', closedConversation.id)
-          .select('id')
-          .single();
+            endedAt: null,
+            updatedAt: new Date(),
+          },
+          select: { id: true },
+        });
 
-        if (!reopenError && reopenedConv) {
-          conversationId = reopenedConv.id;
-          conversationReopened = true;
-          console.log('Reopened closed conversation:', conversationId);
-        }
+        conversationId = reopenedConv.id;
+        conversationReopened = true;
+        console.log('Reopened closed conversation:', conversationId);
       }
     }
 
-    // Se não reabriu, buscar conversa ativa (usar a mais antiga para evitar duplicatas)
     if (!conversationId) {
-      const { data: activeConversations } = await supabase
-        .from('conversations')
-        .select('id, started_at')
-        .eq('company_id', companyId)
-        .eq('client_id', clientId)
-        .eq('status', 'active' as any)
-        .eq('channel', (payload.channel || 'whatsapp') as any)
-        .order('started_at', { ascending: true }); // Mais antiga primeiro
+      const activeConversations = await prisma.conversation.findMany({
+        where: {
+          companyId,
+          clientId,
+          status: 'active',
+          channel: (payload.channel || 'whatsapp') as any,
+        },
+        select: { id: true, startedAt: true },
+        orderBy: { startedAt: 'asc' },
+      });
 
       if (activeConversations && activeConversations.length > 0) {
-        // Usar a conversa mais antiga (a original)
         conversationId = activeConversations[0].id;
 
-        // Log warning se houver duplicatas
         if (activeConversations.length > 1) {
           console.warn(`[Warning] Client ${clientId} has ${activeConversations.length} active conversations. Using oldest: ${conversationId}. Duplicates: ${activeConversations.slice(1).map(c => c.id).join(', ')}`);
         }
@@ -1189,55 +1054,39 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Se ainda não tem conversationId, criar nova
     if (!conversationId) {
-      const { data: newConversation, error: conversationError } = await supabase
-        .from('conversations')
-        .insert({
-          company_id: companyId,
-          client_id: clientId,
+      const newConversation = await prisma.conversation.create({
+        data: {
+          companyId,
+          clientId,
           channel: (payload.channel || 'whatsapp') as any,
-          status: 'active' as any,
-          ai_handled: payload.type === 'outgoing',
+          status: 'active',
+          aiHandled: payload.type === 'outgoing',
           stage: 'mensagem_fixa',
-        } as any)
-        .select('id')
-        .single();
-
-      if (conversationError || !newConversation) {
-        console.error('Error creating conversation:', conversationError);
-        return errorResponse('Failed to create conversation', 500);
-      }
+        },
+        select: { id: true },
+      });
 
       conversationId = newConversation.id;
       console.log('Created new conversation:', conversationId);
-
-      // Lead distribution is now handled via the transfer-conversation API endpoint
     }
 
     // 3.5. Buscar instância do WhatsApp completa (com API keys para mídia e transcrição)
-    const { data: whatsappInstance } = await supabase
-      .from('whatsapp_instances')
-      .select('instance_api_key, api_url')
-      .eq('company_id', companyId)
-      .eq('is_active', true)
-      .single();
+    const whatsappInstance = await prisma.whatsappInstance.findFirst({
+      where: { companyId, isActive: true },
+      select: { instanceApiKey: true, apiUrl: true },
+    });
 
-    // Buscar chave OpenAI INDEPENDENTE do status da configuração
-    // Transcrição deve funcionar sempre que a chave estiver configurada
-    const { data: aiConfig } = await supabase
-      .from('ai_configurations')
-      .select('api_keys')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const aiConfig = await prisma.aiConfiguration.findFirst({
+      where: { companyId },
+      select: { apiKeys: true },
+      orderBy: { createdAt: 'desc' },
+    });
 
-    // Usar chave OpenAI da empresa, ou fallback padrão (secret) para garantir transcrição sempre
-    const openAiKey = (aiConfig?.api_keys as any)?.openai || process.env.DEFAULT_OPENAI_API_KEY;
-    console.log('[AI Config] OpenAI key source:', (aiConfig?.api_keys as any)?.openai ? 'company' : 'default_secret');
+    const openAiKey = (aiConfig?.apiKeys as any)?.openai || process.env.DEFAULT_OPENAI_API_KEY;
+    console.log('[AI Config] OpenAI key source:', (aiConfig?.apiKeys as any)?.openai ? 'company' : 'default_secret');
 
-    // 3.6. Processar mídia do WhatsApp — SEMPRE baixar e salvar no Storage
+    // 3.6. Processar mídia do WhatsApp
     const mediaTypes = ['image', 'video', 'audio', 'ptt', 'document', 'sticker'];
     const isMediaMessage = mediaTypes.includes(payload.message_type || '');
     const hasMediaUrl = !!payload.media_url;
@@ -1253,20 +1102,14 @@ export async function POST(req: NextRequest) {
                 '| message_type:', payload.message_type,
                 '| openAiKey available:', !!openAiKey);
 
-    // Use messageid (short) with fallback to id (full owner:messageid format)
     const mediaMessageId = rawPayload.message?.messageid || rawPayload.message?.id;
 
-    // Media processing will be queued after message insert (needs message ID)
     const shouldQueueMedia = isMediaMessage && mediaMessageId && hasInstance && conversationId;
-
-    // 3.7. Audio transcription — queued in background after message insert
-    // (Transcription job is enqueued after message is saved to DB, see below)
     let shouldQueueTranscription = isAudioMessage && openAiKey && hasInstance && mediaMessageId;
     if (isAudioMessage && !openAiKey) {
       console.warn('[Audio Transcription] Skipped! openAiKey not available');
     }
     if (isAudioMessage) {
-      // Set placeholder text for audio messages
       payload.message = payload.message || '[Áudio - transcrevendo...]';
     }
 
@@ -1284,85 +1127,62 @@ export async function POST(req: NextRequest) {
 
     // 5. Determinar sender_type e inserir mensagem
     const senderType = payload.type === 'incoming' ? 'client' : 'agent';
-    const { data: message, error: messageError } = await supabase
-      .from('messages')
-      .insert({
-        conversation_id: conversationId,
-        sender_type: senderType,
-        message_text: payload.message,
-        message_type: payload.message_type || 'text',
-        media_url: payload.media_url,
-        uaz_message_id: payload.uaz_message_id,
-        quoted_message_id: payload.quoted_message_id,
+    const message = await prisma.message.create({
+      data: {
+        conversationId,
+        senderType,
+        messageText: payload.message,
+        messageType: payload.message_type || 'text',
+        mediaUrl: payload.media_url,
+        uazMessageId: payload.uaz_message_id,
+        quotedMessageId: payload.quoted_message_id,
         metadata: {
           ...payload.metadata,
-          channel: payload.channel,
+          channel: payload.channel as any,
           profile_picture_url: payload.profile_picture_url,
           uaz_message_id: payload.uaz_message_id,
           quoted_message_id: payload.quoted_message_id,
         },
-      })
-      .select('id, created_at')
-      .single();
-
-    if (messageError || !message) {
-      console.error('Error creating message:', messageError);
-      return errorResponse('Failed to create message', 500);
-    }
+      },
+      select: { id: true, createdAt: true },
+    });
 
     console.log('Created message:', message.id);
 
-    // 5.5. AI pause removido - agora só manual ou via API
-
-    // ===== Queue: Transcription job — enqueued later (after N8N payload is built) =====
-
-    // ===== Queue: Media processing job — enqueued later (after N8N payload is built) =====
-
     // 5. Enviar webhook para N8N via fila (non-blocking)
     if (payload.type === 'incoming' || payload.type === 'outgoing') {
-      // Buscar URL de webhook e knowledge (paralelo com outros dados)
       const [aiConfigResult, clientDataResult, apiKeyResult, companyDataResult, convDataResult] = await Promise.all([
-        supabase
-          .from('ai_configurations')
-          .select('n8n_webhook_url, knowledge')
-          .eq('company_id', companyId)
-          .eq('is_active', true)
-          .limit(1)
-          .maybeSingle(),
-        supabase
-          .from('clients')
-          .select('first_name, last_name, ai_paused')
-          .eq('id', clientId)
-          .maybeSingle(),
-        supabase
-          .from('api_keys')
-          .select('key')
-          .eq('company_id', companyId)
-          .eq('is_active', true)
-          .limit(1)
-          .maybeSingle(),
-        supabase
-          .from('companies')
-          .select('name, settings')
-          .eq('id', companyId)
-          .maybeSingle(),
-        supabase
-          .from('conversations')
-          .select('stage, friendly_id')
-          .eq('id', conversationId)
-          .maybeSingle(),
+        prisma.aiConfiguration.findFirst({
+          where: { companyId, isActive: true },
+          select: { n8nWebhookUrl: true, knowledge: true },
+        }),
+        prisma.client.findUnique({
+          where: { id: clientId },
+          select: { firstName: true, lastName: true, aiPaused: true },
+        }),
+        prisma.apiKey.findFirst({
+          where: { companyId, isActive: true },
+          select: { key: true },
+        }),
+        prisma.company.findUnique({
+          where: { id: companyId },
+          select: { name: true, settings: true },
+        }),
+        prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { stage: true, friendlyId: true },
+        }),
       ]);
 
-      const companyAiConfig = aiConfigResult.data;
-      const clientData = clientDataResult.data;
-      const companyApiKey = apiKeyResult.data;
-      const companyData = companyDataResult.data;
-      const conversationData = convDataResult.data;
+      const companyAiConfig = aiConfigResult;
+      const clientData = clientDataResult;
+      const companyApiKey = apiKeyResult;
+      const companyData = companyDataResult;
+      const conversationData = convDataResult;
 
-      const n8nWebhookUrl = companyAiConfig?.n8n_webhook_url || process.env.N8N_AI_WEBHOOK_URL;
+      const n8nWebhookUrl = companyAiConfig?.n8nWebhookUrl || process.env.N8N_AI_WEBHOOK_URL;
       const knowledgeName = companyAiConfig?.knowledge || null;
 
-      // Build webhook payload (needed for both N8N and transcription worker)
       const defaultBusinessHours = {
         monday: { enabled: true, start: '08:00', end: '18:00' },
         tuesday: { enabled: true, start: '08:00', end: '18:00' },
@@ -1397,17 +1217,17 @@ export async function POST(req: NextRequest) {
       } : defaultAppointmentSettings;
 
       const clientName = clientData
-        ? `${clientData.first_name} ${clientData.last_name || ''}`.trim()
+        ? `${clientData.firstName} ${clientData.lastName || ''}`.trim()
         : payload.phone;
 
-      const aiStatus = clientData?.ai_paused ? 'paused' : 'active';
+      const aiStatus = clientData?.aiPaused ? 'paused' : 'active';
 
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       let fullMediaUrl: string | null = null;
       if (payload.media_url) {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
         fullMediaUrl = payload.media_url.startsWith('http')
           ? payload.media_url
-          : `${supabaseUrl}/storage/v1/object/public/conversation-media/${payload.media_url}`;
+          : `${appUrl}/uploads/${payload.media_url}`;
       }
 
       const webhookPayload = {
@@ -1417,7 +1237,7 @@ export async function POST(req: NextRequest) {
         numero_cliente: payload.phone,
         company_id: companyId,
         conversation_id: conversationId,
-        conversation_friendly_id: conversationData?.friendly_id || null,
+        conversation_friendly_id: conversationData?.friendlyId || null,
         client_id: clientId,
         fromMe: payload.type === 'outgoing',
         stage: conversationData?.stage || null,
@@ -1441,8 +1261,8 @@ export async function POST(req: NextRequest) {
             conversationId,
             companyId,
             audioUrl: payload.media_url || '',
-            instanceApiUrl: whatsappInstance.api_url,
-            instanceApiKey: whatsappInstance.instance_api_key,
+            instanceApiUrl: whatsappInstance.apiUrl,
+            instanceApiKey: whatsappInstance.instanceApiKey,
             messageKey: mediaMessageId,
             n8nWebhookUrl: n8nWebhookUrl || undefined,
             n8nPayload: webhookPayload,
@@ -1451,7 +1271,6 @@ export async function POST(req: NextRequest) {
         } catch (queueError) {
           console.error('[Audio Transcription] Failed to queue transcription:', queueError);
         }
-      // For media messages (image, video, document, sticker): skip N8N, media worker sends it after upload to S3
       } else if (shouldQueueMedia && whatsappInstance && mediaMessageId) {
         console.log(`[N8N Webhook] ⏳ Skipping for media message ${message.id} — will send after S3 upload`);
         try {
@@ -1464,8 +1283,8 @@ export async function POST(req: NextRequest) {
             mimeType: rawPayload.message?.content && typeof rawPayload.message.content === 'object'
               ? (rawPayload.message.content as any).mimetype || 'application/octet-stream'
               : 'application/octet-stream',
-            instanceApiUrl: whatsappInstance.api_url,
-            instanceApiKey: whatsappInstance.instance_api_key,
+            instanceApiUrl: whatsappInstance.apiUrl,
+            instanceApiKey: whatsappInstance.instanceApiKey,
             messageKey: mediaMessageId,
             n8nWebhookUrl: n8nWebhookUrl || undefined,
             n8nPayload: webhookPayload,
@@ -1475,7 +1294,6 @@ export async function POST(req: NextRequest) {
           console.error('[Media Processing] Failed to queue:', queueError);
         }
       } else if (n8nWebhookUrl) {
-        // Text messages: send N8N immediately
         try {
           await enqueueN8NWebhook({
             webhookUrl: n8nWebhookUrl,
@@ -1507,99 +1325,93 @@ export async function POST(req: NextRequest) {
       console.log('[Follow-up] Processing incoming message for follow-up jobs...');
 
       // Cancelar jobs de follow-up pendentes quando cliente responde
-      const { error: cancelError } = await supabase
-        .from('follow_up_jobs')
-        .update({ status: 'cancelled' })
-        .eq('conversation_id', conversationId)
-        .eq('status', 'pending');
-
-      if (!cancelError) {
-        console.log('[Follow-up] Cancelled pending jobs due to client response');
-      }
+      await prisma.followUpJob.updateMany({
+        where: { conversationId, status: 'pending' },
+        data: { status: 'cancelled' },
+      });
+      console.log('[Follow-up] Cancelled pending jobs due to client response');
 
       // GUARD: Verificar se a IA está pausada para este cliente (atendimento manual)
-      const { data: followUpClient } = await supabase
-        .from('clients')
-        .select('ai_paused')
-        .eq('id', clientId)
-        .single();
+      const followUpClient = await prisma.client.findUnique({
+        where: { id: clientId },
+        select: { aiPaused: true },
+      });
 
       // GUARD: Verificar se a conversa está ativa
-      const { data: followUpConv } = await supabase
-        .from('conversations')
-        .select('status')
-        .eq('id', conversationId)
-        .single();
+      const followUpConv = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { status: true },
+      });
 
-      const shouldCreateFollowUps = !followUpClient?.ai_paused && followUpConv?.status !== 'closed';
+      const shouldCreateFollowUps = !followUpClient?.aiPaused && followUpConv?.status !== 'closed';
 
       if (!shouldCreateFollowUps) {
-        console.log(`[Follow-up] Skipping follow-up creation: ai_paused=${followUpClient?.ai_paused}, conv_status=${followUpConv?.status}`);
+        console.log(`[Follow-up] Skipping follow-up creation: ai_paused=${followUpClient?.aiPaused}, conv_status=${followUpConv?.status}`);
       } else {
-        // Buscar configuração de IA da empresa
-        const { data: aiConfig } = await supabase
-          .from('ai_configurations')
-          .select('follow_up_stages, whatsapp_instance_id, follow_up_enabled')
-          .eq('company_id', companyId)
-          .eq('is_active', true)
-          .maybeSingle();
+        const followUpAiConfig = await prisma.aiConfiguration.findFirst({
+          where: { companyId, isActive: true },
+          select: { followUpStages: true, whatsappInstanceId: true, followUpEnabled: true },
+        });
 
-        if (aiConfig?.follow_up_enabled && (aiConfig.follow_up_stages as any)?.length > 0) {
-          // Filtrar apenas stages habilitados (enabled !== false para retrocompatibilidade)
-          const followUpStages = (aiConfig.follow_up_stages as any[]).filter((s: any) => s.enabled !== false);
-          const messageReceivedAt = new Date(message.created_at);
+        if (followUpAiConfig?.followUpEnabled && (followUpAiConfig.followUpStages as any)?.length > 0) {
+          const followUpStages = (followUpAiConfig.followUpStages as any[]).filter((s: any) => s.enabled !== false);
+          const messageReceivedAt = new Date(message.createdAt);
 
           if (followUpStages.length === 0) {
             console.log('[Follow-up] All stages are disabled, skipping job creation');
           } else {
-            console.log(`[Follow-up] Creating ${followUpStages.length} jobs for conversation ${conversationId} (${(aiConfig.follow_up_stages as any[]).length - followUpStages.length} disabled)`);
+            console.log(`[Follow-up] Creating ${followUpStages.length} jobs for conversation ${conversationId} (${(followUpAiConfig.followUpStages as any[]).length - followUpStages.length} disabled)`);
 
-          // Buscar dados do cliente para substituir variáveis
-          const { data: clientData } = await supabase
-            .from('clients')
-            .select('first_name, phone')
-            .eq('id', clientId)
-            .single();
-
-          // Criar um job para cada stage habilitado
-          const jobsToUpsert = followUpStages.map((stage: any) => {
-            const scheduledFor = new Date(messageReceivedAt);
-            scheduledFor.setHours(scheduledFor.getHours() + (stage.delay_hours || 24));
-
-            // Substituir variáveis na mensagem
-            let messageText = stage.message || '';
-            if (clientData) {
-              messageText = messageText
-                .replace(/\[client_name\]/g, clientData.first_name || 'Cliente')
-                .replace(/\[client_phone\]/g, clientData.phone || '');
-            }
-
-            return {
-              conversation_id: conversationId,
-              company_id: companyId,
-              client_id: clientId,
-              stage_order: stage.order,
-              scheduled_for: scheduledFor.toISOString(),
-              message_text: messageText,
-              whatsapp_instance_id: aiConfig.whatsapp_instance_id,
-              status: 'pending',
-            };
-          });
-
-          // Fazer UPSERT dos jobs (atualiza se existir, cria se não existir)
-          const { error: jobsError } = await supabase
-            .from('follow_up_jobs')
-            .upsert(jobsToUpsert, {
-              onConflict: 'conversation_id,stage_order',
-              ignoreDuplicates: false,
+            const followUpClientData = await prisma.client.findUnique({
+              where: { id: clientId },
+              select: { firstName: true, phone: true },
             });
 
-          if (jobsError) {
-            console.error('[Follow-up] Error creating jobs:', jobsError);
-          } else {
+            const jobsToUpsert = followUpStages.map((stage: any) => {
+              const scheduledFor = new Date(messageReceivedAt);
+              scheduledFor.setHours(scheduledFor.getHours() + (stage.delay_hours || 24));
+
+              let messageText = stage.message || '';
+              if (followUpClientData) {
+                messageText = messageText
+                  .replace(/\[client_name\]/g, followUpClientData.firstName || 'Cliente')
+                  .replace(/\[client_phone\]/g, followUpClientData.phone || '');
+              }
+
+              return {
+                conversationId: conversationId!,
+                companyId,
+                clientId,
+                stageOrder: stage.order,
+                scheduledFor,
+                messageText,
+                whatsappInstanceId: followUpAiConfig.whatsappInstanceId,
+                status: 'pending' as const,
+              };
+            });
+
+            // Use transactions to upsert follow-up jobs
+            for (const job of jobsToUpsert) {
+              try {
+                const existing = await prisma.followUpJob.findFirst({
+                  where: { conversationId: job.conversationId, stageOrder: job.stageOrder },
+                });
+
+                if (existing) {
+                  await prisma.followUpJob.update({
+                    where: { id: existing.id },
+                    data: job,
+                  });
+                } else {
+                  await prisma.followUpJob.create({ data: job });
+                }
+              } catch (jobError) {
+                console.error('[Follow-up] Error upserting job:', jobError);
+              }
+            }
+
             console.log(`[Follow-up] Successfully created/updated ${jobsToUpsert.length} jobs`);
           }
-          } // end if followUpStages.length > 0
         } else {
           console.log('[Follow-up] Follow-up disabled or no stages configured');
         }
@@ -1615,7 +1427,7 @@ export async function POST(req: NextRequest) {
         conversation_id: conversationId,
         client_id: clientId,
         company_id: companyId,
-        created_at: message.created_at,
+        created_at: message.createdAt,
         conversation_reopened: conversationReopened,
       },
     });

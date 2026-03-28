@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   const baseRedirectUrl = process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}/app/settings` : '/app/settings';
@@ -36,8 +36,10 @@ export async function GET(req: NextRequest) {
     let connectedEmail = '';
     if (userInfoRes.ok) { connectedEmail = (await userInfoRes.json()).email || ''; }
 
-    const supabase = createAdminClient();
-    const { data: company } = await supabase.from('companies').select('name').eq('id', companyId).single();
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { name: true },
+    });
     if (!company) return NextResponse.redirect(`${baseRedirectUrl}?google_calendar=error&message=company_not_found`);
 
     const calendarName = `Agenda - ${company.name}`;
@@ -49,14 +51,27 @@ export async function GET(req: NextRequest) {
     if (!calRes.ok) return NextResponse.redirect(`${baseRedirectUrl}?google_calendar=error&message=calendar_creation_failed`);
     const calendarId = (await calRes.json()).id;
 
-    await supabase.from('google_calendar_connections').delete().eq('company_id', companyId);
-    const { error: insertError } = await supabase.from('google_calendar_connections').insert({
-      company_id: companyId, calendar_id: calendarId, calendar_name: calendarName,
-      access_token, refresh_token, token_expires_at: new Date(Date.now() + expires_in * 1000).toISOString(),
-      connected_email: connectedEmail, is_active: true, sync_enabled: true, create_meet_links: false,
-    });
+    await prisma.googleCalendarConnection.deleteMany({ where: { companyId } });
 
-    if (insertError) return NextResponse.redirect(`${baseRedirectUrl}?google_calendar=error&message=save_failed`);
+    try {
+      await prisma.googleCalendarConnection.create({
+        data: {
+          companyId,
+          calendarId,
+          calendarName,
+          accessToken: access_token,
+          refreshToken: refresh_token,
+          tokenExpiresAt: new Date(Date.now() + expires_in * 1000),
+          connectedEmail,
+          isActive: true,
+          syncEnabled: true,
+          createMeetLinks: false,
+        },
+      });
+    } catch (insertError) {
+      return NextResponse.redirect(`${baseRedirectUrl}?google_calendar=error&message=save_failed`);
+    }
+
     return NextResponse.redirect(`${baseRedirectUrl}?google_calendar=success`);
   } catch (error) {
     console.error('[Calendar Callback]', error);

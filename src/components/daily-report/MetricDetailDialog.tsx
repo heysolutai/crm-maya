@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, User, Calendar, Phone, ArrowLeft, Search, Check, UserPlus, DollarSign, Clock, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { supabase } from '@/lib/supabase/client';
 import { useEffectiveCompanyId } from '@/hooks/useEffectiveCompanyId';
 import { useAuth } from '@/hooks/useAuth';
 import { useClients } from '@/hooks/useClients';
@@ -99,8 +98,13 @@ export function MetricDetailDialog({
   const handleDeleteAppointment = async (id: string) => {
     setDeleting(id);
     try {
-      const { error } = await supabase.from('appointments').delete().eq('id', id);
-      if (error) throw error;
+      const res = await fetch('/api/daily-report/metric-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteAppointment', appointmentId: id, companyId: effectiveCompanyId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro');
       toast({ title: 'Agendamento excluído!' });
       onRefresh?.();
     } catch (e: any) {
@@ -117,69 +121,69 @@ export function MetricDetailDialog({
     return name.includes(q) || phone.includes(q);
   });
 
+  const callMetricAction = async (actionBody: any) => {
+    const res = await fetch('/api/daily-report/metric-actions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...actionBody, companyId: effectiveCompanyId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro');
+    return data;
+  };
+
   const handleAddExisting = async () => {
     if (!selectedClientId || !effectiveCompanyId) return;
     setSaving(true);
     try {
       if (type === 'entrantes') {
-        await supabase.from('clients').update({ source: 'manual_report' }).eq('id', selectedClientId);
+        await callMetricAction({ action: 'updateClientSource', clientId: selectedClientId, source: 'manual_report' });
       }
       if (type === 'agendaram' || type === 'agendados') {
-        const { error } = await supabase.from('appointments').insert({
-          client_id: selectedClientId,
-          company_id: effectiveCompanyId,
+        await callMetricAction({
+          action: 'createAppointment',
+          clientId: selectedClientId,
           title: 'Agendamento manual',
-          scheduled_for: buildScheduledFor(),
+          scheduledFor: buildScheduledFor(),
           status: 'scheduled',
-          created_by: user?.id,
         });
-        if (error) throw error;
       }
       if (type === 'compareceram') {
-        // Mark the appointment as completed
         const apt = scheduledForToday.find((a: any) => a.client_id === selectedClientId || a.clients?.id === selectedClientId);
         if (apt) {
-          await supabase.from('appointments').update({ status: 'completed' }).eq('id', apt.id);
+          await callMetricAction({ action: 'updateAppointmentStatus', appointmentId: apt.id, status: 'completed' });
         } else {
-          // Create a completed appointment (marked to avoid inflating agendaram count)
-          const { error } = await supabase.from('appointments').insert({
-            client_id: selectedClientId,
-            company_id: effectiveCompanyId,
+          await callMetricAction({
+            action: 'createAppointment',
+            clientId: selectedClientId,
             title: 'Comparecimento manual',
-            scheduled_for: buildScheduledFor(),
+            scheduledFor: buildScheduledFor(),
             status: 'completed',
             notes: 'comparecimento',
-            created_by: user?.id,
           });
-          if (error) throw error;
         }
       }
       if (type === 'walk_in') {
-        // Create a completed appointment without prior scheduling
-        const { error } = await supabase.from('appointments').insert({
-          client_id: selectedClientId,
-          company_id: effectiveCompanyId,
+        await callMetricAction({
+          action: 'createAppointment',
+          clientId: selectedClientId,
           title: 'Compareceu sem agendar',
-          scheduled_for: buildScheduledFor(),
+          scheduledFor: buildScheduledFor(),
           status: 'completed',
           notes: 'walk-in',
-          created_by: user?.id,
         });
-        if (error) throw error;
       }
       if (type === 'vendas' || type === 'total_vendas') {
         const saleNumber = `V-${format(new Date(), 'yyyyMMdd')}-${Date.now().toString(36).toUpperCase()}`;
         const value = Number(saleValue) || 0;
-        const { error } = await supabase.from('sales').insert({
-          company_id: effectiveCompanyId,
-          client_id: selectedClientId,
-          sold_by: user?.id,
-          sale_number: saleNumber,
+        await callMetricAction({
+          action: 'createSale',
+          clientId: selectedClientId,
+          saleNumber,
           items: [{ name: saleProduct || 'Venda', quantity: 1, unit_price: value, total: value }],
           subtotal: value,
           status: 'approved',
         });
-        if (error) throw error;
       }
       toast({ title: 'Adicionado com sucesso!' });
       onRefresh?.();
@@ -197,18 +201,16 @@ export function MetricDetailDialog({
     try {
       const clientId = appointment.client_id || appointment.clients?.id;
       if (type === 'compareceram') {
-        await supabase.from('appointments').update({ status: 'completed' }).eq('id', appointment.id);
+        await callMetricAction({ action: 'updateAppointmentStatus', appointmentId: appointment.id, status: 'completed' });
       } else if (type === 'walk_in') {
-        const { error } = await supabase.from('appointments').insert({
-          client_id: clientId,
-          company_id: effectiveCompanyId,
+        await callMetricAction({
+          action: 'createAppointment',
+          clientId,
           title: 'Compareceu sem agendar',
-          scheduled_for: new Date().toISOString(),
+          scheduledFor: new Date().toISOString(),
           status: 'completed',
           notes: 'walk-in',
-          created_by: user?.id,
         });
-        if (error) throw error;
       } else if (type === 'vendas' || type === 'total_vendas') {
         setSelectedClientId(clientId);
         setShowAddForm(true);
@@ -237,46 +239,42 @@ export function MetricDetailDialog({
         : type === 'walk_in' ? 'walk_in'
         : 'manual_report';
 
-      const { data: newClient, error } = await supabase.from('clients').insert({
-        first_name: firstName,
-        last_name: lastName,
+      const clientResult = await callMetricAction({
+        action: 'createClient',
+        firstName,
+        lastName,
         phone: newPhone || undefined,
-        company_id: effectiveCompanyId,
         source: clientSource,
-        created_by: user?.id,
-      }).select('id').single();
+      });
 
-      if (error) throw error;
+      const newClientId = clientResult.id;
 
-      if ((type === 'agendaram' || type === 'agendados') && newClient) {
-        await supabase.from('appointments').insert({
-          client_id: newClient.id,
-          company_id: effectiveCompanyId,
+      if ((type === 'agendaram' || type === 'agendados') && newClientId) {
+        await callMetricAction({
+          action: 'createAppointment',
+          clientId: newClientId,
           title: 'Agendamento manual',
-          scheduled_for: buildScheduledFor(),
+          scheduledFor: buildScheduledFor(),
           status: 'scheduled',
-          created_by: user?.id,
         });
       }
-      if ((type === 'compareceram' || type === 'walk_in') && newClient) {
-        await supabase.from('appointments').insert({
-          client_id: newClient.id,
-          company_id: effectiveCompanyId,
+      if ((type === 'compareceram' || type === 'walk_in') && newClientId) {
+        await callMetricAction({
+          action: 'createAppointment',
+          clientId: newClientId,
           title: type === 'walk_in' ? 'Compareceu sem agendar' : 'Comparecimento manual',
-          scheduled_for: buildScheduledFor(),
+          scheduledFor: buildScheduledFor(),
           status: 'completed',
           notes: type === 'walk_in' ? 'walk-in' : 'comparecimento',
-          created_by: user?.id,
         });
       }
-      if ((type === 'vendas' || type === 'total_vendas') && newClient) {
+      if ((type === 'vendas' || type === 'total_vendas') && newClientId) {
         const saleNumber = `V-${format(new Date(), 'yyyyMMdd')}-${Date.now().toString(36).toUpperCase()}`;
         const value = Number(saleValue) || 0;
-        await supabase.from('sales').insert({
-          company_id: effectiveCompanyId,
-          client_id: newClient.id,
-          sold_by: user?.id,
-          sale_number: saleNumber,
+        await callMetricAction({
+          action: 'createSale',
+          clientId: newClientId,
+          saleNumber,
           items: [{ name: saleProduct || 'Venda', quantity: 1, unit_price: value, total: value }],
           subtotal: value,
           status: 'approved',

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { assignNextAgent, assignNextAgentInDepartment } from '@/lib/api/database';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
@@ -18,16 +18,12 @@ export async function POST(req: NextRequest) {
 
     if (!conversationId) return badRequestResponse('conversation_id is required');
 
-    const supabase = createAdminClient();
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: conversationId, companyId },
+      select: { id: true, companyId: true, transferredTo: true, clientId: true },
+    });
 
-    const { data: conversation, error: convError } = await supabase
-      .from('conversations')
-      .select('id, company_id, transferred_to, client_id')
-      .eq('id', conversationId)
-      .eq('company_id', companyId)
-      .single();
-
-    if (convError || !conversation) return errorResponse('Conversation not found or access denied', 404);
+    if (!conversation) return errorResponse('Conversation not found or access denied', 404);
 
     let assignedUserId: string | null = null;
 
@@ -36,32 +32,27 @@ export async function POST(req: NextRequest) {
       if (!departmentId) return badRequestResponse('department_id is required for department transfer');
 
       // Verify department exists and belongs to company
-      const { data: dept, error: deptError } = await supabase
-        .from('departments')
-        .select('id, name')
-        .eq('id', departmentId)
-        .eq('company_id', companyId)
-        .eq('is_active', true)
-        .single();
+      const dept = await prisma.department.findFirst({
+        where: { id: departmentId, companyId, isActive: true },
+        select: { id: true, name: true },
+      });
 
-      if (deptError || !dept) return errorResponse('Department not found or inactive', 404);
+      if (!dept) return errorResponse('Department not found or inactive', 404);
 
       assignedUserId = await assignNextAgentInDepartment(companyId, departmentId);
 
       if (!assignedUserId) {
         // QUEUE: No online agents — put conversation in department queue
-        const { error: updateError } = await supabase
-          .from('conversations')
-          .update({
-            department_id: departmentId,
-            transferred_to: null,
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data: {
+            departmentId,
+            transferredTo: null,
             status: 'waiting',
-            ai_handled: false,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', conversationId);
-
-        if (updateError) return errorResponse('Failed to queue conversation');
+            aiHandled: false,
+            updatedAt: new Date(),
+          },
+        });
 
         console.log(`[Transfer] Conversation ${conversationId} queued in department ${dept.name} (no online agents)`);
 
@@ -76,24 +67,21 @@ export async function POST(req: NextRequest) {
       }
 
       // Agent found — assign and set department
-      const { error: updateError } = await supabase
-        .from('conversations')
-        .update({
-          transferred_to: assignedUserId,
-          department_id: departmentId,
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: {
+          transferredTo: assignedUserId,
+          departmentId,
           status: 'transferred',
-          ai_handled: false,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', conversationId);
+          aiHandled: false,
+          updatedAt: new Date(),
+        },
+      });
 
-      if (updateError) return errorResponse('Failed to transfer conversation');
-
-      const { data: assignedUser } = await supabase
-        .from('users')
-        .select('full_name, email')
-        .eq('id', assignedUserId)
-        .single();
+      const assignedUser = await prisma.user.findUnique({
+        where: { id: assignedUserId },
+        select: { fullName: true, email: true },
+      });
 
       console.log(`[Transfer] Conversation ${conversationId} transferred to ${assignedUserId} in department ${dept.name}`);
 
@@ -102,7 +90,7 @@ export async function POST(req: NextRequest) {
         conversation_id: conversationId,
         queued: false,
         department: { id: dept.id, name: dept.name },
-        transferred_to: { user_id: assignedUserId, full_name: assignedUser?.full_name || null, email: assignedUser?.email || null },
+        transferred_to: { user_id: assignedUserId, full_name: assignedUser?.fullName || null, email: assignedUser?.email || null },
         mode: 'department',
       });
     }
@@ -114,32 +102,30 @@ export async function POST(req: NextRequest) {
     } else {
       // Mode: manual
       if (!targetUserId) return badRequestResponse('target_user_id is required for manual transfer');
-      const { data: targetUser, error: userError } = await supabase
-        .from('users')
-        .select('id, full_name')
-        .eq('id', targetUserId)
-        .eq('company_id', companyId)
-        .eq('is_active', true)
-        .single();
-      if (userError || !targetUser) return errorResponse('Target user not found or inactive', 404);
+      const targetUser = await prisma.user.findFirst({
+        where: { id: targetUserId, companyId, isActive: true },
+        select: { id: true, fullName: true },
+      });
+      if (!targetUser) return errorResponse('Target user not found or inactive', 404);
       assignedUserId = targetUserId;
     }
 
-    const { error: updateError } = await supabase
-      .from('conversations')
-      .update({ transferred_to: assignedUserId, ai_handled: false, updated_at: new Date().toISOString() })
-      .eq('id', conversationId);
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { transferredTo: assignedUserId, aiHandled: false, updatedAt: new Date() },
+    });
 
-    if (updateError) return errorResponse('Failed to transfer conversation');
-
-    const { data: assignedUser } = await supabase.from('users').select('full_name, email').eq('id', assignedUserId).single();
+    const assignedUser = await prisma.user.findUnique({
+      where: { id: assignedUserId! },
+      select: { fullName: true, email: true },
+    });
 
     console.log(`[Transfer] Conversation ${conversationId} transferred to ${assignedUserId} (mode: ${mode})`);
 
     return jsonResponse({
       success: true,
       conversation_id: conversationId,
-      transferred_to: { user_id: assignedUserId, full_name: assignedUser?.full_name || null, email: assignedUser?.email || null },
+      transferred_to: { user_id: assignedUserId, full_name: assignedUser?.fullName || null, email: assignedUser?.email || null },
       mode,
     });
   } catch (error: any) {

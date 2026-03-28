@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase/client";
-import { invokeFn } from "@/lib/supabase-functions-adapter";
+import { invokeFn } from "@/lib/api-functions";
 import { toast } from "@/hooks/use-toast";
 
 export interface Reaction {
@@ -13,7 +12,6 @@ export interface Reaction {
 
 /**
  * Batch hook: fetches all reactions for a list of message IDs in ONE query.
- * Use this in the Conversations page instead of per-message queries.
  */
 export const useConversationReactions = (messageIds: string[]) => {
   const queryClient = useQueryClient();
@@ -23,22 +21,9 @@ export const useConversationReactions = (messageIds: string[]) => {
     queryFn: async () => {
       if (messageIds.length === 0) return {};
 
-      const { data, error } = await supabase
-        .from('message_reactions')
-        .select('*, users(full_name)')
-        .in('message_id', messageIds);
-
-      if (error) throw error;
-
-      // Group reactions by message_id
-      const map: Record<string, Reaction[]> = {};
-      for (const reaction of data || []) {
-        if (!map[reaction.message_id]) {
-          map[reaction.message_id] = [];
-        }
-        map[reaction.message_id].push(reaction);
-      }
-      return map;
+      const res = await fetch(`/api/message-reactions?messageIds=${messageIds.join(',')}`);
+      if (!res.ok) throw new Error('Failed to fetch reactions');
+      return await res.json();
     },
     enabled: messageIds.length > 0,
   });

@@ -16,7 +16,6 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useImpersonation } from '@/hooks/useImpersonation';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   AlertDialog,
@@ -80,19 +79,9 @@ export function CompaniesTable({ companies, searchTerm, onSearchChange, totalCou
   const { data: ticketCounts } = useQuery({
     queryKey: ['support-ticket-counts'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('support_tickets')
-        .select('company_id, status, created_at')
-        .in('status', ['open', 'in_progress']);
-      if (error) throw error;
-      const counts: Record<string, { open: number; in_progress: number; oldest: string }> = {};
-      (data || []).forEach((t: any) => {
-        if (!counts[t.company_id]) counts[t.company_id] = { open: 0, in_progress: 0, oldest: t.created_at };
-        if (t.status === 'open') counts[t.company_id].open++;
-        if (t.status === 'in_progress') counts[t.company_id].in_progress++;
-        if (t.created_at < counts[t.company_id].oldest) counts[t.company_id].oldest = t.created_at;
-      });
-      return counts;
+      const res = await fetch('/api/support-tickets?counts=true');
+      if (!res.ok) throw new Error('Failed to fetch ticket counts');
+      return await res.json();
     },
   });
 

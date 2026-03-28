@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useTeam } from '@/hooks/useTeam';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/lib/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -55,31 +54,36 @@ export function TeamSignaturesConfig() {
 
   const handleSaveSignature = async (signature: string) => {
     if (!editingAgent) return;
-    
-    const { data: userData } = await supabase
-      .from('users')
-      .select('settings')
-      .eq('id', editingAgent.id)
-      .single();
 
-    const currentSettings = (userData?.settings as any) || {};
-    const updatedSettings = {
-      ...currentSettings,
-      permissions: {
-        ...(currentSettings.permissions || {}),
-        message_signature: signature,
-      },
-    };
+    try {
+      // Get current settings first
+      const getRes = await fetch(`/api/user-settings?userId=${editingAgent.id}`);
+      const currentSettings = getRes.ok ? await getRes.json() : {};
 
-    await supabase
-      .from('users')
-      .update({ settings: updatedSettings })
-      .eq('id', editingAgent.id);
+      const updatedSettings = {
+        permissions: {
+          ...(currentSettings.permissions || {}),
+          message_signature: signature,
+        },
+      };
 
-    queryClient.invalidateQueries({ queryKey: ['user-permissions'] });
-    queryClient.invalidateQueries({ queryKey: ['team'] });
-    
-    toast({ title: 'Assinatura atualizada' });
+      const res = await fetch('/api/user-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: editingAgent.id,
+          settings: updatedSettings,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+
+      queryClient.invalidateQueries({ queryKey: ['user-permissions'] });
+      queryClient.invalidateQueries({ queryKey: ['team'] });
+
+      toast({ title: 'Assinatura atualizada' });
+    } catch (err) {
+      toast({ title: 'Erro ao atualizar assinatura', variant: 'destructive' });
+    }
     setEditingAgent(null);
   };
 

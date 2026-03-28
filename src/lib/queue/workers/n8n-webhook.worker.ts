@@ -1,7 +1,7 @@
 import { Worker, Job } from 'bullmq'
 import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type N8NWebhookJob } from '../queues'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { prisma } from '@/lib/db'
 
 async function processN8NWebhook(job: Job<N8NWebhookJob>) {
   const { webhookUrl, payload, companyId, conversationId, messageId } = job.data
@@ -25,37 +25,30 @@ async function processN8NWebhook(job: Job<N8NWebhookJob>) {
   const aiStatus = payload.ai_status as string
   if (aiStatus === 'active') {
     try {
-      const supabase = createAdminClient()
       const phone = payload.numero_cliente as string
 
       // Wait 5 seconds before sending typing indicator
       await new Promise(resolve => setTimeout(resolve, 5000))
 
-      const { data: instance } = await supabase
-        .from('whatsapp_instances')
-        .select('api_url, instance_api_key')
-        .eq('company_id', companyId)
-        .eq('is_active', true)
-        .limit(1)
-        .maybeSingle()
+      const instance = await prisma.whatsappInstance.findFirst({
+        where: { companyId, isActive: true },
+        select: { apiUrl: true, instanceApiKey: true },
+      })
 
-      if (instance?.api_url && instance?.instance_api_key) {
-        const { data: aiConfig } = await supabase
-          .from('ai_configurations')
-          .select('behavior_settings')
-          .eq('company_id', companyId)
-          .eq('is_active', true)
-          .limit(1)
-          .maybeSingle()
+      if (instance?.apiUrl && instance?.instanceApiKey) {
+        const aiConfig = await prisma.aiConfiguration.findFirst({
+          where: { companyId, isActive: true },
+          select: { behaviorSettings: true },
+        })
 
-        const behaviorSettings = aiConfig?.behavior_settings as Record<string, unknown> | null
+        const behaviorSettings = aiConfig?.behaviorSettings as Record<string, unknown> | null
         const typingDelayMs = (behaviorSettings?.typing_indicator_delay_ms as number) || 30000
 
-        await fetch(`${instance.api_url}/message/presence`, {
+        await fetch(`${instance.apiUrl}/message/presence`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'token': instance.instance_api_key,
+            'token': instance.instanceApiKey,
           },
           body: JSON.stringify({
             number: phone,

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useImpersonation } from '@/hooks/useImpersonation';
 import { Badge } from '@/components/ui/badge';
@@ -122,13 +121,9 @@ export default function SupportHistory() {
     queryKey: ['support-tickets', effectiveCompanyId],
     queryFn: async () => {
       if (!effectiveCompanyId) return [];
-      const { data, error } = await supabase
-        .from('support_tickets')
-        .select('*')
-        .eq('company_id', effectiveCompanyId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
+      const res = await fetch(`/api/support-tickets?companyId=${effectiveCompanyId}`);
+      if (!res.ok) throw new Error('Failed to fetch tickets');
+      return await res.json();
     },
     enabled: !!effectiveCompanyId,
   });
@@ -402,15 +397,17 @@ function TicketCard({ ticket, effectiveCompanyId }: { ticket: any; effectiveComp
   const handleStatusChange = async (newStatus: string) => {
     setUpdating(true);
     try {
-      const updateData: any = { status: newStatus };
-      if (newStatus === 'resolved') {
-        updateData.resolved_at = new Date().toISOString();
-      }
-      const { error } = await supabase
-        .from('support_tickets')
-        .update(updateData)
-        .eq('id', ticket.id);
-      if (error) throw error;
+      const res = await fetch('/api/support-tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateStatus',
+          ticketId: ticket.id,
+          status: newStatus,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro');
       queryClient.invalidateQueries({ queryKey: ['support-tickets', effectiveCompanyId] });
       toast({ title: 'Status atualizado' });
     } catch (err: any) {

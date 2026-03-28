@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { sendToWhatsApp } from '@/lib/api/whatsapp';
 import { handleCors, jsonResponse, errorResponse, unauthorizedResponse } from '@/lib/api/cors';
@@ -18,28 +18,28 @@ export async function POST(req: NextRequest) {
     const { conversationId, messageText } = await req.json();
     if (!conversationId || !messageText) return jsonResponse({ error: 'Missing conversationId or messageText' }, 400);
 
-    const supabase = createAdminClient();
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: {
+        id: true,
+        companyId: true,
+        clientId: true,
+        client: { select: { phone: true, firstName: true } },
+      },
+    });
 
-    const { data: conversation, error: convError } = await supabase
-      .from('conversations')
-      .select('id, company_id, client_id, clients!inner (phone, first_name), companies (whatsapp_instance_name)')
-      .eq('id', conversationId)
-      .single();
+    if (!conversation) throw new Error('Conversation not found');
 
-    if (convError || !conversation) throw new Error('Conversation not found');
-
-    if (conversation.company_id !== authResult.companyId) {
+    if (conversation.companyId !== authResult.companyId) {
       return jsonResponse({ error: 'Forbidden: conversation does not belong to your company' }, 403);
     }
 
-    const client = Array.isArray(conversation.clients) ? conversation.clients[0] : conversation.clients;
+    const client = conversation.client;
 
-    const { data: instance } = await supabase
-      .from('whatsapp_instances')
-      .select('id, company_id, instance_name, api_url, instance_api_key, is_active')
-      .eq('company_id', conversation.company_id)
-      .eq('is_active', true)
-      .single();
+    const instance = await prisma.whatsappInstance.findFirst({
+      where: { companyId: conversation.companyId, isActive: true },
+      select: { id: true, companyId: true, instanceName: true, apiUrl: true, instanceApiKey: true, isActive: true },
+    });
 
     if (!instance) throw new Error('WhatsApp instance not found or inactive');
 
@@ -48,21 +48,24 @@ export async function POST(req: NextRequest) {
     // Agent signature
     let finalMessageText = messageText;
     if (agentId) {
-      const { data: userData } = await supabase.from('users').select('full_name, settings').eq('id', agentId).single();
+      const userData = await prisma.user.findUnique({
+        where: { id: agentId },
+        select: { fullName: true, settings: true },
+      });
       if (userData) {
         const settings = userData.settings as any;
-        const signature = settings?.permissions?.message_signature || userData.full_name || '';
+        const signature = settings?.permissions?.message_signature || userData.fullName || '';
         if (signature) finalMessageText = `${messageText}\n\n_${signature}_`;
       }
     }
 
-    const { data: message, error: msgError } = await supabase.from('messages').insert({
-      conversation_id: conversationId, sender_type: 'agent', sender_id: agentId, message_text: finalMessageText, message_type: 'text',
-    }).select().single();
+    const message = await prisma.message.create({
+      data: {
+        conversationId, senderType: 'agent', senderId: agentId, messageText: finalMessageText, messageType: 'text',
+      },
+    });
 
-    if (msgError) throw new Error('Failed to save message');
-
-    const { success, error: whatsappError } = await sendToWhatsApp(instance, '/send/text', { phone: client.phone, text: messageText }, message.id);
+    const { success, error: whatsappError } = await sendToWhatsApp(instance as any, '/send/text', { phone: client.phone, text: messageText }, message.id);
     if (!success) console.error('Failed to send WhatsApp message:', whatsappError);
 
     // Optional external webhook
@@ -71,7 +74,7 @@ export async function POST(req: NextRequest) {
       try {
         await fetch(webhookUrl, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: messageText, phone: client.phone, instance_name: instance.instance_name, instance_id: instance.instance_name, client_name: client.first_name, timestamp: new Date().toISOString() }),
+          body: JSON.stringify({ message: messageText, phone: client.phone, instance_name: instance.instanceName, instance_id: instance.instanceName, client_name: client.firstName, timestamp: new Date().toISOString() }),
         });
       } catch (e) { console.error('Webhook failed:', e); }
     }

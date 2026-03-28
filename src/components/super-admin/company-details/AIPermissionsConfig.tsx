@@ -4,7 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -57,16 +56,15 @@ export function AIPermissionsConfig({ companyId }: AIPermissionsConfigProps) {
   useEffect(() => {
     async function load() {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from('companies')
-        .select('settings')
-        .eq('id', companyId)
-        .single();
-
-      if (!error && data) {
-        const settings = data.settings as Record<string, any> | null;
-        const saved = settings?.ai_permissions as Partial<AIPermissions> | undefined;
-        setPermissions({ ...DEFAULT_PERMISSIONS, ...saved });
+      try {
+        const res = await fetch(`/api/company-settings?companyId=${companyId}`);
+        if (res.ok) {
+          const settings = await res.json();
+          const saved = settings?.ai_permissions as Partial<AIPermissions> | undefined;
+          setPermissions({ ...DEFAULT_PERMISSIONS, ...saved });
+        }
+      } catch (err) {
+        console.error('Error loading AI permissions:', err);
       }
       setIsLoading(false);
     }
@@ -88,23 +86,16 @@ export function AIPermissionsConfig({ companyId }: AIPermissionsConfigProps) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Get current settings first
-      const { data: current } = await supabase
-        .from('companies')
-        .select('settings')
-        .eq('id', companyId)
-        .single();
-
-      const currentSettings = (current?.settings as Record<string, any>) || {};
-
-      const { error } = await supabase
-        .from('companies')
-        .update({
-          settings: { ...currentSettings, ai_permissions: permissions } as any,
-        })
-        .eq('id', companyId);
-
-      if (error) throw error;
+      const res = await fetch('/api/company-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId,
+          settings: { ai_permissions: permissions },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro');
 
       queryClient.invalidateQueries({ queryKey: ['company', companyId] });
       queryClient.invalidateQueries({ queryKey: ['company'] });

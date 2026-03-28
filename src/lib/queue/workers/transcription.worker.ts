@@ -1,7 +1,7 @@
 import { Worker, Job } from 'bullmq'
 import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type TranscriptionJob, enqueueN8NWebhook } from '../queues'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { prisma } from '@/lib/db'
 
 // Transcribe audio via UazAPI (calls OpenAI Whisper internally)
 async function transcribeViaUazAPI(
@@ -76,25 +76,23 @@ async function processTranscription(job: Job<TranscriptionJob>) {
     return { messageId, transcription: null, reason: 'missing_instance' }
   }
 
-  const supabase = createAdminClient()
-
   const transcription = await transcribeViaUazAPI(messageKey, instanceApiKey, instanceApiUrl, openAiKey)
 
   if (transcription) {
     console.log(`[Transcription Worker] Transcription: "${transcription.substring(0, 100)}"`)
 
     // Update message with transcription
-    await supabase
-      .from('messages')
-      .update({
-        message_text: transcription,
+    await prisma.message.update({
+      where: { id: messageId },
+      data: {
+        messageText: transcription,
         metadata: {
           transcribed: true,
           transcription_source: 'uazapi',
           transcribed_at: new Date().toISOString(),
         },
-      })
-      .eq('id', messageId)
+      },
+    })
 
     // Send to N8N with transcription as conteudo (single request, not a re-send)
     if (n8nWebhookUrl && n8nPayload) {
@@ -109,23 +107,23 @@ async function processTranscription(job: Job<TranscriptionJob>) {
         conversationId,
         messageId,
       })
-      console.log(`[Transcription Worker] ✅ Sent N8N webhook with transcribed audio`)
+      console.log(`[Transcription Worker] Sent N8N webhook with transcribed audio`)
     }
   } else {
     console.error(`[Transcription Worker] Transcription failed for message ${messageId}`)
 
     // Update message to indicate failed transcription
-    await supabase
-      .from('messages')
-      .update({
-        message_text: '[Áudio - transcrição falhou]',
+    await prisma.message.update({
+      where: { id: messageId },
+      data: {
+        messageText: '[Audio - transcricao falhou]',
         metadata: {
           transcribed: false,
           transcription_error: true,
           transcription_attempted_at: new Date().toISOString(),
         },
-      })
-      .eq('id', messageId)
+      },
+    })
   }
 
   return { messageId, transcription: !!transcription }

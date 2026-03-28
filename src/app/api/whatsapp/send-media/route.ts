@@ -1,10 +1,12 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { getWhatsAppInstance, findOrCreateConversation, saveMessage, getUAZMessageId, getClientPhoneByConversationId } from '@/lib/api/database';
 import { sendToWhatsApp } from '@/lib/api/whatsapp';
 import { validateMediaPayload } from '@/lib/api/utils';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
+import fs from 'fs';
+import path from 'path';
 
 function normalizeBase64(input: string): string {
   const stripped = input.trim().replace(/^data:[^;]+;base64,/, '');
@@ -45,12 +47,13 @@ async function resolveFileToBase64(file: string): Promise<string> {
     const bytes = new Uint8Array(await res.arrayBuffer());
     return uint8ArrayToBase64(bytes);
   }
-  // Supabase Storage path
-  const supabase = createAdminClient();
-  const { data, error } = await supabase.storage.from('conversation-media').download(file);
-  if (error || !data) throw new Error(`Could not download media from storage: ${error?.message ?? 'unknown error'}`);
-  const bytes = new Uint8Array(await data.arrayBuffer());
-  return uint8ArrayToBase64(bytes);
+  // Local file path - read from public/uploads directory
+  const localPath = path.join(process.cwd(), 'public', 'uploads', file);
+  if (fs.existsSync(localPath)) {
+    const bytes = fs.readFileSync(localPath);
+    return uint8ArrayToBase64(new Uint8Array(bytes));
+  }
+  throw new Error(`Could not resolve media file: ${file}`);
 }
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }

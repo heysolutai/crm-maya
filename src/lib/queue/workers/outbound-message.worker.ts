@@ -1,7 +1,7 @@
 import { Worker, Job } from 'bullmq'
 import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type OutboundMessageJob, type OutboundMediaJob } from '../queues'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { prisma } from '@/lib/db'
 
 async function processOutboundMessage(job: Job<OutboundMessageJob>) {
   const {
@@ -11,16 +11,13 @@ async function processOutboundMessage(job: Job<OutboundMessageJob>) {
 
   console.log(`[Outbound Worker] Sending text to ${phone} (company: ${companyId})`)
 
-  const supabase = createAdminClient()
-
   // Get WhatsApp instance
-  const { data: instance, error: instanceError } = await supabase
-    .from('whatsapp_instances')
-    .select('api_url, instance_api_key')
-    .eq('id', instanceId)
-    .single()
+  const instance = await prisma.whatsappInstance.findFirst({
+    where: { id: instanceId },
+    select: { apiUrl: true, instanceApiKey: true },
+  })
 
-  if (instanceError || !instance) {
+  if (!instance) {
     throw new Error(`WhatsApp instance not found: ${instanceId}`)
   }
 
@@ -35,11 +32,11 @@ async function processOutboundMessage(job: Job<OutboundMessageJob>) {
   }
 
   // Send via WhatsApp API
-  const response = await fetch(`${instance.api_url}/send/text`, {
+  const response = await fetch(`${instance.apiUrl}/send/text`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'token': instance.instance_api_key,
+      'token': instance.instanceApiKey,
     },
     body: JSON.stringify(body),
   })
@@ -54,19 +51,19 @@ async function processOutboundMessage(job: Job<OutboundMessageJob>) {
 
   // If we need to save the message to DB (e.g., follow-up, reminder)
   if (conversationId && !messageId) {
-    await supabase
-      .from('messages')
-      .insert({
-        conversation_id: conversationId,
-        sender_type: fromAI ? 'ai' : 'agent',
-        message_text: text,
-        message_type: 'text',
+    await prisma.message.create({
+      data: {
+        conversationId: conversationId,
+        senderType: fromAI ? 'ai' : 'agent',
+        messageText: text,
+        messageType: 'text',
         metadata: {
           ...metadata,
           sent_via_queue: true,
           wa_message_id: result?.key?.id,
         },
-      } as any)
+      },
+    })
   }
 
   return { phone, waMessageId: result?.key?.id }
@@ -80,15 +77,12 @@ async function processOutboundMedia(job: Job<OutboundMediaJob>) {
 
   console.log(`[Outbound Worker] Sending ${mediaType} to ${phone}`)
 
-  const supabase = createAdminClient()
+  const instance = await prisma.whatsappInstance.findFirst({
+    where: { id: instanceId },
+    select: { apiUrl: true, instanceApiKey: true },
+  })
 
-  const { data: instance, error: instanceError } = await supabase
-    .from('whatsapp_instances')
-    .select('api_url, instance_api_key')
-    .eq('id', instanceId)
-    .single()
-
-  if (instanceError || !instance) {
+  if (!instance) {
     throw new Error(`WhatsApp instance not found: ${instanceId}`)
   }
 
@@ -109,11 +103,11 @@ async function processOutboundMedia(job: Job<OutboundMediaJob>) {
   if (caption) body.caption = caption
   if (fileName) body.fileName = fileName
 
-  const response = await fetch(`${instance.api_url}${endpoint}`, {
+  const response = await fetch(`${instance.apiUrl}${endpoint}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'token': instance.instance_api_key,
+      'token': instance.instanceApiKey,
     },
     body: JSON.stringify(body),
   })

@@ -1,5 +1,4 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
 export interface PipelineStage {
@@ -15,6 +14,21 @@ export interface PipelineStage {
   updated_at: string;
 }
 
+function mapStage(raw: any): PipelineStage {
+  return {
+    id: raw.id,
+    pipeline_id: raw.pipelineId ?? raw.pipeline_id,
+    name: raw.name,
+    description: raw.description,
+    color: raw.color,
+    order_position: raw.orderPosition ?? raw.order_position,
+    is_default: raw.isDefault ?? raw.is_default,
+    is_final: raw.isFinal ?? raw.is_final,
+    created_at: raw.createdAt ?? raw.created_at,
+    updated_at: raw.updatedAt ?? raw.updated_at,
+  };
+}
+
 export function usePipelineStages(pipelineId: string | null) {
   const queryClient = useQueryClient();
 
@@ -23,14 +37,10 @@ export function usePipelineStages(pipelineId: string | null) {
     queryFn: async () => {
       if (!pipelineId) return [];
 
-      const { data, error } = await supabase
-        .from('pipeline_stages')
-        .select('*')
-        .eq('pipeline_id', pipelineId)
-        .order('order_position', { ascending: true });
-
-      if (error) throw error;
-      return (data || []) as PipelineStage[];
+      const res = await fetch(`/api/pipeline-stages?pipelineId=${pipelineId}`);
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch stages');
+      const data = await res.json();
+      return (data || []).map(mapStage) as PipelineStage[];
     },
     enabled: !!pipelineId,
   });
@@ -45,20 +55,21 @@ export function usePipelineStages(pipelineId: string | null) {
     }
 
     try {
-      const { data: stage, error } = await supabase
-        .from('pipeline_stages')
-        .insert({
+      const res = await fetch('/api/pipeline-stages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           pipeline_id: pipelineId,
           name: data.name.trim(),
           color: data.color || '#6366f1',
           order_position: data.order_position,
           is_default: data.is_default || false,
           is_final: data.is_final || false,
-        })
-        .select()
-        .single();
+        }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to create stage');
+      const stage = await res.json();
 
       toast({ title: 'Stage criada', description: 'Stage adicionada com sucesso!' });
       invalidate();
@@ -71,12 +82,13 @@ export function usePipelineStages(pipelineId: string | null) {
 
   const updateStage = async (id: string, data: Partial<PipelineStage>) => {
     try {
-      const { error } = await supabase
-        .from('pipeline_stages')
-        .update({ ...data, updated_at: new Date().toISOString() })
-        .eq('id', id);
+      const res = await fetch('/api/pipeline-stages', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...data }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to update stage');
 
       toast({ title: 'Stage atualizada', description: 'Alterações salvas com sucesso!' });
       invalidate();
@@ -91,19 +103,13 @@ export function usePipelineStages(pipelineId: string | null) {
     try {
       // Move clients to first remaining stage
       const remaining = stages.filter(s => s.id !== id);
-      if (remaining.length > 0) {
-        await supabase
-          .from('clients')
-          .update({ stage_id: remaining[0].id })
-          .eq('stage_id', id);
-      }
+      const fallbackStageId = remaining.length > 0 ? remaining[0].id : '';
 
-      const { error } = await supabase
-        .from('pipeline_stages')
-        .delete()
-        .eq('id', id);
+      const res = await fetch(`/api/pipeline-stages?id=${id}&fallbackStageId=${fallbackStageId}`, {
+        method: 'DELETE',
+      });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete stage');
 
       toast({ title: 'Stage removida', description: 'Stage excluída com sucesso!' });
       invalidate();
@@ -116,12 +122,13 @@ export function usePipelineStages(pipelineId: string | null) {
 
   const reorderStages = async (orderedIds: string[]) => {
     try {
-      for (let i = 0; i < orderedIds.length; i++) {
-        await supabase
-          .from('pipeline_stages')
-          .update({ order_position: i + 1, updated_at: new Date().toISOString() })
-          .eq('id', orderedIds[i]);
-      }
+      const res = await fetch('/api/pipeline-stages', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds }),
+      });
+
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to reorder stages');
 
       toast({ title: 'Stages reordenadas', description: 'Ordem atualizada com sucesso!' });
       invalidate();

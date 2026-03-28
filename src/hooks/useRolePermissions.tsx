@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
 
@@ -29,7 +28,6 @@ export interface UpdateRolePermissionParams {
   can_edit_settings?: boolean;
 }
 
-// Labels para exibição
 export const ROLE_LABELS: Record<RoleType, string> = {
   company_admin: 'Administrador',
   manager: 'Gerente',
@@ -54,46 +52,48 @@ export function useRolePermissions(companyId?: string) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Buscar permissões de todas as roles da empresa
   const { data: rolePermissions, isLoading } = useQuery({
     queryKey: ['role-permissions', companyId],
     queryFn: async () => {
       if (!companyId) return [];
 
-      const { data, error } = await supabase
-        .from('role_permissions')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('role');
-
-      if (error) throw error;
-      return data as RolePermission[];
+      const res = await fetch(`/api/role-permissions?companyId=${companyId}`);
+      if (!res.ok) throw new Error('Failed to fetch role permissions');
+      const data = await res.json();
+      return (data || []).map((rp: any) => ({
+        ...rp,
+        company_id: rp.companyId || rp.company_id,
+        conversation_access: rp.conversationAccess || rp.conversation_access,
+        crm_access: rp.crmAccess || rp.crm_access,
+        appointments_access: rp.appointmentsAccess || rp.appointments_access,
+        sales_access: rp.salesAccess || rp.sales_access,
+        can_edit_settings: rp.canEditSettings ?? rp.can_edit_settings,
+        created_at: rp.createdAt || rp.created_at,
+        updated_at: rp.updatedAt || rp.updated_at,
+      })) as RolePermission[];
     },
     enabled: !!companyId,
   });
 
-  // Atualizar permissões de uma role
   const updateRolePermission = useMutation({
     mutationFn: async (params: UpdateRolePermissionParams) => {
       if (!companyId) throw new Error('Company ID is required');
 
-      const { role, ...updates } = params;
+      const res = await fetch('/api/role-permissions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId, ...params }),
+      });
 
-      const { error } = await supabase
-        .from('role_permissions')
-        .update(updates)
-        .eq('company_id', companyId)
-        .eq('role', role);
-
-      if (error) throw error;
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update permissions');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['role-permissions', companyId] });
       queryClient.invalidateQueries({ queryKey: ['user-permissions'] });
-      toast({
-        title: 'Permissões atualizadas',
-        description: 'As permissões da role foram atualizadas com sucesso.',
-      });
+      toast({ title: 'Permissões atualizadas', description: 'As permissões da role foram atualizadas com sucesso.' });
     },
     onError: (error) => {
       toast({
@@ -104,12 +104,10 @@ export function useRolePermissions(companyId?: string) {
     },
   });
 
-  // Helper para buscar permissão de uma role específica
   const getPermissionByRole = (role: RoleType): RolePermission | undefined => {
     return rolePermissions?.find(rp => rp.role === role);
   };
 
-  // Roles configuráveis (não incluímos super_admin pois tem acesso total sempre)
   const configurableRoles: RoleType[] = ['manager', 'agent', 'viewer'];
 
   return {

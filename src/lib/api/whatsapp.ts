@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import type { WhatsAppInstance } from './types';
 import { getUAZMessageId } from './database';
 
@@ -8,7 +8,6 @@ export async function sendToWhatsApp(
   payload: any,
   messageId: string
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = createAdminClient();
   const rawPhone = payload.phone ?? payload.number;
   if (!rawPhone) {
     throw new Error('phone or number is required');
@@ -47,25 +46,21 @@ export async function sendToWhatsApp(
       console.error('[WhatsApp API] Error:', response.status, errorText);
 
       if (response.status === 401 || response.status === 403) {
-        Promise.resolve(
-          supabase
-            .from('whatsapp_instances')
-            .update({ status: 'disconnected' as any, error_message: 'Authentication failed' })
-            .eq('id', instance.id)
-        ).catch(() => {});
+        prisma.whatsappInstance.update({
+          where: { id: instance.id },
+          data: { status: 'disconnected', errorMessage: 'Authentication failed' },
+        }).catch(() => {});
       }
 
-      Promise.resolve(
-        supabase
-          .from('messages')
-          .update({
-            metadata: {
-              whatsapp_error: `API error: ${response.status}`,
-              failed_at: new Date().toISOString(),
-            } as any
-          })
-          .eq('id', messageId)
-      ).catch(() => {});
+      prisma.message.update({
+        where: { id: messageId },
+        data: {
+          metadata: {
+            whatsapp_error: `API error: ${response.status}`,
+            failed_at: new Date().toISOString(),
+          } as any,
+        },
+      }).catch(() => {});
 
       return {
         success: false,
@@ -78,21 +73,19 @@ export async function sendToWhatsApp(
     const uazMessageId = responseData.message_id || responseData.id || responseData.key?.id;
     console.log('[WhatsApp API] Success, UAZ ID:', uazMessageId);
 
-    Promise.resolve(
-      supabase
-        .from('messages')
-        .update({
-          uaz_message_id: uazMessageId,
-          read_status: 'sent' as any,
-          metadata: {
-            whatsapp_message_id: uazMessageId,
-            whatsapp_status: responseData.status || 'sent',
-            sent_via: 'uaz_api_direct',
-            sent_successfully_at: new Date().toISOString(),
-          } as any
-        })
-        .eq('id', messageId)
-    ).catch((e: any) => console.warn('[WhatsApp API] Metadata update failed:', e));
+    prisma.message.update({
+      where: { id: messageId },
+      data: {
+        uazMessageId,
+        readStatus: 'sent',
+        metadata: {
+          whatsapp_message_id: uazMessageId,
+          whatsapp_status: responseData.status || 'sent',
+          sent_via: 'uaz_api_direct',
+          sent_successfully_at: new Date().toISOString(),
+        } as any,
+      },
+    }).catch((e: any) => console.warn('[WhatsApp API] Metadata update failed:', e));
 
     return { success: true };
 
@@ -100,17 +93,15 @@ export async function sendToWhatsApp(
     console.error('[WhatsApp API] Exception:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-    Promise.resolve(
-      supabase
-        .from('messages')
-        .update({
-          metadata: {
-            whatsapp_error: errorMessage,
-            failed_at: new Date().toISOString(),
-          } as any
-        })
-        .eq('id', messageId)
-    ).catch(() => {});
+    prisma.message.update({
+      where: { id: messageId },
+      data: {
+        metadata: {
+          whatsapp_error: errorMessage,
+          failed_at: new Date().toISOString(),
+        } as any,
+      },
+    }).catch(() => {});
 
     return {
       success: false,

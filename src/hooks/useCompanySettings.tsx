@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { useToast } from './use-toast';
 
@@ -13,30 +12,18 @@ export function useCompanySettings() {
     queryFn: async () => {
       if (!companyId) return null;
 
-      const { data, error } = await supabase
-        .from('companies')
-        .select('*')
-        .eq('id', companyId)
-        .single();
-
-      if (error) throw error;
-      return data;
+      const res = await fetch(`/api/companies?id=${companyId}`);
+      if (!res.ok) throw new Error('Failed to fetch company');
+      return await res.json();
     },
     enabled: !!companyId,
   });
 
   const updateCompany = useMutation({
     mutationFn: async (updates: any) => {
-      // Use API route to bypass RLS restrictions on companies table
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
       const res = await fetch('/api/company/settings', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           company_id: companyId,
           settings: updates.settings,

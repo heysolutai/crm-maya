@@ -1,21 +1,23 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 
 export function useWhatsAppInstances(companyId: string | undefined) {
   return useQuery({
     queryKey: ['whatsapp-instances', companyId],
     queryFn: async () => {
       if (!companyId) return [];
-      
-      const { data, error } = await supabase
-        .from('whatsapp_instances')
-        .select('id, instance_name, instance_api_key, status, is_active')
-        .eq('company_id', companyId)
-        .eq('is_active', true)
-        .order('instance_name');
-      
-      if (error) throw error;
-      return data;
+
+      const res = await fetch(`/api/whatsapp-instances?companyId=${companyId}&activeOnly=true`);
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch instances');
+      const data = await res.json();
+
+      // Map camelCase to snake_case for backwards compatibility
+      return (data || []).map((item: any) => ({
+        id: item.id,
+        instance_name: item.instanceName ?? item.instance_name,
+        instance_api_key: item.instanceApiKey ?? item.instance_api_key,
+        status: item.status,
+        is_active: item.isActive ?? item.is_active,
+      }));
     },
     enabled: !!companyId,
   });

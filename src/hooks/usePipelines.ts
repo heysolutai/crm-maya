@@ -1,5 +1,4 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from '@/hooks/use-toast';
 
@@ -31,6 +30,34 @@ export interface Pipeline {
   pipeline_stages?: PipelineStage[];
 }
 
+function mapPipeline(raw: any): Pipeline {
+  return {
+    id: raw.id,
+    company_id: raw.companyId ?? raw.company_id,
+    department_id: raw.departmentId ?? raw.department_id,
+    name: raw.name,
+    description: raw.description,
+    color: raw.color,
+    is_default: raw.isDefault ?? raw.is_default,
+    is_active: raw.isActive ?? raw.is_active,
+    created_at: raw.createdAt ?? raw.created_at,
+    updated_at: raw.updatedAt ?? raw.updated_at,
+    department: raw.department || null,
+    pipeline_stages: (raw.stages ?? raw.pipeline_stages ?? []).map((s: any) => ({
+      id: s.id,
+      pipeline_id: s.pipelineId ?? s.pipeline_id,
+      name: s.name,
+      description: s.description,
+      color: s.color,
+      order_position: s.orderPosition ?? s.order_position,
+      is_default: s.isDefault ?? s.is_default,
+      is_final: s.isFinal ?? s.is_final,
+      created_at: s.createdAt ?? s.created_at,
+      updated_at: s.updatedAt ?? s.updated_at,
+    })),
+  };
+}
+
 export function usePipelines() {
   const { effectiveCompanyId: companyId } = useEffectiveCompanyId();
   const queryClient = useQueryClient();
@@ -40,26 +67,11 @@ export function usePipelines() {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const { data, error } = await supabase
-        .from('pipelines')
-        .select(`
-          *,
-          department:departments(id, name, color),
-          pipeline_stages(id, name, color, order_position, is_default, is_final)
-        `)
-        .eq('company_id', companyId)
-        .eq('is_active', true)
-        .order('is_default', { ascending: false })
-        .order('created_at', { ascending: true });
+      const res = await fetch(`/api/pipelines?companyId=${companyId}`);
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch pipelines');
+      const data = await res.json();
 
-      if (error) throw error;
-
-      return (data || []).map((p: any) => ({
-        ...p,
-        pipeline_stages: (p.pipeline_stages || []).sort(
-          (a: any, b: any) => a.order_position - b.order_position
-        ),
-      })) as Pipeline[];
+      return (data || []).map(mapPipeline) as Pipeline[];
     },
     enabled: !!companyId,
   });
@@ -80,38 +92,21 @@ export function usePipelines() {
     }
 
     try {
-      // Create pipeline
-      const { data: pipeline, error } = await supabase
-        .from('pipelines')
-        .insert({
+      const res = await fetch('/api/pipelines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           company_id: companyId,
           name: data.name.trim(),
           description: data.description?.trim() || null,
           color: data.color || '#10b981',
           department_id: data.department_id || null,
-        })
-        .select()
-        .single();
+          stages: data.stages,
+        }),
+      });
 
-      if (error) throw error;
-
-      // Create stages
-      const stages = data.stages && data.stages.length > 0
-        ? data.stages.map((s, i) => ({
-            pipeline_id: pipeline.id,
-            name: s.name,
-            color: s.color || '#6366f1',
-            order_position: i + 1,
-            is_default: i === 0,
-            is_final: i === data.stages!.length - 1,
-          }))
-        : [
-            { pipeline_id: pipeline.id, name: 'Novo', color: '#3b82f6', order_position: 1, is_default: true, is_final: false },
-            { pipeline_id: pipeline.id, name: 'Em andamento', color: '#f59e0b', order_position: 2, is_default: false, is_final: false },
-            { pipeline_id: pipeline.id, name: 'Concluído', color: '#10b981', order_position: 3, is_default: false, is_final: true },
-          ];
-
-      await supabase.from('pipeline_stages').insert(stages);
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to create pipeline');
+      const pipeline = await res.json();
 
       toast({ title: 'Pipeline criado', description: 'Pipeline adicionado com sucesso!' });
       invalidate();
@@ -125,12 +120,13 @@ export function usePipelines() {
   const updatePipeline = async (id: string, data: Partial<Pipeline>) => {
     try {
       const { department, pipeline_stages, ...updateData } = data as any;
-      const { error } = await supabase
-        .from('pipelines')
-        .update({ ...updateData, updated_at: new Date().toISOString() })
-        .eq('id', id);
+      const res = await fetch('/api/pipelines', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...updateData }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to update pipeline');
 
       toast({ title: 'Pipeline atualizado', description: 'Alterações salvas com sucesso!' });
       invalidate();
@@ -149,12 +145,8 @@ export function usePipelines() {
         return false;
       }
 
-      const { error } = await supabase
-        .from('pipelines')
-        .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/pipelines?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete pipeline');
 
       toast({ title: 'Pipeline removido', description: 'Pipeline desativado com sucesso!' });
       invalidate();

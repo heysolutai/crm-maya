@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase/client';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -28,16 +27,10 @@ export function useAIBuilder() {
     queryKey: ['ai-builder-webhook', effectiveCompanyId],
     queryFn: async () => {
       if (!effectiveCompanyId) return null;
-      const { data, error } = await supabase
-        .from('ai_configurations')
-        .select('n8n_webhook_url')
-        .eq('company_id', effectiveCompanyId)
-        .not('n8n_webhook_url', 'is', null)
-        .limit(1)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data?.n8n_webhook_url || null;
+      const res = await fetch(`/api/ai-builder?companyId=${effectiveCompanyId}`);
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch webhook');
+      const data = await res.json();
+      return data?.webhookUrl || null;
     },
     enabled: !!effectiveCompanyId,
   });

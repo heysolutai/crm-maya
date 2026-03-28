@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { assignNextAgentInDepartment } from '@/lib/api/database';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
@@ -12,29 +12,29 @@ export async function POST(req: NextRequest) {
 
     if (!agentId) return errorResponse('Agent authentication required', 401);
 
-    const supabase = createAdminClient();
-
     // 1. Get departments this agent belongs to
-    const { data: memberships } = await supabase
-      .from('department_members')
-      .select('department_id')
-      .eq('user_id', agentId);
+    const memberships = await prisma.departmentMember.findMany({
+      where: { userId: agentId },
+      select: { departmentId: true },
+    });
 
     if (!memberships || memberships.length === 0) {
       return jsonResponse({ picked_up: 0 });
     }
 
-    const departmentIds = memberships.map(m => m.department_id);
+    const departmentIds = memberships.map(m => m.departmentId);
 
     // 2. Find queued conversations (department_id set, transferred_to IS NULL, status waiting)
-    const { data: queuedConversations } = await supabase
-      .from('conversations')
-      .select('id, department_id')
-      .in('department_id', departmentIds)
-      .is('transferred_to', null)
-      .eq('company_id', companyId)
-      .eq('status', 'waiting')
-      .order('updated_at', { ascending: true });
+    const queuedConversations = await prisma.conversation.findMany({
+      where: {
+        departmentId: { in: departmentIds },
+        transferredTo: null,
+        companyId,
+        status: 'waiting',
+      },
+      select: { id: true, departmentId: true },
+      orderBy: { updatedAt: 'asc' },
+    });
 
     if (!queuedConversations || queuedConversations.length === 0) {
       return jsonResponse({ picked_up: 0 });
@@ -43,21 +43,24 @@ export async function POST(req: NextRequest) {
     // 3. Assign conversations via department round-robin
     let pickedUp = 0;
     for (const conv of queuedConversations) {
-      if (!conv.department_id) continue;
+      if (!conv.departmentId) continue;
 
-      const assignedId = await assignNextAgentInDepartment(companyId, conv.department_id);
+      const assignedId = await assignNextAgentInDepartment(companyId, conv.departmentId);
       if (assignedId) {
-        const { error } = await supabase
-          .from('conversations')
-          .update({
-            transferred_to: assignedId,
+        // Use a conditional update to prevent race conditions
+        const result = await prisma.conversation.updateMany({
+          where: {
+            id: conv.id,
+            transferredTo: null, // Prevent race conditions
+          },
+          data: {
+            transferredTo: assignedId,
             status: 'transferred',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', conv.id)
-          .is('transferred_to', null); // Prevent race conditions
+            updatedAt: new Date(),
+          },
+        });
 
-        if (!error) pickedUp++;
+        if (result.count > 0) pickedUp++;
       }
     }
 

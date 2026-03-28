@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { useAuth } from './useAuth';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from 'sonner';
@@ -13,18 +12,10 @@ export function useConversationNotes(conversationId?: string) {
     queryKey: ['conversation-notes', conversationId],
     queryFn: async () => {
       if (!conversationId) return [];
-      
-      const { data, error } = await supabase
-        .from('conversation_notes')
-        .select(`
-          *,
-          user:users!created_by(full_name, avatar_url)
-        `)
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
-      
-      if (error) throw error;
-      return data || [];
+
+      const res = await fetch(`/api/conversation-notes?conversationId=${conversationId}`);
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch notes');
+      return await res.json() || [];
     },
     enabled: !!conversationId && !!companyId,
   });
@@ -32,20 +23,20 @@ export function useConversationNotes(conversationId?: string) {
   const createNote = useMutation({
     mutationFn: async ({ note }: { note: string }) => {
       if (!conversationId || !companyId || !user?.id) throw new Error('Missing data');
-      
-      const { data, error } = await supabase
-        .from('conversation_notes')
-        .insert({
+
+      const res = await fetch('/api/conversation-notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           conversation_id: conversationId,
           company_id: companyId,
           created_by: user.id,
           note,
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
+        }),
+      });
+
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to create note');
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversation-notes', conversationId] });
@@ -58,12 +49,8 @@ export function useConversationNotes(conversationId?: string) {
 
   const deleteNote = useMutation({
     mutationFn: async (noteId: string) => {
-      const { error } = await supabase
-        .from('conversation_notes')
-        .delete()
-        .eq('id', noteId);
-      
-      if (error) throw error;
+      const res = await fetch(`/api/conversation-notes?id=${noteId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete note');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversation-notes', conversationId] });

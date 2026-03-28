@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -19,72 +18,26 @@ export function useSuperAdmins() {
   const { data: superAdmins, isLoading } = useQuery({
     queryKey: ['super-admins'],
     queryFn: async (): Promise<SuperAdmin[]> => {
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select(`
-          id,
-          user_id,
-          created_at,
-          users!user_roles_public_user_id_fkey (
-            email,
-            full_name
-          )
-        `)
-        .eq('role', 'super_admin')
-        .is('company_id', null);
-
-      if (error) throw error;
-
-      return (data || []).map((item: any) => ({
-        id: item.id,
-        user_id: item.user_id,
-        email: item.users?.email || '',
-        full_name: item.users?.full_name,
-        created_at: item.created_at,
-      }));
+      const res = await fetch('/api/admin/super-admins');
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch super admins');
+      return await res.json();
     },
   });
 
   const addSuperAdmin = useMutation({
     mutationFn: async (email: string) => {
-      // 1. Buscar usuário pelo email
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id, email')
-        .eq('email', email.toLowerCase().trim())
-        .single();
+      const res = await fetch('/api/admin/super-admins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
 
-      if (userError || !userData) {
-        throw new Error('Usuário não encontrado. O usuário precisa criar uma conta primeiro.');
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to add super admin');
       }
 
-      // 2. Verificar se já é super_admin
-      const { data: existingRole, error: roleCheckError } = await supabase
-        .from('user_roles')
-        .select('id')
-        .eq('user_id', userData.id)
-        .eq('role', 'super_admin')
-        .is('company_id', null)
-        .maybeSingle();
-
-      if (roleCheckError) throw roleCheckError;
-
-      if (existingRole) {
-        throw new Error('Este usuário já é um Super Admin.');
-      }
-
-      // 3. Adicionar role de super_admin
-      const { error: insertError } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: userData.id,
-          role: 'super_admin',
-          company_id: null,
-        });
-
-      if (insertError) throw insertError;
-
-      return userData;
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['super-admins'] });
@@ -109,14 +62,14 @@ export function useSuperAdmins() {
         throw new Error('Você não pode remover a si próprio.');
       }
 
-      const { error } = await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', userId)
-        .eq('role', 'super_admin')
-        .is('company_id', null);
+      const res = await fetch(`/api/admin/super-admins?userId=${userId}`, {
+        method: 'DELETE',
+      });
 
-      if (error) throw error;
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to remove super admin');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['super-admins'] });

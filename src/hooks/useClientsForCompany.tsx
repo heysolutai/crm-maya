@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 export interface ClientForCompany {
@@ -14,6 +13,20 @@ export interface ClientForCompany {
   stage_id: string | null;
 }
 
+function mapClient(raw: any): ClientForCompany {
+  return {
+    id: raw.id,
+    first_name: raw.firstName ?? raw.first_name,
+    last_name: raw.lastName ?? raw.last_name,
+    phone: raw.phone,
+    email: raw.email,
+    ai_paused: raw.aiPaused ?? raw.ai_paused ?? false,
+    created_at: raw.createdAt ?? raw.created_at,
+    avatar_url: raw.avatarUrl ?? raw.avatar_url,
+    stage_id: raw.stageId ?? raw.stage_id,
+  };
+}
+
 export function useClientsForCompany(companyId: string | undefined) {
   const [clients, setClients] = useState<ClientForCompany[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -21,18 +34,14 @@ export function useClientsForCompany(companyId: string | undefined) {
 
   const fetchClients = async () => {
     if (!companyId) return;
-    
+
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('id, first_name, last_name, phone, email, ai_paused, created_at, avatar_url, stage_id')
-        .eq('company_id', companyId)
-        .order('created_at', { ascending: false });
+      const res = await fetch(`/api/clients?companyId=${companyId}`);
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch clients');
+      const data = await res.json();
 
-      if (error) throw error;
-      
-      setClients(data || []);
+      setClients((data || []).map(mapClient));
     } catch (error) {
       console.error('Error fetching clients:', error);
       toast({
@@ -47,16 +56,17 @@ export function useClientsForCompany(companyId: string | undefined) {
 
   const toggleAIPaused = async (clientId: string, currentValue: boolean) => {
     try {
-      const { error } = await supabase
-        .from('clients')
-        .update({ ai_paused: !currentValue })
-        .eq('id', clientId);
+      const res = await fetch('/api/clients', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: clientId, aiPaused: !currentValue }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to update client');
 
-      setClients(prev => 
-        prev.map(client => 
-          client.id === clientId 
+      setClients(prev =>
+        prev.map(client =>
+          client.id === clientId
             ? { ...client, ai_paused: !currentValue }
             : client
         )
@@ -64,7 +74,7 @@ export function useClientsForCompany(companyId: string | undefined) {
 
       toast({
         title: !currentValue ? 'IA pausada' : 'IA ativada',
-        description: !currentValue 
+        description: !currentValue
           ? 'A IA não responderá automaticamente para este cliente'
           : 'A IA voltou a responder automaticamente para este cliente',
       });

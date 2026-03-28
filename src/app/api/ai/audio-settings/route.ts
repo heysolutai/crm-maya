@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse, errorResponse, unauthorizedResponse } from '@/lib/api/cors';
 
 export async function OPTIONS(req: NextRequest) {
@@ -13,39 +13,29 @@ export async function GET(req: NextRequest) {
       return unauthorizedResponse('API key is required');
     }
 
-    const supabase = createAdminClient();
+    const keyData = await prisma.apiKey.findFirst({
+      where: { key: apiKey },
+      select: { id: true, companyId: true, isActive: true },
+    });
 
-    const { data: keyData, error: keyError } = await supabase
-      .from('api_keys')
-      .select('id, company_id, is_active')
-      .eq('key', apiKey)
-      .single();
-
-    if (keyError || !keyData) {
+    if (!keyData) {
       return unauthorizedResponse('Invalid API key');
     }
 
-    if (!keyData.is_active) {
+    if (!keyData.isActive) {
       return unauthorizedResponse('API key is inactive');
     }
 
-    await supabase
-      .from('api_keys')
-      .update({ last_used_at: new Date().toISOString() })
-      .eq('id', keyData.id);
+    await prisma.apiKey.update({
+      where: { id: keyData.id },
+      data: { lastUsedAt: new Date() },
+    });
 
-    const { data: config, error: configError } = await supabase
-      .from('ai_configurations')
-      .select('api_keys')
-      .eq('company_id', keyData.company_id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (configError) {
-      console.error('[get-audio-settings] Error fetching config:', configError.message);
-      return errorResponse('Failed to fetch audio settings');
-    }
+    const config = await prisma.aiConfiguration.findFirst({
+      where: { companyId: keyData.companyId },
+      select: { apiKeys: true },
+      orderBy: { createdAt: 'desc' },
+    });
 
     if (!config) {
       return jsonResponse({
@@ -58,7 +48,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const apiKeysConfig = (config as any).api_keys || {};
+    const apiKeysConfig = (config as any).apiKeys || {};
 
     return jsonResponse({
       voice_id: apiKeysConfig.elevenlabs_voice_id || null,

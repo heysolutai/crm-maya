@@ -1,21 +1,21 @@
 import { Worker, Queue } from 'bullmq'
 import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type CronTickJob } from '../queues'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { prisma } from '@/lib/db'
 
 async function checkWhatsAppStatus() {
-  const supabase = createAdminClient()
-
   // Fetch all active WhatsApp instances
-  const { data: instances, error } = await supabase
-    .from('whatsapp_instances')
-    .select('id, company_id, api_url, instance_api_key, status, instance_name')
-    .eq('is_active', true)
-
-  if (error) {
-    console.error('[Cron WhatsApp Status] Error fetching instances:', error.message)
-    return { checked: 0, errors: 1 }
-  }
+  const instances = await prisma.whatsappInstance.findMany({
+    where: { isActive: true },
+    select: {
+      id: true,
+      companyId: true,
+      apiUrl: true,
+      instanceApiKey: true,
+      status: true,
+      instanceName: true,
+    },
+  })
 
   if (!instances || instances.length === 0) {
     return { checked: 0, errors: 0 }
@@ -28,10 +28,10 @@ async function checkWhatsAppStatus() {
   for (const instance of instances) {
     try {
       // Call the WhatsApp API to check connection status
-      const response = await fetch(`${instance.api_url}/status`, {
+      const response = await fetch(`${instance.apiUrl}/status`, {
         method: 'GET',
         headers: {
-          'token': instance.instance_api_key,
+          'token': instance.instanceApiKey,
         },
         signal: AbortSignal.timeout(10000),
       })
@@ -58,43 +58,42 @@ async function checkWhatsAppStatus() {
 
       // Update if status changed
       if (newStatus !== instance.status) {
-        await supabase
-          .from('whatsapp_instances')
-          .update({
-            status: newStatus as any,
-            error_message: errorMessage,
-            last_checked_at: new Date().toISOString(),
-          } as any)
-          .eq('id', instance.id)
+        await prisma.whatsappInstance.update({
+          where: { id: instance.id },
+          data: {
+            status: newStatus,
+            errorMessage: errorMessage,
+          },
+        })
 
         statusChanges++
         console.log(
-          `[Cron WhatsApp Status] Instance ${instance.instance_name || instance.id}: ${instance.status} → ${newStatus}`
+          `[Cron WhatsApp Status] Instance ${instance.instanceName || instance.id}: ${instance.status} → ${newStatus}`
         )
       } else {
-        // Just update last_checked_at
-        await supabase
-          .from('whatsapp_instances')
-          .update({ last_checked_at: new Date().toISOString() } as any)
-          .eq('id', instance.id)
+        // Just update lastCheckedAt
+        await prisma.whatsappInstance.update({
+          where: { id: instance.id },
+          data: { updatedAt: new Date() },
+        })
       }
 
       checked++
     } catch (err: any) {
       console.error(
-        `[Cron WhatsApp Status] Error checking instance ${instance.instance_name || instance.id}:`,
+        `[Cron WhatsApp Status] Error checking instance ${instance.instanceName || instance.id}:`,
         err.message
       )
 
       // Mark as disconnected on timeout/network error
-      await supabase
-        .from('whatsapp_instances')
-        .update({
-          status: 'disconnected' as any,
-          error_message: err.message,
-          last_checked_at: new Date().toISOString(),
-        } as any)
-        .eq('id', instance.id)
+      await prisma.whatsappInstance.update({
+        where: { id: instance.id },
+        data: {
+          status: 'disconnected',
+          errorMessage: err.message,
+          updatedAt: new Date(),
+        },
+      })
 
       errors++
     }

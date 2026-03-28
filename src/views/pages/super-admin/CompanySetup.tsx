@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Building2, Wifi, Key, Bot, Check, ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react';
 import { useCompanyDetails } from '@/hooks/useCompanyDetails';
-import { supabase } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { WhatsAppConfigCard } from '@/components/super-admin/company-details/WhatsAppConfigCard';
@@ -49,16 +48,18 @@ export default function CompanySetup() {
     if (!id) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('companies')
-        .update({
-          trade_name: formData.trade_name || null,
+      const res = await fetch('/api/companies', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          tradeName: formData.trade_name || null,
           phone: formData.phone || null,
-          document_number: formData.document_number || null,
-        })
-        .eq('id', id);
-
-      if (error) throw error;
+          documentNumber: formData.document_number || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao salvar');
       toast({ title: 'Dados salvos com sucesso!' });
       setCurrentStep(1);
     } catch (err: any) {
@@ -72,15 +73,16 @@ export default function CompanySetup() {
     if (!id || !company) return;
     setSaving(true);
     try {
-      const currentSettings = (company.settings as Record<string, any>) || {};
-      const { error } = await supabase
-        .from('companies')
-        .update({
-          settings: { ...currentSettings, setup_completed: true },
-        })
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch('/api/company-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId: id,
+          settings: { setup_completed: true },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao concluir setup');
       toast({ title: 'Setup concluído com sucesso!' });
       router.push(`/super-admin/companies/${id}`);
     } catch (err: any) {

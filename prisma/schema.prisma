@@ -1,0 +1,893 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ──────────────────────────────────────────
+
+enum AppRole {
+  super_admin
+  company_admin
+  manager
+  agent
+  viewer
+}
+
+enum SubscriptionStatus {
+  trial
+  active
+  suspended
+  cancelled
+}
+
+enum CommunicationChannel {
+  whatsapp
+  telegram
+  webchat
+  instagram
+  facebook
+  email
+  sms
+}
+
+enum ConversationStatus {
+  active
+  waiting
+  closed
+  transferred
+}
+
+enum SenderType {
+  client
+  ai
+  agent
+  system
+}
+
+enum AppointmentStatus {
+  scheduled
+  confirmed
+  completed
+  cancelled
+  no_show
+}
+
+// ─── Core ───────────────────────────────────────────
+
+model Plan {
+  id                     String   @id @default(uuid()) @db.Uuid
+  name                   String
+  price                  Decimal  @default(0) @db.Decimal(10, 2)
+  billingCycle           String?  @default("monthly") @map("billing_cycle")
+  maxClients             Int?     @map("max_clients")
+  maxUsers               Int?     @map("max_users")
+  maxAiConversations     Int?     @map("max_ai_conversations")
+  features               Json?    @default("{}")
+  description            String?
+  isActive               Boolean  @default(true) @map("is_active")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at")
+
+  companies Company[]
+
+  @@map("plans")
+}
+
+model Company {
+  id                     String             @id @default(uuid()) @db.Uuid
+  name                   String
+  email                  String?
+  tradeName              String?            @map("trade_name")
+  phone                  String?
+  address                Json?
+  documentNumber         String?            @map("document_number")
+  planId                 String?            @map("plan_id") @db.Uuid
+  subscriptionStatus     SubscriptionStatus @default(trial) @map("subscription_status")
+  subscriptionExpiresAt  DateTime?          @map("subscription_expires_at")
+  trialEndsAt            DateTime?          @map("trial_ends_at")
+  isActive               Boolean            @default(true) @map("is_active")
+  metadata               Json?              @default("{}")
+  settings               Json?              @default("{}")
+  whatsappInstanceName   String?            @map("whatsapp_instance_name")
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @default(now()) @updatedAt @map("updated_at")
+
+  plan                   Plan?              @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  users                  User[]
+  userRoles              UserRole[]
+  rolePermissions        RolePermission[]
+  apiKeys                ApiKey[]
+  funnelStages           FunnelStage[]
+  clients                Client[]
+  clientNotes            ClientNote[]
+  conversations          Conversation[]
+  conversationNotes      ConversationNote[]
+  products               Product[]
+  sales                  Sale[]
+  appointments           Appointment[]
+  reminders              Reminder[]
+  followUpJobs           FollowUpJob[]
+  whatsappInstances      WhatsappInstance[]
+  googleCalendarConn     GoogleCalendarConnection?
+  aiConfigurations       AiConfiguration[]
+  aiTokenUsage           AiTokenUsage[]
+  companyFaqs            CompanyFaq[]
+  analyticsDaily         AnalyticsDaily[]
+  dailyReports           DailyReport[]
+  supportTickets         SupportTicket[]
+  leadDistributionState  LeadDistributionState[]
+  departments            Department[]
+  pipelines              Pipeline[]
+
+  @@index([planId], map: "idx_companies_plan")
+  @@index([isActive], map: "idx_companies_active")
+  @@map("companies")
+}
+
+model User {
+  id                     String    @id @default(uuid()) @db.Uuid
+  email                  String    @unique
+  passwordHash           String?   @map("password_hash")
+  fullName               String?   @map("full_name")
+  avatarUrl              String?   @map("avatar_url")
+  companyId              String?   @map("company_id") @db.Uuid
+  phone                  String?
+  isActive               Boolean   @default(true) @map("is_active")
+  isOnline               Boolean   @default(false) @map("is_online")
+  lastSeenAt             DateTime? @map("last_seen_at")
+  settings               Json?     @default("{}")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  company                Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  userRoles              UserRole[]
+  apiKeysCreated         ApiKey[]            @relation("ApiKeyCreator")
+  clientsAssigned        Client[]            @relation("ClientAssignedTo")
+  clientsCreated         Client[]            @relation("ClientCreatedBy")
+  clientNotes            ClientNote[]
+  clientFunnelMoves      ClientFunnelHistory[] @relation("FunnelMovedBy")
+  conversationsTransferred Conversation[]    @relation("ConversationTransferredTo")
+  messagesSent           Message[]
+  messageReactions       MessageReaction[]
+  conversationNotes      ConversationNote[]
+  salesSold              Sale[]              @relation("SaleSoldBy")
+  salesApproved          Sale[]              @relation("SaleApprovedBy")
+  appointmentsAssigned   Appointment[]       @relation("AppointmentAssignedTo")
+  appointmentsCancelled  Appointment[]       @relation("AppointmentCancelledBy")
+  appointmentsCreated    Appointment[]       @relation("AppointmentCreatedBy")
+  remindersCreated       Reminder[]
+  aiConfigsCreated       AiConfiguration[]
+  dailyReportsCreated    DailyReport[]
+  supportTicketsCreated  SupportTicket[]     @relation("TicketCreator")
+  supportTicketsResolved SupportTicket[]     @relation("TicketResolver")
+  departmentMemberships  DepartmentMember[]
+
+  @@index([companyId], map: "idx_users_company")
+  @@index([email], map: "idx_users_email")
+  @@index([isOnline], map: "idx_users_is_online")
+  @@map("users")
+}
+
+model UserRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  companyId String?  @map("company_id") @db.Uuid
+  role      AppRole
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId], map: "idx_user_roles_unique")
+  @@index([userId], map: "idx_user_roles_user")
+  @@index([companyId], map: "idx_user_roles_company")
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id                  String   @id @default(uuid()) @db.Uuid
+  companyId           String   @map("company_id") @db.Uuid
+  role                AppRole
+  crmAccess           String   @default("full") @map("crm_access")
+  salesAccess         String   @default("full") @map("sales_access")
+  conversationAccess  String   @default("all") @map("conversation_access")
+  appointmentsAccess  String   @default("full") @map("appointments_access")
+  canEditSettings     Boolean  @default(false) @map("can_edit_settings")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, role], map: "idx_role_permissions_unique")
+  @@index([companyId], map: "idx_role_permissions_company")
+  @@map("role_permissions")
+}
+
+model ApiKey {
+  id          String    @id @default(uuid()) @db.Uuid
+  companyId   String    @map("company_id") @db.Uuid
+  createdBy   String?   @map("created_by") @db.Uuid
+  key         String    @unique
+  name        String?
+  permissions Json?     @default("{}")
+  isActive    Boolean   @default(true) @map("is_active")
+  expiresAt   DateTime? @map("expires_at")
+  lastUsedAt  DateTime? @map("last_used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator User?   @relation("ApiKeyCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([companyId], map: "idx_api_keys_company")
+  @@map("api_keys")
+}
+
+// ─── Clients & Funnel ───────────────────────────────
+
+model FunnelStage {
+  id            String   @id @default(uuid()) @db.Uuid
+  companyId     String   @map("company_id") @db.Uuid
+  name          String
+  description   String?
+  color         String?  @default("#3b82f6")
+  orderPosition Int      @default(0) @map("order_position")
+  isDefault     Boolean  @default(false) @map("is_default")
+  isFinal       Boolean  @default(false) @map("is_final")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clients              Client[]
+  clientFunnelHistory  ClientFunnelHistory[]
+
+  @@index([companyId], map: "idx_funnel_stages_company")
+  @@index([orderPosition], map: "idx_funnel_stages_order")
+  @@map("funnel_stages")
+}
+
+model Client {
+  id             String    @id @default(uuid()) @db.Uuid
+  companyId      String    @map("company_id") @db.Uuid
+  firstName      String    @map("first_name")
+  lastName       String?   @map("last_name")
+  fullName       String?   @map("full_name")
+  email          String?
+  phone          String?
+  secondaryPhone String?   @map("secondary_phone")
+  birthDate      DateTime? @map("birth_date") @db.Date
+  gender         String?
+  documentNumber String?   @map("document_number")
+  avatarUrl      String?   @map("avatar_url")
+  address        Json?
+  source         String?
+  tags           String[]  @default([])
+  customFields   Json?     @default("{}") @map("custom_fields")
+  assignedTo     String?   @map("assigned_to") @db.Uuid
+  stageId        String?   @map("stage_id") @db.Uuid
+  pipelineId     String?   @map("pipeline_id") @db.Uuid
+  whatsappLid    String?   @map("whatsapp_lid")
+  isActive       Boolean   @default(true) @map("is_active")
+  aiPaused       Boolean   @default(false) @map("ai_paused")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.Uuid
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignedUser   User?        @relation("ClientAssignedTo", fields: [assignedTo], references: [id], onDelete: SetNull)
+  stage          FunnelStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  pipeline       Pipeline?    @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
+  creator        User?        @relation("ClientCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  notes          ClientNote[]
+  funnelHistory  ClientFunnelHistory[]
+  conversations  Conversation[]
+  sales          Sale[]
+  appointments   Appointment[]
+  reminders      Reminder[]
+  followUpJobs   FollowUpJob[]
+  aiTokenUsage   AiTokenUsage[]
+
+  @@index([companyId], map: "idx_clients_company")
+  @@index([assignedTo], map: "idx_clients_assigned")
+  @@index([stageId], map: "idx_clients_stage")
+  @@index([phone], map: "idx_clients_phone")
+  @@index([email], map: "idx_clients_email")
+  @@index([whatsappLid], map: "idx_clients_whatsapp_lid")
+  @@index([pipelineId], map: "idx_clients_pipeline")
+  @@map("clients")
+}
+
+model ClientNote {
+  id        String   @id @default(uuid()) @db.Uuid
+  clientId  String   @map("client_id") @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  createdBy String?  @map("created_by") @db.Uuid
+  note      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  client  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator User?    @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([clientId], map: "idx_client_notes_client")
+  @@index([companyId], map: "idx_client_notes_company")
+  @@map("client_notes")
+}
+
+model ClientFunnelHistory {
+  id              String    @id @default(uuid()) @db.Uuid
+  clientId        String    @map("client_id") @db.Uuid
+  stageId         String    @map("stage_id") @db.Uuid
+  enteredAt       DateTime  @default(now()) @map("entered_at")
+  leftAt          DateTime? @map("left_at")
+  durationMinutes Int?      @map("duration_minutes")
+  movedBy         String?   @map("moved_by") @db.Uuid
+  notes           String?
+
+  client Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  stage  FunnelStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  mover  User?       @relation("FunnelMovedBy", fields: [movedBy], references: [id], onDelete: SetNull)
+
+  @@index([clientId], map: "idx_client_funnel_history_client")
+  @@index([stageId], map: "idx_client_funnel_history_stage")
+  @@map("client_funnel_history")
+}
+
+// ─── Conversations & Messages ───────────────────────
+
+model Conversation {
+  id                String             @id @default(uuid()) @db.Uuid
+  companyId         String             @map("company_id") @db.Uuid
+  clientId          String?            @map("client_id") @db.Uuid
+  channel           CommunicationChannel @default(whatsapp)
+  status            ConversationStatus @default(active)
+  startedAt         DateTime?          @map("started_at")
+  endedAt           DateTime?          @map("ended_at")
+  durationSeconds   Int?               @map("duration_seconds")
+  transferredTo     String?            @map("transferred_to") @db.Uuid
+  aiHandled         Boolean            @default(false) @map("ai_handled")
+  summary           String?
+  tags              String[]           @default([])
+  stage             String?
+  satisfactionScore Int?               @map("satisfaction_score")
+  friendlyId        String?            @map("friendly_id")
+  metadata          Json?              @default("{}")
+  departmentId      String?            @map("department_id") @db.Uuid
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @default(now()) @updatedAt @map("updated_at")
+
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client        Client?     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  transferAgent User?       @relation("ConversationTransferredTo", fields: [transferredTo], references: [id], onDelete: SetNull)
+  department    Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  messages          Message[]
+  conversationNotes ConversationNote[]
+  reminders         Reminder[]
+  followUpJobs      FollowUpJob[]
+  aiTokenUsage      AiTokenUsage[]
+
+  @@index([companyId], map: "idx_conversations_company")
+  @@index([clientId], map: "idx_conversations_client")
+  @@index([status], map: "idx_conversations_status")
+  @@index([channel], map: "idx_conversations_channel")
+  @@index([createdAt], map: "idx_conversations_created")
+  @@index([departmentId], map: "idx_conversations_department")
+  @@map("conversations")
+}
+
+model Message {
+  id              String     @id @default(uuid()) @db.Uuid
+  conversationId  String     @map("conversation_id") @db.Uuid
+  messageText     String?    @map("message_text")
+  messageType     String?    @default("text") @map("message_type")
+  senderId        String?    @map("sender_id") @db.Uuid
+  senderType      SenderType @default(client) @map("sender_type")
+  mediaUrl        String?    @map("media_url")
+  quotedMessageId String?    @map("quoted_message_id")
+  isRead          Boolean    @default(false) @map("is_read")
+  readAt          DateTime?  @map("read_at")
+  readStatus      String?    @map("read_status")
+  aiConfidence    Decimal?   @map("ai_confidence") @db.Decimal(5, 4)
+  intentDetected  String?    @map("intent_detected")
+  sentiment       String?
+  metadata        Json?      @default("{}")
+  uazMessageId    String?    @map("uaz_message_id")
+  createdAt       DateTime   @default(now()) @map("created_at")
+
+  conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User?             @relation(fields: [senderId], references: [id], onDelete: SetNull)
+  reactions    MessageReaction[]
+  aiTokenUsage AiTokenUsage[]
+
+  @@index([conversationId], map: "idx_messages_conversation")
+  @@index([senderId], map: "idx_messages_sender")
+  @@index([createdAt], map: "idx_messages_created")
+  @@index([uazMessageId], map: "idx_messages_uaz")
+  @@map("messages")
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @map("message_id") @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  emoji     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([messageId], map: "idx_message_reactions_message")
+  @@map("message_reactions")
+}
+
+model ConversationNote {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  companyId      String   @map("company_id") @db.Uuid
+  createdBy      String?  @map("created_by") @db.Uuid
+  note           String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator      User?        @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([conversationId], map: "idx_conversation_notes_conv")
+  @@index([companyId], map: "idx_conversation_notes_company")
+  @@map("conversation_notes")
+}
+
+// ─── Sales & Products ───────────────────────────────
+
+model Product {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String   @map("company_id") @db.Uuid
+  name        String
+  description String?
+  category    String?
+  sku         String?
+  price       Decimal  @default(0) @db.Decimal(12, 2)
+  cost        Decimal  @default(0) @db.Decimal(12, 2)
+  isService   Boolean  @default(false) @map("is_service")
+  isActive    Boolean  @default(true) @map("is_active")
+  metadata    Json?    @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "idx_products_company")
+  @@index([sku], map: "idx_products_sku")
+  @@map("products")
+}
+
+model Sale {
+  id              String    @id @default(uuid()) @db.Uuid
+  companyId       String    @map("company_id") @db.Uuid
+  clientId        String?   @map("client_id") @db.Uuid
+  saleNumber      String?   @map("sale_number")
+  soldBy          String?   @map("sold_by") @db.Uuid
+  items           Json      @default("[]")
+  subtotal        Decimal   @default(0) @db.Decimal(12, 2)
+  discountAmount  Decimal   @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  taxAmount       Decimal   @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  totalAmount     Decimal   @default(0) @map("total_amount") @db.Decimal(12, 2)
+  paymentMethod   String?   @map("payment_method")
+  paymentTerms    String?   @map("payment_terms")
+  status          String?   @default("draft")
+  approvedBy      String?   @map("approved_by") @db.Uuid
+  approvedAt      DateTime? @map("approved_at")
+  notes           String?
+  metadata        Json?     @default("{}")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  company  Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  seller   User?   @relation("SaleSoldBy", fields: [soldBy], references: [id], onDelete: Restrict)
+  approver User?   @relation("SaleApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
+
+  @@index([companyId], map: "idx_sales_company")
+  @@index([clientId], map: "idx_sales_client")
+  @@index([soldBy], map: "idx_sales_sold_by")
+  @@index([saleNumber], map: "idx_sales_number")
+  @@index([status], map: "idx_sales_status")
+  @@map("sales")
+}
+
+// ─── Appointments & Scheduling ──────────────────────
+
+model Appointment {
+  id                 String            @id @default(uuid()) @db.Uuid
+  companyId          String            @map("company_id") @db.Uuid
+  clientId           String?           @map("client_id") @db.Uuid
+  title              String?
+  description        String?
+  scheduledFor       DateTime          @map("scheduled_for")
+  durationMinutes    Int               @default(30) @map("duration_minutes")
+  assignedTo         String?           @map("assigned_to") @db.Uuid
+  location           String?
+  meetingUrl         String?           @map("meeting_url")
+  patientName        String?           @map("patient_name")
+  status             AppointmentStatus @default(scheduled)
+  notes              String?
+  googleEventId      String?           @map("google_event_id")
+  reminderSent       Boolean           @default(false) @map("reminder_sent")
+  reminderSentAt     DateTime?         @map("reminder_sent_at")
+  cancelledBy        String?           @map("cancelled_by") @db.Uuid
+  cancelledAt        DateTime?         @map("cancelled_at")
+  cancellationReason String?           @map("cancellation_reason")
+  metadata           Json?             @default("{}")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  createdBy          String?           @map("created_by") @db.Uuid
+  updatedAt          DateTime          @default(now()) @updatedAt @map("updated_at")
+
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client      Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  assignee    User?   @relation("AppointmentAssignedTo", fields: [assignedTo], references: [id], onDelete: SetNull)
+  canceller   User?   @relation("AppointmentCancelledBy", fields: [cancelledBy], references: [id], onDelete: SetNull)
+  creator     User?   @relation("AppointmentCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  reminders   Reminder[]
+
+  @@index([companyId], map: "idx_appointments_company")
+  @@index([clientId], map: "idx_appointments_client")
+  @@index([assignedTo], map: "idx_appointments_assigned")
+  @@index([scheduledFor], map: "idx_appointments_scheduled")
+  @@index([status], map: "idx_appointments_status")
+  @@index([googleEventId], map: "idx_appointments_google")
+  @@map("appointments")
+}
+
+model Reminder {
+  id                    String    @id @default(uuid()) @db.Uuid
+  companyId             String    @map("company_id") @db.Uuid
+  clientId              String?   @map("client_id") @db.Uuid
+  conversationId        String?   @map("conversation_id") @db.Uuid
+  appointmentId         String?   @map("appointment_id") @db.Uuid
+  messageText           String?   @map("message_text")
+  reminderType          String?   @default("whatsapp") @map("reminder_type")
+  reminderOffsetMinutes Int?      @map("reminder_offset_minutes")
+  scheduledFor          DateTime  @map("scheduled_for")
+  status                String    @default("pending")
+  sentAt                DateTime? @map("sent_at")
+  attempts              Int       @default(0)
+  lastAttemptAt         DateTime? @map("last_attempt_at")
+  errorMessage          String?   @map("error_message")
+  whatsappInstanceId    String?   @map("whatsapp_instance_id") @db.Uuid
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.Uuid
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client           Client?           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  conversation     Conversation?     @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  appointment      Appointment?      @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  whatsappInstance WhatsappInstance?  @relation(fields: [whatsappInstanceId], references: [id], onDelete: SetNull)
+  creator          User?             @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([companyId], map: "idx_reminders_company")
+  @@index([clientId], map: "idx_reminders_client")
+  @@index([scheduledFor], map: "idx_reminders_scheduled")
+  @@index([appointmentId], map: "idx_reminders_appointment")
+  @@map("reminders")
+}
+
+model FollowUpJob {
+  id                 String    @id @default(uuid()) @db.Uuid
+  companyId          String    @map("company_id") @db.Uuid
+  conversationId     String?   @map("conversation_id") @db.Uuid
+  clientId           String?   @map("client_id") @db.Uuid
+  messageText        String?   @map("message_text")
+  scheduledFor       DateTime  @map("scheduled_for")
+  stageOrder         Int       @default(1) @map("stage_order")
+  status             String    @default("pending")
+  attempts           Int       @default(0)
+  lastAttemptAt      DateTime? @map("last_attempt_at")
+  errorMessage       String?   @map("error_message")
+  whatsappInstanceId String?   @map("whatsapp_instance_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversation     Conversation?     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  client           Client?           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  whatsappInstance WhatsappInstance?  @relation(fields: [whatsappInstanceId], references: [id], onDelete: SetNull)
+
+  @@index([companyId], map: "idx_follow_up_company")
+  @@index([scheduledFor], map: "idx_follow_up_scheduled")
+  @@index([conversationId], map: "idx_follow_up_conversation")
+  @@map("follow_up_jobs")
+}
+
+// ─── Integrations ───────────────────────────────────
+
+model WhatsappInstance {
+  id              String    @id @default(uuid()) @db.Uuid
+  companyId       String    @unique @map("company_id") @db.Uuid
+  instanceName    String    @map("instance_name")
+  apiUrl          String?   @map("api_url")
+  instanceApiKey  String?   @map("instance_api_key")
+  adminToken      String?   @map("admin_token")
+  status          String?   @default("disconnected")
+  isActive        Boolean   @default(true) @map("is_active")
+  qrCode          String?   @map("qr_code")
+  errorMessage    String?   @map("error_message")
+  lastConnectedAt DateTime? @map("last_connected_at")
+  metadata        Json?     @default("{}")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  aiConfigurations AiConfiguration[]
+  reminders        Reminder[]
+  followUpJobs     FollowUpJob[]
+
+  @@index([companyId], map: "idx_whatsapp_instances_company")
+  @@map("whatsapp_instances")
+}
+
+model GoogleCalendarConnection {
+  id              String    @id @default(uuid()) @db.Uuid
+  companyId       String    @unique @map("company_id") @db.Uuid
+  calendarId      String?   @map("calendar_id")
+  calendarName    String?   @map("calendar_name")
+  connectedEmail  String?   @map("connected_email")
+  accessToken     String?   @map("access_token")
+  refreshToken    String?   @map("refresh_token")
+  tokenExpiresAt  DateTime? @map("token_expires_at")
+  syncEnabled     Boolean   @default(false) @map("sync_enabled")
+  createMeetLinks Boolean   @default(false) @map("create_meet_links")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "idx_google_calendar_company")
+  @@map("google_calendar_connections")
+}
+
+// ─── AI & Knowledge ─────────────────────────────────
+
+model AiConfiguration {
+  id                 String   @id @default(uuid()) @db.Uuid
+  companyId          String   @map("company_id") @db.Uuid
+  createdBy          String?  @map("created_by") @db.Uuid
+  name               String?
+  prompts            Json?    @default("{}")
+  behaviorSettings   Json?    @default("{}") @map("behavior_settings")
+  conditions         Json?    @default("{}")
+  apiKeys            Json?    @default("{}") @map("api_keys")
+  variables          Json?    @default("{}")
+  knowledge          String?
+  memoryKey          String?  @map("memory_key")
+  whatsappInstanceId String?  @map("whatsapp_instance_id") @db.Uuid
+  n8nWebhookUrl      String?  @map("n8n_webhook_url")
+  followUpEnabled    Boolean  @default(false) @map("follow_up_enabled")
+  followUpStages     Json?    @default("[]") @map("follow_up_stages")
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator          User?             @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  whatsappInstance WhatsappInstance? @relation(fields: [whatsappInstanceId], references: [id], onDelete: SetNull)
+
+  @@index([companyId], map: "idx_ai_config_company")
+  @@index([isActive], map: "idx_ai_config_active")
+  @@map("ai_configurations")
+}
+
+model AiTokenUsage {
+  id             String   @id @default(uuid()) @db.Uuid
+  companyId      String   @map("company_id") @db.Uuid
+  conversationId String?  @map("conversation_id") @db.Uuid
+  clientId       String?  @map("client_id") @db.Uuid
+  messageId      String?  @map("message_id") @db.Uuid
+  provider       String?
+  model          String?
+  requestType    String?  @map("request_type")
+  inputTokens    Int      @default(0) @map("input_tokens")
+  outputTokens   Int      @default(0) @map("output_tokens")
+  totalTokens    Int      @default(0) @map("total_tokens")
+  inputCost      Decimal  @default(0) @map("input_cost") @db.Decimal(10, 6)
+  outputCost     Decimal  @default(0) @map("output_cost") @db.Decimal(10, 6)
+  totalCost      Decimal  @default(0) @map("total_cost") @db.Decimal(10, 6)
+  metadata       Json?    @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  client       Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  message      Message?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([companyId], map: "idx_ai_token_company")
+  @@index([conversationId], map: "idx_ai_token_conversation")
+  @@index([createdAt], map: "idx_ai_token_created")
+  @@map("ai_token_usage")
+}
+
+model CompanyFaq {
+  id            String   @id @default(uuid()) @db.Uuid
+  companyId     String   @map("company_id") @db.Uuid
+  question      String
+  answer        String
+  category      String?
+  keywords      String[] @default([])
+  orderPosition Int      @default(0) @map("order_position")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "idx_company_faqs_company")
+  @@index([category], map: "idx_company_faqs_category")
+  @@map("company_faqs")
+}
+
+// ─── Analytics & System ─────────────────────────────
+
+model AnalyticsDaily {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  date      DateTime @db.Date
+  metrics   Json?    @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, date], map: "idx_analytics_company_date")
+  @@index([companyId], map: "idx_analytics_company")
+  @@map("analytics_daily")
+}
+
+model DailyReport {
+  id                    String    @id @default(uuid()) @db.Uuid
+  companyId             String    @map("company_id") @db.Uuid
+  reportDate            DateTime  @map("report_date") @db.Date
+  crmEntries            Int       @default(0) @map("crm_entries")
+  crmScheduled          Int       @default(0) @map("crm_scheduled")
+  crmScheduledToday     Int       @default(0) @map("crm_scheduled_today")
+  manualEntries         Int       @default(0) @map("manual_entries")
+  manualScheduled       Int       @default(0) @map("manual_scheduled")
+  manualScheduledToday  Int       @default(0) @map("manual_scheduled_today")
+  manualAttended        Int       @default(0) @map("manual_attended")
+  salesIds              String[]  @default([]) @map("sales_ids")
+  salesTotal            Decimal   @default(0) @map("sales_total") @db.Decimal(12, 2)
+  sentAt                DateTime? @map("sent_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  createdBy             String?   @map("created_by") @db.Uuid
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator User?   @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([companyId], map: "idx_daily_reports_company")
+  @@index([reportDate], map: "idx_daily_reports_date")
+  @@map("daily_reports")
+}
+
+model SupportTicket {
+  id              String    @id @default(uuid()) @db.Uuid
+  companyId       String    @map("company_id") @db.Uuid
+  createdBy       String    @map("created_by") @db.Uuid
+  subject         String
+  description     String?
+  priority        String    @default("medium")
+  status          String    @default("open")
+  adminNotes      String?   @map("admin_notes")
+  resolvedBy      String?   @map("resolved_by") @db.Uuid
+  resolvedAt      DateTime? @map("resolved_at")
+  screenshotPaths String[]  @default([]) @map("screenshot_paths")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  company  Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator  User    @relation("TicketCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  resolver User?   @relation("TicketResolver", fields: [resolvedBy], references: [id], onDelete: SetNull)
+
+  @@index([companyId], map: "idx_support_tickets_company")
+  @@index([status], map: "idx_support_tickets_status")
+  @@map("support_tickets")
+}
+
+model LeadDistributionState {
+  id                 String   @id @default(uuid()) @db.Uuid
+  companyId          String   @map("company_id") @db.Uuid
+  lastAssignedUserId String?  @map("last_assigned_user_id") @db.Uuid
+  departmentId       String?  @map("department_id") @db.Uuid
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "idx_lead_dist_company")
+  @@map("lead_distribution_state")
+}
+
+// ─── Departments & Pipelines ────────────────────────
+
+model Department {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyId   String   @map("company_id") @db.Uuid
+  name        String
+  description String?
+  color       String?  @default("#3b82f6")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company               Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  members               DepartmentMember[]
+  pipelines             Pipeline[]
+  conversations         Conversation[]
+  leadDistributionState LeadDistributionState[]
+
+  @@index([companyId], map: "idx_departments_company")
+  @@map("departments")
+}
+
+model DepartmentMember {
+  id           String   @id @default(uuid()) @db.Uuid
+  departmentId String   @map("department_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  role         String   @default("member")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, userId])
+  @@index([departmentId], map: "idx_department_members_dept")
+  @@index([userId], map: "idx_department_members_user")
+  @@map("department_members")
+}
+
+model Pipeline {
+  id           String   @id @default(uuid()) @db.Uuid
+  companyId    String   @map("company_id") @db.Uuid
+  departmentId String?  @map("department_id") @db.Uuid
+  name         String
+  description  String?
+  color        String?  @default("#3b82f6")
+  isDefault    Boolean  @default(false) @map("is_default")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  stages     PipelineStage[]
+  clients    Client[]
+
+  @@index([companyId], map: "idx_pipelines_company")
+  @@index([departmentId], map: "idx_pipelines_department")
+  @@map("pipelines")
+}
+
+model PipelineStage {
+  id            String   @id @default(uuid()) @db.Uuid
+  pipelineId    String   @map("pipeline_id") @db.Uuid
+  name          String
+  description   String?
+  color         String?  @default("#3b82f6")
+  orderPosition Int      @default(0) @map("order_position")
+  isDefault     Boolean  @default(false) @map("is_default")
+  isFinal       Boolean  @default(false) @map("is_final")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
+
+  pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@index([pipelineId], map: "idx_pipeline_stages_pipeline")
+  @@map("pipeline_stages")
+}

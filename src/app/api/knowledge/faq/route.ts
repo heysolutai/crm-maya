@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 
 const apiError = (message: string, errorCode: string, status: number) =>
@@ -12,19 +12,17 @@ async function authenticateFaqApiKey(req: NextRequest) {
   const apiKey = req.headers.get('x-api-key');
   if (!apiKey) return { error: apiError('Chave de API não fornecida. Inclua o header x-api-key.', 'API_KEY_REQUIRED', 401) };
 
-  const supabase = createAdminClient();
-  const { data: apiKeyData, error: apiKeyError } = await supabase
-    .from('api_keys')
-    .select('id, company_id, is_active, expires_at')
-    .eq('key', apiKey)
-    .single();
+  const apiKeyData = await prisma.apiKey.findFirst({
+    where: { key: apiKey },
+    select: { id: true, companyId: true, isActive: true, expiresAt: true },
+  });
 
-  if (apiKeyError || !apiKeyData) return { error: apiError('Chave de API inválida. Verifique suas credenciais.', 'INVALID_API_KEY', 401) };
-  if (!apiKeyData.is_active) return { error: apiError('Chave de API inativa. Entre em contato com o administrador.', 'INACTIVE_API_KEY', 401) };
-  if (apiKeyData.expires_at && new Date(apiKeyData.expires_at) < new Date()) return { error: apiError('Chave de API expirada. Gere uma nova chave.', 'EXPIRED_API_KEY', 401) };
+  if (!apiKeyData) return { error: apiError('Chave de API inválida. Verifique suas credenciais.', 'INVALID_API_KEY', 401) };
+  if (!apiKeyData.isActive) return { error: apiError('Chave de API inativa. Entre em contato com o administrador.', 'INACTIVE_API_KEY', 401) };
+  if (apiKeyData.expiresAt && new Date(apiKeyData.expiresAt) < new Date()) return { error: apiError('Chave de API expirada. Gere uma nova chave.', 'EXPIRED_API_KEY', 401) };
 
-  await supabase.from('api_keys').update({ last_used_at: new Date().toISOString() }).eq('id', apiKeyData.id);
-  return { companyId: apiKeyData.company_id, supabase };
+  await prisma.apiKey.update({ where: { id: apiKeyData.id }, data: { lastUsedAt: new Date() } });
+  return { companyId: apiKeyData.companyId };
 }
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
@@ -34,23 +32,29 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateFaqApiKey(req);
     if ('error' in auth) return auth.error;
-    const { companyId, supabase } = auth;
+    const { companyId } = auth;
 
     const { searchParams } = req.nextUrl;
     const category = searchParams.get('category');
     const active = searchParams.get('active');
     const search = searchParams.get('search');
 
-    let query = supabase.from('company_faqs').select('*').eq('company_id', companyId).order('order_position', { ascending: true });
-    if (category) query = query.eq('category', category);
-    if (active !== null) query = query.eq('is_active', active === 'true');
+    const whereClause: any = { companyId };
+    if (category) whereClause.category = category;
+    if (active !== null) whereClause.isActive = active === 'true';
     if (search) {
       const sanitized = search.replace(/[,.()\\'"%]/g, '');
-      query = query.or(`question.ilike.%${sanitized}%,answer.ilike.%${sanitized}%`);
+      whereClause.OR = [
+        { question: { contains: sanitized, mode: 'insensitive' } },
+        { answer: { contains: sanitized, mode: 'insensitive' } },
+      ];
     }
 
-    const { data, error } = await query;
-    if (error) return apiError('Erro ao listar perguntas frequentes. Tente novamente.', 'FETCH_FAQS_ERROR', 500);
+    const data = await prisma.companyFaq.findMany({
+      where: whereClause,
+      orderBy: { orderPosition: 'asc' },
+    });
+
     return apiSuccess(data);
   } catch (error: any) {
     return errorResponse(error.message);
@@ -62,7 +66,7 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await authenticateFaqApiKey(req);
     if ('error' in auth) return auth.error;
-    const { companyId, supabase } = auth;
+    const { companyId } = auth;
 
     const body = await req.json();
 
@@ -86,30 +90,56 @@ export async function POST(req: NextRequest) {
       });
       if (invalidItems.length > 0) return apiError(`Erros de validação: ${invalidItems.join(', ')}.`, 'VALIDATION_ERROR', 400);
 
-      const { data: maxOrderData } = await supabase.from('company_faqs').select('order_position').eq('company_id', companyId).order('order_position', { ascending: false }).limit(1).single();
-      let nextOrder = (maxOrderData?.order_position ?? -1) + 1;
+      const maxOrderFaq = await prisma.companyFaq.findFirst({
+        where: { companyId },
+        select: { orderPosition: true },
+        orderBy: { orderPosition: 'desc' },
+      });
+      let nextOrder = (maxOrderFaq?.orderPosition ?? -1) + 1;
 
       const faqsToInsert = faqsArray.map((faq) => {
         const f = faq as { question: string; answer?: string; category?: string; keywords?: string[]; is_active?: boolean };
-        return { company_id: companyId, question: f.question.trim(), answer: f.answer || '', category: f.category || null, keywords: f.keywords || null, is_active: f.is_active ?? true, order_position: nextOrder++ };
+        return {
+          companyId,
+          question: f.question.trim(),
+          answer: f.answer || '',
+          category: f.category || null,
+          keywords: f.keywords || null,
+          isActive: f.is_active ?? true,
+          orderPosition: nextOrder++,
+        };
       });
 
-      const { data, error } = await supabase.from('company_faqs').insert(faqsToInsert).select();
-      if (error) return apiError('Erro ao criar FAQs em lote. Tente novamente.', 'BULK_CREATE_ERROR', 500);
+      // Prisma createMany doesn't return records, so use a transaction
+      const data = await prisma.$transaction(
+        faqsToInsert.map(faq => prisma.companyFaq.create({ data: faq }))
+      );
+
       return jsonResponse({ success: true, data, count: data.length }, 201);
     }
 
     // Single FAQ creation
     if (!body.question) return apiError('O campo question é obrigatório.', 'MISSING_QUESTION', 400);
 
-    const { data: maxOrderData } = await supabase.from('company_faqs').select('order_position').eq('company_id', companyId).order('order_position', { ascending: false }).limit(1).single();
-    const nextOrder = (maxOrderData?.order_position ?? -1) + 1;
+    const maxOrderFaq = await prisma.companyFaq.findFirst({
+      where: { companyId },
+      select: { orderPosition: true },
+      orderBy: { orderPosition: 'desc' },
+    });
+    const nextOrder = (maxOrderFaq?.orderPosition ?? -1) + 1;
 
-    const { data, error } = await supabase.from('company_faqs').insert({
-      company_id: companyId, question: body.question, answer: body.answer || '', category: body.category || null, keywords: body.keywords || null, is_active: body.is_active ?? true, order_position: nextOrder,
-    }).select().single();
+    const data = await prisma.companyFaq.create({
+      data: {
+        companyId,
+        question: body.question,
+        answer: body.answer || '',
+        category: body.category || null,
+        keywords: body.keywords || null,
+        isActive: body.is_active ?? true,
+        orderPosition: nextOrder,
+      },
+    });
 
-    if (error) return apiError('Erro ao criar pergunta frequente. Tente novamente.', 'CREATE_FAQ_ERROR', 500);
     return jsonResponse({ success: true, data }, 201);
   } catch (error: any) {
     return errorResponse(error.message);

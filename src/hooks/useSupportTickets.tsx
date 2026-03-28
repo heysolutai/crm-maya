@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase/client';
 import { useAuth } from './useAuth';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { useToast } from './use-toast';
@@ -27,31 +26,38 @@ export function useSupportTickets() {
     try {
       const screenshotPaths: string[] = [];
 
-      // Upload images
+      // Upload images via API route
       for (const file of images) {
-        const timestamp = Date.now();
-        const randomId = Math.random().toString(36).substring(2, 9);
-        const ext = file.name.split('.').pop();
-        const path = `${effectiveCompanyId}/support-tickets/${timestamp}-${randomId}.${ext}`;
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('bucket', 'support-tickets');
 
-        const { error: uploadError } = await supabase.storage
-          .from('conversation-media')
-          .upload(path, file, { cacheControl: '3600', upsert: false });
-
-        if (uploadError) throw uploadError;
-        screenshotPaths.push(path);
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json();
+          throw new Error(err.error || 'Upload failed');
+        }
+        const uploadData = await uploadRes.json();
+        screenshotPaths.push(uploadData.path || uploadData.url);
       }
 
-      const { error } = await supabase.from('support_tickets').insert({
-        company_id: effectiveCompanyId,
-        created_by: user.id,
-        subject,
-        description,
-        screenshot_paths: screenshotPaths,
-        priority,
+      const res = await fetch('/api/support-tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          companyId: effectiveCompanyId,
+          subject,
+          description,
+          screenshotPaths,
+          priority,
+        }),
       });
 
-      if (error) throw error;
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to create ticket');
+      }
 
       toast({ title: 'Problema reportado', description: 'Seu ticket foi enviado com sucesso.' });
     } catch (err: any) {
@@ -65,21 +71,21 @@ export function useSupportTickets() {
 
   const updateTicketStatus = async (ticketId: string, status: string, adminNotes?: string) => {
     try {
-      const updateData: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
-      if (status === 'resolved') {
-        updateData.resolved_at = new Date().toISOString();
-        updateData.resolved_by = user?.id;
-      }
-      if (adminNotes !== undefined) {
-        updateData.admin_notes = adminNotes;
-      }
+      const res = await fetch('/api/support-tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateStatus',
+          ticketId,
+          status,
+          adminNotes,
+        }),
+      });
 
-      const { error } = await supabase
-        .from('support_tickets')
-        .update(updateData)
-        .eq('id', ticketId);
-
-      if (error) throw error;
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update ticket');
+      }
 
       toast({ title: 'Status atualizado', description: `Ticket marcado como "${status}".` });
     } catch (err: any) {
@@ -90,11 +96,10 @@ export function useSupportTickets() {
   };
 
   const deleteTicketScreenshots = async (paths: string[]) => {
+    // With local file storage, cleanup would need a dedicated endpoint
+    // For now, this is a no-op as uploaded files live on the server
     if (!paths.length) return;
-    const { error } = await supabase.storage
-      .from('conversation-media')
-      .remove(paths);
-    if (error) console.error('Erro ao deletar screenshots:', error);
+    console.warn('[SupportTickets] Screenshot cleanup not implemented for local storage');
   };
 
   return { submitTicket, updateTicketStatus, deleteTicketScreenshots, isSubmitting };

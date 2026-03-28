@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
-import { invokeFn } from '@/lib/supabase-functions-adapter';
+import { invokeFn } from '@/lib/api-functions';
 import { useToast } from '@/hooks/use-toast';
 
 export interface FAQ {
@@ -36,47 +35,50 @@ export function useFAQs(companyId: string | undefined) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch FAQs
   const { data: faqs, isLoading } = useQuery({
     queryKey: ['company-faqs', companyId],
     queryFn: async () => {
       if (!companyId) return [];
 
-      const { data, error } = await supabase
-        .from('company_faqs')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('order_position', { ascending: true });
-
-      if (error) throw error;
-      return data as FAQ[];
+      const res = await fetch(`/api/faqs?companyId=${companyId}`);
+      if (!res.ok) throw new Error('Failed to fetch FAQs');
+      const data = await res.json();
+      return (data || []).map((f: any) => ({
+        ...f,
+        company_id: f.companyId || f.company_id,
+        order_position: f.orderPosition ?? f.order_position,
+        is_active: f.isActive ?? f.is_active,
+        created_at: f.createdAt || f.created_at,
+        updated_at: f.updatedAt || f.updated_at,
+      })) as FAQ[];
     },
     enabled: !!companyId,
   });
 
-  // Create FAQ
   const createFAQMutation = useMutation({
     mutationFn: async (faqData: CreateFAQData) => {
       if (!companyId) throw new Error('Company ID is required');
 
-      // Get next order position
       const maxPosition = faqs?.reduce((max, faq) => Math.max(max, faq.order_position), -1) ?? -1;
 
-      const { data, error } = await supabase
-        .from('company_faqs')
-        .insert({
-          company_id: companyId,
+      const res = await fetch('/api/faqs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId,
           question: faqData.question,
           answer: faqData.answer,
           keywords: faqData.keywords || null,
           category: faqData.category || null,
-          order_position: maxPosition + 1,
-        })
-        .select()
-        .single();
+          orderPosition: maxPosition + 1,
+        }),
+      });
 
-      if (error) throw error;
-      return data;
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to create FAQ');
+      }
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company-faqs', companyId] });
@@ -88,18 +90,19 @@ export function useFAQs(companyId: string | undefined) {
     },
   });
 
-  // Update FAQ
   const updateFAQMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: UpdateFAQData }) => {
-      const { data, error } = await supabase
-        .from('company_faqs')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
+      const res = await fetch('/api/faqs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...updates }),
+      });
 
-      if (error) throw error;
-      return data;
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update FAQ');
+      }
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company-faqs', companyId] });
@@ -111,15 +114,13 @@ export function useFAQs(companyId: string | undefined) {
     },
   });
 
-  // Delete FAQ
   const deleteFAQMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('company_faqs')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/faqs?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete FAQ');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company-faqs', companyId] });
@@ -131,15 +132,17 @@ export function useFAQs(companyId: string | undefined) {
     },
   });
 
-  // Delete multiple FAQs
   const deleteManyFAQsMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      const { error } = await supabase
-        .from('company_faqs')
-        .delete()
-        .in('id', ids);
-
-      if (error) throw error;
+      const res = await fetch('/api/faqs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteMany', ids }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete FAQs');
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['company-faqs', companyId] });
@@ -151,15 +154,17 @@ export function useFAQs(companyId: string | undefined) {
     },
   });
 
-  // Toggle FAQ active status
   const toggleFAQMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase
-        .from('company_faqs')
-        .update({ is_active })
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch('/api/faqs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, isActive: is_active }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to toggle FAQ');
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['company-faqs', companyId] });
@@ -171,18 +176,17 @@ export function useFAQs(companyId: string | undefined) {
     },
   });
 
-  // Reorder FAQs
   const reorderFAQsMutation = useMutation({
     mutationFn: async (orderedIds: string[]) => {
-      // Update each FAQ with its new position
-      const updates = orderedIds.map((id, index) => 
-        supabase
-          .from('company_faqs')
-          .update({ order_position: index })
-          .eq('id', id)
-      );
-
-      await Promise.all(updates);
+      const res = await fetch('/api/faqs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reorder', orderedIds }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to reorder FAQs');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company-faqs', companyId] });
@@ -193,30 +197,20 @@ export function useFAQs(companyId: string | undefined) {
     },
   });
 
-  // Sync to Knowledge Base
   const syncToKnowledgeBaseMutation = useMutation({
     mutationFn: async () => {
       if (!companyId) throw new Error('Company ID is required');
-
       const { data, error } = await invokeFn('sync-knowledge-base', { company_id: companyId });
-
       if (error) throw error;
       return data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['ai-configurations', companyId] });
-      toast({ 
-        title: 'Knowledge Base sincronizada', 
-        description: `Nome: ${data.knowledge_name}`,
-      });
+      toast({ title: 'Knowledge Base sincronizada', description: `Nome: ${data.knowledge_name}` });
     },
     onError: (error) => {
       console.error('Error syncing to Knowledge Base:', error);
-      toast({ 
-        title: 'Erro ao sincronizar Knowledge Base', 
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Erro ao sincronizar Knowledge Base', description: (error as any).message, variant: 'destructive' });
     },
   });
 

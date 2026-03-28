@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { useAuth } from './useAuth';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { useToast } from './use-toast';
@@ -32,6 +31,34 @@ export interface FollowUpJob {
   };
 }
 
+function mapJob(raw: any): FollowUpJob {
+  return {
+    id: raw.id,
+    company_id: raw.companyId ?? raw.company_id,
+    conversation_id: raw.conversationId ?? raw.conversation_id,
+    client_id: raw.clientId ?? raw.client_id,
+    stage_order: raw.stageOrder ?? raw.stage_order,
+    scheduled_for: raw.scheduledFor ?? raw.scheduled_for,
+    status: raw.status,
+    message_text: raw.messageText ?? raw.message_text,
+    whatsapp_instance_id: raw.whatsappInstanceId ?? raw.whatsapp_instance_id,
+    attempts: raw.attempts,
+    last_attempt_at: raw.lastAttemptAt ?? raw.last_attempt_at,
+    error_message: raw.errorMessage ?? raw.error_message,
+    created_at: raw.createdAt ?? raw.created_at,
+    updated_at: raw.updatedAt ?? raw.updated_at,
+    client: raw.client ? {
+      first_name: raw.client.firstName ?? raw.client.first_name,
+      last_name: raw.client.lastName ?? raw.client.last_name,
+      phone: raw.client.phone,
+    } : undefined,
+    company: raw.company ? { name: raw.company.name } : undefined,
+    conversation: raw.conversation ? {
+      started_at: raw.conversation.startedAt ?? raw.conversation.started_at,
+    } : undefined,
+  };
+}
+
 interface Filters {
   status?: string;
   companyId?: string;
@@ -49,72 +76,35 @@ export function useFollowUpJobs(filters?: Filters) {
   const { data: jobs, isLoading } = useQuery({
     queryKey: ['follow-up-jobs', companyId, filters, role],
     queryFn: async () => {
-      // Para usuários normais, exigir companyId
       if (role !== 'super_admin' && !companyId) {
         return [];
       }
 
-      let query = supabase
-        .from('follow_up_jobs')
-        .select(`
-          *,
-          client:clients(first_name, last_name, phone),
-          company:companies(name),
-          conversation:conversations(started_at)
-        `)
-        .order('scheduled_for', { ascending: false });
+      const params = new URLSearchParams();
+      if (companyId) params.set('companyId', companyId);
+      if (filters?.status && filters.status !== 'all') params.set('status', filters.status);
+      if (filters?.companyId) params.set('filterCompanyId', filters.companyId);
+      if (filters?.clientSearch) params.set('clientSearch', filters.clientSearch);
+      if (filters?.dateFrom) params.set('dateFrom', filters.dateFrom);
+      if (filters?.dateTo) params.set('dateTo', filters.dateTo);
 
-      // Sempre filtrar por empresa (para usuários normais é obrigatório, para super_admin é opcional)
-      if (companyId) {
-        query = query.eq('company_id', companyId);
-      }
-
-      if (filters?.status && filters.status !== 'all') {
-        query = query.eq('status', filters.status);
-      }
-
-      if (filters?.companyId) {
-        query = query.eq('company_id', filters.companyId);
-      }
-
-      if (filters?.clientSearch) {
-        const { data: clientData } = await supabase
-          .from('clients')
-          .select('id')
-          .or(`first_name.ilike.%${filters.clientSearch}%,phone.ilike.%${filters.clientSearch}%`);
-        
-        if (clientData && clientData.length > 0) {
-          const clientIds = clientData.map(c => c.id);
-          query = query.in('client_id', clientIds);
-        } else {
-          return [];
-        }
-      }
-
-      if (filters?.dateFrom) {
-        query = query.gte('scheduled_for', filters.dateFrom);
-      }
-
-      if (filters?.dateTo) {
-        query = query.lte('scheduled_for', filters.dateTo);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      return data as FollowUpJob[];
+      const res = await fetch(`/api/follow-up-jobs?${params.toString()}`);
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch follow-up jobs');
+      const data = await res.json();
+      return (data || []).map(mapJob) as FollowUpJob[];
     },
     enabled: !!companyId || role === 'super_admin',
   });
 
   const cancelJob = useMutation({
     mutationFn: async (jobId: string) => {
-      const { error } = await supabase
-        .from('follow_up_jobs')
-        .update({ status: 'cancelled' })
-        .eq('id', jobId);
+      const res = await fetch('/api/follow-up-jobs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: jobId, status: 'cancelled' }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to cancel job');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['follow-up-jobs'] });
@@ -131,17 +121,19 @@ export function useFollowUpJobs(filters?: Filters) {
 
   const rescheduleJob = useMutation({
     mutationFn: async ({ jobId, newDate }: { jobId: string; newDate: string }) => {
-      const { error } = await supabase
-        .from('follow_up_jobs')
-        .update({ 
-          scheduled_for: newDate,
+      const res = await fetch('/api/follow-up-jobs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: jobId,
+          scheduledFor: newDate,
           status: 'pending',
           attempts: 0,
-          error_message: null,
-        })
-        .eq('id', jobId);
+          errorMessage: null,
+        }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to reschedule job');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['follow-up-jobs'] });
@@ -162,7 +154,7 @@ export function useFollowUpJobs(filters?: Filters) {
     failed: jobs?.filter(j => j.status === 'failed').length || 0,
     cancelled: jobs?.filter(j => j.status === 'cancelled').length || 0,
     total: jobs?.length || 0,
-    successRate: jobs && jobs.length > 0 
+    successRate: jobs && jobs.length > 0
       ? ((jobs.filter(j => j.status === 'sent').length / jobs.length) * 100).toFixed(1)
       : '0.0',
   };

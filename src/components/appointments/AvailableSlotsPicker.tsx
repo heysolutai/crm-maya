@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { invokeFn } from '@/lib/supabase-functions-adapter';
+import { invokeFn } from '@/lib/api-functions';
 import { useEffectiveCompanyId } from '@/hooks/useEffectiveCompanyId';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { authenticate } from '@/lib/api/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, unauthorizedResponse } from '@/lib/api/cors';
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
@@ -25,8 +25,9 @@ export async function POST(req: NextRequest) {
     if (payload.companyId !== authResult.companyId) {
       // Allow super_admin to upload for any company
       if (authResult.agentId) {
-        const supabase = createAdminClient();
-        const { data: isSuperAdmin } = await supabase.rpc('has_role', { _user_id: authResult.agentId, _role: 'super_admin' });
+        const isSuperAdmin = await prisma.userRole.findFirst({
+          where: { userId: authResult.agentId, role: 'super_admin' },
+        });
         if (!isSuperAdmin) {
           return jsonResponse({ error: 'Forbidden: companyId mismatch' }, 403);
         }

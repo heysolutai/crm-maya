@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse } from '@/lib/api/cors';
 import {
   apiError, apiSuccess, formatWithBrazilOffset, defaultBusinessHours,
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await authenticateApiKey(req);
     if ('error' in auth) return auth.error;
-    const { supabase, company } = auth;
+    const { company } = auth;
     const companyId = company.id;
     const url = req.nextUrl;
 
@@ -28,31 +28,43 @@ export async function GET(req: NextRequest) {
     if (!clientId && phone) {
       const normalizedPhone = phone.replace(/\D/g, '');
       const phoneSuffix = normalizedPhone.slice(-8).replace(/[,.()\\'"%]/g, '');
-      const { data: clientByPhone } = await supabase!
-        .from('clients').select('id').eq('company_id', companyId)
-        .or(`phone.eq.${normalizedPhone},phone.like.%${phoneSuffix}%`)
-        .limit(1).maybeSingle();
+      const clientByPhone = await prisma.client.findFirst({
+        where: {
+          companyId,
+          OR: [
+            { phone: normalizedPhone },
+            { phone: { contains: phoneSuffix } },
+          ],
+        },
+        select: { id: true },
+      });
       if (!clientByPhone) return apiSuccess({ appointments: [], message: `Nenhum cliente encontrado com o telefone ${phone}.` });
       clientId = clientByPhone.id;
     }
 
-    let query = supabase!
-      .from('appointments')
-      .select('*, client:clients(id, first_name, last_name, phone, email), assigned_user:users!appointments_assigned_to_fkey(id, full_name)')
-      .eq('company_id', companyId).order('scheduled_for', { ascending: true });
+    const whereClause: any = { companyId };
+    if (status) whereClause.status = status;
+    if (clientId) whereClause.clientId = clientId;
+    if (assignedTo) whereClause.assignedTo = assignedTo;
+    if (dateFrom || dateTo) {
+      whereClause.scheduledFor = {};
+      if (dateFrom) whereClause.scheduledFor.gte = new Date(dateFrom);
+      if (dateTo) whereClause.scheduledFor.lte = new Date(dateTo);
+    }
 
-    if (status) query = query.eq('status', status as any);
-    if (clientId) query = query.eq('client_id', clientId);
-    if (assignedTo) query = query.eq('assigned_to', assignedTo);
-    if (dateFrom) query = query.gte('scheduled_for', dateFrom);
-    if (dateTo) query = query.lte('scheduled_for', dateTo);
+    const appointments = await prisma.appointment.findMany({
+      where: whereClause,
+      include: {
+        client: { select: { id: true, firstName: true, lastName: true, phone: true, email: true } },
+        assignee: { select: { id: true, fullName: true } },
+      },
+      orderBy: { scheduledFor: 'asc' },
+    });
 
-    const { data: appointments, error } = await query;
-    if (error) return apiError('Erro ao listar agendamentos.', 'FETCH_ERROR', 200);
     if (!appointments?.length) return apiSuccess({ appointments: [], message: 'Nenhum agendamento encontrado.' });
 
     return apiSuccess({
-      appointments: appointments.map(a => ({ ...a, scheduled_for: formatWithBrazilOffset(new Date(a.scheduled_for)) })),
+      appointments: appointments.map(a => ({ ...a, scheduled_for: formatWithBrazilOffset(new Date(a.scheduledFor)) })),
       message: `${appointments.length} agendamento(s) encontrado(s).`,
     });
   } catch (error) {
@@ -65,7 +77,7 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await authenticateApiKey(req);
     if ('error' in auth) return auth.error;
-    const { supabase, company, settings } = auth;
+    const { company, settings } = auth;
     const companyId = company.id;
 
     const body = await req.json();
@@ -78,8 +90,16 @@ export async function POST(req: NextRequest) {
     if (!resolvedClientId && phone) {
       const normalizedPhone = phone.replace(/\D/g, '');
       const phoneSuffix = normalizedPhone.slice(-8).replace(/[,.()\\'"%]/g, '');
-      const { data: c } = await supabase!.from('clients').select('id').eq('company_id', companyId)
-        .or(`phone.eq.${normalizedPhone},phone.like.%${phoneSuffix}%`).limit(1).maybeSingle();
+      const c = await prisma.client.findFirst({
+        where: {
+          companyId,
+          OR: [
+            { phone: normalizedPhone },
+            { phone: { contains: phoneSuffix } },
+          ],
+        },
+        select: { id: true },
+      });
       if (!c) return apiError(`Cliente com telefone ${phone} não encontrado.`, 'CLIENT_NOT_FOUND', 200);
       resolvedClientId = c.id;
     }
@@ -100,24 +120,52 @@ export async function POST(req: NextRequest) {
       return apiError(`Máximo de ${apptSettings.advance_booking_days} dias de antecedência.`, 'MAX_ADVANCE', 200);
     }
 
-    const { data: conflictData } = await supabase!.rpc('check_appointment_conflict', {
-      p_company_id: companyId, p_scheduled_for: normalizedScheduledFor,
-      p_duration_minutes: duration_minutes, p_assigned_to: assigned_to || null, p_exclude_appointment_id: null,
+    // Check for conflicts using raw query (replaces supabase.rpc)
+    const conflictEnd = new Date(scheduledDate.getTime() + duration_minutes * 60 * 1000);
+    const conflictWhere: any = {
+      companyId,
+      status: { not: 'cancelled' },
+      scheduledFor: { lt: conflictEnd },
+    };
+    if (assigned_to) conflictWhere.assignedTo = assigned_to;
+
+    const conflicting = await prisma.appointment.findFirst({
+      where: {
+        ...conflictWhere,
+        AND: {
+          scheduledFor: { gte: new Date(scheduledDate.getTime() - 24 * 60 * 60 * 1000) },
+        },
+      },
+      include: { client: { select: { firstName: true, lastName: true } } },
     });
 
-    if (conflictData?.[0]?.has_conflict) {
-      return apiError(`Horário já ocupado por ${conflictData[0].conflicting_client_name || 'outro cliente'}.`, 'CONFLICT', 200);
+    if (conflicting) {
+      const conflictingEnd = new Date(new Date(conflicting.scheduledFor).getTime() + (conflicting.durationMinutes || 60) * 60 * 1000);
+      if (scheduledDate < conflictingEnd && conflictEnd > new Date(conflicting.scheduledFor)) {
+        const name = conflicting.client ? `${conflicting.client.firstName || ''} ${conflicting.client.lastName || ''}`.trim() : 'outro cliente';
+        return apiError(`Horário já ocupado por ${name}.`, 'CONFLICT', 200);
+      }
     }
 
-    const { data: appointment, error: apptError } = await supabase!
-      .from('appointments').insert({
-        company_id: companyId, client_id: resolvedClientId, title, scheduled_for: normalizedScheduledFor,
-        duration_minutes, assigned_to: assigned_to || null, location: location || null,
-        description: description || null, notes: notes || null, patient_name: patient_name || null,
-        status: 'scheduled', created_by: null,
-      }).select('*, client:clients(first_name, last_name)').single();
-
-    if (apptError) return apiError('Erro ao criar agendamento.', 'CREATE_ERROR', 200);
+    const appointment = await prisma.appointment.create({
+      data: {
+        companyId,
+        clientId: resolvedClientId,
+        title,
+        scheduledFor: new Date(normalizedScheduledFor),
+        durationMinutes: duration_minutes,
+        assignedTo: assigned_to || null,
+        location: location || null,
+        description: description || null,
+        notes: notes || null,
+        patientName: patient_name || null,
+        status: 'scheduled',
+        createdBy: null,
+      },
+      include: {
+        client: { select: { firstName: true, lastName: true } },
+      },
+    });
 
     syncWithGoogleCalendar(companyId, appointment.id, 'create');
     return apiSuccess(appointment, 201);

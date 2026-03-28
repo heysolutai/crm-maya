@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { authenticate, isInternalRequest } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
 
@@ -7,37 +7,36 @@ export async function OPTIONS(req: NextRequest) { return handleCors(req) || json
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createAdminClient();
     const body = await req.json();
     const { action, user_id } = body;
 
     if (!action || !user_id) return badRequestResponse('action and user_id are required');
 
-    const now = new Date().toISOString();
+    const now = new Date();
 
     if (action === 'online') {
-      await supabase
-        .from('users')
-        .update({ is_online: true, last_seen_at: now })
-        .eq('id', user_id);
+      await prisma.user.update({
+        where: { id: user_id },
+        data: { isOnline: true, lastSeenAt: now },
+      });
 
       return jsonResponse({ success: true, status: 'online' });
     }
 
     if (action === 'offline') {
-      await supabase
-        .from('users')
-        .update({ is_online: false, last_seen_at: now })
-        .eq('id', user_id);
+      await prisma.user.update({
+        where: { id: user_id },
+        data: { isOnline: false, lastSeenAt: now },
+      });
 
       return jsonResponse({ success: true, status: 'offline' });
     }
 
     if (action === 'heartbeat') {
-      await supabase
-        .from('users')
-        .update({ last_seen_at: now })
-        .eq('id', user_id);
+      await prisma.user.update({
+        where: { id: user_id },
+        data: { lastSeenAt: now },
+      });
 
       return jsonResponse({ success: true, status: 'heartbeat' });
     }

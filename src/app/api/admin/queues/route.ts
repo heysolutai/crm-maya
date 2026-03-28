@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import {
   getN8NQueue,
@@ -28,16 +28,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Super admin authentication required (Bearer token)' }, { status: 403 })
     }
 
-    const supabase = createAdminClient()
-
     // Check super_admin role
-    const { data: userRecord } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', agentId)
-      .single()
+    const superAdminRole = await prisma.userRole.findFirst({
+      where: { userId: agentId, role: 'super_admin' },
+    })
 
-    if ((userRecord as any)?.role !== 'super_admin') {
+    if (!superAdminRole) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

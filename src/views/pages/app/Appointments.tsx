@@ -3,8 +3,7 @@ import { useAppointments } from '@/hooks/useAppointments';
 import { useClients } from '@/hooks/useClients';
 import { useTeam } from '@/hooks/useTeam';
 import { useEffectiveCompanyId } from '@/hooks/useEffectiveCompanyId';
-import { supabase } from '@/lib/supabase/client';
-import { invokeFn } from '@/lib/supabase-functions-adapter';
+import { invokeFn } from '@/lib/api-functions';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -310,18 +309,17 @@ export default function Appointments() {
                         onClick={async () => {
                           const clientId = editingAppointment.client_id;
                           if (!clientId) return;
-                          const { data } = await supabase
-                            .from('conversations')
-                            .select('id')
-                            .eq('client_id', clientId)
-                            .order('updated_at', { ascending: false })
-                            .limit(1)
-                            .single();
-                          if (data) {
-                            setIsDialogOpen(false);
-                            router.push(`/app/conversations?conversation=${data.id}`);
-                          } else {
-                            toast({ title: 'Nenhuma conversa encontrada para este cliente', variant: 'destructive' });
+                          try {
+                            const res = await fetch(`/api/conversations/find-by-client?clientId=${clientId}`);
+                            const data = await res.json();
+                            if (data?.id) {
+                              setIsDialogOpen(false);
+                              router.push(`/app/conversations?conversation=${data.id}`);
+                            } else {
+                              toast({ title: 'Nenhuma conversa encontrada para este cliente', variant: 'destructive' });
+                            }
+                          } catch {
+                            toast({ title: 'Erro ao buscar conversa', variant: 'destructive' });
                           }
                         }}
                       >

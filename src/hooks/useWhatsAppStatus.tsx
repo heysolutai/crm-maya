@@ -1,7 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
-import { invokeFn } from '@/lib/supabase-functions-adapter';
+import { invokeFn } from '@/lib/api-functions';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from 'sonner';
 
@@ -37,50 +36,43 @@ export function useWhatsAppStatus(): UseWhatsAppStatusResult {
     queryFn: async () => {
       if (!effectiveCompanyId) return null;
 
-      const { data, error } = await supabase
-        .from('whatsapp_instances')
-        .select('id, instance_name, status, is_active')
-        .eq('company_id', effectiveCompanyId)
-        .eq('is_active', true)
-        .maybeSingle();
+      const res = await fetch(`/api/whatsapp-instances?companyId=${effectiveCompanyId}&activeOnly=true`);
+      if (!res.ok) throw new Error('Failed to fetch WhatsApp instance');
+      const instances = await res.json();
 
-      if (error) {
-        console.error('[useWhatsAppStatus] Error fetching instance:', error);
-        throw error;
-      }
+      // Get first active instance
+      const inst = instances?.[0] || null;
+      if (!inst) return null;
 
-      return data as WhatsAppInstance | null;
+      return {
+        id: inst.id,
+        instance_name: inst.instanceName || inst.instance_name,
+        status: inst.status,
+        is_active: inst.isActive ?? inst.is_active,
+      } as WhatsAppInstance;
     },
     enabled: !!effectiveCompanyId,
-    staleTime: 30000, // Consider data stale after 30s
+    staleTime: 30000,
   });
 
   // Mutation to sync status with UAZAPI
   const syncMutation = useMutation({
     mutationFn: async () => {
-      if (!effectiveCompanyId || !instance?.id) {
-        return null;
-      }
-
-      console.log('[useWhatsAppStatus] Syncing status for instance:', instance.instance_name);
+      if (!effectiveCompanyId || !instance?.id) return null;
 
       const { data, error } = await invokeFn('whatsapp-connect', {
-          action: 'update',
-          company_id: effectiveCompanyId,
-          instance_id: instance.id,
-        });
+        action: 'update',
+        company_id: effectiveCompanyId,
+        instance_id: instance.id,
+      });
 
-      if (error) {
-        console.error('[useWhatsAppStatus] Sync error:', error);
-        throw new Error(error);
-      }
+      if (error) throw new Error(error);
 
       lastSyncRef.current = new Date();
       return data;
     },
     onSuccess: (data) => {
       if (data?.status) {
-        // Invalidate query to refetch updated status
         queryClient.invalidateQueries({ queryKey: ['whatsapp-instance-status', effectiveCompanyId] });
         queryClient.invalidateQueries({ queryKey: ['whatsapp-instances', effectiveCompanyId] });
       }
@@ -93,18 +85,13 @@ export function useWhatsAppStatus(): UseWhatsAppStatusResult {
   // Determine current status
   const getStatus = useCallback((): WhatsAppStatus => {
     if (!instance) return 'no_instance';
-    
+
     const status = instance.status?.toLowerCase() || '';
-    
-    if (status === 'connected' || status === 'open') {
-      return 'connected';
-    } else if (status === 'connecting' || status === 'qr_code' || status === 'waiting_qr') {
-      return 'connecting';
-    } else if (status === 'error' || status === 'failed') {
-      return 'error';
-    } else {
-      return 'disconnected';
-    }
+
+    if (status === 'connected' || status === 'open') return 'connected';
+    if (status === 'connecting' || status === 'qr_code' || status === 'waiting_qr') return 'connecting';
+    if (status === 'error' || status === 'failed') return 'error';
+    return 'disconnected';
   }, [instance]);
 
   const currentStatus = getStatus();

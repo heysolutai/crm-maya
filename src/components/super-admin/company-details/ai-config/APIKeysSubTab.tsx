@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAIConfigurations, APIKeys } from '@/hooks/useAIConfigurations';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
-import { invokeFn } from '@/lib/supabase-functions-adapter';
+import { invokeFn } from '@/lib/api-functions';
 import { useToast } from '@/hooks/use-toast';
 import { APIKeysSection } from './APIKeysSection';
 import { Save, Loader2, Volume2, RefreshCw, Play, Pause } from 'lucide-react';

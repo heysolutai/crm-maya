@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
-import { invokeFn } from '@/lib/supabase-functions-adapter';
+import { invokeFn } from '@/lib/api-functions';
 import { toast } from 'sonner';
 import { getErrorMessage } from '@/utils/getErrorMessage';
 
@@ -26,76 +25,32 @@ interface AddUserData {
 export function useCompanyTeam(companyId: string | undefined) {
   const queryClient = useQueryClient();
 
-  // Fetch team members for the company
   const { data: teamMembers = [], isLoading } = useQuery({
     queryKey: ['company-team', companyId],
     queryFn: async () => {
       if (!companyId) return [];
 
-      // Buscar IDs de usuários que são super_admin
-      const { data: superAdmins } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .eq('role', 'super_admin')
-        .is('company_id', null);
-
-      const superAdminIds = superAdmins?.map(sa => sa.user_id) || [];
-
-      // Buscar membros da equipe, excluindo super_admins
-      let query = supabase
-        .from('users')
-        .select(`
-          id,
-          email,
-          full_name,
-          phone,
-          avatar_url,
-          is_active,
-          created_at,
-          last_seen_at,
-          user_roles!inner(role, company_id)
-        `)
-        .eq('company_id', companyId)
-        .eq('user_roles.company_id', companyId)
-        .order('created_at', { ascending: false });
-
-      // Se houver super_admins, excluí-los
-      if (superAdminIds.length > 0) {
-        query = query.not('id', 'in', `(${superAdminIds.join(',')})`);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      return data as unknown as TeamMember[];
+      const res = await fetch(`/api/company-team?companyId=${companyId}`);
+      if (!res.ok) throw new Error('Failed to fetch team');
+      return await res.json() as TeamMember[];
     },
     enabled: !!companyId,
   });
 
-  // Add user to company
   const addUserMutation = useMutation({
     mutationFn: async (userData: AddUserData) => {
       if (!companyId) throw new Error('Company ID is required');
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
       const { data, error } = await invokeFn('add-user-to-company', {
-          company_id: companyId,
-          email: userData.email,
-          full_name: userData.full_name,
-          phone: userData.phone,
-          role: userData.role,
-        });
+        company_id: companyId,
+        email: userData.email,
+        full_name: userData.full_name,
+        phone: userData.phone,
+        role: userData.role,
+      });
 
-      if (error) {
-        throw new Error(error);
-      }
-
-      if (!data?.success) {
-        throw new Error(data?.error || 'Failed to add user');
-      }
-
+      if (error) throw new Error(error);
+      if (!data?.success) throw new Error(data?.error || 'Failed to add user');
       return data.user;
     },
     onSuccess: () => {
@@ -108,18 +63,19 @@ export function useCompanyTeam(companyId: string | undefined) {
     },
   });
 
-  // Update member role
   const updateRoleMutation = useMutation({
-    mutationFn: async ({ userId, newRole }: { userId: string; newRole: 'company_admin' | 'manager' | 'agent' | 'viewer' | 'super_admin' }) => {
+    mutationFn: async ({ userId, newRole }: { userId: string; newRole: string }) => {
       if (!companyId) throw new Error('Company ID is required');
 
-      const { error } = await supabase
-        .from('user_roles')
-        .update({ role: newRole })
-        .eq('user_id', userId)
-        .eq('company_id', companyId);
-
-      if (error) throw error;
+      const res = await fetch('/api/company-team', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'updateRole', userId, companyId, newRole }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update role');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company-team', companyId] });
@@ -131,15 +87,17 @@ export function useCompanyTeam(companyId: string | undefined) {
     },
   });
 
-  // Toggle member status
   const toggleStatusMutation = useMutation({
     mutationFn: async ({ userId, isActive }: { userId: string; isActive: boolean }) => {
-      const { error } = await supabase
-        .from('users')
-        .update({ is_active: !isActive })
-        .eq('id', userId);
-
-      if (error) throw error;
+      const res = await fetch('/api/company-team', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggleStatus', userId, isActive }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to toggle status');
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['company-team', companyId] });
@@ -151,18 +109,19 @@ export function useCompanyTeam(companyId: string | undefined) {
     },
   });
 
-  // Remove member
   const removeMemberMutation = useMutation({
     mutationFn: async (userId: string) => {
       if (!companyId) throw new Error('Company ID is required');
 
-      const { error } = await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', userId)
-        .eq('company_id', companyId);
-
-      if (error) throw error;
+      const res = await fetch('/api/company-team', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove', userId, companyId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to remove member');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company-team', companyId] });
@@ -174,14 +133,11 @@ export function useCompanyTeam(companyId: string | undefined) {
     },
   });
 
-  // Reset user password
   const resetPasswordMutation = useMutation({
     mutationFn: async (userId: string) => {
       const { data, error } = await invokeFn('reset-user-password', { userId });
-
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Failed to reset password');
-      
       return data;
     },
     onSuccess: (data) => {
@@ -193,14 +149,11 @@ export function useCompanyTeam(companyId: string | undefined) {
     },
   });
 
-  // Set user password directly
   const setPasswordMutation = useMutation({
     mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
       const { data, error } = await invokeFn('set-user-password', { userId, password });
-
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Failed to set password');
-      
       return data;
     },
     onSuccess: (data) => {

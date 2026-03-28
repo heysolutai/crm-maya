@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse, errorResponse, unauthorizedResponse, badRequestResponse, notFoundResponse } from '@/lib/api/cors';
 
 export async function OPTIONS(req: NextRequest) {
@@ -13,26 +13,23 @@ export async function POST(req: NextRequest) {
       return unauthorizedResponse('API key is required');
     }
 
-    const supabase = createAdminClient();
+    const keyData = await prisma.apiKey.findFirst({
+      where: { key: apiKey },
+      select: { id: true, companyId: true, isActive: true },
+    });
 
-    const { data: keyData, error: keyError } = await supabase
-      .from('api_keys')
-      .select('id, company_id, is_active')
-      .eq('key', apiKey)
-      .single();
-
-    if (keyError || !keyData) {
+    if (!keyData) {
       return unauthorizedResponse('Invalid API key');
     }
 
-    if (!keyData.is_active) {
+    if (!keyData.isActive) {
       return unauthorizedResponse('API key is inactive');
     }
 
-    await supabase
-      .from('api_keys')
-      .update({ last_used_at: new Date().toISOString() })
-      .eq('id', keyData.id);
+    await prisma.apiKey.update({
+      where: { id: keyData.id },
+      data: { lastUsedAt: new Date() },
+    });
 
     const body = await req.json();
     const { configuration_id, papel, objetivo, funcao, funil, regras, regras_horarios, boas_vindas } = body;
@@ -50,34 +47,28 @@ export async function POST(req: NextRequest) {
       return badRequestResponse('At least one prompt field is required');
     }
 
-    let query = supabase
-      .from('ai_configurations')
-      .select('id, prompts')
-      .eq('company_id', keyData.company_id);
-
+    const whereClause: any = { companyId: keyData.companyId };
     if (configuration_id) {
-      query = query.eq('id', configuration_id);
+      whereClause.id = configuration_id;
     }
 
-    const { data: configs, error: configError } = await query.limit(1).single();
+    const config = await prisma.aiConfiguration.findFirst({
+      where: whereClause,
+      select: { id: true, prompts: true },
+    });
 
-    if (configError || !configs) {
+    if (!config) {
       return notFoundResponse('AI configuration not found for this company');
     }
 
-    const existingPrompts = (configs.prompts as Record<string, any>) || {};
+    const existingPrompts = (config.prompts as Record<string, any>) || {};
     const mergedPrompts = { ...existingPrompts, ...prompts };
 
-    const { data: updated, error: updateError } = await supabase
-      .from('ai_configurations')
-      .update({ prompts: mergedPrompts, updated_at: new Date().toISOString() })
-      .eq('id', configs.id)
-      .select('id, prompts, updated_at')
-      .single();
-
-    if (updateError) {
-      return errorResponse('Failed to update prompts');
-    }
+    const updated = await prisma.aiConfiguration.update({
+      where: { id: config.id },
+      data: { prompts: mergedPrompts, updatedAt: new Date() },
+      select: { id: true, prompts: true, updatedAt: true },
+    });
 
     return jsonResponse({ success: true, configuration: updated });
   } catch (error) {

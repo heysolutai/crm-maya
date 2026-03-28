@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse } from '@/lib/api/cors';
 import { apiError, apiSuccess, formatWithBrazilOffset, authenticateApiKey, syncWithGoogleCalendar } from '@/lib/api/appointments-helpers';
 
@@ -9,14 +10,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const auth = await authenticateApiKey(req);
     if ('error' in auth) return auth.error;
-    const { supabase, company } = auth;
+    const { company } = auth;
 
-    const { data: appointment, error } = await supabase!.from('appointments')
-      .select('*, client:clients(id, first_name, last_name, phone, email), assigned_user:users!appointments_assigned_to_fkey(id, full_name)')
-      .eq('id', id).eq('company_id', company.id).single();
+    const appointment = await prisma.appointment.findFirst({
+      where: { id, companyId: company.id },
+      include: {
+        client: { select: { id: true, firstName: true, lastName: true, phone: true, email: true } },
+        assignee: { select: { id: true, fullName: true } },
+      },
+    });
 
-    if (error || !appointment) return apiError('Agendamento não encontrado.', 'NOT_FOUND', 200);
-    return apiSuccess({ ...appointment, scheduled_for: formatWithBrazilOffset(new Date(appointment.scheduled_for)) });
+    if (!appointment) return apiError('Agendamento não encontrado.', 'NOT_FOUND', 200);
+    return apiSuccess({ ...appointment, scheduled_for: formatWithBrazilOffset(new Date(appointment.scheduledFor)) });
   } catch (error) {
     return apiError('Erro interno.', 'INTERNAL_ERROR', 200);
   }
@@ -27,23 +32,31 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const { id } = await params;
     const auth = await authenticateApiKey(req);
     if ('error' in auth) return auth.error;
-    const { supabase, company } = auth;
+    const { company } = auth;
     const reason = req.nextUrl.searchParams.get('reason');
 
-    const { data: existing, error: fetchError } = await supabase!.from('appointments')
-      .select('*').eq('id', id).eq('company_id', company.id).single();
+    const existing = await prisma.appointment.findFirst({
+      where: { id, companyId: company.id },
+    });
 
-    if (fetchError || !existing) return apiError('Agendamento não encontrado.', 'NOT_FOUND', 200);
+    if (!existing) return apiError('Agendamento não encontrado.', 'NOT_FOUND', 200);
     if (existing.status === 'cancelled') return apiError('Já cancelado.', 'ALREADY_CANCELLED', 200);
 
-    const { data: cancelled, error: cancelError } = await supabase!.from('appointments')
-      .update({ status: 'cancelled', cancelled_at: new Date().toISOString(), cancellation_reason: reason || 'Cancelado via API' })
-      .eq('id', id).select().single();
+    const cancelled = await prisma.appointment.update({
+      where: { id },
+      data: {
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        cancellationReason: reason || 'Cancelado via API',
+      },
+    });
 
-    if (cancelError) return apiError('Erro ao cancelar.', 'CANCEL_ERROR', 200);
+    await prisma.reminder.updateMany({
+      where: { appointmentId: id, status: 'pending' },
+      data: { status: 'cancelled' },
+    });
 
-    await supabase!.from('reminders').update({ status: 'cancelled' }).eq('appointment_id', id).eq('status', 'pending');
-    syncWithGoogleCalendar(company.id, id, 'delete', existing.google_event_id);
+    syncWithGoogleCalendar(company.id, id, 'delete', existing.googleEventId);
     return apiSuccess(cancelled);
   } catch (error) {
     return apiError('Erro interno.', 'INTERNAL_ERROR', 200);

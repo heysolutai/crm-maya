@@ -29,7 +29,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { supabase } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -78,12 +77,16 @@ function AISettingsContent() {
     if (!id || !company) return;
     setCompletingSetup(true);
     try {
-      const currentSettings = (company.settings as Record<string, any>) || {};
-      const { error } = await supabase
-        .from('companies')
-        .update({ settings: { ...currentSettings, setup_completed: true } })
-        .eq('id', id);
-      if (error) throw error;
+      const res = await fetch('/api/company-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId: id,
+          settings: { setup_completed: true },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro');
       toast({ title: 'Setup marcado como concluído!' });
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });

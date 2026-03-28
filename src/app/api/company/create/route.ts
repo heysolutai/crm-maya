@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
+import bcrypt from 'bcryptjs';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
 
@@ -9,20 +10,15 @@ export async function OPTIONS(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createAdminClient();
-
     const { agentId } = await authenticate(req);
 
     if (!agentId) {
       return errorResponse('Super admin authentication required (Bearer token)', 403);
     }
 
-    const { data: roles } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', agentId)
-      .eq('role', 'super_admin')
-      .single();
+    const roles = await prisma.userRole.findFirst({
+      where: { userId: agentId, role: 'super_admin' },
+    });
 
     if (!roles) {
       return errorResponse('Only super admins can create companies', 403);
@@ -38,71 +34,78 @@ export async function POST(req: NextRequest) {
       return badRequestResponse('Password must be at least 8 characters');
     }
 
-    const { data: existingUsers } = await supabase.auth.admin.listUsers();
-    const existingUser = (existingUsers as any)?.users?.find((u: any) => u.email?.toLowerCase() === ownerEmail.toLowerCase());
+    // Check if user already exists
+    const existingUser = await prisma.user.findFirst({
+      where: { email: ownerEmail.toLowerCase() },
+    });
 
     let ownerId: string;
     let isNewUser = false;
 
     if (existingUser) {
-      const { data: userWithCompany } = await supabase
-        .from('users')
-        .select('company_id')
-        .eq('id', existingUser.id)
-        .single();
-
-      if (userWithCompany?.company_id) {
+      if (existingUser.companyId) {
         return badRequestResponse('User already belongs to a company');
       }
-
       ownerId = existingUser.id;
     } else {
-      const { data: newUser, error: createUserError } = await supabase.auth.admin.createUser({
-        email: ownerEmail,
-        password: ownerPassword || undefined,
-        email_confirm: true,
-        user_metadata: { full_name: ownerFullName || ownerEmail.split('@')[0] },
+      const hash = ownerPassword
+        ? await bcrypt.hash(ownerPassword, 12)
+        : await bcrypt.hash(Math.random().toString(36).slice(-12), 12);
+
+      const newUser = await prisma.user.create({
+        data: {
+          email: ownerEmail,
+          passwordHash: hash,
+          fullName: ownerFullName || ownerEmail.split('@')[0],
+        },
       });
 
-      if (createUserError || !newUser.user) {
-        return errorResponse('Failed to create owner user', 500, createUserError?.message);
-      }
-
-      ownerId = newUser.user.id;
+      ownerId = newUser.id;
       isNewUser = true;
     }
 
-    await supabase
-      .from('users')
-      .upsert({
-        id: ownerId,
+    // Update user profile
+    await prisma.user.update({
+      where: { id: ownerId },
+      data: {
         email: ownerEmail,
-        full_name: ownerFullName || ownerEmail.split('@')[0],
-      }, { onConflict: 'id', ignoreDuplicates: false });
+        fullName: ownerFullName || ownerEmail.split('@')[0],
+      },
+    });
 
-    const { data: companyId, error: createCompanyError } = await supabase
-      .rpc('create_company_with_owner', {
-        p_company_name: companyName,
-        p_company_email: ownerEmail,
-        p_owner_user_id: ownerId,
+    // Create company and assign owner
+    let companyId: string;
+    try {
+      const newCompany = await prisma.company.create({
+        data: {
+          name: companyName,
+          email: ownerEmail,
+        },
+      });
+      companyId = newCompany.id;
+
+      // Assign user to company
+      await prisma.user.update({
+        where: { id: ownerId },
+        data: { companyId },
       });
 
-    if (createCompanyError) {
+      // Assign company_admin role
+      await prisma.userRole.create({
+        data: { userId: ownerId, role: 'company_admin', companyId },
+      });
+    } catch (createCompanyError: any) {
       if (isNewUser) {
-        await supabase.auth.admin.deleteUser(ownerId);
+        await prisma.user.delete({ where: { id: ownerId } });
       }
       return errorResponse('Failed to create company', 500, createCompanyError.message);
     }
 
-    if (!ownerPassword && isNewUser) {
-      await supabase.auth.admin.generateLink({ type: 'recovery', email: ownerEmail });
-    }
+    // Skip link generation (was supabase.auth.admin.generateLink)
 
-    const { data: company } = await supabase
-      .from('companies')
-      .select('*')
-      .eq('id', companyId)
-      .single();
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
 
     return jsonResponse({
       success: true,
@@ -112,7 +115,7 @@ export async function POST(req: NextRequest) {
         ownerId,
         ownerEmail,
         message: isNewUser
-          ? (ownerPassword ? 'Empresa criada com sucesso. Senha definida.' : 'Empresa criada com sucesso. Email de redefinição de senha enviado.')
+          ? (ownerPassword ? 'Empresa criada com sucesso. Senha definida.' : 'Empresa criada com sucesso.')
           : 'Empresa criada com sucesso. Usuário existente associado.',
       },
     });

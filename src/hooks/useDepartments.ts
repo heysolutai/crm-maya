@@ -1,5 +1,4 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from '@/hooks/use-toast';
 
@@ -28,6 +27,26 @@ export interface Department {
   department_members?: DepartmentMember[];
 }
 
+function mapDepartment(raw: any): Department {
+  return {
+    id: raw.id,
+    company_id: raw.companyId ?? raw.company_id,
+    name: raw.name,
+    description: raw.description,
+    color: raw.color,
+    is_active: raw.isActive ?? raw.is_active,
+    created_at: raw.createdAt ?? raw.created_at,
+    updated_at: raw.updatedAt ?? raw.updated_at,
+    department_members: (raw.members ?? raw.department_members ?? []).map((m: any) => ({
+      id: m.id,
+      user_id: m.userId ?? m.user_id,
+      role: m.role,
+      created_at: m.createdAt ?? m.created_at,
+      users: m.users || {},
+    })),
+  };
+}
+
 export function useDepartments() {
   const { effectiveCompanyId: companyId } = useEffectiveCompanyId();
   const queryClient = useQueryClient();
@@ -37,18 +56,10 @@ export function useDepartments() {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const { data, error } = await supabase
-        .from('departments')
-        .select(`
-          *,
-          department_members(id, user_id, role, created_at)
-        `)
-        .eq('company_id', companyId)
-        .eq('is_active', true)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      return (data || []) as Department[];
+      const res = await fetch(`/api/departments?companyId=${companyId}`);
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch departments');
+      const data = await res.json();
+      return (data || []).map(mapDepartment) as Department[];
     },
     enabled: !!companyId,
   });
@@ -63,18 +74,19 @@ export function useDepartments() {
     }
 
     try {
-      const { data: dept, error } = await supabase
-        .from('departments')
-        .insert({
+      const res = await fetch('/api/departments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           company_id: companyId,
           name: data.name.trim(),
           description: data.description?.trim() || null,
           color: data.color || '#6366f1',
-        })
-        .select()
-        .single();
+        }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to create department');
+      const dept = await res.json();
 
       toast({ title: 'Departamento criado', description: 'Departamento adicionado com sucesso!' });
       invalidate();
@@ -87,12 +99,13 @@ export function useDepartments() {
 
   const updateDepartment = async (id: string, data: Partial<Department>) => {
     try {
-      const { error } = await supabase
-        .from('departments')
-        .update({ ...data, updated_at: new Date().toISOString() })
-        .eq('id', id);
+      const res = await fetch('/api/departments', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...data }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to update department');
 
       toast({ title: 'Departamento atualizado', description: 'Alterações salvas com sucesso!' });
       invalidate();
@@ -105,12 +118,8 @@ export function useDepartments() {
 
   const deleteDepartment = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('departments')
-        .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/departments?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete department');
 
       toast({ title: 'Departamento removido', description: 'Departamento desativado com sucesso!' });
       invalidate();
@@ -123,17 +132,17 @@ export function useDepartments() {
 
   const addMember = async (departmentId: string, userId: string, role: string = 'member') => {
     try {
-      const { error } = await supabase
-        .from('department_members')
-        .insert({ department_id: departmentId, user_id: userId, role });
+      const res = await fetch('/api/departments/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ departmentId, userId, role }),
+      });
 
-      if (error) {
-        if (error.code === '23505') {
-          toast({ title: 'Aviso', description: 'Usuário já é membro deste departamento', variant: 'destructive' });
-          return false;
-        }
-        throw error;
+      if (res.status === 409) {
+        toast({ title: 'Aviso', description: 'Usuário já é membro deste departamento', variant: 'destructive' });
+        return false;
       }
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to add member');
 
       toast({ title: 'Membro adicionado', description: 'Membro adicionado ao departamento!' });
       invalidate();
@@ -146,13 +155,10 @@ export function useDepartments() {
 
   const removeMember = async (departmentId: string, userId: string) => {
     try {
-      const { error } = await supabase
-        .from('department_members')
-        .delete()
-        .eq('department_id', departmentId)
-        .eq('user_id', userId);
-
-      if (error) throw error;
+      const res = await fetch(`/api/departments/members?departmentId=${departmentId}&userId=${userId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to remove member');
 
       toast({ title: 'Membro removido', description: 'Membro removido do departamento!' });
       invalidate();
@@ -165,13 +171,12 @@ export function useDepartments() {
 
   const updateMemberRole = async (departmentId: string, userId: string, role: string) => {
     try {
-      const { error } = await supabase
-        .from('department_members')
-        .update({ role })
-        .eq('department_id', departmentId)
-        .eq('user_id', userId);
-
-      if (error) throw error;
+      const res = await fetch('/api/departments/members', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ departmentId, userId, role }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to update member role');
 
       toast({ title: 'Papel atualizado', description: 'Papel do membro atualizado!' });
       invalidate();

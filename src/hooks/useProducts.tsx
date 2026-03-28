@@ -1,5 +1,4 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from '@/hooks/use-toast';
 
@@ -28,15 +27,17 @@ export function useProducts() {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, company_id, name, description, sku, price, cost, category, is_service, is_active, created_at, updated_at')
-        .eq('company_id', companyId)
-        .order('name', { ascending: true })
-        .limit(1000);
-
-      if (error) throw error;
-      return data || [];
+      const res = await fetch(`/api/products?companyId=${companyId}`);
+      if (!res.ok) throw new Error('Failed to fetch products');
+      const data = await res.json();
+      return (data || []).map((p: any) => ({
+        ...p,
+        company_id: p.companyId || p.company_id,
+        is_service: p.isService ?? p.is_service,
+        is_active: p.isActive ?? p.is_active,
+        created_at: p.createdAt || p.created_at,
+        updated_at: p.updatedAt || p.updated_at,
+      }));
     },
     enabled: !!companyId,
   });
@@ -51,18 +52,16 @@ export function useProducts() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .insert([{
-          ...productData,
-          company_id: companyId,
-          name: productData.name,
-          price: productData.price
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...productData, company_id: companyId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to create product');
+      }
+      const data = await res.json();
 
       toast({ title: 'Produto criado', description: 'Produto adicionado com sucesso!' });
       invalidate();
@@ -75,12 +74,15 @@ export function useProducts() {
 
   const updateProduct = async (id: string, productData: Partial<Product>) => {
     try {
-      const { error } = await supabase
-        .from('products')
-        .update(productData)
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch('/api/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...productData }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update product');
+      }
 
       toast({ title: 'Produto atualizado', description: 'Alterações salvas com sucesso!' });
       invalidate();
@@ -93,12 +95,11 @@ export function useProducts() {
 
   const deleteProduct = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete product');
+      }
 
       toast({ title: 'Produto removido', description: 'Produto excluído com sucesso!' });
       invalidate();

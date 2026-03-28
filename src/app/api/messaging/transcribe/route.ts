@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, unauthorizedResponse } from '@/lib/api/cors';
 
@@ -17,55 +17,55 @@ export async function POST(req: NextRequest) {
     const { messageId } = await req.json();
     if (!messageId) return jsonResponse({ error: 'messageId is required' }, 400);
 
-    const supabase = createAdminClient();
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: {
+        id: true,
+        uazMessageId: true,
+        messageText: true,
+        metadata: true,
+        conversationId: true,
+        conversation: { select: { companyId: true } },
+      },
+    });
 
-    const { data: message, error: msgError } = await supabase
-      .from('messages')
-      .select('id, uaz_message_id, message_text, metadata, conversation_id, conversations!inner (company_id)')
-      .eq('id', messageId)
-      .single();
+    if (!message) throw new Error('Message not found');
 
-    if (msgError || !message) throw new Error('Message not found');
-
-    const messageCompanyId = (message.conversations as any).company_id;
+    const messageCompanyId = message.conversation.companyId;
     if (messageCompanyId !== authResult.companyId) {
       return jsonResponse({ error: 'Forbidden: message does not belong to your company' }, 403);
     }
 
-    if (!message.uaz_message_id) throw new Error('Message does not have UAZ message ID');
+    if (!message.uazMessageId) throw new Error('Message does not have UAZ message ID');
 
     // Return cached transcription if available
-    if (message.message_text && message.message_text !== '[Áudio]' && message.message_text !== '[Media]') {
-      return jsonResponse({ success: true, transcription: message.message_text, cached: true });
+    if (message.messageText && message.messageText !== '[Áudio]' && message.messageText !== '[Media]') {
+      return jsonResponse({ success: true, transcription: message.messageText, cached: true });
     }
 
-    const companyId = (message.conversations as any).company_id;
+    const companyId = message.conversation.companyId;
 
-    const { data: instance } = await supabase
-      .from('whatsapp_instances')
-      .select('instance_api_key, api_url')
-      .eq('company_id', companyId)
-      .eq('is_active', true)
-      .single();
+    const instance = await prisma.whatsappInstance.findFirst({
+      where: { companyId, isActive: true },
+      select: { instanceApiKey: true, apiUrl: true },
+    });
 
     if (!instance) throw new Error('Active WhatsApp instance not found');
 
-    const { data: aiConfig } = await supabase
-      .from('ai_configurations')
-      .select('api_keys')
-      .eq('company_id', companyId)
-      .eq('is_active', true)
-      .maybeSingle();
+    const aiConfig = await prisma.aiConfiguration.findFirst({
+      where: { companyId, isActive: true },
+      select: { apiKeys: true },
+    });
 
-    const openAiKey = (aiConfig?.api_keys as any)?.openai;
+    const openAiKey = (aiConfig?.apiKeys as any)?.openai;
     if (!openAiKey) throw new Error('OpenAI API key not configured for this company');
 
-    console.log('[Transcription] Calling UAZapi for message:', message.uaz_message_id);
+    console.log('[Transcription] Calling UAZapi for message:', message.uazMessageId);
 
-    const response = await fetch(`${instance.api_url}/message/download`, {
+    const response = await fetch(`${instance.apiUrl}/message/download`, {
       method: 'POST',
-      headers: { 'token': instance.instance_api_key, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ id: message.uaz_message_id, return_base64: false, generate_mp3: false, return_link: false, transcribe: true, openai_apikey: openAiKey, download_quoted: false }),
+      headers: { 'token': instance.instanceApiKey, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ id: message.uazMessageId, return_base64: false, generate_mp3: false, return_link: false, transcribe: true, openai_apikey: openAiKey, download_quoted: false }),
     });
 
     if (!response.ok) throw new Error(`UAZapi error: ${response.status}`);
@@ -76,10 +76,13 @@ export async function POST(req: NextRequest) {
 
     console.log('[Transcription] Success:', transcription.substring(0, 100));
 
-    await supabase.from('messages').update({
-      message_text: transcription,
-      metadata: { ...(message.metadata as any || {}), transcribed: true, transcription_source: 'uazapi_openai', transcribed_at: new Date().toISOString() },
-    }).eq('id', messageId);
+    await prisma.message.update({
+      where: { id: messageId },
+      data: {
+        messageText: transcription,
+        metadata: { ...(message.metadata as any || {}), transcribed: true, transcription_source: 'uazapi_openai', transcribed_at: new Date().toISOString() },
+      },
+    });
 
     return jsonResponse({ success: true, transcription, cached: false });
   } catch (error) {

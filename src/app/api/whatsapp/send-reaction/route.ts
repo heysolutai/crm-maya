@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 
@@ -7,8 +7,6 @@ export async function OPTIONS(req: NextRequest) { return handleCors(req) || json
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createAdminClient();
-
     const { agentId } = await authenticate(req);
 
     const { messageId, emoji } = await req.json();
@@ -16,35 +14,43 @@ export async function POST(req: NextRequest) {
 
     console.log('[send-reaction] User:', agentId || 'api-key', 'Message:', messageId, 'Emoji:', emoji);
 
-    const { data: message, error: msgError } = await supabase
-      .from('messages')
-      .select('id, uaz_message_id, conversation_id, conversations(id, company_id, client_id, clients(phone))')
-      .eq('id', messageId)
-      .single();
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: {
+        id: true,
+        uazMessageId: true,
+        conversationId: true,
+        conversation: {
+          select: {
+            id: true,
+            companyId: true,
+            clientId: true,
+            client: { select: { phone: true } },
+          },
+        },
+      },
+    });
 
-    if (msgError || !message) throw new Error('Message not found');
+    if (!message) throw new Error('Message not found');
 
-    const phone = (message.conversations as any).clients.phone;
-    const companyId = (message.conversations as any).company_id;
-    const uazMessageId = message.uaz_message_id;
+    const phone = message.conversation.client.phone;
+    const companyId = message.conversation.companyId;
+    const uazMessageId = message.uazMessageId;
 
     if (!uazMessageId) throw new Error('Message does not have UAZ message ID');
 
-    const { data: instance, error: instanceError } = await supabase
-      .from('whatsapp_instances')
-      .select('*')
-      .eq('company_id', companyId)
-      .eq('is_active', true)
-      .single();
+    const instance = await prisma.whatsappInstance.findFirst({
+      where: { companyId, isActive: true },
+    });
 
-    if (instanceError || !instance) throw new Error('WhatsApp instance not found');
+    if (!instance) throw new Error('WhatsApp instance not found');
 
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const cleanPhone = phone!.replace(/[^0-9]/g, '');
     const formattedNumber = cleanPhone.includes('@') ? cleanPhone : `${cleanPhone}@s.whatsapp.net`;
 
-    const response = await fetch(`${instance.api_url}/message/react`, {
+    const response = await fetch(`${instance.apiUrl}/message/react`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'token': instance.instance_api_key },
+      headers: { 'Content-Type': 'application/json', 'token': instance.instanceApiKey },
       body: JSON.stringify({ number: formattedNumber, text: emoji || '', id: uazMessageId }),
     });
 
@@ -53,9 +59,18 @@ export async function POST(req: NextRequest) {
     // Save or remove reaction in DB (agentId is null when using API key)
     if (agentId) {
       if (emoji) {
-        await supabase.from('message_reactions').upsert({ message_id: messageId, user_id: agentId, emoji }, { onConflict: 'message_id,user_id' });
+        const existing = await prisma.messageReaction.findFirst({
+          where: { messageId, userId: agentId },
+        });
+        if (existing) {
+          await prisma.messageReaction.update({ where: { id: existing.id }, data: { emoji } });
+        } else {
+          await prisma.messageReaction.create({ data: { messageId, userId: agentId, emoji } });
+        }
       } else {
-        await supabase.from('message_reactions').delete().eq('message_id', messageId).eq('user_id', agentId);
+        await prisma.messageReaction.deleteMany({
+          where: { messageId, userId: agentId },
+        });
       }
     }
 

@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from '@/hooks/use-toast';
 
@@ -37,21 +36,9 @@ export function useClients() {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const { data, error } = await supabase
-        .from('clients')
-        .select(`
-          id, company_id, first_name, last_name, full_name, email, phone,
-          secondary_phone, document_number, gender, birth_date, source, tags,
-          address, assigned_to, stage_id, is_active, created_at, updated_at,
-          created_by, avatar_url,
-          appointments(id, scheduled_for, status),
-          sales(id, total_amount, status)
-        `)
-        .eq('company_id', companyId)
-        .order('created_at', { ascending: false })
-        .limit(1000);
-
-      if (error) throw error;
+      const res = await fetch(`/api/clients?companyId=${companyId}`);
+      if (!res.ok) throw new Error('Failed to fetch clients');
+      const data = await res.json();
 
       return (data || []).map((client: any) => {
         const appointments = client.appointments || [];
@@ -60,21 +47,36 @@ export function useClients() {
         const upcomingAppointments = appointments
           .filter((a: any) =>
             a.status === 'scheduled' &&
-            new Date(a.scheduled_for) > new Date()
+            new Date(a.scheduledFor || a.scheduled_for) > new Date()
           )
           .sort((a: any, b: any) =>
-            new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime()
+            new Date(a.scheduledFor || a.scheduled_for).getTime() - new Date(b.scheduledFor || b.scheduled_for).getTime()
           );
 
         const approvedSales = sales.filter((s: any) => s.status === 'approved');
 
         return {
           ...client,
-          next_appointment: upcomingAppointments[0]?.scheduled_for,
+          // Normalize Prisma camelCase to snake_case for compatibility
+          company_id: client.companyId || client.company_id,
+          first_name: client.firstName || client.first_name,
+          last_name: client.lastName || client.last_name,
+          full_name: client.fullName || client.full_name,
+          secondary_phone: client.secondaryPhone || client.secondary_phone,
+          document_number: client.documentNumber || client.document_number,
+          birth_date: client.birthDate || client.birth_date,
+          assigned_to: client.assignedTo || client.assigned_to,
+          stage_id: client.stageId || client.stage_id,
+          is_active: client.isActive ?? client.is_active,
+          created_at: client.createdAt || client.created_at,
+          updated_at: client.updatedAt || client.updated_at,
+          created_by: client.createdBy || client.created_by,
+          avatar_url: client.avatarUrl || client.avatar_url,
+          next_appointment: upcomingAppointments[0]?.scheduledFor || upcomingAppointments[0]?.scheduled_for,
           total_appointments: upcomingAppointments.length,
           total_sales: approvedSales.length,
           total_revenue: approvedSales.reduce(
-            (sum: number, s: any) => sum + (parseFloat(s.total_amount) || 0),
+            (sum: number, s: any) => sum + (parseFloat(s.totalAmount || s.total_amount) || 0),
             0
           ),
         };
@@ -94,17 +96,20 @@ export function useClients() {
 
     try {
       const { full_name, ...insertData } = clientData;
-      const { data, error } = await supabase
-        .from('clients')
-        .insert([{
+      const res = await fetch('/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           ...insertData,
           company_id: companyId,
-          first_name: clientData.first_name
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
+          firstName: clientData.first_name,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to create client');
+      }
+      const data = await res.json();
 
       toast({ title: 'Cliente criado', description: 'Cliente adicionado com sucesso!' });
       invalidate();
@@ -118,12 +123,15 @@ export function useClients() {
   const updateClient = async (id: string, clientData: Partial<Client>) => {
     try {
       const { full_name, ...updateData } = clientData;
-      const { error } = await supabase
-        .from('clients')
-        .update(updateData)
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch('/api/clients', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...updateData }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update client');
+      }
 
       toast({ title: 'Cliente atualizado', description: 'Alterações salvas com sucesso!' });
       invalidate();
@@ -136,12 +144,11 @@ export function useClients() {
 
   const deleteClient = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('clients')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/clients?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete client');
+      }
 
       toast({ title: 'Cliente removido', description: 'Cliente excluído com sucesso!' });
       invalidate();
@@ -154,12 +161,15 @@ export function useClients() {
 
   const moveClientToStage = async (clientId: string, stageId: string) => {
     try {
-      const { error } = await supabase
-        .from('clients')
-        .update({ stage_id: stageId })
-        .eq('id', clientId);
-
-      if (error) throw error;
+      const res = await fetch('/api/clients', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: clientId, stageId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to move client');
+      }
 
       toast({ title: 'Cliente movido', description: 'Cliente movido com sucesso.' });
       invalidate();

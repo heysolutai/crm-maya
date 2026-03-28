@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
 
@@ -11,33 +11,32 @@ export async function POST(req: NextRequest) {
   try {
     const { agentId } = await authenticate(req);
 
-    const supabase = createAdminClient();
-
     const { company_id, report_date, manual_entries, manual_scheduled, manual_scheduled_today, manual_attended } = await req.json();
 
     if (!company_id || !report_date) {
       return badRequestResponse('company_id and report_date are required');
     }
 
-    const startOfDay = `${report_date}T00:00:00.000Z`;
-    const endOfDay = `${report_date}T23:59:59.999Z`;
+    const startOfDay = new Date(`${report_date}T00:00:00.000Z`);
+    const endOfDay = new Date(`${report_date}T23:59:59.999Z`);
 
-    const [clientsRes, appointmentsCreatedRes, appointmentsForTodayRes, salesRes] = await Promise.all([
-      supabase.from('clients').select('*', { count: 'exact', head: true })
-        .eq('company_id', company_id).gte('created_at', startOfDay).lte('created_at', endOfDay),
-      supabase.from('appointments').select('*', { count: 'exact', head: true })
-        .eq('company_id', company_id).gte('created_at', startOfDay).lte('created_at', endOfDay),
-      supabase.from('appointments').select('*', { count: 'exact', head: true })
-        .eq('company_id', company_id).gte('scheduled_for', startOfDay).lte('scheduled_for', endOfDay),
-      supabase.from('sales').select('id, total_amount, client_id, clients(first_name, last_name, full_name)')
-        .eq('company_id', company_id).gte('created_at', startOfDay).lte('created_at', endOfDay),
+    const [crmEntries, crmScheduled, crmScheduledToday, sales] = await Promise.all([
+      prisma.client.count({
+        where: { companyId: company_id, createdAt: { gte: startOfDay, lte: endOfDay } },
+      }),
+      prisma.appointment.count({
+        where: { companyId: company_id, createdAt: { gte: startOfDay, lte: endOfDay } },
+      }),
+      prisma.appointment.count({
+        where: { companyId: company_id, scheduledFor: { gte: startOfDay, lte: endOfDay } },
+      }),
+      prisma.sale.findMany({
+        where: { companyId: company_id, createdAt: { gte: startOfDay, lte: endOfDay } },
+        select: { id: true, totalAmount: true, clientId: true, client: { select: { firstName: true, lastName: true, fullName: true } } },
+      }),
     ]);
 
-    const crmEntries = clientsRes.count || 0;
-    const crmScheduled = appointmentsCreatedRes.count || 0;
-    const crmScheduledToday = appointmentsForTodayRes.count || 0;
-    const sales = salesRes.data || [];
-    const salesTotalAmount = sales.reduce((sum: number, s: any) => sum + (Number(s.total_amount) || 0), 0);
+    const salesTotalAmount = sales.reduce((sum: number, s: any) => sum + (Number(s.totalAmount) || 0), 0);
     const salesIds = sales.map((s: any) => s.id);
 
     const [year, month, day] = report_date.split('-');
@@ -46,8 +45,8 @@ export async function POST(req: NextRequest) {
     const salesLines = sales.length === 0
       ? '• Nenhuma venda registrada'
       : sales.map((s: any) => {
-          const name = (s as any).clients?.full_name || (s as any).clients?.first_name || 'Cliente';
-          const amount = Number(s.total_amount) || 0;
+          const name = s.client?.fullName || s.client?.firstName || 'Cliente';
+          const amount = Number(s.totalAmount) || 0;
           return `• ${name} - R$ ${amount.toFixed(2).replace('.', ',')}`;
         }).join('\n');
 
@@ -65,67 +64,68 @@ ${salesLines}
 
 💵 TOTAL EM VENDAS: ${totalFormatted}`;
 
-    const { data: report, error: reportError } = await supabase
-      .from('daily_reports')
-      .upsert({
-        company_id,
-        report_date,
-        manual_entries: manual_entries || 0,
-        manual_scheduled: manual_scheduled || 0,
-        manual_scheduled_today: manual_scheduled_today || 0,
-        manual_attended: manual_attended || 0,
-        crm_entries: crmEntries,
-        crm_scheduled: crmScheduled,
-        crm_scheduled_today: crmScheduledToday,
-        sales_ids: salesIds,
-        sales_total: salesTotalAmount,
-        created_by: agentId,
-      }, { onConflict: 'company_id,report_date' })
-      .select()
-      .single();
+    const existingReport = await prisma.dailyReport.findFirst({
+      where: { companyId: company_id, reportDate: new Date(report_date) },
+    });
 
-    if (reportError) {
-      console.error('[generate-daily-report] Error saving report:', reportError);
-      throw reportError;
-    }
+    const reportData = {
+      manualEntries: manual_entries || 0,
+      manualScheduled: manual_scheduled || 0,
+      manualScheduledToday: manual_scheduled_today || 0,
+      manualAttended: manual_attended || 0,
+      crmEntries,
+      crmScheduled,
+      crmScheduledToday,
+      salesIds,
+      salesTotal: salesTotalAmount,
+      createdBy: agentId,
+    };
+
+    const report = existingReport
+      ? await prisma.dailyReport.update({
+          where: { id: existingReport.id },
+          data: reportData,
+        })
+      : await prisma.dailyReport.create({
+          data: {
+            companyId: company_id,
+            reportDate: new Date(report_date),
+            ...reportData,
+          },
+        });
 
     let sent = false;
-    const { data: company } = await supabase
-      .from('companies')
-      .select('settings')
-      .eq('id', company_id)
-      .single();
+    const company = await prisma.company.findUnique({
+      where: { id: company_id },
+      select: { settings: true },
+    });
 
     const settings = company?.settings as Record<string, any> | null;
     const reportGroupPhone = settings?.report_group_phone;
 
     if (reportGroupPhone) {
-      const { data: instance } = await supabase
-        .from('whatsapp_instances')
-        .select('*')
-        .eq('company_id', company_id)
-        .eq('status', 'connected')
-        .limit(1)
-        .single();
+      const instance = await prisma.whatsappInstance.findFirst({
+        where: { companyId: company_id, status: 'connected' },
+      });
 
       if (instance) {
         try {
           const cleanPhone = reportGroupPhone.replace(/[^0-9]/g, '');
-          const response = await fetch(`${instance.api_url}/send/text`, {
+          const response = await fetch(`${instance.apiUrl}/send/text`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'token': instance.instance_api_key,
+              'token': instance.instanceApiKey,
             },
             body: JSON.stringify({ number: cleanPhone, text: message }),
           });
 
           if (response.ok) {
             sent = true;
-            await supabase
-              .from('daily_reports')
-              .update({ sent_at: new Date().toISOString() })
-              .eq('id', report.id);
+            await prisma.dailyReport.update({
+              where: { id: report.id },
+              data: { sentAt: new Date() },
+            });
           }
         } catch (whatsappError) {
           console.error('[generate-daily-report] WhatsApp error:', whatsappError);

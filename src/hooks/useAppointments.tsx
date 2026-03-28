@@ -1,6 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
-import { invokeFn } from '@/lib/supabase-functions-adapter';
+import { invokeFn } from '@/lib/api-functions';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from '@/hooks/use-toast';
 
@@ -38,20 +37,25 @@ export function useAppointments() {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const { data, error } = await supabase
-        .from('appointments')
-        .select(`
-          id, company_id, client_id, title, description, scheduled_for,
-          duration_minutes, status, assigned_to, location, meeting_url, notes,
-          reminder_sent, google_event_id, created_by, created_at, updated_at,
-          clients(first_name, last_name, full_name)
-        `)
-        .eq('company_id', companyId)
-        .order('scheduled_for', { ascending: true })
-        .limit(1000);
-
-      if (error) throw error;
-      return data || [];
+      const res = await fetch(`/api/appointments?company_id=${companyId}`);
+      if (!res.ok) throw new Error('Failed to fetch appointments');
+      const data = await res.json();
+      // Normalize if needed
+      return (Array.isArray(data) ? data : data.appointments || []).map((a: any) => ({
+        ...a,
+        company_id: a.companyId || a.company_id,
+        client_id: a.clientId || a.client_id,
+        scheduled_for: a.scheduledFor || a.scheduled_for,
+        duration_minutes: a.durationMinutes || a.duration_minutes,
+        assigned_to: a.assignedTo || a.assigned_to,
+        meeting_url: a.meetingUrl || a.meeting_url,
+        reminder_sent: a.reminderSent ?? a.reminder_sent,
+        google_event_id: a.googleEventId || a.google_event_id,
+        created_by: a.createdBy || a.created_by,
+        created_at: a.createdAt || a.created_at,
+        updated_at: a.updatedAt || a.updated_at,
+        clients: a.client || a.clients,
+      }));
     },
     enabled: !!companyId,
   });
@@ -66,20 +70,19 @@ export function useAppointments() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('appointments')
-        .insert([{
+      const res = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           ...appointmentData,
           company_id: companyId,
-          client_id: appointmentData.client_id,
-          title: appointmentData.title,
-          scheduled_for: appointmentData.scheduled_for,
-          created_by: appointmentData.created_by
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to create appointment');
+      }
+      const data = await res.json();
 
       toast({ title: 'Agendamento criado', description: 'Agendamento adicionado com sucesso!' });
       invalidate();
@@ -94,12 +97,15 @@ export function useAppointments() {
     try {
       const appointment = appointments.find(a => a.id === id);
 
-      const { error } = await supabase
-        .from('appointments')
-        .update(appointmentData)
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/appointments/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appointmentData),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update appointment');
+      }
 
       if (appointmentData.status === 'cancelled' && appointment) {
         try {
@@ -148,20 +154,10 @@ export function useAppointments() {
         }
       }
 
-      const { error, count } = await supabase
-        .from('appointments')
-        .delete({ count: 'exact' })
-        .eq('id', id);
-
-      if (error) throw error;
-
-      if (count === 0) {
-        toast({
-          title: 'Erro ao remover agendamento',
-          description: 'Não foi possível excluir. Verifique suas permissões.',
-          variant: 'destructive',
-        });
-        return false;
+      const res = await fetch(`/api/appointments/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to delete appointment');
       }
 
       toast({

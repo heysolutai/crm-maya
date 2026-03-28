@@ -1,11 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { useToast } from './use-toast';
-import { 
-  DEFAULT_BEHAVIOR_SETTINGS, 
+import {
+  DEFAULT_BEHAVIOR_SETTINGS,
   DEFAULT_PROMPTS,
   type BehaviorSettings,
-  type Prompts 
+  type Prompts
 } from '@/lib/aiConfig';
 
 // Re-export types from aiConfig for backwards compatibility
@@ -51,6 +50,41 @@ export interface AIConfiguration {
   knowledge: string | null;
 }
 
+function mapConfig(item: any): AIConfiguration {
+  const rawPrompts = (item.prompts as any) || {};
+  return {
+    id: item.id,
+    company_id: item.companyId ?? item.company_id,
+    name: item.name,
+    is_active: item.isActive ?? item.is_active,
+    conditions: item.conditions,
+    variables: item.variables,
+    created_at: item.createdAt ?? item.created_at,
+    updated_at: item.updatedAt ?? item.updated_at,
+    whatsapp_instance_id: item.whatsappInstanceId ?? item.whatsapp_instance_id ?? null,
+    follow_up_stages: (item.followUpStages ?? item.follow_up_stages ?? []) as FollowUpStage[],
+    follow_up_enabled: item.followUpEnabled ?? item.follow_up_enabled ?? false,
+    api_keys: (item.apiKeys ?? item.api_keys ?? {}) as APIKeys,
+    behavior_settings: {
+      ...DEFAULT_BEHAVIOR_SETTINGS,
+      ...(item.behaviorSettings ?? item.behavior_settings ?? {}),
+    } as BehaviorSettings,
+    n8n_webhook_url: item.n8nWebhookUrl ?? item.n8n_webhook_url ?? null,
+    knowledge: item.knowledge ?? null,
+    prompts: {
+      // Preserve all existing fields (including prompt_completo)
+      ...rawPrompts,
+      // Fallbacks for legacy fields
+      persona: rawPrompts.persona || rawPrompts.main || '',
+      behavior: rawPrompts.behavior || '',
+      attendance_funnel: rawPrompts.attendance_funnel || rawPrompts.guidelines || rawPrompts.attendance || '',
+      scheduling_funnel: rawPrompts.scheduling_funnel || rawPrompts.scheduling || '',
+      business_rules: rawPrompts.business_rules || '',
+      first_message: rawPrompts.first_message || '',
+    } as Prompts,
+  };
+}
+
 export function useAIConfigurations(companyId: string | undefined) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -60,40 +94,10 @@ export function useAIConfigurations(companyId: string | undefined) {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const { data, error } = await supabase
-        .from('ai_configurations')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return (data || []).map(item => {
-        const rawPrompts = item.prompts as any || {};
-        return {
-          ...item,
-          prompts: {
-            // Preservar todos os campos existentes (incluindo prompt_completo)
-            ...rawPrompts,
-            // Fallbacks para campos legados
-            persona: rawPrompts.persona || rawPrompts.main || '',
-            behavior: rawPrompts.behavior || '',
-            attendance_funnel: rawPrompts.attendance_funnel || rawPrompts.guidelines || rawPrompts.attendance || '',
-            scheduling_funnel: rawPrompts.scheduling_funnel || rawPrompts.scheduling || '',
-            business_rules: rawPrompts.business_rules || '',
-            first_message: rawPrompts.first_message || '',
-          } as Prompts,
-          follow_up_stages: (item.follow_up_stages as any) || [],
-          follow_up_enabled: item.follow_up_enabled ?? false,
-          whatsapp_instance_id: item.whatsapp_instance_id || null,
-          api_keys: (item.api_keys as any) || {},
-          behavior_settings: {
-            ...DEFAULT_BEHAVIOR_SETTINGS,
-            ...(item.behavior_settings as any),
-          } as BehaviorSettings,
-          n8n_webhook_url: (item as any).n8n_webhook_url || null,
-          knowledge: (item as any).knowledge || null,
-        };
-      }) as AIConfiguration[];
+      const res = await fetch(`/api/ai-configurations?companyId=${companyId}`);
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch configurations');
+      const data = await res.json();
+      return (data || []).map(mapConfig) as AIConfiguration[];
     },
     enabled: !!companyId,
   });
@@ -109,26 +113,14 @@ export function useAIConfigurations(companyId: string | undefined) {
       api_keys?: APIKeys;
       behavior_settings?: BehaviorSettings;
     }) => {
-      const { data: userData } = await supabase.auth.getUser();
-      
-      const { data, error } = await supabase
-        .from('ai_configurations')
-        .insert({
-          company_id: config.company_id,
-          name: config.name,
-          prompts: config.prompts as any,
-          is_active: config.is_active,
-          whatsapp_instance_id: config.whatsapp_instance_id || null,
-          follow_up_stages: config.follow_up_stages as any,
-          api_keys: config.api_keys as any,
-          behavior_settings: config.behavior_settings as any,
-          created_by: userData.user?.id,
-        })
-        .select()
-        .single();
+      const res = await fetch('/api/ai-configurations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
 
-      if (error) throw error;
-      return data;
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to create configuration');
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-configurations'] });
@@ -145,36 +137,14 @@ export function useAIConfigurations(companyId: string | undefined) {
 
   const updateConfiguration = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<AIConfiguration> }) => {
-      const updateData: any = { ...updates };
-      
-      // Convert JSONB fields to proper types
-      if (updates.prompts) {
-        updateData.prompts = updates.prompts as any;
-      }
-      if (updates.follow_up_stages) {
-        updateData.follow_up_stages = updates.follow_up_stages as any;
-      }
-      if (updates.api_keys) {
-        updateData.api_keys = updates.api_keys as any;
-      }
-      if (updates.behavior_settings) {
-        updateData.behavior_settings = updates.behavior_settings as any;
-      }
-      
-      // Convert empty string to null for UUID field
-      if ('whatsapp_instance_id' in updateData) {
-        updateData.whatsapp_instance_id = updateData.whatsapp_instance_id || null;
-      }
-      
-      const { data, error } = await supabase
-        .from('ai_configurations')
-        .update(updateData)
-        .eq('id', id)
-        .select()
-        .single();
+      const res = await fetch('/api/ai-configurations', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...updates }),
+      });
 
-      if (error) throw error;
-      return data;
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to update configuration');
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-configurations'] });
@@ -191,12 +161,8 @@ export function useAIConfigurations(companyId: string | undefined) {
 
   const deleteConfiguration = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('ai_configurations')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      const res = await fetch(`/api/ai-configurations?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete configuration');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-configurations'] });

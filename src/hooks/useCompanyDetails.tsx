@@ -1,6 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
-import { Json } from '@/types/database';
 
 interface CompanyUpdate {
   name?: string;
@@ -9,8 +7,8 @@ interface CompanyUpdate {
   document_number?: string;
   trade_name?: string;
   is_active?: boolean;
-  settings?: Json;
-  metadata?: Json;
+  settings?: any;
+  metadata?: any;
 }
 
 export function useCompanyDetails(companyId: string | undefined) {
@@ -21,14 +19,9 @@ export function useCompanyDetails(companyId: string | undefined) {
     queryFn: async () => {
       if (!companyId) return null;
 
-      const { data, error } = await supabase
-        .from('companies')
-        .select('*')
-        .eq('id', companyId)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data;
+      const res = await fetch(`/api/companies?id=${companyId}`);
+      if (!res.ok) throw new Error('Failed to fetch company');
+      return await res.json();
     },
     enabled: !!companyId,
   });
@@ -38,16 +31,10 @@ export function useCompanyDetails(companyId: string | undefined) {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const { data, error } = await supabase
-        .from('users')
-        .select(`
-          *,
-          user_roles!inner(role)
-        `)
-        .eq('company_id', companyId);
-
-      if (error) throw error;
-      return data;
+      const res = await fetch(`/api/company-details?companyId=${companyId}`);
+      if (!res.ok) throw new Error('Failed to fetch company users');
+      const data = await res.json();
+      return data.users || [];
     },
     enabled: !!companyId,
   });
@@ -56,17 +43,10 @@ export function useCompanyDetails(companyId: string | undefined) {
     mutationFn: async (updates: CompanyUpdate) => {
       if (!companyId) throw new Error('Company ID is required');
 
-      // Use API route to bypass RLS restrictions on companies table
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
       if (updates.settings) {
         const res = await fetch('/api/company/settings', {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             company_id: companyId,
             settings: updates.settings,
@@ -80,16 +60,18 @@ export function useCompanyDetails(companyId: string | undefined) {
         return result;
       }
 
-      // For non-settings updates, use direct supabase
-      const { data, error } = await supabase
-        .from('companies')
-        .update(updates)
-        .eq('id', companyId)
-        .select()
-        .single();
+      // For non-settings updates
+      const res = await fetch('/api/companies', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: companyId, ...updates }),
+      });
 
-      if (error) throw error;
-      return data;
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update company');
+      }
+      return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company', companyId] });

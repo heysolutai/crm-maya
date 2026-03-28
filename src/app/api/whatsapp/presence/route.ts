@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse } from '@/lib/api/cors';
 
@@ -7,33 +7,35 @@ export async function OPTIONS(req: NextRequest) { return handleCors(req) || json
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createAdminClient();
-
     await authenticate(req);
 
     const { conversationId, presence = 'composing', delay = 30000 } = await req.json();
     if (!conversationId) return jsonResponse({ success: false, error: 'conversationId is required' }, 400);
 
-    const { data: conversation, error: convError } = await supabase.from('conversations').select('client_id, company_id').eq('id', conversationId).single();
-    if (convError || !conversation) return jsonResponse({ success: false, error: 'Conversation not found' }, 404);
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { clientId: true, companyId: true },
+    });
+    if (!conversation) return jsonResponse({ success: false, error: 'Conversation not found' }, 404);
 
-    const { data: client, error: clientError } = await supabase.from('clients').select('phone').eq('id', conversation.client_id).single();
-    if (clientError || !client?.phone) return jsonResponse({ success: false, error: 'Client phone not found' }, 404);
+    const client = await prisma.client.findUnique({
+      where: { id: conversation.clientId },
+      select: { phone: true },
+    });
+    if (!client?.phone) return jsonResponse({ success: false, error: 'Client phone not found' }, 404);
 
     const cleanPhone = client.phone.replace(/[^0-9]/g, '');
 
-    const { data: instance, error: instanceError } = await supabase
-      .from('whatsapp_instances')
-      .select('api_url, instance_api_key')
-      .eq('company_id', conversation.company_id)
-      .eq('is_active', true)
-      .single();
+    const instance = await prisma.whatsappInstance.findFirst({
+      where: { companyId: conversation.companyId, isActive: true },
+      select: { apiUrl: true, instanceApiKey: true },
+    });
 
-    if (instanceError || !instance) return jsonResponse({ success: false, error: 'WhatsApp instance not found' }, 404);
+    if (!instance) return jsonResponse({ success: false, error: 'WhatsApp instance not found' }, 404);
 
-    const presenceResponse = await fetch(`${instance.api_url}/message/presence`, {
+    const presenceResponse = await fetch(`${instance.apiUrl}/message/presence`, {
       method: 'POST',
-      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'token': instance.instance_api_key },
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'token': instance.instanceApiKey },
       body: JSON.stringify({ number: cleanPhone, presence, delay }),
     });
 

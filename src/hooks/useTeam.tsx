@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 import { useAuth } from './useAuth';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { useToast } from './use-toast';
+import { invokeFn } from '@/lib/api-functions';
 
 export function useTeam() {
   const { user } = useAuth();
@@ -15,24 +15,9 @@ export function useTeam() {
     queryFn: async () => {
       if (!companyId) return [];
 
-      // Buscar membros da equipe que têm uma role nesta empresa
-      // Inclui donos mesmo que também sejam super_admin
-      const { data, error } = await supabase
-        .from('users')
-        .select(`
-          *,
-          user_roles!inner(role, company_id)
-        `)
-        .eq('company_id', companyId)
-        .eq('user_roles.company_id', companyId)
-        .in('user_roles.role', ['company_admin', 'manager', 'agent', 'viewer'])
-        .order('full_name');
-
-      if (error) {
-        console.error('[Team] Query error:', error);
-        throw error;
-      }
-      return data || [];
+      const res = await fetch(`/api/team?companyId=${companyId}`);
+      if (!res.ok) throw new Error('Failed to fetch team');
+      return await res.json();
     },
     enabled: !!companyId,
   });
@@ -44,43 +29,17 @@ export function useTeam() {
       phone?: string;
       role: 'company_admin' | 'manager' | 'agent' | 'viewer';
     }) => {
-      // Create user in auth
-      const { data: authData, error: authError } = await supabase.auth.admin.inviteUserByEmail(
-        data.email,
-        {
-          data: {
-            full_name: data.full_name,
-          },
-        }
-      );
+      const { data: result, error } = await invokeFn('add-user-to-company', {
+        company_id: companyId,
+        email: data.email,
+        full_name: data.full_name,
+        phone: data.phone,
+        role: data.role,
+      });
 
-      if (authError) throw authError;
-
-      // Create user profile
-      const { error: userError } = await supabase
-        .from('users')
-        .insert({
-          id: authData.user.id,
-          email: data.email,
-          full_name: data.full_name,
-          phone: data.phone,
-          company_id: companyId,
-        });
-
-      if (userError) throw userError;
-
-      // Create user role
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: authData.user.id,
-          role: data.role,
-          company_id: companyId,
-        });
-
-      if (roleError) throw roleError;
-
-      return authData;
+      if (error) throw new Error(error);
+      if (!result?.success) throw new Error(result?.error || 'Failed to invite member');
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['team'] });
@@ -96,24 +55,26 @@ export function useTeam() {
   });
 
   const updateMemberRole = useMutation({
-    mutationFn: async ({ 
-      userId, 
-      role 
-    }: { 
-      userId: string; 
+    mutationFn: async ({
+      userId,
+      role
+    }: {
+      userId: string;
       role: 'company_admin' | 'manager' | 'agent' | 'viewer';
     }) => {
       if (userId === user?.id) {
         throw new Error('Você não pode alterar sua própria role');
       }
 
-      const { error } = await supabase
-        .from('user_roles')
-        .update({ role })
-        .eq('user_id', userId)
-        .eq('company_id', companyId);
-
-      if (error) throw error;
+      const res = await fetch('/api/team', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'updateRole', userId, companyId, role }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to update role');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['team'] });
@@ -134,12 +95,15 @@ export function useTeam() {
         throw new Error('Você não pode desativar seu próprio usuário');
       }
 
-      const { error } = await supabase
-        .from('users')
-        .update({ is_active: isActive })
-        .eq('id', userId);
-
-      if (error) throw error;
+      const res = await fetch('/api/team', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggleStatus', userId, isActive }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to toggle status');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['team'] });
@@ -160,13 +124,15 @@ export function useTeam() {
         throw new Error('Você não pode remover seu próprio usuário');
       }
 
-      const { error } = await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', userId)
-        .eq('company_id', companyId);
-
-      if (error) throw error;
+      const res = await fetch('/api/team', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove', userId, companyId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to remove member');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['team'] });

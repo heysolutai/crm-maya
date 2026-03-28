@@ -1,28 +1,29 @@
 import { Worker, Queue } from 'bullmq'
 import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type CronTickJob } from '../queues'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { prisma } from '@/lib/db'
 
 async function processFollowUps() {
-  const supabase = createAdminClient()
-
   // Fetch pending follow-up jobs that are due
-  const { data: jobs, error } = await supabase
-    .from('follow_up_jobs')
-    .select(`
-      id, company_id, conversation_id, client_id,
-      stage_order, message_text, whatsapp_instance_id, attempts
-    `)
-    .eq('status', 'pending')
-    .lte('scheduled_for', new Date().toISOString())
-    .lt('attempts', 3)
-    .order('scheduled_for', { ascending: true })
-    .limit(30)
-
-  if (error) {
-    console.error('[Cron Follow-ups] Error fetching jobs:', error.message)
-    return { processed: 0, errors: 1 }
-  }
+  const jobs = await prisma.followUpJob.findMany({
+    where: {
+      status: 'pending',
+      scheduledFor: { lte: new Date() },
+      attempts: { lt: 3 },
+    },
+    select: {
+      id: true,
+      companyId: true,
+      conversationId: true,
+      clientId: true,
+      stageOrder: true,
+      messageText: true,
+      whatsappInstanceId: true,
+      attempts: true,
+    },
+    orderBy: { scheduledFor: 'asc' },
+    take: 30,
+  })
 
   if (!jobs || jobs.length === 0) {
     return { processed: 0, errors: 0 }
@@ -36,92 +37,83 @@ async function processFollowUps() {
   for (const job of jobs) {
     try {
       // Increment attempts and mark as processing
-      await supabase
-        .from('follow_up_jobs')
-        .update({ attempts: (job.attempts || 0) + 1, status: 'processing' } as any)
-        .eq('id', job.id)
+      await prisma.followUpJob.update({
+        where: { id: job.id },
+        data: { attempts: (job.attempts || 0) + 1, status: 'processing' },
+      })
 
       // Get WhatsApp instance
-      let instanceId = job.whatsapp_instance_id
-      let instance: any = null
+      let instance: { id: string; apiUrl: string; instanceApiKey: string } | null = null
 
-      if (instanceId) {
-        const { data } = await supabase
-          .from('whatsapp_instances')
-          .select('id, api_url, instance_api_key')
-          .eq('id', instanceId)
-          .eq('is_active', true)
-          .single()
-        instance = data
+      if (job.whatsappInstanceId) {
+        instance = await prisma.whatsappInstance.findFirst({
+          where: { id: job.whatsappInstanceId, isActive: true },
+          select: { id: true, apiUrl: true, instanceApiKey: true },
+        })
       }
 
       // Fallback: find any active instance for this company
       if (!instance) {
-        const { data } = await supabase
-          .from('whatsapp_instances')
-          .select('id, api_url, instance_api_key')
-          .eq('company_id', job.company_id)
-          .eq('is_active', true)
-          .single()
-        instance = data
+        instance = await prisma.whatsappInstance.findFirst({
+          where: { companyId: job.companyId, isActive: true },
+          select: { id: true, apiUrl: true, instanceApiKey: true },
+        })
       }
 
       if (!instance) {
-        console.warn(`[Cron Follow-ups] No active WhatsApp instance for company ${job.company_id}`)
-        await supabase
-          .from('follow_up_jobs')
-          .update({ status: 'failed', error_message: 'No active WhatsApp instance' } as any)
-          .eq('id', job.id)
+        console.warn(`[Cron Follow-ups] No active WhatsApp instance for company ${job.companyId}`)
+        await prisma.followUpJob.update({
+          where: { id: job.id },
+          data: { status: 'failed', errorMessage: 'No active WhatsApp instance' },
+        })
         errors++
         continue
       }
 
       // Get client phone
-      const { data: client } = await supabase
-        .from('clients')
-        .select('phone')
-        .eq('id', job.client_id)
-        .single()
+      const client = await prisma.client.findFirst({
+        where: { id: job.clientId },
+        select: { phone: true },
+      })
 
       if (!client?.phone) {
-        console.warn(`[Cron Follow-ups] No phone for client ${job.client_id}`)
-        await supabase
-          .from('follow_up_jobs')
-          .update({ status: 'failed', error_message: 'Client has no phone' } as any)
-          .eq('id', job.id)
+        console.warn(`[Cron Follow-ups] No phone for client ${job.clientId}`)
+        await prisma.followUpJob.update({
+          where: { id: job.id },
+          data: { status: 'failed', errorMessage: 'Client has no phone' },
+        })
         errors++
         continue
       }
 
       // Check if conversation is still active (don't follow up closed conversations)
-      if (job.conversation_id) {
-        const { data: conv } = await supabase
-          .from('conversations')
-          .select('status')
-          .eq('id', job.conversation_id)
-          .single()
+      if (job.conversationId) {
+        const conv = await prisma.conversation.findFirst({
+          where: { id: job.conversationId },
+          select: { status: true },
+        })
 
         if (conv?.status === 'closed') {
           console.log(`[Cron Follow-ups] Skipping job ${job.id} - conversation closed`)
-          await supabase
-            .from('follow_up_jobs')
-            .update({ status: 'cancelled', error_message: 'Conversation already closed' } as any)
-            .eq('id', job.id)
+          await prisma.followUpJob.update({
+            where: { id: job.id },
+            data: { status: 'cancelled', errorMessage: 'Conversation already closed' },
+          })
           continue
         }
       }
 
       // Send WhatsApp message
       const cleanPhone = client.phone.replace(/[^0-9]/g, '')
-      const response = await fetch(`${instance.api_url}/send/text`, {
+      const response = await fetch(`${instance.apiUrl}/send/text`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'token': instance.instance_api_key,
+          'token': instance.instanceApiKey,
         },
         body: JSON.stringify({
           number: cleanPhone,
-          text: job.message_text,
+          text: job.messageText,
         }),
       })
 
@@ -134,44 +126,46 @@ async function processFollowUps() {
       const waMessageId = result?.key?.id || result?.message_id
 
       // Save message to conversation
-      if (job.conversation_id) {
-        await supabase.from('messages').insert({
-          conversation_id: job.conversation_id,
-          sender_type: 'ai',
-          message_text: job.message_text,
-          message_type: 'text',
-          metadata: {
-            follow_up_job_id: job.id,
-            stage_order: job.stage_order,
-            wa_message_id: waMessageId,
-            sent_via: 'cron_worker',
+      if (job.conversationId) {
+        await prisma.message.create({
+          data: {
+            conversationId: job.conversationId,
+            senderType: 'ai',
+            messageText: job.messageText,
+            messageType: 'text',
+            metadata: {
+              follow_up_job_id: job.id,
+              stage_order: job.stageOrder,
+              wa_message_id: waMessageId,
+              sent_via: 'cron_worker',
+            },
           },
-        } as any)
+        })
       }
 
       // Mark as sent
-      await supabase
-        .from('follow_up_jobs')
-        .update({
+      await prisma.followUpJob.update({
+        where: { id: job.id },
+        data: {
           status: 'sent',
-          sent_at: new Date().toISOString(),
-        } as any)
-        .eq('id', job.id)
+          lastAttemptAt: new Date(),
+        },
+      })
 
       processed++
-      console.log(`[Cron Follow-ups] Sent follow-up ${job.id} (stage ${job.stage_order}) to ${cleanPhone}`)
+      console.log(`[Cron Follow-ups] Sent follow-up ${job.id} (stage ${job.stageOrder}) to ${cleanPhone}`)
 
     } catch (err: any) {
       console.error(`[Cron Follow-ups] Error processing job ${job.id}:`, err.message)
 
       const newAttempts = (job.attempts || 0) + 1
-      await supabase
-        .from('follow_up_jobs')
-        .update({
+      await prisma.followUpJob.update({
+        where: { id: job.id },
+        data: {
           status: newAttempts >= 3 ? 'failed' : 'pending',
-          error_message: err.message,
-        } as any)
-        .eq('id', job.id)
+          errorMessage: err.message,
+        },
+      })
 
       errors++
     }

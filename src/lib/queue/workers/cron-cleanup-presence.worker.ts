@@ -1,32 +1,31 @@
 import { Worker, Queue } from 'bullmq'
 import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type CronTickJob } from '../queues'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { prisma } from '@/lib/db'
 
 async function cleanupPresence() {
-  const supabase = createAdminClient()
-
   // Mark users as offline if last_seen_at > 3 minutes ago
-  const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString()
+  const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000)
 
-  const { data, error } = await supabase
-    .from('users')
-    .update({ is_online: false })
-    .eq('is_online', true)
-    .lt('last_seen_at', threeMinutesAgo)
-    .select('id')
+  try {
+    const result = await prisma.user.updateMany({
+      where: {
+        isOnline: true,
+        lastSeenAt: { lt: threeMinutesAgo },
+      },
+      data: { isOnline: false },
+    })
 
-  if (error) {
+    const cleaned = result.count
+    if (cleaned > 0) {
+      console.log(`[Cron Cleanup Presence] Marked ${cleaned} users as offline`)
+    }
+
+    return { cleaned }
+  } catch (error: any) {
     console.error('[Cron Cleanup Presence] Error:', error.message)
     return { cleaned: 0, error: error.message }
   }
-
-  const cleaned = data?.length || 0
-  if (cleaned > 0) {
-    console.log(`[Cron Cleanup Presence] Marked ${cleaned} users as offline`)
-  }
-
-  return { cleaned }
 }
 
 let worker: Worker<CronTickJob> | null = null

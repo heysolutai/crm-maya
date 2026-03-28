@@ -1,5 +1,3 @@
-import { Database } from '@/types/database';
-
 export type ConversationStatus = 'active' | 'waiting' | 'closed' | 'transferred';
 
 export const statusColors: Record<ConversationStatus, string> = {
