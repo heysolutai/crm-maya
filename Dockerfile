@@ -18,7 +18,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npx prisma generate --schema=prisma/schema.prisma
 RUN npm run build
 
-# Production image, copy all the files and run next
+# Production image
 FROM base AS runner
 WORKDIR /app
 
@@ -27,19 +27,20 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
-
-# Set the correct permission for prerender cache
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-
-# Automatically leverage output traces to reduce image size
+# Copy standalone build
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-# Prisma schema + engine for auto-migration on startup
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Copy ALL node_modules from builder (Prisma CLI + all dependencies)
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+
+# Copy Prisma schema + config for db push
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+
+# Entrypoint script
 COPY --chown=nextjs:nodejs entrypoint.sh ./
 RUN chmod +x entrypoint.sh
 

@@ -8,7 +8,15 @@ fi
 # Auto-run migrations on startup
 if [ -n "$DATABASE_URL" ]; then
   echo "[entrypoint] Rodando prisma db push..."
-  npx prisma db push --schema=prisma/schema.prisma --skip-generate --accept-data-loss 2>&1 || echo "[entrypoint] Migration falhou, continuando..."
+  npx prisma db push --schema=prisma/schema.prisma --skip-generate --accept-data-loss 2>&1
+  if [ $? -eq 0 ]; then
+    echo "[entrypoint] Banco de dados atualizado com sucesso!"
+  else
+    echo "[entrypoint] ERRO no prisma db push. Verifique a DATABASE_URL."
+  fi
+else
+  echo "[entrypoint] AVISO: DATABASE_URL nao definida. Pulando migrations."
 fi
 
+echo "[entrypoint] Iniciando servidor..."
 exec node server.js
