@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import Image from 'next/image';
+import { useBranding } from '@/hooks/useBranding';
 
 const navigation = [
   { name: 'Dashboard', href: '/super-admin/dashboard', icon: LayoutDashboard },
@@ -45,6 +46,7 @@ const navigation = [
 export default function SuperAdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
+  const { branding } = useBranding();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -63,9 +65,13 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
   const sidebarContent = (
     <>
       <div className="flex h-16 items-center gap-3 px-5 pt-[env(safe-area-inset-top)]">
-        <Image src="/logo-mileto.png" alt="Mileto" width={32} height={32} className="rounded-lg" />
+        {branding.logoUrl ? (
+          <Image src={branding.logoUrl} alt={branding.systemName} width={32} height={32} className="rounded-lg" />
+        ) : (
+          <Image src="/logo-mileto.png" alt={branding.systemName} width={32} height={32} className="rounded-lg" />
+        )}
         <div className="flex flex-col">
-          <span className="text-sm font-bold leading-tight">CRM Admin</span>
+          <span className="text-sm font-bold leading-tight">{branding.systemName}</span>
           <span className="text-[10px] text-muted-foreground leading-tight">Management Console</span>
         </div>
         {isMobile && (

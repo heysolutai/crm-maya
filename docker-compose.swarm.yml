@@ -1,0 +1,93 @@
+version: "3.8"
+
+services:
+  app:
+    image: SEU_USUARIO/crm-maya:latest  # Altere para sua imagem no registry
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      # Postgres (aponta para o service 'db' do swarm)
+      - DATABASE_URL=postgresql://postgres:SUA_SENHA_FORTE@db:5432/crm_maya
+      # NextAuth
+      - NEXTAUTH_SECRET=GERAR_COM_openssl_rand_-base64_32
+      - NEXTAUTH_URL=https://seudominio.com
+      # App
+      - NEXT_PUBLIC_APP_URL=https://seudominio.com
+      # Redis (aponta para o service 'redis' do swarm)
+      - REDIS_URL=redis://redis:6379
+      # Seguranca interna
+      - INTERNAL_API_SECRET=GERAR_COM_openssl_rand_-hex_32
+      - CRON_SECRET=GERAR_COM_openssl_rand_-hex_32
+      # WhatsApp
+      - WHATSAPP_ADMIN_TOKEN=
+      - EXTERNAL_WEBHOOK_URL=
+      - UAZAPI_BASE_URL=https://heysolut.uazapi.com
+      # IA / N8N
+      - N8N_AI_WEBHOOK_URL=
+      - N8N_FAQ_UPLOAD_WEBHOOK_URL=
+      - NEXT_PUBLIC_N8N_FAQ_WEBHOOK_URL=https://webhook.mileto.heysolut.com.br/webhook/330429cf-7832-444f-bd97-a7c584e65781/chat
+      - DEFAULT_OPENAI_API_KEY=
+      # Google Calendar
+      - GOOGLE_CLIENT_ID=
+      - GOOGLE_CLIENT_SECRET=
+      # Base de conhecimento
+      - KNOWLEDGE_WEBHOOK_URL=
+      # CORS
+      - CORS_EXTRA_ORIGINS=
+    volumes:
+      - uploads_data:/app/public/uploads
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+    networks:
+      - crm_network
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=SUA_SENHA_FORTE
+      - POSTGRES_DB=crm_maya
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: any
+    networks:
+      - crm_network
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+    networks:
+      - crm_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+
+networks:
+  crm_network:
+    driver: overlay

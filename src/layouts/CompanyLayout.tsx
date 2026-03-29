@@ -59,6 +59,7 @@ import {
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { WhatsAppStatusIndicator } from '@/components/WhatsAppStatusIndicator';
 import { cn } from '@/lib/utils';
+import { useBranding } from '@/hooks/useBranding';
 
 interface NavItem {
   name: string;
@@ -150,6 +151,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
   const { data: unreadCount = 0 } = useTotalUnreadConversations();
   const { appointmentsToday, pendingFollowUps } = useSidebarCounts();
   const { status: whatsAppStatus } = useWhatsAppStatus();
+  const { branding } = useBranding();
   const isMobile = useIsMobile();
   const [companyName, setCompanyName] = useState<string>('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -260,13 +262,11 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
           <div className="px-3 pt-[env(safe-area-inset-top)]">
             <div className="flex items-center gap-3 px-1 py-4">
               <div className="relative shrink-0">
-                <Image
-                  src="/logo-mileto.png"
-                  alt="MiletoIA"
-                  width={32}
-                  height={32}
-                  className="rounded-lg"
-                />
+                {branding.logoUrl ? (
+                  <Image src={branding.logoUrl} alt={branding.systemName} width={32} height={32} className="rounded-lg" />
+                ) : (
+                  <Image src="/logo-mileto.png" alt={branding.systemName} width={32} height={32} className="rounded-lg" />
+                )}
                 {/* WhatsApp status dot on logo */}
                 <span className={cn(
                   'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-sidebar',
@@ -277,7 +277,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-sidebar-foreground truncate">
-                  {effectiveCompanyName || 'MiletoIA'}
+                  {effectiveCompanyName || branding.systemName}
                 </p>
                 <p className="text-[11px] text-sidebar-foreground/50 truncate">
                   {whatsAppStatus === 'connected' ? 'WhatsApp conectado' :

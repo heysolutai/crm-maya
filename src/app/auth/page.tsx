@@ -10,10 +10,12 @@ import { toast } from 'sonner'
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, MessageSquare, Calendar, Sparkles } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useBranding } from '@/hooks/useBranding'
 
 export default function AuthPage() {
   const router = useRouter()
   const { signIn, signUp, user, role, companyId, loading: authLoading } = useAuth()
+  const { branding } = useBranding()
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -84,22 +86,20 @@ export default function AuthPage() {
 
         {/* Content */}
         <div className="relative z-10 flex flex-col items-center justify-center w-full p-12">
-          <Image
-            src="/logo-mileto.png"
-            alt="MiletoIA"
-            className="w-40 h-40 mb-8 drop-shadow-2xl"
-            width={160}
-            height={160}
-          />
+          {branding.logoUrl ? (
+            <Image src={branding.logoUrl} alt={branding.systemName} className="w-40 h-40 mb-8 drop-shadow-2xl" width={160} height={160} />
+          ) : (
+            <Image src="/logo-mileto.png" alt={branding.systemName} className="w-40 h-40 mb-8 drop-shadow-2xl" width={160} height={160} />
+          )}
 
           <h1 className="text-4xl font-bold text-white mb-4 text-center">
             <span className="bg-gradient-to-r from-mileto-green via-mileto-cyan to-mileto-blue bg-clip-text text-transparent">
-              MiletoIA
+              {branding.systemName}
             </span>
           </h1>
 
           <p className="text-white/70 text-lg text-center max-w-md mb-10">
-            O CRM mais inteligente para impulsionar suas vendas com Inteligência Artificial
+            {branding.loginDescription || 'O CRM mais inteligente para impulsionar suas vendas com Inteligência Artificial'}
           </p>
 
           {/* Features */}
@@ -121,15 +121,13 @@ export default function AuthPage() {
         <div className="w-full max-w-md space-y-8">
           {/* Mobile Logo */}
           <div className="lg:hidden flex flex-col items-center mb-8">
-            <Image
-              src="/logo-mileto.png"
-              alt="MiletoIA"
-              className="w-24 h-24 mb-4"
-              width={96}
-              height={96}
-            />
+            {branding.logoUrl ? (
+              <Image src={branding.logoUrl} alt={branding.systemName} className="w-24 h-24 mb-4" width={96} height={96} />
+            ) : (
+              <Image src="/logo-mileto.png" alt={branding.systemName} className="w-24 h-24 mb-4" width={96} height={96} />
+            )}
             <h1 className="text-2xl font-bold bg-gradient-to-r from-mileto-green via-mileto-cyan to-mileto-blue bg-clip-text text-transparent">
-              MiletoIA
+              {branding.systemName}
             </h1>
           </div>
 

@@ -9,16 +9,39 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  const session = await auth()
-
+  const isSetupPage = request.nextUrl.pathname === '/setup'
   const isAuthPage =
     request.nextUrl.pathname === '/auth' ||
     request.nextUrl.pathname === '/super-admin/auth'
   const isPublicPage =
-    request.nextUrl.pathname === '/' ||
-    request.nextUrl.pathname === '/preview' ||
     request.nextUrl.pathname === '/privacy' ||
     request.nextUrl.pathname === '/terms'
+
+  // Setup page is always accessible
+  if (isSetupPage) {
+    return NextResponse.next()
+  }
+
+  // Check if system needs initial setup (no users exist)
+  // Only check on auth page to avoid hitting DB on every request
+  if (isAuthPage) {
+    try {
+      const baseUrl = request.nextUrl.origin
+      const res = await fetch(`${baseUrl}/api/setup`, {
+        headers: { 'x-middleware-check': '1' },
+      })
+      const data = await res.json()
+      if (data.needsSetup) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/setup'
+        return NextResponse.redirect(url)
+      }
+    } catch {
+      // If check fails, continue normally
+    }
+  }
+
+  const session = await auth()
 
   // Redirect unauthenticated users from protected routes to /auth
   if (!session?.user && !isAuthPage && !isPublicPage) {

@@ -3,7 +3,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
-  title: "Multi-Core CRM",
+  title: "CRM",
   description: "CRM Multi-tenant com IA",
 };
 

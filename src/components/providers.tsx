@@ -5,6 +5,7 @@ import { SessionProvider } from 'next-auth/react'
 import { ThemeProvider } from 'next-themes'
 import { AuthProvider } from '@/hooks/useAuth'
 import { ImpersonationProvider } from '@/hooks/useImpersonation'
+import { BrandingProvider } from '@/hooks/useBranding'
 import { PresenceProvider } from '@/hooks/usePresence'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/toaster'
@@ -30,11 +31,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <AuthProvider>
             <PresenceProvider>
               <ImpersonationProvider>
-                <TooltipProvider>
-                  <Toaster />
-                  <Sonner />
-                  {children}
-                </TooltipProvider>
+                <BrandingProvider>
+                  <TooltipProvider>
+                    <Toaster />
+                    <Sonner />
+                    {children}
+                  </TooltipProvider>
+                </BrandingProvider>
               </ImpersonationProvider>
             </PresenceProvider>
           </AuthProvider>

@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:push": "prisma db push",
+    "db:indexes": "psql $DATABASE_URL -f prisma/indexes.sql",
+    "db:setup": "prisma db push && psql $DATABASE_URL -f prisma/indexes.sql",
+    "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
