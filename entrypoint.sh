@@ -8,7 +8,7 @@ fi
 # Auto-run migrations on startup
 if [ -n "$DATABASE_URL" ]; then
   echo "[entrypoint] Rodando prisma db push..."
-  node ./node_modules/prisma/build/index.js db push --schema=prisma/schema.prisma --skip-generate --accept-data-loss 2>&1
+  node ./node_modules/prisma/build/index.js db push --schema=prisma/schema.prisma --accept-data-loss 2>&1
   if [ $? -eq 0 ]; then
     echo "[entrypoint] Banco de dados atualizado com sucesso!"
   else
