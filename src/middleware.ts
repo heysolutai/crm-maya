@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { auth } from '@/lib/auth'
 
+export const runtime = 'nodejs'
+
 export async function middleware(request: NextRequest) {
   // Do not run auth check on API routes (they handle their own auth)
   const isApiRoute = request.nextUrl.pathname.startsWith('/api/')
