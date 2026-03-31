@@ -12,9 +12,10 @@ export function useWhatsAppInstances(companyId: string | undefined) {
 
       // Map camelCase to snake_case for backwards compatibility
       return (data || []).map((item: any) => ({
-        id: item.id,
+        ...item,
         instance_name: item.instanceName ?? item.instance_name,
         instance_api_key: item.instanceApiKey ?? item.instance_api_key,
+        qr_code: item.qrCode ?? item.qr_code,
         status: item.status,
         is_active: item.isActive ?? item.is_active,
       }));

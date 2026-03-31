@@ -14,7 +14,15 @@ export function useWhatsAppIntegrationForCompany(companyId: string | undefined) 
 
       const res = await fetch(`/api/whatsapp-instances?companyId=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch instances');
-      return await res.json();
+      const data = await res.json();
+      // Map camelCase to snake_case for frontend compatibility
+      return (data || []).map((item: any) => ({
+        ...item,
+        instance_name: item.instanceName ?? item.instance_name,
+        instance_api_key: item.instanceApiKey ?? item.instance_api_key,
+        qr_code: item.qrCode ?? item.qr_code,
+        is_active: item.isActive ?? item.is_active,
+      }));
     },
     enabled: !!companyId,
   });
@@ -32,9 +40,32 @@ export function useWhatsAppIntegrationForCompany(companyId: string | undefined) 
     return data;
   };
 
+  const updateInstanceInCache = (responseData: any) => {
+    if (!responseData?.data) return;
+    const d = responseData.data;
+    queryClient.setQueryData(['whatsapp-instances', companyId], (old: any[] | undefined) => {
+      const mapped = {
+        ...d,
+        instance_name: d.instanceName ?? d.instance_name,
+        instance_api_key: d.instanceApiKey ?? d.instance_api_key,
+        qr_code: d.qr_code ?? d.qrCode ?? d.qr_code,
+        is_active: d.isActive ?? d.is_active ?? true,
+      };
+      if (!old) return [mapped];
+      const idx = old.findIndex((i: any) => i.id === d.id);
+      if (idx >= 0) {
+        const updated = [...old];
+        updated[idx] = { ...updated[idx], ...mapped };
+        return updated;
+      }
+      return [...old, mapped];
+    });
+  };
+
   const connectMutation = useMutation({
     mutationFn: async () => callWhatsAppFunction('connect'),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      updateInstanceInCache(data);
       queryClient.invalidateQueries({ queryKey: ['whatsapp-instances', companyId] });
     },
     onError: (error: any) => {
@@ -45,6 +76,7 @@ export function useWhatsAppIntegrationForCompany(companyId: string | undefined) 
   const reconnectMutation = useMutation({
     mutationFn: async (instanceId: string) => callWhatsAppFunction('reconnect', instanceId),
     onSuccess: (data) => {
+      updateInstanceInCache(data);
       queryClient.invalidateQueries({ queryKey: ['whatsapp-instances', companyId] });
       toast({ title: 'WhatsApp reconectando', description: data.message });
     },
