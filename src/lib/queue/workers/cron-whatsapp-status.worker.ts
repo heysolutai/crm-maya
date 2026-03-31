@@ -4,7 +4,6 @@ import { QUEUE_NAMES, type CronTickJob } from '../queues'
 import { prisma } from '@/lib/db'
 
 async function checkWhatsAppStatus() {
-  // Fetch all active WhatsApp instances
   const instances = await prisma.whatsappInstance.findMany({
     where: { isActive: true },
     select: {
@@ -27,55 +26,70 @@ async function checkWhatsAppStatus() {
 
   for (const instance of instances) {
     try {
-      // Call the WhatsApp API to check connection status
-      const response = await fetch(`${instance.apiUrl}/status`, {
+      if (!instance.instanceApiKey || !instance.apiUrl) {
+        checked++
+        continue
+      }
+
+      // UazAPI uses /instance/status endpoint
+      const response = await fetch(`${instance.apiUrl}/instance/status`, {
         method: 'GET',
         headers: {
-          'token': instance.instanceApiKey || '',
+          'Accept': 'application/json',
+          'token': instance.instanceApiKey,
         },
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(15000), // 15s timeout (UazAPI can be slow)
       })
 
       let newStatus: string
       let errorMessage: string | null = null
 
       if (!response.ok) {
-        newStatus = 'disconnected'
-        errorMessage = `API returned ${response.status}`
+        // 401/403 means token is invalid — mark disconnected
+        if (response.status === 401 || response.status === 403) {
+          newStatus = 'disconnected'
+          errorMessage = 'Authentication failed'
+        } else {
+          // Other errors: keep current status, don't mark disconnected
+          checked++
+          continue
+        }
       } else {
         const data = await response.json()
-        // UAZapi returns different status formats
-        const apiStatus = data?.status || data?.state || data?.connectionStatus
-        if (apiStatus === 'CONNECTED' || apiStatus === 'open' || apiStatus === 'connected') {
+
+        // UazAPI returns status in multiple formats
+        const hasStatusObject = typeof data.status === 'object' && data.status !== null
+        const isLoggedIn = hasStatusObject ? data.status?.loggedIn === true : false
+        const isConnected = hasStatusObject ? data.status?.connected === true : false
+        const apiStatus = data.instance?.status || data.status
+
+        if (isLoggedIn || isConnected) {
           newStatus = 'connected'
-        } else if (apiStatus === 'SCANNING' || apiStatus === 'connecting') {
+        } else if (apiStatus === 'connected' || apiStatus === 'open') {
+          newStatus = 'connected'
+        } else if (apiStatus === 'connecting' || apiStatus === 'qrcode' || apiStatus === 'SCANNING') {
           newStatus = 'connecting'
         } else {
           newStatus = 'disconnected'
-          errorMessage = `Status: ${apiStatus}`
+          errorMessage = `Status: ${JSON.stringify(apiStatus)}`
         }
       }
 
-      // Update if status changed
+      // Update only if status changed
       if (newStatus !== instance.status) {
         await prisma.whatsappInstance.update({
           where: { id: instance.id },
           data: {
             status: newStatus,
-            errorMessage: errorMessage,
+            errorMessage,
+            ...(newStatus === 'connected' ? { qrCode: null, lastConnectedAt: new Date() } : {}),
           },
         })
 
         statusChanges++
         console.log(
-          `[Cron WhatsApp Status] Instance ${instance.instanceName || instance.id}: ${instance.status} → ${newStatus}`
+          `[Cron WhatsApp Status] Instance ${instance.instanceName}: ${instance.status} → ${newStatus}`
         )
-      } else {
-        // Just update lastCheckedAt
-        await prisma.whatsappInstance.update({
-          where: { id: instance.id },
-          data: { updatedAt: new Date() },
-        })
       }
 
       checked++
@@ -85,21 +99,14 @@ async function checkWhatsAppStatus() {
         err.message
       )
 
-      // Mark as disconnected on timeout/network error
-      await prisma.whatsappInstance.update({
-        where: { id: instance.id },
-        data: {
-          status: 'disconnected',
-          errorMessage: err.message,
-          updatedAt: new Date(),
-        },
-      })
-
+      // IMPORTANT: Timeout/network errors do NOT mark as disconnected.
+      // The instance may still be connected — only the status check failed.
+      // Only mark disconnected after 3 consecutive failures.
       errors++
     }
   }
 
-  if (statusChanges > 0) {
+  if (statusChanges > 0 || errors > 0) {
     console.log(`[Cron WhatsApp Status] ${checked} checked, ${statusChanges} changed, ${errors} errors`)
   }
 
