@@ -12,22 +12,25 @@ const updateFollowUpJobSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const { companyId: authCompanyId, isSuperAdmin } = await authenticate(req)
-    const companyId = req.nextUrl.searchParams.get('companyId') || authCompanyId
+    const { companyId, isSuperAdmin } = await authenticate(req)
 
     if (!isSuperAdmin && !companyId) {
       return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
     }
 
     const status = req.nextUrl.searchParams.get('status')
-    const filterCompanyId = req.nextUrl.searchParams.get('filterCompanyId')
     const clientSearch = req.nextUrl.searchParams.get('clientSearch')
     const dateFrom = req.nextUrl.searchParams.get('dateFrom')
     const dateTo = req.nextUrl.searchParams.get('dateTo')
 
+    // Super admin can filter by company; regular users see only their own
     const where: any = {}
-    if (companyId) where.companyId = companyId
-    if (filterCompanyId) where.companyId = filterCompanyId
+    if (isSuperAdmin) {
+      const filterCompanyId = req.nextUrl.searchParams.get('filterCompanyId')
+      if (filterCompanyId) where.companyId = filterCompanyId
+    } else if (companyId) {
+      where.companyId = companyId
+    }
     if (status && status !== 'all') where.status = status
     if (dateFrom) where.scheduledFor = { ...where.scheduledFor, gte: new Date(dateFrom) }
     if (dateTo) where.scheduledFor = { ...where.scheduledFor, lte: new Date(dateTo) }

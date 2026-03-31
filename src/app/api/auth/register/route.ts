@@ -27,6 +27,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ id: user.id, email: user.email }, { status: 201 })
   } catch (error: any) {
+    // Handle unique constraint violation (race condition: concurrent registration)
+    if (error?.code === 'P2002') {
+      return NextResponse.json({ error: 'Este email ja esta cadastrado' }, { status: 409 })
+    }
     console.error('[Register] Error:', error)
     return NextResponse.json({ error: 'Erro interno ao criar conta' }, { status: 500 })
   }

@@ -19,68 +19,67 @@ export async function findOrCreateConversation(
 ): Promise<string> {
   const cleanPhone = phone.replace(/[^0-9]/g, '');
 
-  // Buscar cliente por phone OU whatsapp_lid (LID do WhatsApp)
-  // Prioriza o mais antigo para evitar duplicatas
-  const clients = await prisma.client.findMany({
-    where: {
-      companyId,
-      OR: [
-        { phone: cleanPhone },
-        { whatsappLid: cleanPhone },
-      ],
-    },
-    select: { id: true },
-    orderBy: { createdAt: 'asc' },
-    take: 1,
-  });
-
-  let client = clients[0] || null;
-
-  if (!client) {
-    const newClient = await prisma.client.create({
-      data: {
-        phone: cleanPhone,
+  // Use transaction to prevent race conditions creating duplicate clients/conversations
+  return await prisma.$transaction(async (tx) => {
+    const clients = await tx.client.findMany({
+      where: {
         companyId,
-        firstName: cleanPhone,
-        source: 'whatsapp',
+        OR: [
+          { phone: cleanPhone },
+          { whatsappLid: cleanPhone },
+        ],
       },
       select: { id: true },
+      orderBy: { createdAt: 'asc' },
+      take: 1,
     });
 
-    client = newClient;
-  }
+    let client = clients[0] || null;
 
-  if (!client) {
-    throw new Error('Failed to find or create client');
-  }
+    if (!client) {
+      client = await tx.client.create({
+        data: {
+          phone: cleanPhone,
+          companyId,
+          firstName: cleanPhone,
+          source: 'whatsapp',
+        },
+        select: { id: true },
+      });
+    }
 
-  let conversation = await prisma.conversation.findFirst({
-    where: {
-      clientId: client.id,
-      status: 'active',
-    },
-    select: { id: true },
-    orderBy: { startedAt: 'desc' },
-  });
+    if (!client) {
+      throw new Error('Failed to find or create client');
+    }
 
-  if (!conversation) {
-    conversation = await prisma.conversation.create({
-      data: {
+    let conversation = await tx.conversation.findFirst({
+      where: {
         clientId: client.id,
-        companyId,
         status: 'active',
-        channel: 'whatsapp',
-        startedAt: new Date(),
       },
       select: { id: true },
+      orderBy: { startedAt: 'desc' },
+    });
+
+    if (!conversation) {
+      conversation = await tx.conversation.create({
+        data: {
+          clientId: client.id,
+          companyId,
+          status: 'active',
+          channel: 'whatsapp',
+          startedAt: new Date(),
+        },
+        select: { id: true },
     });
   }
 
-  if (!conversation) {
-    throw new Error('Failed to find or create conversation');
-  }
+    if (!conversation) {
+      throw new Error('Failed to find or create conversation');
+    }
 
-  return conversation.id;
+    return conversation.id;
+  }); // end $transaction
 }
 
 export async function saveMessage(
@@ -158,64 +157,60 @@ export async function getClientPhoneByConversationId(conversationId: string): Pr
 
 export async function assignNextAgent(companyId: string): Promise<string | null> {
   try {
-    const agents = await prisma.user.findMany({
-      where: { companyId, isActive: true },
-      select: { id: true },
-      orderBy: { id: 'asc' },
-    });
-
-    if (!agents || agents.length === 0) {
-      console.log('[Round-Robin] No active agents found for company:', companyId);
-      return null;
-    }
-
-    const validRoles = ['agent', 'manager', 'company_admin'] as any[];
-    const rolesData = await prisma.userRole.findMany({
-      where: {
-        userId: { in: agents.map(a => a.id) },
-        role: { in: validRoles },
-      },
-      select: { userId: true, role: true },
-    });
-
-    if (!rolesData || rolesData.length === 0) {
-      console.log('[Round-Robin] No agents with valid roles found');
-      return null;
-    }
-
-    const agentIds = [...new Set(rolesData.map(r => r.userId))].sort();
-
-    if (agentIds.length === 0) {
-      return null;
-    }
-
-    const state = await prisma.leadDistributionState.findFirst({
-      where: { companyId },
-      select: { lastAssignedUserId: true },
-    });
-
-    let nextIndex = 0;
-    if (state?.lastAssignedUserId) {
-      const lastIndex = agentIds.indexOf(state.lastAssignedUserId);
-      nextIndex = (lastIndex + 1) % agentIds.length;
-    }
-
-    const nextAgentId = agentIds[nextIndex];
-
-    const existingState = await prisma.leadDistributionState.findFirst({ where: { companyId, departmentId: null } });
-    if (existingState) {
-      await prisma.leadDistributionState.update({
-        where: { id: existingState.id },
-        data: { lastAssignedUserId: nextAgentId },
+    // Use serializable transaction to prevent race conditions in round-robin
+    return await prisma.$transaction(async (tx) => {
+      const agents = await tx.user.findMany({
+        where: { companyId, isActive: true },
+        select: { id: true },
+        orderBy: { id: 'asc' },
       });
-    } else {
-      await prisma.leadDistributionState.create({
-        data: { companyId, lastAssignedUserId: nextAgentId },
-      });
-    }
 
-    console.log('[Round-Robin] Assigned agent:', nextAgentId, 'index:', nextIndex, 'of', agentIds.length);
-    return nextAgentId;
+      if (!agents || agents.length === 0) {
+        console.log('[Round-Robin] No active agents found for company:', companyId);
+        return null;
+      }
+
+      const validRoles = ['agent', 'manager', 'company_admin'] as any[];
+      const rolesData = await tx.userRole.findMany({
+        where: {
+          userId: { in: agents.map(a => a.id) },
+          role: { in: validRoles },
+        },
+        select: { userId: true, role: true },
+      });
+
+      if (!rolesData || rolesData.length === 0) return null;
+
+      const agentIds = [...new Set(rolesData.map(r => r.userId))].sort();
+      if (agentIds.length === 0) return null;
+
+      const state = await tx.leadDistributionState.findFirst({
+        where: { companyId, departmentId: null },
+        select: { id: true, lastAssignedUserId: true },
+      });
+
+      let nextIndex = 0;
+      if (state?.lastAssignedUserId) {
+        const lastIndex = agentIds.indexOf(state.lastAssignedUserId);
+        nextIndex = (lastIndex + 1) % agentIds.length;
+      }
+
+      const nextAgentId = agentIds[nextIndex];
+
+      if (state) {
+        await tx.leadDistributionState.update({
+          where: { id: state.id },
+          data: { lastAssignedUserId: nextAgentId },
+        });
+      } else {
+        await tx.leadDistributionState.create({
+          data: { companyId, lastAssignedUserId: nextAgentId },
+        });
+      }
+
+      console.log('[Round-Robin] Assigned agent:', nextAgentId, 'index:', nextIndex, 'of', agentIds.length);
+      return nextAgentId;
+    }, { isolationLevel: 'Serializable' });
   } catch (error) {
     console.error('[Round-Robin] Error:', error);
     return null;
@@ -227,90 +222,77 @@ export async function assignNextAgentInDepartment(
   departmentId: string
 ): Promise<string | null> {
   try {
-    // 1. Get department members
-    const members = await prisma.departmentMember.findMany({
-      where: { departmentId },
-      select: { userId: true },
-    });
-
-    if (!members || members.length === 0) {
-      console.log('[Dept Round-Robin] No members in department:', departmentId);
-      return null;
-    }
-
-    const memberUserIds = members.map(m => m.userId);
-
-    // 2. Filter by is_active = true AND is_online = true
-    const onlineAgents = await prisma.user.findMany({
-      where: {
-        id: { in: memberUserIds },
-        companyId,
-        isActive: true,
-        isOnline: true,
-      },
-      select: { id: true },
-      orderBy: { id: 'asc' },
-    });
-
-    if (!onlineAgents || onlineAgents.length === 0) {
-      console.log('[Dept Round-Robin] No online active agents in department:', departmentId);
-      return null;
-    }
-
-    // 3. Filter by valid roles
-    const validRoles = ['agent', 'manager', 'company_admin'] as any[];
-    const rolesData = await prisma.userRole.findMany({
-      where: {
-        userId: { in: onlineAgents.map(a => a.id) },
-        role: { in: validRoles },
-      },
-      select: { userId: true, role: true },
-    });
-
-    if (!rolesData || rolesData.length === 0) {
-      console.log('[Dept Round-Robin] No agents with valid roles online in department:', departmentId);
-      return null;
-    }
-
-    const agentIds = [...new Set(rolesData.map(r => r.userId))].sort();
-    if (agentIds.length === 0) return null;
-
-    // 4. Get department-specific round-robin state
-    const state = await prisma.leadDistributionState.findFirst({
-      where: { companyId, departmentId },
-      select: { id: true, lastAssignedUserId: true },
-    });
-
-    let nextIndex = 0;
-    if (state?.lastAssignedUserId) {
-      const lastIndex = agentIds.indexOf(state.lastAssignedUserId);
-      nextIndex = (lastIndex + 1) % agentIds.length;
-    }
-
-    const nextAgentId = agentIds[nextIndex];
-
-    // 5. Upsert department-specific state
-    if (state) {
-      await prisma.leadDistributionState.update({
-        where: { id: state.id },
-        data: {
-          lastAssignedUserId: nextAgentId,
-          updatedAt: new Date(),
-        },
+    // Use serializable transaction to prevent race conditions in round-robin
+    return await prisma.$transaction(async (tx) => {
+      const members = await tx.departmentMember.findMany({
+        where: { departmentId },
+        select: { userId: true },
       });
-    } else {
-      await prisma.leadDistributionState.create({
-        data: {
+
+      if (!members || members.length === 0) {
+        console.log('[Dept Round-Robin] No members in department:', departmentId);
+        return null;
+      }
+
+      const memberUserIds = members.map(m => m.userId);
+
+      const onlineAgents = await tx.user.findMany({
+        where: {
+          id: { in: memberUserIds },
           companyId,
-          departmentId,
-          lastAssignedUserId: nextAgentId,
-          updatedAt: new Date(),
+          isActive: true,
+          isOnline: true,
         },
+        select: { id: true },
+        orderBy: { id: 'asc' },
       });
-    }
 
-    console.log('[Dept Round-Robin] Assigned agent:', nextAgentId, 'in dept:', departmentId, 'index:', nextIndex, 'of', agentIds.length);
-    return nextAgentId;
+      if (!onlineAgents || onlineAgents.length === 0) {
+        console.log('[Dept Round-Robin] No online active agents in department:', departmentId);
+        return null;
+      }
+
+      const validRoles = ['agent', 'manager', 'company_admin'] as any[];
+      const rolesData = await tx.userRole.findMany({
+        where: {
+          userId: { in: onlineAgents.map(a => a.id) },
+          role: { in: validRoles },
+        },
+        select: { userId: true, role: true },
+      });
+
+      if (!rolesData || rolesData.length === 0) return null;
+
+      const agentIds = [...new Set(rolesData.map(r => r.userId))].sort();
+      if (agentIds.length === 0) return null;
+
+      const state = await tx.leadDistributionState.findFirst({
+        where: { companyId, departmentId },
+        select: { id: true, lastAssignedUserId: true },
+      });
+
+      let nextIndex = 0;
+      if (state?.lastAssignedUserId) {
+        const lastIndex = agentIds.indexOf(state.lastAssignedUserId);
+        nextIndex = (lastIndex + 1) % agentIds.length;
+      }
+
+      const nextAgentId = agentIds[nextIndex];
+
+      if (state) {
+        await tx.leadDistributionState.update({
+          where: { id: state.id },
+          data: { lastAssignedUserId: nextAgentId, updatedAt: new Date() },
+        });
+      } else {
+        await tx.leadDistributionState.create({
+          data: { companyId, departmentId, lastAssignedUserId: nextAgentId, updatedAt: new Date() },
+        });
+      }
+
+      console.log('[Dept Round-Robin] Assigned agent:', nextAgentId, 'in dept:', departmentId, 'index:', nextIndex, 'of', agentIds.length);
+      return nextAgentId;
+    }, { isolationLevel: 'Serializable' });
   } catch (error) {
     console.error('[Dept Round-Robin] Error:', error);
     return null;

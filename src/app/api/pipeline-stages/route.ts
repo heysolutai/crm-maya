@@ -6,7 +6,7 @@ import { authenticate } from '@/lib/api/auth'
 const createStageSchema = z.object({
   pipeline_id: z.string().uuid(),
   name: z.string().min(1).max(255),
-  color: z.string().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{3,8}$/, 'Invalid color format').optional(),
   order_position: z.number().int().optional(),
   is_default: z.boolean().optional(),
   is_final: z.boolean().optional(),
@@ -15,7 +15,7 @@ const createStageSchema = z.object({
 const updateStageSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(255).optional(),
-  color: z.string().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{3,8}$/, 'Invalid color format').optional(),
   orderPosition: z.number().int().optional(),
   isDefault: z.boolean().optional(),
   isFinal: z.boolean().optional(),

@@ -5,13 +5,13 @@ import { authenticate } from '@/lib/api/auth'
 
 const stageSchema = z.object({
   name: z.string().max(255),
-  color: z.string().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{3,8}$/, 'Invalid color format').optional(),
 })
 
 const createPipelineSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional(),
-  color: z.string().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{3,8}$/, 'Invalid color format').optional(),
   department_id: z.string().uuid().nullable().optional(),
   company_id: z.string().uuid().optional(),
   stages: z.array(stageSchema).optional(),
@@ -22,7 +22,7 @@ const updatePipelineSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().nullable().optional(),
   isDefault: z.boolean().optional(),
-  color: z.string().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{3,8}$/, 'Invalid color format').optional(),
 })
 
 export async function GET(req: NextRequest) {

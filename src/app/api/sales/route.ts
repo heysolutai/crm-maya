@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     }
 
     const data = validation.data
-    const companyId = data.company_id || authCompanyId
+    const companyId = authCompanyId
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
     const sale = await prisma.sale.create({

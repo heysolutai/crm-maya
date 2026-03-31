@@ -9,9 +9,9 @@ export async function OPTIONS(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { agentId } = await authenticate(req);
+    const { agentId, companyId: company_id } = await authenticate(req);
 
-    const { company_id, report_date, manual_entries, manual_scheduled, manual_scheduled_today, manual_attended } = await req.json();
+    const { report_date, manual_entries, manual_scheduled, manual_scheduled_today, manual_attended } = await req.json();
 
     if (!company_id || !report_date) {
       return badRequestResponse('company_id and report_date are required');

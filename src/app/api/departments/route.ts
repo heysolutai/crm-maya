@@ -6,7 +6,7 @@ import { z } from 'zod'
 const createDepartmentSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional().nullable(),
-  color: z.string().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{3,8}$/, 'Invalid color format').optional(),
   isActive: z.boolean().optional(),
   company_id: z.string().uuid().optional(),
 })
@@ -15,7 +15,7 @@ const updateDepartmentSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(255).optional(),
   description: z.string().optional().nullable(),
-  color: z.string().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{3,8}$/, 'Invalid color format').optional(),
   isActive: z.boolean().optional(),
 })
 

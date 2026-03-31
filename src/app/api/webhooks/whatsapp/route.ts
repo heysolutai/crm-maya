@@ -56,13 +56,47 @@ const UAZapiPayloadSchema = z.object({
       messageid: z.string(),
       text: z.string().optional(),
     }).optional(),
-  }),
+    // Meta CTWA (Click to WhatsApp Ads) referral data
+    referral: z.object({
+      headline: z.string().optional(),
+      body: z.string().optional(),
+      source_url: z.string().optional(),
+      source_id: z.string().optional(),
+      source_type: z.string().optional(),
+      media_url: z.string().optional(),
+      thumbnail_url: z.string().optional(),
+      ctwa_clid: z.string().optional(),
+    }).passthrough().optional(),
+    contextInfo: z.object({
+      externalAdReply: z.object({
+        title: z.string().optional(),
+        body: z.string().optional(),
+        sourceUrl: z.string().optional(),
+        mediaUrl: z.string().optional(),
+        thumbnailUrl: z.string().optional(),
+        sourceId: z.string().optional(),
+        sourceType: z.string().optional(),
+        ctwaClid: z.string().optional(),
+      }).passthrough().optional(),
+    }).passthrough().optional(),
+  }).passthrough(),
   sender: z.object({
     profilePicUrl: z.union([z.string().url(), z.literal('')]).optional(),
   }).optional(),
 });
 
 type UAZapiPayload = z.infer<typeof UAZapiPayloadSchema>;
+
+// Ad tracking data from Meta CTWA
+interface AdTrackingData {
+  ad_id?: string;
+  ad_headline?: string;
+  ad_body?: string;
+  ad_media_url?: string;
+  ad_source_url?: string;
+  ad_platform: string;
+  ctwa_clid?: string;
+}
 
 // Interface interna (após adaptação)
 interface InternalMessagePayload {
@@ -81,6 +115,7 @@ interface InternalMessagePayload {
   uaz_message_id: string;
   quoted_message_id?: string;
   was_sent_by_api: boolean;
+  ad_tracking?: AdTrackingData;
   metadata: Record<string, any>;
 }
 
@@ -312,6 +347,29 @@ function validateAndAdaptPayload(rawPayload: unknown): {
       }
     }
 
+    // Extract Meta CTWA ad tracking data
+    let adTracking: AdTrackingData | undefined;
+    const referral = uazPayload.message.referral;
+    const extAdReply = uazPayload.message.contextInfo?.externalAdReply;
+    // Also check raw payload for non-schema fields
+    const rawRef = (rawPayload as any)?.message?.referral;
+    const rawCtx = (rawPayload as any)?.message?.contextInfo?.externalAdReply;
+
+    if (referral || extAdReply || rawRef || rawCtx) {
+      const ref = referral || rawRef;
+      const ext = extAdReply || rawCtx;
+      adTracking = {
+        ad_id: ref?.source_id || ext?.sourceId,
+        ad_headline: ref?.headline || ext?.title,
+        ad_body: ref?.body || ext?.body,
+        ad_media_url: ref?.media_url || ref?.thumbnail_url || ext?.mediaUrl || ext?.thumbnailUrl,
+        ad_source_url: ref?.source_url || ext?.sourceUrl,
+        ad_platform: 'meta',
+        ctwa_clid: ref?.ctwa_clid || ext?.ctwaClid,
+      };
+      console.log('[Ad Tracking] CTWA data detected:', JSON.stringify(adTracking));
+    }
+
     return {
       success: true,
       data: {
@@ -330,6 +388,7 @@ function validateAndAdaptPayload(rawPayload: unknown): {
         uaz_message_id: uazPayload.message.messageid,
         quoted_message_id: quotedMessageId,
         was_sent_by_api: uazPayload.message.wasSentByApi || false,
+        ad_tracking: adTracking,
         metadata: {
           uaz_full_id: uazPayload.message.id,
           chat_name: uazPayload.chat.name,
@@ -927,15 +986,25 @@ export async function POST(req: NextRequest) {
             phone: payload.real_phone || payload.phone,
             whatsappLid: payload.phone,
             firstName: clientName,
-            source: payload.channel || 'whatsapp',
+            source: payload.ad_tracking ? `meta_ad` : (payload.channel || 'whatsapp'),
             avatarUrl: payload.profile_picture_url || null,
+            ...(payload.ad_tracking ? {
+              utmSource: 'meta',
+              utmMedium: 'ctwa',
+              adId: payload.ad_tracking.ad_id,
+              adHeadline: payload.ad_tracking.ad_headline,
+              adBody: payload.ad_tracking.ad_body,
+              adMediaUrl: payload.ad_tracking.ad_media_url,
+              adSourceUrl: payload.ad_tracking.ad_source_url,
+              adPlatform: payload.ad_tracking.ad_platform,
+            } : {}),
           },
           select: { id: true },
         });
 
         clientId = newClient.id;
         existingClient = newClient;
-        console.log('[LID Scenario] Created client with LID:', payload.phone, 'and real phone:', payload.real_phone);
+        console.log('[LID Scenario] Created client with LID:', payload.phone, 'and real phone:', payload.real_phone, payload.ad_tracking ? '(from Meta ad)' : '');
       }
     } else {
       // CENÁRIO 2: Phone é número normal (10-13 dígitos)
@@ -986,15 +1055,50 @@ export async function POST(req: NextRequest) {
             phone: payload.phone,
             whatsappLid: payload.whatsapp_lid,
             firstName: clientName,
-            source: payload.channel || 'whatsapp',
+            source: payload.ad_tracking ? `meta_ad` : (payload.channel || 'whatsapp'),
             avatarUrl: payload.profile_picture_url || null,
+            ...(payload.ad_tracking ? {
+              utmSource: 'meta',
+              utmMedium: 'ctwa',
+              adId: payload.ad_tracking.ad_id,
+              adHeadline: payload.ad_tracking.ad_headline,
+              adBody: payload.ad_tracking.ad_body,
+              adMediaUrl: payload.ad_tracking.ad_media_url,
+              adSourceUrl: payload.ad_tracking.ad_source_url,
+              adPlatform: payload.ad_tracking.ad_platform,
+            } : {}),
           },
           select: { id: true },
         });
 
         clientId = newClient.id;
         existingClient = newClient;
-        console.log('[Normal Scenario] Created new client:', clientName);
+        console.log('[Normal Scenario] Created new client:', clientName, payload.ad_tracking ? '(from Meta ad)' : '');
+      }
+    }
+
+    // 2.5 Update ad tracking on existing client if this message has ad data and client doesn't have it yet
+    if (payload.ad_tracking && clientId && existingClient) {
+      const currentClient = await prisma.client.findUnique({
+        where: { id: clientId },
+        select: { adId: true },
+      });
+      if (currentClient && !currentClient.adId) {
+        await prisma.client.update({
+          where: { id: clientId },
+          data: {
+            source: 'meta_ad',
+            utmSource: 'meta',
+            utmMedium: 'ctwa',
+            adId: payload.ad_tracking.ad_id,
+            adHeadline: payload.ad_tracking.ad_headline,
+            adBody: payload.ad_tracking.ad_body,
+            adMediaUrl: payload.ad_tracking.ad_media_url,
+            adSourceUrl: payload.ad_tracking.ad_source_url,
+            adPlatform: payload.ad_tracking.ad_platform,
+          },
+        });
+        console.log('[Ad Tracking] Updated existing client with ad data:', clientId);
       }
     }
 

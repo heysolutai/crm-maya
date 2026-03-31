@@ -228,6 +228,8 @@ model ApiKey {
   companyId   String    @map("company_id") @db.Uuid
   createdBy   String?   @map("created_by") @db.Uuid
   key         String    @unique
+  keyHash     String?   @map("key_hash")
+  keyPrefix   String?   @map("key_prefix") @db.VarChar(16)
   name        String?
   permissions Json?     @default("{}")
   isActive    Boolean   @default(true) @map("is_active")
@@ -240,6 +242,7 @@ model ApiKey {
   creator User?   @relation("ApiKeyCreator", fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@index([companyId], map: "idx_api_keys_company")
+  @@index([keyPrefix], map: "idx_api_keys_prefix")
   @@map("api_keys")
 }
 
@@ -289,6 +292,20 @@ model Client {
   whatsappLid    String?   @map("whatsapp_lid")
   isActive       Boolean   @default(true) @map("is_active")
   aiPaused       Boolean   @default(false) @map("ai_paused")
+
+  // Ad tracking fields (Meta/Facebook CTWA)
+  utmSource      String?   @map("utm_source")
+  utmMedium      String?   @map("utm_medium")
+  utmCampaign    String?   @map("utm_campaign")
+  utmContent     String?   @map("utm_content")
+  utmTerm        String?   @map("utm_term")
+  adId           String?   @map("ad_id")
+  adHeadline     String?   @map("ad_headline")
+  adBody         String?   @map("ad_body")
+  adMediaUrl     String?   @map("ad_media_url")
+  adSourceUrl    String?   @map("ad_source_url")
+  adPlatform     String?   @map("ad_platform")
+
   createdAt      DateTime  @default(now()) @map("created_at")
   createdBy      String?   @map("created_by") @db.Uuid
   updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
@@ -315,6 +332,8 @@ model Client {
   @@index([email], map: "idx_clients_email")
   @@index([whatsappLid], map: "idx_clients_whatsapp_lid")
   @@index([pipelineId], map: "idx_clients_pipeline")
+  @@index([utmSource], map: "idx_clients_utm_source")
+  @@index([adId], map: "idx_clients_ad_id")
   @@map("clients")
 }
 

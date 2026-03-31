@@ -41,7 +41,9 @@ export function GoogleCalendarConfig() {
       // Limpar parâmetros da URL
       router.replace(pathname);
     } else if (googleCalendarResult === 'error') {
-      const message = searchParams.get('message') || 'Erro desconhecido';
+      const rawMessage = searchParams.get('message') || 'Erro desconhecido';
+      // Sanitize: strip HTML tags and limit length to prevent XSS
+      const message = rawMessage.replace(/<[^>]*>/g, '').slice(0, 200);
       toast({
         title: 'Erro ao conectar Google Calendar',
         description: `Falha na conexão: ${message}`,
