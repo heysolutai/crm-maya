@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
-import { enqueueN8NWebhook, enqueueTranscription, enqueueMediaProcessing } from '@/lib/queue';
+import { enqueueInboundMessage, enqueueN8NWebhook, enqueueTranscription, enqueueMediaProcessing } from '@/lib/queue';
 import fs from 'fs';
 import path from 'path';
 
@@ -888,7 +888,9 @@ export async function POST(req: NextRequest) {
     }
     // ===== FIM: PROCESSAMENTO DE READ RECEIPTS =====
 
-    // Validar e adaptar payload
+    // ===== FAST PATH: Validate format and enqueue for async processing =====
+    // This allows the webhook to respond in <5ms even under 5000+ concurrent messages
+    const isQueueProcessed = req.headers.get('x-queue-processed') === 'true';
     const validationResult = validateAndAdaptPayload(rawPayload);
 
     if (!validationResult.success) {
@@ -896,12 +898,26 @@ export async function POST(req: NextRequest) {
       return jsonResponse({
         success: false,
         error: 'Erro de validação',
-        received_payload: rawPayload
       }, 400);
     }
 
+    // If NOT already processed by queue worker, enqueue and return fast
+    if (!isQueueProcessed) {
+      try {
+        await enqueueInboundMessage({
+          rawPayload: rawPayload as Record<string, unknown>,
+          receivedAt: new Date().toISOString(),
+        });
+        console.log('[Receive] Message enqueued for async processing');
+        return jsonResponse({ success: true, message: 'Message queued for processing' });
+      } catch (queueError) {
+        console.error('[Receive] Failed to enqueue, falling back to sync processing:', queueError);
+        // Fall through to synchronous processing if Redis/queue is unavailable
+      }
+    }
+
+    // ===== SYNCHRONOUS PROCESSING (queue worker callback or fallback) =====
     const payload = (validationResult as { success: true; data: InternalMessagePayload }).data;
-    console.log('[Receive] Validated and adapted payload:', payload);
 
     // Verificar duplicata por uaz_message_id
     const existingMessage = await prisma.message.findFirst({

@@ -102,13 +102,11 @@ async function uploadToStorage(
 
     // Ensure directory exists
     const dir = path.dirname(fullPath)
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true })
-    }
+    await fs.promises.mkdir(dir, { recursive: true })
 
     console.log(`[Media Worker] Uploading ${storagePath} (${buffer.length} bytes, type: ${baseMime})`)
 
-    fs.writeFileSync(fullPath, buffer)
+    await fs.promises.writeFile(fullPath, buffer)
 
     return storagePath
   } catch (error) {

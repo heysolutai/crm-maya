@@ -8,11 +8,13 @@ export {
 
 export {
   QUEUE_NAMES,
+  enqueueInboundMessage,
   enqueueN8NWebhook,
   enqueueTranscription,
   enqueueMediaProcessing,
   enqueueOutboundMessage,
   enqueueOutboundMedia,
+  type InboundMessageJob,
   type N8NWebhookJob,
   type TranscriptionJob,
   type MediaProcessingJob,

@@ -409,6 +409,8 @@ model Conversation {
   aiTokenUsage      AiTokenUsage[]
 
   @@index([companyId], map: "idx_conversations_company")
+  @@index([companyId, status], map: "idx_conversations_company_status")
+  @@index([clientId, status], map: "idx_conversations_client_status")
   @@index([clientId], map: "idx_conversations_client")
   @@index([status], map: "idx_conversations_status")
   @@index([channel], map: "idx_conversations_channel")
@@ -442,6 +444,7 @@ model Message {
   aiTokenUsage AiTokenUsage[]
 
   @@index([conversationId], map: "idx_messages_conversation")
+  @@index([conversationId, createdAt], map: "idx_messages_conv_created")
   @@index([senderId], map: "idx_messages_sender")
   @@index([createdAt], map: "idx_messages_created")
   @@index([uazMessageId], map: "idx_messages_uaz")

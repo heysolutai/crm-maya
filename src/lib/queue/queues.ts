@@ -64,6 +64,11 @@ export interface OutboundMediaJob {
   messageId?: string
 }
 
+export interface InboundMessageJob {
+  rawPayload: Record<string, unknown>
+  receivedAt: string
+}
+
 // Cron job types (no payload — workers poll Supabase directly)
 export interface CronTickJob {
   triggeredAt: string
@@ -74,6 +79,7 @@ export interface CronTickJob {
 // ============================================================
 
 export const QUEUE_NAMES = {
+  INBOUND_MESSAGE: 'inbound-message',
   N8N_WEBHOOK: 'n8n-webhook',
   TRANSCRIPTION: 'audio-transcription',
   MEDIA_PROCESSING: 'media-processing',
@@ -115,6 +121,10 @@ function getOrCreateQueue<T>(name: string): Queue<T> {
   return queues.get(name)! as Queue<T>
 }
 
+export function getInboundMessageQueue() {
+  return getOrCreateQueue<InboundMessageJob>(QUEUE_NAMES.INBOUND_MESSAGE)
+}
+
 export function getN8NQueue() {
   return getOrCreateQueue<N8NWebhookJob>(QUEUE_NAMES.N8N_WEBHOOK)
 }
@@ -138,6 +148,13 @@ export function getOutboundMediaQueue() {
 // ============================================================
 // Helper to add jobs with proper defaults per queue
 // ============================================================
+
+export async function enqueueInboundMessage(data: InboundMessageJob) {
+  const queue = getInboundMessageQueue()
+  return queue.add('process-inbound', data, {
+    priority: 0, // Highest priority — incoming messages
+  })
+}
 
 export async function enqueueN8NWebhook(data: N8NWebhookJob) {
   const queue = getN8NQueue()

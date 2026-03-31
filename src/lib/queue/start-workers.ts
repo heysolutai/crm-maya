@@ -1,3 +1,4 @@
+import { startInboundMessageWorker } from './workers/inbound-message.worker'
 import { startN8NWebhookWorker } from './workers/n8n-webhook.worker'
 import { startTranscriptionWorker } from './workers/transcription.worker'
 import { startMediaProcessingWorker } from './workers/media-processing.worker'
@@ -40,6 +41,7 @@ export function startAllWorkers() {
   console.log('[Queue] Starting all workers...')
 
   // Message processing workers
+  startInboundMessageWorker()
   startN8NWebhookWorker()
   startTranscriptionWorker()
   startMediaProcessingWorker()
