@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+
+const createReminderSchema = z.object({
+  company_id: z.string().uuid().optional(),
+  client_id: z.string().uuid().optional(),
+  conversation_id: z.string().uuid().optional(),
+  created_by: z.string().uuid().optional(),
+  scheduled_for: z.string().datetime({ offset: true }).or(z.string().min(1)),
+  message_text: z.string().optional(),
+})
+
+const updateReminderSchema = z.object({
+  id: z.string().uuid(),
+  status: z.string().optional(),
+  scheduledFor: z.string().datetime({ offset: true }).or(z.string().min(1)).optional(),
+  messageText: z.string().optional(),
+})
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,8 +45,9 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json(reminders)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -37,40 +55,64 @@ export async function POST(req: NextRequest) {
   try {
     const { companyId: authCompanyId, agentId } = await authenticate(req)
     const body = await req.json()
-    const companyId = body.company_id || authCompanyId
+
+    const validation = createReminderSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const companyId = validation.data.company_id || authCompanyId
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
     const reminder = await prisma.reminder.create({
       data: {
         companyId,
-        conversationId: body.conversation_id,
-        clientId: body.client_id,
-        createdBy: agentId || body.created_by,
-        scheduledFor: new Date(body.scheduled_for),
-        messageText: body.message_text,
+        conversationId: validation.data.conversation_id,
+        clientId: validation.data.client_id,
+        createdBy: agentId || validation.data.created_by,
+        scheduledFor: new Date(validation.data.scheduled_for),
+        messageText: validation.data.message_text,
         status: 'pending',
       },
     })
 
-    return NextResponse.json(reminder)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json(reminder, { status: 201 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+
     const body = await req.json()
-    const { id, ...data } = body
-    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+    const validation = updateReminderSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const { id, ...data } = validation.data
+
+    const existing = await prisma.reminder.findFirst({ where: { id, companyId } })
+    if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
 
     const reminder = await prisma.reminder.update({
       where: { id },
       data,
     })
     return NextResponse.json(reminder)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

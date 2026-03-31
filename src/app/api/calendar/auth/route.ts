@@ -27,7 +27,8 @@ export async function POST(req: NextRequest) {
     authUrl.searchParams.set('state', state);
 
     return jsonResponse({ url: authUrl.toString() });
-  } catch (error: any) {
-    return errorResponse(error.message);
+  } catch (error) {
+    console.error('Erro:', error);
+    return errorResponse('Erro interno do servidor');
   }
 }

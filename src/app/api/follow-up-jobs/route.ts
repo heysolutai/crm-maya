@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+
+const updateFollowUpJobSchema = z.object({
+  id: z.string().uuid(),
+  status: z.string().optional(),
+  scheduledFor: z.string().datetime({ offset: true }).or(z.string().min(1)).optional(),
+  message: z.string().optional(),
+})
 
 export async function GET(req: NextRequest) {
   try {
@@ -52,24 +60,39 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json(jobs)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+
     const body = await req.json()
-    const { id, ...data } = body
-    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+    const validation = updateFollowUpJobSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const { id, ...data } = validation.data
+
+    const existing = await prisma.followUpJob.findFirst({ where: { id, companyId } })
+    if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
 
     const job = await prisma.followUpJob.update({
       where: { id },
       data,
     })
     return NextResponse.json(job)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

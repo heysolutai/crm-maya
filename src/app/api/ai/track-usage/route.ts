@@ -101,6 +101,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('Error in track-ai-usage:', error);
-    return errorResponse(error instanceof Error ? error.message : 'Internal server error');
+    return errorResponse('Erro interno do servidor');
   }
 }

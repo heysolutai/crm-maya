@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { getWhatsAppInstance, findOrCreateConversation, saveMessage, getClientPhoneByConversationId } from '@/lib/api/database';
@@ -7,28 +8,46 @@ import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 import fs from 'fs';
 import path from 'path';
 
+const sendAudioSchema = z.object({
+  audioBase64: z.string(),
+  conversationId: z.string().uuid().optional(),
+  phone: z.string().optional(),
+  duration: z.number().optional(),
+  mimeType: z.string().optional(),
+  fromAI: z.boolean().optional(),
+});
+
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
 export async function POST(req: NextRequest) {
   try {
-    const payload = await req.json();
+    const body = await req.json();
+    const validation = sendAudioSchema.safeParse(body);
+
+    if (!validation.success) {
+      return jsonResponse({ error: 'Dados inválidos', details: validation.error.flatten().fieldErrors }, 400);
+    }
+
+    const payload = validation.data;
     const { audioBase64, duration, mimeType, fromAI } = payload;
 
     let phone = payload.phone;
     let conversationId = payload.conversationId;
 
     if (!phone && conversationId) {
-      phone = await getClientPhoneByConversationId(conversationId);
-      if (!phone) return jsonResponse({ error: 'Could not find client phone for conversation' }, 404);
+      const fetchedPhone = await getClientPhoneByConversationId(conversationId);
+      if (!fetchedPhone) return jsonResponse({ error: 'Could not find client phone for conversation' }, 404);
+      phone = fetchedPhone;
     }
 
     if (!phone || !audioBase64) return jsonResponse({ error: 'Missing phone or audioBase64' }, 400);
 
     const { agentId, companyId } = await authenticate(req);
+    if (!companyId) return jsonResponse({ error: 'Company not identified' }, 400);
     console.log(`[send-audio-message] Authenticated - companyId: ${companyId}`);
 
     const instance = await getWhatsAppInstance(companyId);
-    if (!conversationId) conversationId = await findOrCreateConversation(phone, companyId);
+    if (!conversationId) conversationId = await findOrCreateConversation(phone || '', companyId);
 
     // Convert base64 to Buffer and save to filesystem
     const buffer = Buffer.from(audioBase64, 'base64');
@@ -70,7 +89,6 @@ export async function POST(req: NextRequest) {
     return jsonResponse({ success: true, message_id: message.id, conversation_id: conversationId, audio_url: mediaPath, webhook_sent: !!webhookUrl });
   } catch (error) {
     console.error('[send-audio-message] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
-    return jsonResponse({ error: errorMessage }, errorMessage.includes('Authentication') ? 401 : 500);
+    return jsonResponse({ error: 'Erro interno do servidor' }, 500);
   }
 }

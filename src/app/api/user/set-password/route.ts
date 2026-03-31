@@ -1,8 +1,14 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, notFoundResponse } from '@/lib/api/cors';
+
+const setPasswordSchema = z.object({
+  userId: z.string().uuid('Invalid userId format'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+});
 
 export async function OPTIONS(req: NextRequest) {
   return handleCors(req) || jsonResponse(null);
@@ -25,15 +31,14 @@ export async function POST(req: NextRequest) {
       return errorResponse('Only super admins can set passwords', 403);
     }
 
-    const { userId, password } = await req.json();
+    const body = await req.json();
+    const validation = setPasswordSchema.safeParse(body);
 
-    if (!userId || !password) {
-      return badRequestResponse('userId and password are required');
+    if (!validation.success) {
+      return badRequestResponse('Invalid request data: ' + JSON.stringify(validation.error.flatten().fieldErrors));
     }
 
-    if (password.length < 8) {
-      return badRequestResponse('Password must be at least 8 characters');
-    }
+    const { userId, password } = validation.data;
 
     const targetUser = await prisma.user.findUnique({
       where: { id: userId },
@@ -59,6 +64,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('Error in set-user-password:', error);
-    return errorResponse(error instanceof Error ? error.message : 'Unknown error');
+    return errorResponse('Erro interno do servidor');
   }
 }

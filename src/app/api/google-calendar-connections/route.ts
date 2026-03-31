@@ -13,8 +13,9 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json(connection)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -27,7 +28,8 @@ export async function PUT(req: NextRequest) {
 
     await prisma.googleCalendarConnection.update({ where: { id }, data: updates })
     return NextResponse.json({ success: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

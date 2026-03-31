@@ -61,8 +61,8 @@ export async function POST(req: NextRequest) {
     try { n8nData = await n8nResponse.json(); } catch { n8nData = { message: 'OK' }; }
 
     return jsonResponse({ success: true, message: 'Arquivo notificado com sucesso', n8nResponse: n8nData });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in notify-faq-upload:', error);
-    return errorResponse(error.message);
+    return errorResponse('Erro interno do servidor');
   }
 }

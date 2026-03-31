@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     const response = await fetch(`${instance.apiUrl}/message/download`, {
       method: 'POST',
-      headers: { 'token': instance.instanceApiKey, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      headers: { 'token': instance.instanceApiKey ?? '', 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({ id: message.uazMessageId, return_base64: false, generate_mp3: false, return_link: false, transcribe: true, openai_apikey: openAiKey, download_quoted: false }),
     });
 
@@ -87,6 +87,6 @@ export async function POST(req: NextRequest) {
     return jsonResponse({ success: true, transcription, cached: false });
   } catch (error) {
     console.error('[Transcription] Error:', error);
-    return jsonResponse({ error: error instanceof Error ? error.message : 'Internal server error' }, 500);
+    return jsonResponse({ error: 'Erro interno do servidor' }, 500);
   }
 }

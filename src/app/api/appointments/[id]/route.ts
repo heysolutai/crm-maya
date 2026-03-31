@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse } from '@/lib/api/cors';
 import { apiError, apiSuccess, formatWithBrazilOffset, authenticateApiKey, syncWithGoogleCalendar } from '@/lib/api/appointments-helpers';
+import { logAction } from '@/lib/services/audit';
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
@@ -54,6 +55,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await prisma.reminder.updateMany({
       where: { appointmentId: id, status: 'pending' },
       data: { status: 'cancelled' },
+    });
+
+    await logAction({
+      companyId: company.id,
+      userId: null,
+      action: 'DELETE',
+      entity: 'appointment',
+      entityId: id,
+      details: { reason: reason || 'Cancelado via API' },
     });
 
     syncWithGoogleCalendar(company.id, id, 'delete', existing.googleEventId);

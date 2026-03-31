@@ -114,7 +114,7 @@ export function MetricDetailDialog({
     }
   };
 
-  const filteredClients = allClients.filter(c => {
+  const filteredClients = allClients.filter((c: typeof allClients[0]) => {
     const name = `${c.first_name} ${c.last_name || ''} ${c.full_name || ''}`.toLowerCase();
     const phone = c.phone || '';
     const q = searchQuery.toLowerCase();
@@ -546,7 +546,7 @@ export function MetricDetailDialog({
                   {filteredClients.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-6">Nenhum contato encontrado</p>
                   ) : (
-                    filteredClients.slice(0, 50).map((c) => (
+                    filteredClients.slice(0, 50).map((c: typeof filteredClients[0]) => (
                       <button
                         key={c.id}
                         onClick={() => setSelectedClientId(c.id === selectedClientId ? null : c.id)}

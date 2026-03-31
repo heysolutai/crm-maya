@@ -148,7 +148,7 @@ export function ApiKeysTab({ companyId }: ApiKeysTabProps) {
             </div>
           ) : (
             <div className="space-y-4">
-              {apiKeys?.map((key) => (
+              {apiKeys?.map((key: typeof apiKeys[0]) => (
                 <Card key={key.id} className="border-border">
                   <CardContent className="pt-6">
                     <div className="space-y-4">

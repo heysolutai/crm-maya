@@ -32,7 +32,7 @@ export function PlaygroundChat({ companyId }: PlaygroundChatProps) {
   const { apiKeys, isLoading: loadingKeys } = useApiKeys(companyId);
 
   const activeApiKey = useMemo(
-    () => apiKeys?.find((k) => k.is_active)?.key ?? null,
+    () => apiKeys?.find((k: typeof apiKeys[0]) => k.is_active)?.key ?? null,
     [apiKeys]
   );
 
@@ -151,7 +151,7 @@ export function PlaygroundChat({ companyId }: PlaygroundChatProps) {
         )}
 
         <div className="space-y-4">
-          {messages.map((msg) => (
+          {messages.map((msg: Message) => (
             <div
               key={msg.id}
               className={cn(

@@ -56,8 +56,9 @@ export async function GET(req: NextRequest) {
     });
 
     return apiSuccess(data);
-  } catch (error: any) {
-    return errorResponse(error.message);
+  } catch (error) {
+    console.error('Erro:', error);
+    return errorResponse('Erro interno do servidor');
   }
 }
 
@@ -98,13 +99,14 @@ export async function POST(req: NextRequest) {
       let nextOrder = (maxOrderFaq?.orderPosition ?? -1) + 1;
 
       const faqsToInsert = faqsArray.map((faq) => {
-        const f = faq as { question: string; answer?: string; category?: string; keywords?: string[]; is_active?: boolean };
+        const f = faq as { question: string; answer?: string; category?: string; keywords?: string[] | string; is_active?: boolean };
+        const keywordsValue = f.keywords ? (Array.isArray(f.keywords) ? f.keywords : [f.keywords]) : undefined;
         return {
           companyId,
           question: f.question.trim(),
           answer: f.answer || '',
-          category: f.category || null,
-          keywords: f.keywords || null,
+          category: f.category ?? undefined,
+          keywords: keywordsValue,
           isActive: f.is_active ?? true,
           orderPosition: nextOrder++,
         };
@@ -128,20 +130,22 @@ export async function POST(req: NextRequest) {
     });
     const nextOrder = (maxOrderFaq?.orderPosition ?? -1) + 1;
 
+    const keywordsValue = body.keywords ? (Array.isArray(body.keywords) ? body.keywords : [body.keywords]) : undefined;
     const data = await prisma.companyFaq.create({
       data: {
         companyId,
         question: body.question,
         answer: body.answer || '',
-        category: body.category || null,
-        keywords: body.keywords || null,
+        category: body.category ?? undefined,
+        keywords: keywordsValue,
         isActive: body.is_active ?? true,
         orderPosition: nextOrder,
       },
     });
 
     return jsonResponse({ success: true, data }, 201);
-  } catch (error: any) {
-    return errorResponse(error.message);
+  } catch (error) {
+    console.error('Erro:', error);
+    return errorResponse('Erro interno do servidor');
   }
 }

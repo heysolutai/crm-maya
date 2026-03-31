@@ -31,7 +31,7 @@ async function checkWhatsAppStatus() {
       const response = await fetch(`${instance.apiUrl}/status`, {
         method: 'GET',
         headers: {
-          'token': instance.instanceApiKey,
+          'token': instance.instanceApiKey || '',
         },
         signal: AbortSignal.timeout(10000),
       })

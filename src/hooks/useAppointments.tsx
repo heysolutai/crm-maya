@@ -41,7 +41,7 @@ export function useAppointments() {
       if (!res.ok) throw new Error('Failed to fetch appointments');
       const data = await res.json();
       // Normalize if needed
-      return (Array.isArray(data) ? data : data.appointments || []).map((a: any) => ({
+      return (Array.isArray(data) ? data : data.appointments || []).map((a: Record<string, any>) => ({
         ...a,
         company_id: a.companyId || a.company_id,
         client_id: a.clientId || a.client_id,
@@ -95,7 +95,7 @@ export function useAppointments() {
 
   const updateAppointment = async (id: string, appointmentData: Partial<Appointment>) => {
     try {
-      const appointment = appointments.find(a => a.id === id);
+      const appointment = appointments.find((a: Appointment) => a.id === id);
 
       const res = await fetch(`/api/appointments/${id}`, {
         method: 'PUT',
@@ -140,7 +140,7 @@ export function useAppointments() {
 
   const deleteAppointment = async (id: string, deleteFromGoogleCalendar = true) => {
     try {
-      const appointment = appointments.find(a => a.id === id);
+      const appointment = appointments.find((a: Appointment) => a.id === id);
 
       if (deleteFromGoogleCalendar && appointment?.google_event_id) {
         try {

@@ -42,8 +42,8 @@ export async function POST(req: NextRequest) {
     }
 
     return badRequestResponse('Invalid action. Use: online, offline, or heartbeat');
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Presence] Error:', error);
-    return errorResponse(error.message || 'Internal server error');
+    return errorResponse('Erro interno do servidor');
   }
 }

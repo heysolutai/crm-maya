@@ -32,8 +32,9 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
     return NextResponse.json(tickets)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
       const ticket = await prisma.supportTicket.create({
         data: {
           companyId: companyId || body.companyId,
-          createdBy: agentId,
+          createdBy: agentId || '',
           subject: body.subject,
           description: body.description,
           screenshotPaths: body.screenshotPaths || [],
@@ -57,10 +58,15 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === 'updateStatus') {
+      if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+
+      const existing = await prisma.supportTicket.findFirst({ where: { id: body.ticketId, companyId } })
+      if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
+
       const updateData: any = { status: body.status, updatedAt: new Date() }
       if (body.status === 'resolved') {
         updateData.resolvedAt = new Date()
-        updateData.resolvedBy = agentId
+        updateData.resolvedBy = agentId ?? undefined
       }
       if (body.adminNotes !== undefined) {
         updateData.adminNotes = body.adminNotes
@@ -74,7 +80,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

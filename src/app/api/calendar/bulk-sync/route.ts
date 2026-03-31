@@ -11,7 +11,7 @@ async function refreshAccessToken(connection: any): Promise<string | null> {
   try {
     const res = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: connection.refreshToken, grant_type: 'refresh_token' }),
+      body: new URLSearchParams({ client_id: clientId || '', client_secret: clientSecret || '', refresh_token: connection.refreshToken || '', grant_type: 'refresh_token' }),
     });
     if (!res.ok) { console.error(`[BulkSync] Token refresh failed for company ${connection.companyId}`); return null; }
     const data = await res.json();
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
             eventData.conferenceData = { createRequest: { requestId: `meet-${appointment.id}`, conferenceSolutionKey: { type: 'hangoutsMeet' } } };
           }
 
-          const createUrl = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(connection.calendarId)}/events`);
+          const createUrl = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(connection.calendarId || '')}/events`);
           if (connection.createMeetLinks) createUrl.searchParams.set('conferenceDataVersion', '1');
 
           const createResponse = await fetch(createUrl.toString(), {
@@ -140,8 +140,8 @@ export async function POST(req: NextRequest) {
     }
 
     return jsonResponse({ success: true, results });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[BulkSync] Fatal error:', error);
-    return errorResponse(error.message);
+    return errorResponse('Erro interno do servidor');
   }
 }

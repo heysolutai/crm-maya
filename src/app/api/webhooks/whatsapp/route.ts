@@ -351,7 +351,7 @@ function validateAndAdaptPayload(rawPayload: unknown): {
     console.error('[Validation] Unexpected error during validation:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown validation error'
+      error: 'Erro interno do servidor'
     };
   }
 }
@@ -702,13 +702,13 @@ export async function POST(req: NextRequest) {
           const n8nUrl = aiConfig?.n8nWebhookUrl || process.env.N8N_AI_WEBHOOK_URL;
 
           if (n8nUrl) {
-            const clientData = await prisma.client.findUnique({
+            const clientData = convData.clientId ? await prisma.client.findUnique({
               where: { id: convData.clientId },
               select: { firstName: true, lastName: true, phone: true, aiPaused: true },
-            });
+            }) : null;
 
             const apiKeyRecord = await prisma.apiKey.findFirst({
-              where: { companyId: convData.companyId, isActive: true },
+              where: { companyId: convData.companyId || '', isActive: true },
               select: { key: true },
             });
 
@@ -718,14 +718,14 @@ export async function POST(req: NextRequest) {
             });
 
             const clientName = clientData
-              ? `${clientData.firstName} ${clientData.lastName || ''}`.trim()
+              ? `${clientData.firstName} ${clientData.lastName ?? ''}`.trim()
               : 'Cliente';
 
             const webhookPayload = {
               tipo_mensagem: 'audio_transcription',
               conteudo: transcriptionText,
               nome_cliente: clientName,
-              numero_cliente: clientData?.phone || '',
+              numero_cliente: clientData?.phone ?? '',
               company_id: convData.companyId,
               conversation_id: originalMessage.conversationId,
               conversation_friendly_id: convData.friendlyId || null,
@@ -836,7 +836,7 @@ export async function POST(req: NextRequest) {
       console.error('[Receive] Validation failed:', (validationResult as any).error);
       return jsonResponse({
         success: false,
-        error: (validationResult as any).error,
+        error: 'Erro de validação',
         received_payload: rawPayload
       }, 400);
     }
@@ -1261,8 +1261,8 @@ export async function POST(req: NextRequest) {
             conversationId,
             companyId,
             audioUrl: payload.media_url || '',
-            instanceApiUrl: whatsappInstance.apiUrl,
-            instanceApiKey: whatsappInstance.instanceApiKey,
+            instanceApiUrl: whatsappInstance.apiUrl || '',
+            instanceApiKey: whatsappInstance.instanceApiKey || '',
             messageKey: mediaMessageId,
             n8nWebhookUrl: n8nWebhookUrl || undefined,
             n8nPayload: webhookPayload,
@@ -1283,8 +1283,8 @@ export async function POST(req: NextRequest) {
             mimeType: rawPayload.message?.content && typeof rawPayload.message.content === 'object'
               ? (rawPayload.message.content as any).mimetype || 'application/octet-stream'
               : 'application/octet-stream',
-            instanceApiUrl: whatsappInstance.apiUrl,
-            instanceApiKey: whatsappInstance.instanceApiKey,
+            instanceApiUrl: whatsappInstance.apiUrl || '',
+            instanceApiKey: whatsappInstance.instanceApiKey || '',
             messageKey: mediaMessageId,
             n8nWebhookUrl: n8nWebhookUrl || undefined,
             n8nPayload: webhookPayload,
@@ -1433,7 +1433,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('Error in receive-message function:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
-    return errorResponse(errorMessage, 500);
+    return errorResponse('Erro interno do servidor', 500);
   }
 }

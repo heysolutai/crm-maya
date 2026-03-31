@@ -36,6 +36,8 @@ export async function POST(req: NextRequest) {
 
     const client = conversation.client;
 
+    if (!client) throw new Error('Client not found for this conversation');
+
     const instance = await prisma.whatsappInstance.findFirst({
       where: { companyId: conversation.companyId, isActive: true },
       select: { id: true, companyId: true, instanceName: true, apiUrl: true, instanceApiKey: true, isActive: true },
@@ -82,6 +84,6 @@ export async function POST(req: NextRequest) {
     return jsonResponse({ success: true, message_id: message.id, webhook_sent: !!webhookUrl });
   } catch (error) {
     console.error('Error in send-agent-message:', error);
-    return errorResponse(error instanceof Error ? error.message : 'Internal server error');
+    return errorResponse('Erro interno do servidor');
   }
 }

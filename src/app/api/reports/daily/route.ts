@@ -115,7 +115,7 @@ ${salesLines}
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'token': instance.instanceApiKey,
+              'token': instance.instanceApiKey ?? '',
             },
             body: JSON.stringify({ number: cleanPhone, text: message }),
           });
@@ -134,8 +134,8 @@ ${salesLines}
     }
 
     return jsonResponse({ success: true, sent, report, message });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[generate-daily-report] Error:', error);
-    return errorResponse(error.message || 'Internal server error');
+    return errorResponse('Erro interno do servidor');
   }
 }

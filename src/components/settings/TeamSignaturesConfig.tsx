@@ -24,8 +24,8 @@ export function TeamSignaturesConfig() {
   const [editingAgent, setEditingAgent] = useState<AgentWithSignature | null>(null);
 
   // Filtrar membros que podem ter assinaturas (todos exceto viewers)
-  const agents = useMemo(() => 
-    teamMembers?.filter(member => {
+  const agents = useMemo(() =>
+    teamMembers?.filter((member: typeof teamMembers[0]) => {
       const roles = member.user_roles || [];
       return roles.some((ur: any) => ['company_admin', 'manager', 'agent'].includes(ur.role));
     }) || []
@@ -118,11 +118,11 @@ export function TeamSignaturesConfig() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {agents.map((agent) => (
-            <AgentSignatureRow 
+          {agents.map((agent: typeof agents[0]) => (
+            <AgentSignatureRow
               key={agent.id}
               agent={agent}
-              onEditSignature={(agentWithSig) => setEditingAgent(agentWithSig)}
+              onEditSignature={(agentWithSig: AgentWithSignature) => setEditingAgent(agentWithSig)}
               getInitials={getInitials}
               getRoleBadge={getRoleBadge}
             />

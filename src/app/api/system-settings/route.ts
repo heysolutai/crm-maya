@@ -33,8 +33,9 @@ export async function GET() {
       accentColor: settings.accentColor,
       loginDescription: settings.loginDescription,
     })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -80,7 +81,8 @@ export async function PUT(req: NextRequest) {
       accentColor: settings.accentColor,
       loginDescription: settings.loginDescription,
     })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

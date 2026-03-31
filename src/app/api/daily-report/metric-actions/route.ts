@@ -86,7 +86,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

@@ -24,14 +24,14 @@ interface RolePermissionsConfigProps {
 export function RolePermissionsConfig({ companyId: propCompanyId }: RolePermissionsConfigProps = {}) {
   const { companyId: authCompanyId } = useAuth();
   const effectiveCompanyId = propCompanyId || authCompanyId;
-  const { 
-    rolePermissions, 
-    isLoading, 
-    updateRolePermission, 
+  const {
+    rolePermissions,
+    isLoading,
+    updateRolePermission,
     isUpdating,
     configurableRoles,
     getPermissionByRole,
-  } = useRolePermissions(effectiveCompanyId);
+  } = useRolePermissions(effectiveCompanyId || '');
 
   const [updatingRole, setUpdatingRole] = useState<RoleType | null>(null);
 
@@ -125,8 +125,8 @@ export function RolePermissionsConfig({ companyId: propCompanyId }: RolePermissi
                   <div className="flex items-center justify-between">
                     <Label className="text-sm text-muted-foreground">Acesso às conversas</Label>
                     <Select
-                      value={permission.conversation_access}
-                      onValueChange={(value) => 
+                      value={permission.conversation_access ?? 'none'}
+                      onValueChange={(value: string) =>
                         handlePermissionChange(role, 'conversation_access', value as ConversationAccess)
                       }
                       disabled={isUpdating}

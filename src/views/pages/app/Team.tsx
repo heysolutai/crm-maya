@@ -49,13 +49,13 @@ export default function Team() {
 
   const stats = useMemo((): StatItem[] => {
     const members = teamMembers || [];
-    const active = members.filter(m => m.is_active).length;
+    const active = members.filter((m: typeof members[0]) => m.is_active).length;
     const inactive = members.length - active;
 
     // Membros que acessaram nas últimas 24h
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const recentlyActive = members.filter(m => m.last_seen_at && new Date(m.last_seen_at) >= oneDayAgo).length;
+    const recentlyActive = members.filter((m: typeof members[0]) => m.last_seen_at && new Date(m.last_seen_at) >= oneDayAgo).length;
 
     return [
       { label: 'Total Membros', value: members.length, icon: Users, color: 'blue' },
@@ -65,7 +65,7 @@ export default function Team() {
     ];
   }, [teamMembers]);
 
-  const filteredMembers = (teamMembers || []).filter(member => {
+  const filteredMembers = (teamMembers || []).filter((member: typeof teamMembers[0]) => {
     const matchesSearch =
       member.full_name?.toLowerCase().includes(search.toLowerCase()) ||
       member.email?.toLowerCase().includes(search.toLowerCase());
@@ -201,7 +201,7 @@ export default function Team() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredMembers.map((member) => {
+                {filteredMembers.map((member: typeof filteredMembers[0]) => {
                   const userRole = Array.isArray(member.user_roles) ? member.user_roles[0] : member.user_roles;
                   const role = (userRole as any)?.role || 'viewer';
                   const roleInfo = roleLabels[role as keyof typeof roleLabels];
@@ -285,7 +285,7 @@ export default function Team() {
           />
         ) : (
           <div className="space-y-3">
-            {filteredMembers.map((member) => {
+            {filteredMembers.map((member: typeof filteredMembers[0]) => {
               const userRole = Array.isArray(member.user_roles) ? member.user_roles[0] : member.user_roles;
               const memberRole = (userRole as any)?.role || 'viewer';
               const roleInfo = roleLabels[memberRole as keyof typeof roleLabels];

@@ -401,7 +401,7 @@ export default function CompanyDashboard() {
                 formatter={(v: number) => [`${v} conversas`, '']}
               />
               <Bar dataKey="conversas" radius={[0, 6, 6, 0]} maxBarSize={28}>
-                {agentData.map((entry, i) => (
+                {agentData.map((entry: typeof agentData[0], i: number) => (
                   <Cell key={i} fill={entry.fill} />
                 ))}
                 <LabelList dataKey="conversas" position="right" fill="hsl(var(--foreground))" fontSize={11} fontWeight={600} />
@@ -429,7 +429,7 @@ export default function CompanyDashboard() {
                 formatter={(v: number) => [`${v} clientes`, '']}
               />
               <Bar dataKey="clientes" radius={[0, 6, 6, 0]} maxBarSize={30}>
-                {funnelData.map((entry, i) => (
+                {funnelData.map((entry: typeof funnelData[0], i: number) => (
                   <Cell key={i} fill={entry.fill} />
                 ))}
                 <LabelList dataKey="clientes" position="right" fill="hsl(var(--foreground))" fontSize={11} fontWeight={600} />
@@ -502,7 +502,7 @@ export default function CompanyDashboard() {
             </PieChart>
           </ResponsiveContainer>
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-1">
-            {departmentData.map(item => (
+            {departmentData.map((item: typeof departmentData[0]) => (
               <div key={item.name} className="flex items-center gap-1.5 text-xs">
                 <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.fill }} />
                 <span className="text-muted-foreground">{item.name}</span>

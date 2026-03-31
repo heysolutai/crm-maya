@@ -73,7 +73,8 @@ export async function GET(req: NextRequest) {
       can_edit_settings: rolePermissions.canEditSettings,
       message_signature: settings?.permissions?.message_signature || userData?.fullName || '',
     })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

@@ -241,7 +241,7 @@ export async function POST(req: NextRequest) {
       const targetInstance = await prisma.whatsappInstance.findFirst({ where: { id: instance_id, companyId: company_id } });
       if (!targetInstance) throw new Error('Instância não encontrada');
 
-      try { await fetch(`${targetInstance.apiUrl}/instance`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'token': targetInstance.instanceApiKey } }); } catch (e) { console.error('Delete API error:', e); }
+      try { await fetch(`${targetInstance.apiUrl}/instance`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'token': targetInstance.instanceApiKey || '' } }); } catch (e) { console.error('Delete API error:', e); }
 
       await prisma.whatsappInstance.delete({ where: { id: instance_id } });
       return jsonResponse({ success: true, message: 'Instância excluída com sucesso' });
@@ -257,7 +257,7 @@ export async function POST(req: NextRequest) {
 
       if (targetInstance.instanceApiKey) {
         try {
-          const statusResponse = await fetch(`${targetInstance.apiUrl}/instance/status`, { method: 'GET', headers: { 'Accept': 'application/json', 'token': targetInstance.instanceApiKey } });
+          const statusResponse = await fetch(`${targetInstance.apiUrl}/instance/status`, { method: 'GET', headers: { 'Accept': 'application/json', 'token': targetInstance.instanceApiKey || '' } });
           if (statusResponse.ok) {
             const statusData = await statusResponse.json();
             const apiStatus = statusData.instance?.status;
@@ -287,7 +287,7 @@ export async function POST(req: NextRequest) {
 
       const updatedInstance = await prisma.whatsappInstance.update({
         where: { id: instance_id },
-        data: { status: updatedStatus, metadata: apiMetadata, ...(updatedStatus === 'connected' ? { qrCode: null } : {}) },
+        data: { status: updatedStatus, metadata: apiMetadata ?? undefined, ...(updatedStatus === 'connected' ? { qrCode: null } : {}) },
       });
 
       return jsonResponse({ success: true, data: updatedInstance, message: 'Status atualizado' });
@@ -296,6 +296,6 @@ export async function POST(req: NextRequest) {
     throw new Error('Ação inválida');
   } catch (error) {
     console.error('Error:', error);
-    return jsonResponse({ success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' }, 400);
+    return jsonResponse({ success: false, error: 'Erro interno do servidor' }, 500);
   }
 }

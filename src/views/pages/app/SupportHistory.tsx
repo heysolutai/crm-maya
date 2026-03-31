@@ -165,8 +165,8 @@ export default function SupportHistory() {
     }
   };
 
-  const activeTickets = tickets?.filter(t => t.status === 'open' || t.status === 'in_progress') || [];
-  const resolvedTickets = tickets?.filter(t => t.status === 'resolved' || t.status === 'closed') || [];
+  const activeTickets = tickets?.filter((t: any) => t.status === 'open' || t.status === 'in_progress') || [];
+  const resolvedTickets = tickets?.filter((t: any) => t.status === 'resolved' || t.status === 'closed') || [];
 
   return (
     <div className="space-y-6">
@@ -212,7 +212,7 @@ export default function SupportHistory() {
               <h2 className="text-lg font-semibold">Perguntas Frequentes</h2>
             </div>
             <Accordion type="single" collapsible className="w-full">
-              {FAQ_ITEMS.map((item, index) => (
+              {FAQ_ITEMS.map((item: typeof FAQ_ITEMS[0], index: number) => (
                 <AccordionItem key={index} value={`faq-${index}`}>
                   <AccordionTrigger className="text-sm text-left hover:no-underline">
                     {item.question}
@@ -242,8 +242,8 @@ export default function SupportHistory() {
             </Card>
           ) : (
              <div className="space-y-3">
-              {activeTickets.map((ticket: any) => (
-                <TicketCard key={ticket.id} ticket={ticket} effectiveCompanyId={effectiveCompanyId} />
+              {activeTickets.map((t: any) => (
+                <TicketCard key={t.id} ticket={t} effectiveCompanyId={effectiveCompanyId} />
               ))}
             </div>
           )}
@@ -265,8 +265,8 @@ export default function SupportHistory() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {resolvedTickets.map((ticket: any) => (
-                <TicketCard key={ticket.id} ticket={ticket} effectiveCompanyId={effectiveCompanyId} />
+              {resolvedTickets.map((t: any) => (
+                <TicketCard key={t.id} ticket={t} effectiveCompanyId={effectiveCompanyId} />
               ))}
             </div>
           )}

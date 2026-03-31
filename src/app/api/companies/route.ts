@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+
+const updateCompanySchema = z.object({
+  id: z.string().uuid('Invalid id format'),
+}).passthrough();
 
 export async function GET(req: NextRequest) {
   try {
@@ -40,8 +45,9 @@ export async function GET(req: NextRequest) {
     }))
 
     return NextResponse.json(result)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -49,13 +55,18 @@ export async function PUT(req: NextRequest) {
   try {
     await authenticate(req)
     const body = await req.json()
-    const { id, ...updates } = body
-    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+    const validation = updateCompanySchema.safeParse(body)
 
+    if (!validation.success) {
+      return NextResponse.json({ error: 'Invalid request data', details: validation.error.flatten().fieldErrors }, { status: 400 })
+    }
+
+    const { id, ...updates } = validation.data
     const company = await prisma.company.update({ where: { id }, data: updates })
     return NextResponse.json(company)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -70,7 +81,8 @@ export async function DELETE(req: NextRequest) {
     // Use raw query for cascade delete
     await prisma.$executeRaw`SELECT delete_company_cascade(${id}::uuid)`
     return NextResponse.json({ success: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

@@ -37,7 +37,6 @@ export async function POST(req: NextRequest) {
     return jsonResponse({ voices });
   } catch (error) {
     console.error('[get-elevenlabs-voices] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erro interno';
-    return errorResponse(errorMessage);
+    return errorResponse('Erro interno do servidor');
   }
 }

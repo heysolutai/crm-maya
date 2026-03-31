@@ -29,8 +29,8 @@ export async function POST(req: NextRequest) {
     }
 
     return jsonResponse({ success: true, cleaned });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Cleanup Presence] Error:', error);
-    return errorResponse(error.message || 'Internal server error');
+    return errorResponse('Erro interno do servidor');
   }
 }

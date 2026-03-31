@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { getWhatsAppInstance, findOrCreateConversation, saveMessage, getUAZMessageId, getClientPhoneByConversationId } from '@/lib/api/database';
@@ -28,6 +29,27 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
   }
   return btoa(binary);
 }
+
+const sendMediaSchema = z.object({
+  conversationId: z.string().uuid().optional(),
+  file: z.string(),
+  type: z.string(),
+  phone: z.string().optional(),
+  fromAI: z.boolean().optional(),
+  text: z.string().optional(),
+  docName: z.string().optional(),
+  fileSize: z.number().optional(),
+  mimeType: z.string().optional(),
+  replyToMessageId: z.string().uuid().optional(),
+  replyid: z.string().optional(),
+  mentions: z.any().optional(),
+  readchat: z.boolean().optional(),
+  readmessages: z.boolean().optional(),
+  delay: z.number().optional(),
+  forward: z.boolean().optional(),
+  track_source: z.string().optional(),
+  track_id: z.string().optional(),
+});
 
 async function resolveFileToBase64(file: string): Promise<string> {
   if (/^data:/i.test(file)) {
@@ -61,12 +83,20 @@ export async function OPTIONS(req: NextRequest) { return handleCors(req) || json
 export async function POST(req: NextRequest) {
   try {
     console.log('[send-message-media] Processing request...');
-    const payload = await req.json();
+    const body = await req.json();
+    const validation = sendMediaSchema.safeParse(body);
+
+    if (!validation.success) {
+      return jsonResponse({ success: false, error: 'INVALID_PAYLOAD', details: validation.error.flatten().fieldErrors }, 400);
+    }
+
+    const payload = validation.data;
 
     let phone = payload.phone;
     if (!phone && payload.conversationId) {
-      phone = await getClientPhoneByConversationId(payload.conversationId);
-      if (!phone) throw new Error('Could not find client phone for this conversation');
+      const fetchedPhone = await getClientPhoneByConversationId(payload.conversationId);
+      if (!fetchedPhone) throw new Error('Could not find client phone for this conversation');
+      phone = fetchedPhone;
       payload.phone = phone;
     }
 
@@ -74,8 +104,9 @@ export async function POST(req: NextRequest) {
     console.log('[send-message-media] Type:', payload.type, '| Phone:', payload.phone);
 
     const { agentId, companyId } = await authenticate(req);
+    if (!companyId) throw new Error('Company not identified');
     const instance = await getWhatsAppInstance(companyId);
-    const conversationId = payload.conversationId || await findOrCreateConversation(payload.phone, companyId);
+    const conversationId = payload.conversationId || await findOrCreateConversation(payload.phone || '', companyId);
 
     let replyid: string | undefined;
     if (payload.replyToMessageId) {
@@ -116,6 +147,6 @@ export async function POST(req: NextRequest) {
     return jsonResponse({ success: true, message_id: message.id, conversation_id: conversationId, sender_type: payload.fromAI ? 'ai' : 'agent', media_type: payload.type });
   } catch (error) {
     console.error('[send-message-media] Error:', error);
-    return errorResponse(error instanceof Error ? error.message : 'Internal server error');
+    return errorResponse('Erro interno do servidor');
   }
 }

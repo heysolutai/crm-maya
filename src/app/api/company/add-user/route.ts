@@ -1,8 +1,17 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, notFoundResponse } from '@/lib/api/cors';
+
+const addUserSchema = z.object({
+  company_id: z.string().uuid('Invalid company_id format'),
+  email: z.string().email('Invalid email format'),
+  full_name: z.string().min(1, 'Full name is required'),
+  phone: z.string().optional().nullable(),
+  role: z.enum(['company_admin', 'manager', 'agent', 'viewer'], { message: 'Invalid role' }),
+});
 
 export async function OPTIONS(req: NextRequest) {
   return handleCors(req) || jsonResponse(null);
@@ -24,16 +33,14 @@ export async function POST(req: NextRequest) {
       return errorResponse('Only super admins can add users to companies', 403);
     }
 
-    const { company_id, email, full_name, phone, role } = await req.json();
+    const body = await req.json();
+    const validation = addUserSchema.safeParse(body);
 
-    if (!company_id || !email || !full_name || !role) {
-      return badRequestResponse('Missing required fields: company_id, email, full_name, role');
+    if (!validation.success) {
+      return badRequestResponse('Invalid request data: ' + JSON.stringify(validation.error.flatten().fieldErrors));
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return badRequestResponse('Invalid email format');
-    }
+    const { company_id, email, full_name, phone, role } = validation.data;
 
     const company = await prisma.company.findUnique({
       where: { id: company_id },
@@ -69,17 +76,19 @@ export async function POST(req: NextRequest) {
           isActive: true,
         },
       });
-    } catch (createError: any) {
-      return badRequestResponse(`Failed to create user: ${createError.message}`);
+    } catch (createError) {
+      console.error('Erro ao criar usuário:', createError);
+      return badRequestResponse('Falha ao criar usuário');
     }
 
     try {
       await prisma.userRole.create({
         data: { userId: newUser.id, role, companyId: company_id },
       });
-    } catch (roleError: any) {
+    } catch (roleError) {
+      console.error('Erro ao atribuir role:', roleError);
       await prisma.user.delete({ where: { id: newUser.id } });
-      return errorResponse(`Failed to assign role: ${roleError.message}`);
+      return errorResponse('Falha ao atribuir role');
     }
 
     // Skip link generation (was supabase.auth.admin.generateLink)
@@ -100,8 +109,8 @@ export async function POST(req: NextRequest) {
         user_roles: [{ role }],
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in add-user-to-company:', error);
-    return errorResponse(error.message || 'Internal server error');
+    return errorResponse('Erro interno do servidor');
   }
 }

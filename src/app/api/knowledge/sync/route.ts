@@ -17,8 +17,8 @@ export async function POST(req: NextRequest) {
     try {
       authResult = await authenticate(req);
       console.log('[Sync KB] ✅ Authenticated, companyId:', authResult.companyId);
-    } catch (authError: any) {
-      console.error('[Sync KB] ❌ Authentication failed:', authError.message);
+    } catch (authError) {
+      console.error('[Sync KB] ❌ Authentication failed:', authError);
       return unauthorizedResponse('Authentication required');
     }
 
@@ -101,8 +101,8 @@ export async function POST(req: NextRequest) {
 
     console.log('[Sync KB] ✅ Done! knowledge_name:', knowledgeName, 'faqs_count:', faqs?.length || 0);
     return jsonResponse({ success: true, knowledge_name: knowledgeName, faqs_count: faqs?.length || 0 });
-  } catch (error: any) {
-    console.error('[Sync KB] ❌ Unexpected error:', error.message, error.stack);
-    return errorResponse(error.message);
+  } catch (error) {
+    console.error('[Sync KB] ❌ Unexpected error:', error);
+    return errorResponse('Erro interno do servidor');
   }
 }

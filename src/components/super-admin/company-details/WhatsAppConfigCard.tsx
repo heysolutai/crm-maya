@@ -43,11 +43,11 @@ export function WhatsAppConfigCard({ companyId }: WhatsAppConfigCardProps) {
     }
 
     console.log('🔄 Iniciando polling de status...');
-    
+
     // Verificar a cada 3 segundos
     const intervalId = setInterval(() => {
       console.log('⏱️ Verificando status da conexão...');
-      updateStatus(selectedInstanceId);
+      updateStatus(selectedInstanceId as string);
     }, 3000);
 
     return () => {
@@ -59,7 +59,7 @@ export function WhatsAppConfigCard({ companyId }: WhatsAppConfigCardProps) {
   // Fechar modal automaticamente quando conectar
   useEffect(() => {
     if (selectedInstanceId && instances) {
-      const instance = instances.find(i => i.id === selectedInstanceId);
+      const instance = instances.find((i: typeof instances[0]) => i.id === selectedInstanceId);
       
       if (instance?.status === 'connected' && isQrModalOpen) {
         console.log('✅ WhatsApp conectado com sucesso!');
@@ -166,8 +166,8 @@ export function WhatsAppConfigCard({ companyId }: WhatsAppConfigCardProps) {
             </div>
           ) : (
             (() => {
-              const inst = instances[0];
-              
+              const inst = instances[0] as typeof instances[0];
+
               return (
                 <div className="border rounded-lg p-6 space-y-4">
                   <div className="flex items-center justify-between">
@@ -242,13 +242,13 @@ export function WhatsAppConfigCard({ companyId }: WhatsAppConfigCardProps) {
                   <div className="flex items-center gap-2 pt-2 border-t">
                     {inst.status === 'connected' && (() => {
                       const metadata = inst.metadata as any;
-                      const phone = metadata?.connected_phone 
+                      const phone: string | null = metadata?.connected_phone
                         || (() => {
                           // Fallback: extrair de campos conhecidos
                           const jid = metadata?.instance?.phone || metadata?.instance?.me || metadata?.instance?.owner || metadata?.status?.jid;
                           return jid ? String(jid).replace(/@.*$/, '').replace(/\D/g, '') : null;
                         })();
-                      
+
                       if (!phone || phone.length < 10) return null;
                       
                       return (
@@ -330,20 +330,20 @@ export function WhatsAppConfigCard({ companyId }: WhatsAppConfigCardProps) {
             {selectedInstanceId && (
               <p className="text-sm text-muted-foreground">
                 Instância: <span className="font-medium">
-                  {instances?.find(i => i.id === selectedInstanceId)?.instance_name}
+                  {instances?.find((i: any) => i.id === selectedInstanceId)?.instance_name}
                 </span>
               </p>
             )}
           </DialogHeader>
           
           <div className="space-y-6">
-            {selectedInstanceId && instances?.find(i => i.id === selectedInstanceId)?.qr_code ? (
+            {selectedInstanceId && instances?.find((i: any) => i.id === selectedInstanceId)?.qr_code ? (
               <>
                 <div className="flex items-center justify-center">
                   <div className="border-4 border-foreground rounded-lg p-4 bg-background">
-                    <img 
-                      src={instances.find(i => i.id === selectedInstanceId)!.qr_code!} 
-                      alt="QR Code WhatsApp" 
+                    <img
+                      src={instances.find((i: typeof instances[0]) => i.id === selectedInstanceId)!.qr_code!}
+                      alt="QR Code WhatsApp"
                       className="w-72 h-72"
                     />
                   </div>

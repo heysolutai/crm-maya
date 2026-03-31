@@ -1,6 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+import { logAction } from '@/lib/services/audit'
+import { z } from 'zod'
+import { Prisma } from '@prisma/client'
+
+const createClientSchema = z.object({
+  firstName: z.string().min(1).max(255).optional(),
+  first_name: z.string().min(1).max(255).optional(),
+  lastName: z.string().max(255).optional(),
+  last_name: z.string().max(255).optional(),
+  email: z.string().email().optional().nullable(),
+  phone: z.string().max(50).optional().nullable(),
+  secondaryPhone: z.string().max(50).optional().nullable(),
+  source: z.string().max(100).optional().nullable(),
+  tags: z.array(z.string()).optional(),
+  gender: z.string().max(20).optional().nullable(),
+  documentNumber: z.string().max(50).optional().nullable(),
+  address: z.any().optional().nullable(),
+  customFields: z.any().optional().nullable(),
+  assignedTo: z.string().uuid().optional().nullable(),
+  stageId: z.string().uuid().optional().nullable(),
+  pipelineId: z.string().uuid().optional().nullable(),
+  isActive: z.boolean().optional(),
+  aiPaused: z.boolean().optional(),
+}).refine(data => data.firstName || data.first_name, { message: 'firstName ou first_name obrigatorio' })
+
+const updateClientSchema = z.object({
+  id: z.string().uuid(),
+  firstName: z.string().min(1).max(255).optional(),
+  lastName: z.string().max(255).optional().nullable(),
+  email: z.string().email().optional().nullable(),
+  phone: z.string().max(50).optional().nullable(),
+  secondaryPhone: z.string().max(50).optional().nullable(),
+  source: z.string().max(100).optional().nullable(),
+  tags: z.array(z.string()).optional(),
+  gender: z.string().max(20).optional().nullable(),
+  documentNumber: z.string().max(50).optional().nullable(),
+  address: z.any().optional().nullable(),
+  customFields: z.any().optional().nullable(),
+  assignedTo: z.string().uuid().optional().nullable().transform(v => v ?? undefined),
+  stageId: z.string().uuid().optional().nullable().transform(v => v ?? undefined),
+  pipelineId: z.string().uuid().optional().nullable().transform(v => v ?? undefined),
+  isActive: z.boolean().optional(),
+  aiPaused: z.boolean().optional(),
+})
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,62 +63,127 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json(clients)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro ao buscar clientes:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { companyId: authCompanyId } = await authenticate(req)
+    const { companyId: authCompanyId, agentId } = await authenticate(req)
     const body = await req.json()
     const companyId = body.company_id || authCompanyId
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
-    const { full_name, company_id, ...data } = body
+    const validation = createClientSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const { first_name, ...validData } = validation.data
     const client = await prisma.client.create({
       data: {
-        ...data,
         companyId,
-        firstName: data.first_name || data.firstName,
-        lastName: data.last_name || data.lastName,
+        firstName: validData.firstName || first_name!,
+        lastName: validData.lastName ?? validData.lastName,
+        email: validData.email,
+        phone: validData.phone,
+        secondaryPhone: validData.secondaryPhone,
+        source: validData.source,
+        tags: validData.tags,
+        gender: validData.gender,
+        documentNumber: validData.documentNumber,
+        address: validData.address ? (validData.address as Prisma.InputJsonValue) : undefined,
+        customFields: validData.customFields ? (validData.customFields as Prisma.InputJsonValue) : undefined,
+        assignedTo: validData.assignedTo,
+        stageId: validData.stageId,
+        pipelineId: validData.pipelineId,
+        isActive: validData.isActive,
+        aiPaused: validData.aiPaused,
       },
     })
 
-    return NextResponse.json(client)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    await logAction({
+      companyId,
+      userId: agentId,
+      action: 'CREATE',
+      entity: 'client',
+      entityId: client.id,
+    })
+
+    return NextResponse.json(client, { status: 201 })
+  } catch (error) {
+    console.error('Erro ao criar cliente:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId, agentId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const body = await req.json()
-    const { id, full_name, ...data } = body
 
-    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+    const validation = updateClientSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const { id, ...data } = validation.data
+
+    const existing = await prisma.client.findFirst({ where: { id, companyId } })
+    if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
 
     const client = await prisma.client.update({
       where: { id },
-      data,
+      data: data as any,
+    })
+
+    await logAction({
+      companyId,
+      userId: agentId,
+      action: 'UPDATE',
+      entity: 'client',
+      entityId: client.id,
     })
 
     return NextResponse.json(client)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro ao atualizar cliente:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId, agentId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
+    const existing = await prisma.client.findFirst({ where: { id, companyId } })
+    if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
+
     await prisma.client.delete({ where: { id } })
+
+    await logAction({
+      companyId,
+      userId: agentId,
+      action: 'DELETE',
+      entity: 'client',
+      entityId: id,
+    })
+
     return NextResponse.json({ success: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro ao deletar cliente:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

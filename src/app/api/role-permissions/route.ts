@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+
+const updateRolePermissionSchema = z.object({
+  companyId: z.string().uuid('Invalid companyId format'),
+  role: z.enum(['company_admin', 'manager', 'agent', 'viewer']),
+});
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,8 +19,9 @@ export async function GET(req: NextRequest) {
       orderBy: { role: 'asc' },
     })
     return NextResponse.json(permissions)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -22,11 +29,18 @@ export async function PUT(req: NextRequest) {
   try {
     await authenticate(req)
     const body = await req.json()
-    const { companyId, role, ...updates } = body
 
-    if (!companyId || !role) {
-      return NextResponse.json({ error: 'Missing companyId or role' }, { status: 400 })
+    // Validate required fields exist
+    const baseValidation = updateRolePermissionSchema.safeParse({
+      companyId: body.companyId,
+      role: body.role,
+    })
+
+    if (!baseValidation.success) {
+      return NextResponse.json({ error: 'Invalid request data', details: baseValidation.error.flatten().fieldErrors }, { status: 400 })
     }
+
+    const { companyId, role, ...updates } = body
 
     await prisma.rolePermission.updateMany({
       where: { companyId, role },
@@ -34,7 +48,8 @@ export async function PUT(req: NextRequest) {
     })
 
     return NextResponse.json({ success: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

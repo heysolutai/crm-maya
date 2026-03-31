@@ -1,7 +1,13 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
+
+const sendReactionSchema = z.object({
+  messageId: z.string().uuid(),
+  emoji: z.string().optional(),
+});
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
@@ -9,8 +15,14 @@ export async function POST(req: NextRequest) {
   try {
     const { agentId } = await authenticate(req);
 
-    const { messageId, emoji } = await req.json();
-    if (!messageId) throw new Error('messageId is required');
+    const body = await req.json();
+    const validation = sendReactionSchema.safeParse(body);
+
+    if (!validation.success) {
+      return jsonResponse({ success: false, error: 'Dados inválidos', details: validation.error.flatten().fieldErrors }, 400);
+    }
+
+    const { messageId, emoji } = validation.data;
 
     console.log('[send-reaction] User:', agentId || 'api-key', 'Message:', messageId, 'Emoji:', emoji);
 
@@ -33,6 +45,8 @@ export async function POST(req: NextRequest) {
 
     if (!message) throw new Error('Message not found');
 
+    if (!message.conversation.client) throw new Error('Client not found for this conversation');
+
     const phone = message.conversation.client.phone;
     const companyId = message.conversation.companyId;
     const uazMessageId = message.uazMessageId;
@@ -50,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     const response = await fetch(`${instance.apiUrl}/message/react`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'token': instance.instanceApiKey },
+      headers: { 'Content-Type': 'application/json', 'token': instance.instanceApiKey || '' },
       body: JSON.stringify({ number: formattedNumber, text: emoji || '', id: uazMessageId }),
     });
 
@@ -75,8 +89,8 @@ export async function POST(req: NextRequest) {
     }
 
     return jsonResponse({ success: true, message: 'Reaction sent successfully' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[send-reaction] Error:', error);
-    return jsonResponse({ success: false, error: error.message }, 500);
+    return jsonResponse({ success: false, error: 'Erro interno do servidor' }, 500);
   }
 }

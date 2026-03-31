@@ -102,7 +102,7 @@ export function TeamTab({ companyId }: TeamTabProps) {
         </Card>
       ) : (
         <div className="grid gap-4">
-          {teamMembers.map((user) => {
+          {teamMembers.map((user: typeof teamMembers[0]) => {
             const role = user.user_roles[0]?.role || 'viewer';
             const roleConfig = roleLabels[role] || roleLabels.viewer;
 
@@ -111,13 +111,13 @@ export function TeamTab({ companyId }: TeamTabProps) {
                 <CardHeader>
                   <div className="flex items-start gap-4">
                     <Avatar className="h-12 w-12">
-                      <AvatarImage src={user.avatar_url} />
+                      <AvatarImage src={user.avatar_url || undefined} />
                       <AvatarFallback>
-                        {getInitials(user.full_name || user.email)}
+                        {getInitials(user.full_name ?? user.email)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1">
-                      <CardTitle className="text-base">{user.full_name || 'Sem nome'}</CardTitle>
+                      <CardTitle className="text-base">{user.full_name ?? 'Sem nome'}</CardTitle>
                       <CardDescription className="flex flex-col gap-1 mt-1">
                         <span className="flex items-center gap-2">
                           <Mail className="h-3 w-3" />

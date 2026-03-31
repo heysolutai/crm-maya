@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 
@@ -21,42 +22,64 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json(notes)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
+
+const createClientNoteSchema = z.object({
+  client_id: z.string().uuid(),
+  note: z.string().min(1, 'Note is required'),
+  company_id: z.string().uuid().optional(),
+  created_by: z.string().optional(),
+});
 
 export async function POST(req: NextRequest) {
   try {
     const { companyId: authCompanyId, agentId } = await authenticate(req)
     const body = await req.json()
-    const companyId = body.company_id || authCompanyId
+    const validation = createClientNoteSchema.safeParse(body)
+
+    if (!validation.success) {
+      return NextResponse.json({ error: 'Dados inválidos', details: validation.error.flatten().fieldErrors }, { status: 400 })
+    }
+
+    const { client_id, note, company_id, created_by } = validation.data
+    const companyId = company_id || authCompanyId
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
-    const note = await prisma.clientNote.create({
+    const noteRecord = await prisma.clientNote.create({
       data: {
-        clientId: body.client_id,
+        clientId: client_id,
         companyId,
-        createdBy: agentId || body.created_by,
-        note: body.note,
+        createdBy: agentId || created_by,
+        note,
       },
     })
 
-    return NextResponse.json(note)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json(noteRecord)
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId } = await authenticate(req)
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
+    const existing = await prisma.clientNote.findFirst({
+      where: { id, companyId: companyId! },
+    })
+    if (!existing) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+
     await prisma.clientNote.delete({ where: { id } })
     return NextResponse.json({ success: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

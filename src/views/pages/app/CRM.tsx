@@ -68,7 +68,7 @@ export default function CRM() {
       grouped[stage.id] = [];
     });
 
-    clients.forEach((client) => {
+    clients.forEach((client: typeof clients[0]) => {
       const stageId = (client as any).stage_id || stages[0]?.id;
       if (stageId && grouped[stageId]) {
         grouped[stageId].push(client as ClientWithStage);
@@ -99,7 +99,7 @@ export default function CRM() {
 
   const handleDragStart = (event: DragStartEvent) => {
     const clientId = event.active.id as string;
-    const client = clients?.find((c) => c.id === clientId);
+    const client = clients?.find((c: typeof clients[0]) => c.id === clientId);
     if (client) {
       setActiveClient(client as ClientWithStage);
     }

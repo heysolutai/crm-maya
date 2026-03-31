@@ -11,7 +11,7 @@ async function refreshAccessToken(connection: any): Promise<string | null> {
   try {
     const res = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: connection.refreshToken, grant_type: 'refresh_token' }),
+      body: new URLSearchParams({ client_id: clientId || '', client_secret: clientSecret || '', refresh_token: connection.refreshToken || '', grant_type: 'refresh_token' }),
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     });
     if (!appointment) return notFoundResponse('Appointment not found');
 
-    const calendarId = connection.calendarId;
+    const calendarId = connection.calendarId || '';
 
     if (action === 'delete') {
       if (appointment.googleEventId) {
@@ -115,8 +115,8 @@ export async function POST(req: NextRequest) {
       if (!res.ok) return errorResponse('Failed to update calendar event');
       return jsonResponse({ success: true, action: 'updated', event_id: eventId });
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Calendar Sync]', error);
-    return errorResponse(error.message);
+    return errorResponse('Erro interno do servidor');
   }
 }

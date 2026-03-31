@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
     });
 
     return jsonResponse({ success: true, jobId: job.id, message: 'WhatsApp status check triggered' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[API Cron] whatsapp-status error:', error);
-    return errorResponse(error.message || 'Internal server error');
+    return errorResponse('Erro interno do servidor');
   }
 }

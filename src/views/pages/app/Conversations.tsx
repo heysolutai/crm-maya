@@ -65,9 +65,9 @@ export default function Conversations() {
   };
 
   // Hooks
-  const { 
-    conversations, 
-    isLoading, 
+  const {
+    conversations,
+    isLoading,
     getConversationMessages,
     getUnreadCount,
     loadOlderMessages,
@@ -92,7 +92,7 @@ export default function Conversations() {
     toggleClientAIPaused,
     isTogglingAIPaused,
   } = useConversations(filters);
-  
+
   const { uploadMedia, isUploading } = useMediaUpload();
   const { teamMembers } = useTeam();
   const { departments } = useDepartments();
@@ -100,18 +100,18 @@ export default function Conversations() {
   const { user, companyId } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: whatsappInstances } = useWhatsAppInstances(companyId);
+  const { data: whatsappInstances } = useWhatsAppInstances(companyId || undefined);
   const activeInstance = whatsappInstances?.[0];
 
-  const selectedConv = conversations?.find(c => c.id === selectedConversation) as Conversation | undefined;
+  const selectedConv = conversations?.find((c: Conversation) => c.id === (selectedConversation ?? '')) as Conversation | undefined;
   const messages = selectedConversation ? getConversationMessages(selectedConversation) : [];
-  const messagesState = selectedConversation ? conversationMessages[selectedConversation] : null;
+  const messagesState = selectedConversation ? (conversationMessages[selectedConversation] as any) : (undefined as any);
   const isLoadingMessages = messagesState?.isLoading || false;
   const hasMoreMessages = messagesState?.hasMore || false;
   const initialLoaded = messagesState?.initialLoaded || false;
 
   // Batch reactions: ONE query for all visible messages
-  const messageIds = useMemo(() => messages.map((m: any) => m.id), [messages]);
+  const messageIds = useMemo(() => messages.map((m: Message) => m.id), [messages]);
   const { reactionsMap, addReaction, removeReaction } = useConversationReactions(messageIds);
 
   // Typing indicators
@@ -263,14 +263,14 @@ export default function Conversations() {
     
     const textToSend = messageText.trim();
     const replyingTo = replyToMessage?.id;
-    const phone = selectedConv.client?.phone;
-    
+    const phone = selectedConv.client?.phone || undefined;
+
     clearInput();
-    
+
     sendMessage({
       conversationId: selectedConv.id,
       messageText: textToSend,
-      phone,
+      phone: phone ?? undefined,
       replyToMessageId: replyingTo,
     });
   };
@@ -403,7 +403,7 @@ export default function Conversations() {
                     </div>
                   )}
                   
-                  {messages.map((msg: any, idx: number) => {
+                  {messages.map((msg: Message, idx: number) => {
                     const isClient = msg.sender_type === 'client';
                     const isAI = msg.sender_type === 'ai';
                     

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+
+const createSuperAdminSchema = z.object({
+  email: z.string().email('Invalid email format'),
+});
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,8 +30,9 @@ export async function GET(req: NextRequest) {
     }))
 
     return NextResponse.json(superAdmins)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -37,7 +43,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Super admin access required' }, { status: 403 })
     }
 
-    const { email } = await req.json()
+    const body = await req.json()
+    const validation = createSuperAdminSchema.safeParse(body)
+
+    if (!validation.success) {
+      return NextResponse.json({ error: 'Invalid request data', details: validation.error.flatten().fieldErrors }, { status: 400 })
+    }
+
+    const { email } = validation.data
 
     // Find user by email
     const user = await prisma.user.findUnique({
@@ -67,8 +80,9 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json(user)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -91,7 +105,8 @@ export async function DELETE(req: NextRequest) {
     })
 
     return NextResponse.json({ success: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

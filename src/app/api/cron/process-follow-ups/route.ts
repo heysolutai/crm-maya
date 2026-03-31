@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
     });
 
     return jsonResponse({ success: true, jobId: job.id, message: 'Follow-ups processing triggered' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[API Cron] process-follow-ups error:', error);
-    return errorResponse(error.message || 'Internal server error');
+    return errorResponse('Erro interno do servidor');
   }
 }

@@ -1,14 +1,24 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { assignNextAgentInDepartment } from '@/lib/api/database';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
+
+const pickupQueueSchema = z.object({});
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
 export async function POST(req: NextRequest) {
   try {
     const { agentId, companyId } = await authenticate(req);
+
+    const body = await req.json();
+    const validation = pickupQueueSchema.safeParse(body);
+
+    if (!validation.success) {
+      return errorResponse('Dados inválidos', 400);
+    }
 
     if (!agentId) return errorResponse('Agent authentication required', 401);
 
@@ -29,7 +39,7 @@ export async function POST(req: NextRequest) {
       where: {
         departmentId: { in: departmentIds },
         transferredTo: null,
-        companyId,
+        companyId: companyId || '',
         status: 'waiting',
       },
       select: { id: true, departmentId: true },
@@ -45,7 +55,7 @@ export async function POST(req: NextRequest) {
     for (const conv of queuedConversations) {
       if (!conv.departmentId) continue;
 
-      const assignedId = await assignNextAgentInDepartment(companyId, conv.departmentId);
+      const assignedId = await assignNextAgentInDepartment(companyId || '', conv.departmentId || '');
       if (assignedId) {
         // Use a conditional update to prevent race conditions
         const result = await prisma.conversation.updateMany({
@@ -67,9 +77,8 @@ export async function POST(req: NextRequest) {
     console.log(`[Pickup Queue] Agent ${agentId} picked up ${pickedUp} queued conversations`);
 
     return jsonResponse({ picked_up: pickedUp });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Pickup Queue] Error:', error);
-    if (error.message?.includes('Authentication') || error.message?.includes('API key')) return errorResponse(error.message, 401);
-    return errorResponse(error.message || 'Internal server error');
+    return errorResponse('Erro interno do servidor');
   }
 }

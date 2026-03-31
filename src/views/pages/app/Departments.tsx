@@ -86,7 +86,7 @@ export default function Departments() {
 
   const stats = useMemo((): StatItem[] => {
     const totalMembers = departments.reduce(
-      (sum, d) => sum + (d.department_members?.length || 0), 0
+      (sum: number, d: Department) => sum + (d.department_members?.length || 0), 0
     );
     const avgMembers = departments.length > 0
       ? (totalMembers / departments.length).toFixed(1)
@@ -159,11 +159,11 @@ export default function Departments() {
 
   const getAvailableMembers = (dept: Department) => {
     const existingIds = getMemberIds(dept);
-    return (teamMembers || []).filter(m => !existingIds.includes(m.id));
+    return (teamMembers || []).filter((m: typeof teamMembers[0]) => !existingIds.includes(m.id));
   };
 
   const getMemberName = (userId: string) => {
-    const member = (teamMembers || []).find((m: any) => m.id === userId);
+    const member = (teamMembers || []).find((m: typeof teamMembers[0]) => m.id === userId);
     return member?.full_name || member?.email || 'Desconhecido';
   };
 
@@ -262,7 +262,7 @@ export default function Departments() {
       {/* Department cards */}
       {!loading && departments.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {departments.map(dept => {
+          {departments.map((dept: Department) => {
             const memberCount = dept.department_members?.length || 0;
             return (
               <Card key={dept.id} className="relative group">
@@ -325,7 +325,7 @@ export default function Departments() {
                         Adicionar primeiro membro
                       </button>
                     )}
-                    {(dept.department_members || []).map(member => {
+                    {(dept.department_members || []).map((member: any) => {
                       const name = getMemberName(member.user_id);
                       return (
                         <div

@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+
+const createStageSchema = z.object({
+  pipeline_id: z.string().uuid(),
+  name: z.string().min(1).max(255),
+  color: z.string().optional(),
+  order_position: z.number().int().optional(),
+  is_default: z.boolean().optional(),
+  is_final: z.boolean().optional(),
+})
+
+const updateStageSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(255).optional(),
+  color: z.string().optional(),
+  orderPosition: z.number().int().optional(),
+  isDefault: z.boolean().optional(),
+  isFinal: z.boolean().optional(),
+})
+
+const reorderStagesSchema = z.object({
+  id: z.string().uuid(),
+  orderedIds: z.array(z.string().uuid()),
+})
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,8 +37,9 @@ export async function GET(req: NextRequest) {
       orderBy: { orderPosition: 'asc' },
     })
     return NextResponse.json(stages)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -23,56 +48,99 @@ export async function POST(req: NextRequest) {
     await authenticate(req)
     const body = await req.json()
 
+    const validation = createStageSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
     const stage = await prisma.pipelineStage.create({
       data: {
-        pipelineId: body.pipeline_id,
-        name: body.name,
-        color: body.color || '#6366f1',
-        orderPosition: body.order_position ?? 0,
-        isDefault: body.is_default ?? false,
-        isFinal: body.is_final ?? false,
+        pipelineId: validation.data.pipeline_id,
+        name: validation.data.name,
+        color: validation.data.color || '#6366f1',
+        orderPosition: validation.data.order_position ?? 0,
+        isDefault: validation.data.is_default ?? false,
+        isFinal: validation.data.is_final ?? false,
       },
     })
-    return NextResponse.json(stage)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json(stage, { status: 201 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+
     const body = await req.json()
-    const { id, ...data } = body
-    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
     // Handle reorder (array of ordered IDs)
     if (body.orderedIds && Array.isArray(body.orderedIds)) {
-      for (let i = 0; i < body.orderedIds.length; i++) {
+      const reorderValidation = reorderStagesSchema.safeParse(body)
+      if (!reorderValidation.success) {
+        return NextResponse.json(
+          { error: 'Dados invalidos', details: reorderValidation.error.flatten().fieldErrors },
+          { status: 400 }
+        )
+      }
+      for (let i = 0; i < reorderValidation.data.orderedIds.length; i++) {
+        const existingStage = await prisma.pipelineStage.findFirst({
+          where: { id: reorderValidation.data.orderedIds[i], pipeline: { companyId } },
+        })
+        if (!existingStage) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
         await prisma.pipelineStage.update({
-          where: { id: body.orderedIds[i] },
+          where: { id: reorderValidation.data.orderedIds[i] },
           data: { orderPosition: i + 1 },
         })
       }
       return NextResponse.json({ success: true })
     }
 
+    const validation = updateStageSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const { id, ...data } = validation.data
+
+    const existing = await prisma.pipelineStage.findFirst({
+      where: { id, pipeline: { companyId } },
+    })
+    if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
+
     const stage = await prisma.pipelineStage.update({
       where: { id },
       data,
     })
     return NextResponse.json(stage)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+
     const id = req.nextUrl.searchParams.get('id')
     const fallbackStageId = req.nextUrl.searchParams.get('fallbackStageId')
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+    const existing = await prisma.pipelineStage.findFirst({
+      where: { id, pipeline: { companyId } },
+    })
+    if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
 
     // Move clients to fallback stage if provided
     if (fallbackStageId) {
@@ -84,7 +152,8 @@ export async function DELETE(req: NextRequest) {
 
     await prisma.pipelineStage.delete({ where: { id } })
     return NextResponse.json({ success: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

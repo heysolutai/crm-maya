@@ -1,6 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+
+const stageSchema = z.object({
+  name: z.string().max(255),
+  color: z.string().optional(),
+})
+
+const createPipelineSchema = z.object({
+  name: z.string().min(1).max(255),
+  description: z.string().optional(),
+  color: z.string().optional(),
+  department_id: z.string().uuid().nullable().optional(),
+  company_id: z.string().uuid().optional(),
+  stages: z.array(stageSchema).optional(),
+})
+
+const updatePipelineSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().nullable().optional(),
+  isDefault: z.boolean().optional(),
+  color: z.string().optional(),
+})
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,8 +43,9 @@ export async function GET(req: NextRequest) {
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     })
     return NextResponse.json(pipelines)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -29,29 +53,38 @@ export async function POST(req: NextRequest) {
   try {
     const { companyId: authCompanyId } = await authenticate(req)
     const body = await req.json()
-    const companyId = body.company_id || authCompanyId
+
+    const validation = createPipelineSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const companyId = validation.data.company_id || authCompanyId
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
     // Create pipeline
     const pipeline = await prisma.pipeline.create({
       data: {
         companyId,
-        name: body.name,
-        description: body.description || null,
-        color: body.color || '#10b981',
-        departmentId: body.department_id || null,
+        name: validation.data.name,
+        description: validation.data.description || null,
+        color: validation.data.color || '#10b981',
+        departmentId: validation.data.department_id || null,
       },
     })
 
     // Create stages
-    const stages = body.stages && body.stages.length > 0
-      ? body.stages.map((s: any, i: number) => ({
+    const stages = validation.data.stages && validation.data.stages.length > 0
+      ? validation.data.stages.map((s, i) => ({
           pipelineId: pipeline.id,
           name: s.name,
           color: s.color || '#6366f1',
           orderPosition: i + 1,
           isDefault: i === 0,
-          isFinal: i === body.stages.length - 1,
+          isFinal: i === validation.data.stages!.length - 1,
         }))
       : [
           { pipelineId: pipeline.id, name: 'Novo', color: '#3b82f6', orderPosition: 1, isDefault: true, isFinal: false },
@@ -61,34 +94,54 @@ export async function POST(req: NextRequest) {
 
     await prisma.pipelineStage.createMany({ data: stages })
 
-    return NextResponse.json(pipeline)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json(pipeline, { status: 201 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+
     const body = await req.json()
-    const { id, department, pipeline_stages, stages, ...data } = body
-    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+    const validation = updatePipelineSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const { id, ...data } = validation.data
+
+    const existing = await prisma.pipeline.findFirst({ where: { id, companyId } })
+    if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
 
     const pipeline = await prisma.pipeline.update({
       where: { id },
       data,
     })
     return NextResponse.json(pipeline)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+    const existing = await prisma.pipeline.findFirst({ where: { id, companyId } })
+    if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
 
     // Soft delete
     await prisma.pipeline.update({
@@ -96,7 +149,8 @@ export async function DELETE(req: NextRequest) {
       data: { isActive: false },
     })
     return NextResponse.json({ success: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

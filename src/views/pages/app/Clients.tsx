@@ -88,12 +88,12 @@ export default function Clients() {
 
   // Stats calculados dos dados
   const stats = useMemo((): StatItem[] => {
-    const active = clients.filter(c => c.is_active).length;
-    const inactive = clients.filter(c => !c.is_active).length;
+    const active = clients.filter((c: typeof clients[0]) => c.is_active).length;
+    const inactive = clients.filter((c: typeof clients[0]) => !c.is_active).length;
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const recentClients = clients.filter(c => new Date(c.created_at) >= thirtyDaysAgo).length;
-    const totalRevenue = clients.reduce((sum, c) => sum + ((c as any).total_revenue || 0), 0);
+    const recentClients = clients.filter((c: typeof clients[0]) => new Date(c.created_at) >= thirtyDaysAgo).length;
+    const totalRevenue = clients.reduce((sum: number, c: typeof clients[0]) => sum + ((c as any).total_revenue || 0), 0);
 
     return [
       { label: 'Total de Clientes', value: clients.length, icon: Users, color: 'blue' },
@@ -125,7 +125,7 @@ export default function Clients() {
     );
   }
 
-  const filteredClients = clients.filter(client => {
+  const filteredClients = clients.filter((client: typeof clients[0]) => {
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch =
       client.first_name?.toLowerCase().includes(searchLower) ||
@@ -293,7 +293,7 @@ export default function Clients() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedClients.map((client) => (
+                {paginatedClients.map((client: typeof paginatedClients[0]) => (
                   <TableRow key={client.id} className="group">
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -349,7 +349,7 @@ export default function Clients() {
           />
         ) : (
           <div className="space-y-3">
-            {paginatedClients.map((client) => (
+            {paginatedClients.map((client: typeof paginatedClients[0]) => (
               <Card key={client.id}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">

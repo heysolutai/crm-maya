@@ -46,18 +46,24 @@ async function processFollowUps() {
       let instance: { id: string; apiUrl: string; instanceApiKey: string } | null = null
 
       if (job.whatsappInstanceId) {
-        instance = await prisma.whatsappInstance.findFirst({
+        const foundInstance = await prisma.whatsappInstance.findFirst({
           where: { id: job.whatsappInstanceId, isActive: true },
           select: { id: true, apiUrl: true, instanceApiKey: true },
         })
+        if (foundInstance?.apiUrl && foundInstance?.instanceApiKey) {
+          instance = { id: foundInstance.id, apiUrl: foundInstance.apiUrl, instanceApiKey: foundInstance.instanceApiKey }
+        }
       }
 
       // Fallback: find any active instance for this company
       if (!instance) {
-        instance = await prisma.whatsappInstance.findFirst({
+        const foundInstance = await prisma.whatsappInstance.findFirst({
           where: { companyId: job.companyId, isActive: true },
           select: { id: true, apiUrl: true, instanceApiKey: true },
         })
+        if (foundInstance?.apiUrl && foundInstance?.instanceApiKey) {
+          instance = { id: foundInstance.id, apiUrl: foundInstance.apiUrl, instanceApiKey: foundInstance.instanceApiKey }
+        }
       }
 
       if (!instance) {
@@ -71,6 +77,16 @@ async function processFollowUps() {
       }
 
       // Get client phone
+      if (!job.clientId) {
+        console.warn(`[Cron Follow-ups] No clientId for job ${job.id}`)
+        await prisma.followUpJob.update({
+          where: { id: job.id },
+          data: { status: 'failed', errorMessage: 'Job has no client ID' },
+        })
+        errors++
+        continue
+      }
+
       const client = await prisma.client.findFirst({
         where: { id: job.clientId },
         select: { phone: true },

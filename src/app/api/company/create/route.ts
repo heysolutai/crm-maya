@@ -1,8 +1,16 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
+
+const createCompanySchema = z.object({
+  companyName: z.string().min(1, 'Company name is required'),
+  ownerEmail: z.string().email('Invalid email format'),
+  ownerFullName: z.string().optional(),
+  ownerPassword: z.string().min(8, 'Password must be at least 8 characters').optional(),
+});
 
 export async function OPTIONS(req: NextRequest) {
   return handleCors(req) || jsonResponse(null);
@@ -24,15 +32,14 @@ export async function POST(req: NextRequest) {
       return errorResponse('Only super admins can create companies', 403);
     }
 
-    const { companyName, ownerEmail, ownerFullName, ownerPassword } = await req.json();
+    const body = await req.json();
+    const validation = createCompanySchema.safeParse(body);
 
-    if (!companyName || !ownerEmail) {
-      return badRequestResponse('Company name and owner email are required');
+    if (!validation.success) {
+      return badRequestResponse('Invalid request data: ' + JSON.stringify(validation.error.flatten().fieldErrors));
     }
 
-    if (ownerPassword && ownerPassword.length < 8) {
-      return badRequestResponse('Password must be at least 8 characters');
-    }
+    const { companyName, ownerEmail, ownerFullName, ownerPassword } = validation.data;
 
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({
@@ -94,11 +101,12 @@ export async function POST(req: NextRequest) {
       await prisma.userRole.create({
         data: { userId: ownerId, role: 'company_admin', companyId },
       });
-    } catch (createCompanyError: any) {
+    } catch (createCompanyError) {
+      console.error('Erro ao criar empresa:', createCompanyError);
       if (isNewUser) {
         await prisma.user.delete({ where: { id: ownerId } });
       }
-      return errorResponse('Failed to create company', 500, createCompanyError.message);
+      return errorResponse('Erro interno do servidor', 500);
     }
 
     // Skip link generation (was supabase.auth.admin.generateLink)
@@ -119,8 +127,8 @@ export async function POST(req: NextRequest) {
           : 'Empresa criada com sucesso. Usuário existente associado.',
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Unexpected error:', error);
-    return errorResponse('Internal server error', 500, error.message);
+    return errorResponse('Erro interno do servidor', 500);
   }
 }

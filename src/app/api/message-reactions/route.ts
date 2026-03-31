@@ -29,7 +29,8 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json(map)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

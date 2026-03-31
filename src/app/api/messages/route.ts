@@ -24,20 +24,27 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json(messages)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId } = await authenticate(req)
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
+    const existing = await prisma.message.findFirst({
+      where: { id, conversation: { companyId: companyId! } },
+    })
+    if (!existing) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+
     await prisma.message.delete({ where: { id } })
     return NextResponse.json({ success: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

@@ -18,16 +18,18 @@ export async function POST(req: NextRequest) {
     });
     if (!conversation) return jsonResponse({ success: false, error: 'Conversation not found' }, 404);
 
+    if (!conversation.clientId) return jsonResponse({ success: false, error: 'Client not found for conversation' }, 404);
+
     const client = await prisma.client.findUnique({
       where: { id: conversation.clientId },
       select: { phone: true },
     });
     if (!client?.phone) return jsonResponse({ success: false, error: 'Client phone not found' }, 404);
 
-    const cleanPhone = client.phone.replace(/[^0-9]/g, '');
+    const cleanPhone = (client.phone ?? '').replace(/[^0-9]/g, '');
 
     const instance = await prisma.whatsappInstance.findFirst({
-      where: { companyId: conversation.companyId, isActive: true },
+      where: { companyId: conversation.companyId || '', isActive: true },
       select: { apiUrl: true, instanceApiKey: true },
     });
 
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest) {
 
     const presenceResponse = await fetch(`${instance.apiUrl}/message/presence`, {
       method: 'POST',
-      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'token': instance.instanceApiKey },
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'token': instance.instanceApiKey || '' },
       body: JSON.stringify({ number: cleanPhone, presence, delay }),
     });
 
@@ -47,6 +49,6 @@ export async function POST(req: NextRequest) {
     return jsonResponse({ success: true });
   } catch (error) {
     console.error('[whatsapp-presence] Error:', error);
-    return jsonResponse({ success: false, error: error instanceof Error ? error.message : 'Internal server error' }, 500);
+    return jsonResponse({ success: false, error: 'Erro interno do servidor' }, 500);
   }
 }

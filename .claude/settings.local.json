@@ -1,0 +1,44 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/andreferrari/development/vetriohub/.planning -type f \\\\\\(-name *.md -o -name *.txt \\\\\\))",
+      "Bash(grep -E \"\\\\.\\(json|js|ts\\)$\")",
+      "Bash(ls -la /Users/andreferrari/development/vetriohub/app/\\\\\\(tenant\\\\\\)/consignacoes/)",
+      "Bash(ls -la /Users/andreferrari/development/vetriohub/app/\\\\\\(tenant\\\\\\))",
+      "Bash(find /Users/andreferrari/development/vetriohub/docs -type f -name *.md)",
+      "Bash(ls -la /Users/andreferrari/development/vetriohub/app/api/tenant/consignments/[id\\\\\\)/)",
+      "Bash(find /Users/andreferrari/development/maya -maxdepth 2 -name *.md -o -name *rules* -o -name claude*)",
+      "Bash(find /Users/andreferrari/development/maya -name *jest* -o -name *playwright* -o -name __tests__ -o -name e2e)",
+      "Bash(find /Users/andreferrari/development/maya/src -name *.test.* -o -name *.spec.*)",
+      "Bash(git -C /Users/andreferrari/development/maya log --oneline)",
+      "Bash(find /Users/andreferrari/development/maya/src/app -type d -path \"*\\(dashboard\\)*\")",
+      "Bash(ls /Users/andreferrari/development/maya/src/app/\\\\\\(dashboard\\\\\\)/)",
+      "Bash(node -e \"const pg = require\\(''pg''\\); const pool = new pg.Pool\\({ connectionString: process.env.DATABASE_URL || ''postgresql://postgres:Dell2022nexlia@89.167.62.46:5435/crm-maya'' }\\); pool.query\\(''SELECT 1 as test''\\).then\\(r => { console.log\\(''Conexao OK:'', r.rows\\); pool.end\\(\\); }\\).catch\\(e => { console.error\\(''Erro:'', e.message\\); pool.end\\(\\); }\\);\")",
+      "Bash(npm install:*)",
+      "Bash(node -e \"const pg = require\\(''pg''\\); const pool = new pg.Pool\\({ connectionString: ''postgresql://postgres:Dell2022nexlia@89.167.62.46:5435/crm-maya'' }\\); pool.query\\(''SELECT 1 as test''\\).then\\(r => { console.log\\(''Conexao OK:'', r.rows\\); pool.end\\(\\); }\\).catch\\(e => { console.error\\(''Erro:'', e.message\\); pool.end\\(\\); }\\);\")",
+      "Bash(node -e \"const pg = require\\(''pg''\\); const pool = new pg.Pool\\({ connectionString: ''postgresql://postgres:Dell2022nexlia@89.167.62.46:5433/crm-maya'' }\\); pool.query\\(''SELECT 1 as test''\\).then\\(r => { console.log\\(''Conexao OK:'', r.rows\\); pool.end\\(\\); }\\).catch\\(e => { console.error\\(''Erro:'', e.message\\); pool.end\\(\\); }\\);\")",
+      "Bash(npm run:*)",
+      "Bash(npx prisma:*)",
+      "Bash(grep -c '\"\"zod\"\"' package.json)",
+      "Bash(/tmp/verify_whatsapp_fixes.sh:*)",
+      "Bash(chmod +x /tmp/verify_whatsapp_fixes.sh)",
+      "Bash(/tmp/verify_whatsapp_fixes.sh)",
+      "Bash(npx husky:*)",
+      "Bash(node -e \"const j = require\\(''jest-config''\\); console.log\\(Object.keys\\(j.Defaults\\).filter\\(k => k.toLowerCase\\(\\).includes\\(''setup''\\)\\)\\)\")",
+      "Bash(grep -n \"logAction\" src/app/api/clients/route.ts src/app/api/products/route.ts src/app/api/sales/route.ts src/app/api/conversations/route.ts src/app/api/appointments/[id]/route.ts)",
+      "Bash(node -e \"const c = require\\(''''/Users/andreferrari/development/maya/node_modules/jest-circus/build/index.js''''\\); console.log\\(''''ok''''\\)\")",
+      "Bash(grep -r \"setupFilesAfterFramework\\\\|setupFilesAfterEnv\" /Users/andreferrari/development/maya/node_modules/jest-config/build/*.js)",
+      "Bash(ls -la /Users/andreferrari/development/flow/app/\\\\\\(tenant\\\\\\)/influencers/)",
+      "Bash(node -e \"const t = require\\(''''/Users/andreferrari/development/maya/node_modules/jest/build/jest.js''''\\); \")",
+      "Bash(ls -la /Users/andreferrari/development/flow/app/api/tenant/automations/[id]/)",
+      "Bash(ls -la /Users/andreferrari/development/flow/app/api/tenant/automations/[id]/activate/)",
+      "Bash(ls -la /Users/andreferrari/development/flow/app/api/tenant/forms/[id\\\\\\)/)",
+      "Bash(npm test:*)",
+      "Bash(ls -la /Users/andreferrari/development/flow/app/\\\\\\(tenant\\\\\\)/)",
+      "Bash(ls -la /Users/andreferrari/development/flow/app/\\\\\\(tenant\\\\\\)/automations/)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
+    ]
+  }
+}

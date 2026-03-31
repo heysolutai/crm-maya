@@ -60,6 +60,16 @@ async function processReminders() {
       }
 
       // Get client phone number
+      if (!reminder.clientId) {
+        console.warn(`[Cron Reminders] No clientId for reminder ${reminder.id}`)
+        await prisma.reminder.update({
+          where: { id: reminder.id },
+          data: { status: 'failed', errorMessage: 'Reminder has no client ID' },
+        })
+        errors++
+        continue
+      }
+
       const client = await prisma.client.findFirst({
         where: { id: reminder.clientId },
         select: { phone: true },
@@ -81,7 +91,7 @@ async function processReminders() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'token': instance.instanceApiKey,
+          'token': instance.instanceApiKey || '',
         },
         body: JSON.stringify({
           number: cleanPhone,

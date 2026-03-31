@@ -1,6 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+import { logAction } from '@/lib/services/audit'
+import { z } from 'zod'
+
+const createConversationSchema = z.object({
+  companyId: z.string().uuid().optional(),
+  company_id: z.string().uuid().optional(),
+  phone: z.string().min(1),
+  channel: z.string().optional(),
+})
+
+const conversationStatusEnum = z.enum(['active', 'waiting', 'closed', 'transferred'])
+
+const updateConversationSchema = z.object({
+  id: z.string().uuid(),
+  status: conversationStatusEnum.optional(),
+  transferredTo: z.string().uuid().optional().nullable(),
+  summary: z.string().optional().nullable(),
+  tags: z.array(z.string()).optional(),
+  stage: z.string().optional().nullable(),
+  departmentId: z.string().uuid().optional().nullable(),
+  aiHandled: z.boolean().optional(),
+})
 
 export async function GET(req: NextRequest) {
   try {
@@ -44,19 +66,30 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json(conversations)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro ao buscar conversas:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { companyId: authCompanyId } = await authenticate(req)
+    const { companyId: authCompanyId, agentId } = await authenticate(req)
     const body = await req.json()
-    const companyId = body.companyId || body.company_id || authCompanyId
+
+    const validation = createConversationSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const data = validation.data
+    const companyId = data.companyId || data.company_id || authCompanyId
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
-    const cleanPhone = (body.phone || '').replace(/[^0-9]/g, '')
+    const cleanPhone = (data.phone || '').replace(/[^0-9]/g, '')
     if (cleanPhone.length < 10) {
       return NextResponse.json({ error: 'Número de telefone inválido' }, { status: 400 })
     }
@@ -107,31 +140,62 @@ export async function POST(req: NextRequest) {
         clientId: client.id,
         companyId,
         status: 'active',
-        channel: body.channel || 'whatsapp',
+        channel: (data.channel || 'whatsapp') as any,
         startedAt: new Date(),
       },
       select: { id: true },
     })
 
-    return NextResponse.json({ id: conversation.id, existing: false })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    await logAction({
+      companyId,
+      userId: agentId,
+      action: 'CREATE',
+      entity: 'conversation',
+      entityId: conversation.id,
+    })
+
+    return NextResponse.json({ id: conversation.id, existing: false }, { status: 201 })
+  } catch (error) {
+    console.error('Erro ao criar conversa:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId, agentId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const body = await req.json()
-    const { id, ...updates } = body
-    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+    const validation = updateConversationSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const { id, ...updates } = validation.data
+
+    const existing = await prisma.conversation.findFirst({ where: { id, companyId } })
+    if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
 
     const conversation = await prisma.conversation.update({
       where: { id },
       data: updates,
     })
+
+    await logAction({
+      companyId,
+      userId: agentId,
+      action: 'UPDATE',
+      entity: 'conversation',
+      entityId: conversation.id,
+    })
+
     return NextResponse.json(conversation)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro ao atualizar conversa:', error)
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

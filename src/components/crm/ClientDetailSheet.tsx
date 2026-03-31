@@ -57,7 +57,7 @@ export function ClientDetailSheet({ clientId, isOpen, onClose }: ClientDetailShe
 
   useEffect(() => {
     if (clientId) {
-      const foundClient = clients.find(c => c.id === clientId);
+      const foundClient = clients.find((c: Client) => c.id === clientId);
       setClient(foundClient || null);
     }
   }, [clientId, clients]);

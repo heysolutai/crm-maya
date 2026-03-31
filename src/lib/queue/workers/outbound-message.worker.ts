@@ -36,7 +36,7 @@ async function processOutboundMessage(job: Job<OutboundMessageJob>) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'token': instance.instanceApiKey,
+      'token': instance.instanceApiKey || '',
     },
     body: JSON.stringify(body),
   })
@@ -107,7 +107,7 @@ async function processOutboundMedia(job: Job<OutboundMediaJob>) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'token': instance.instanceApiKey,
+      'token': instance.instanceApiKey || '',
     },
     body: JSON.stringify(body),
   })

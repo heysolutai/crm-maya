@@ -64,13 +64,13 @@ export default function Products() {
   });
 
   const stats = useMemo((): StatItem[] => {
-    const active = products.filter(p => p.is_active).length;
-    const services = products.filter(p => p.is_service).length;
+    const active = products.filter((p: typeof products[0]) => p.is_active).length;
+    const services = products.filter((p: typeof products[0]) => p.is_service).length;
     const avgMargin = products.length > 0
-      ? products.reduce((sum, p) => {
+      ? products.reduce((sum: number, p: typeof products[0]) => {
           if (!p.cost || !p.price) return sum;
           return sum + ((p.price - p.cost) / p.price) * 100;
-        }, 0) / products.filter(p => p.cost && p.price).length || 0
+        }, 0) / products.filter((p: typeof products[0]) => p.cost && p.price).length || 0
       : 0;
 
     return [
@@ -81,7 +81,7 @@ export default function Products() {
     ];
   }, [products]);
 
-  const filteredProducts = products.filter(product => {
+  const filteredProducts = products.filter((product: typeof products[0]) => {
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch =
       product.name?.toLowerCase().includes(searchLower) ||
@@ -282,7 +282,7 @@ export default function Products() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedProducts.map((product) => {
+                {paginatedProducts.map((product: typeof paginatedProducts[0]) => {
                   const margin = product.cost ? ((product.price - product.cost) / product.price) * 100 : null;
                   return (
                     <TableRow key={product.id} className="group">
@@ -353,7 +353,7 @@ export default function Products() {
           />
         ) : (
           <div className="space-y-3">
-            {paginatedProducts.map((product) => (
+            {paginatedProducts.map((product: typeof paginatedProducts[0]) => (
               <Card key={product.id}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">

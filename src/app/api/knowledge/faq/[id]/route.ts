@@ -39,8 +39,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     });
     if (!data) return apiError('Pergunta frequente não encontrada.', 'FAQ_NOT_FOUND', 404);
     return apiSuccess(data);
-  } catch (error: any) {
-    return errorResponse(error.message);
+  } catch (error) {
+    console.error('Erro:', error);
+    return errorResponse('Erro interno do servidor');
   }
 }
 
@@ -74,8 +75,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data: updateData,
     });
     return apiSuccess(data);
-  } catch (error: any) {
-    return errorResponse(error.message);
+  } catch (error) {
+    console.error('Erro:', error);
+    return errorResponse('Erro interno do servidor');
   }
 }
 
@@ -95,7 +97,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     await prisma.companyFaq.delete({ where: { id } });
     return apiSuccess({ message: 'Pergunta frequente excluída com sucesso.' });
-  } catch (error: any) {
-    return errorResponse(error.message);
+  } catch (error) {
+    console.error('Erro:', error);
+    return errorResponse('Erro interno do servidor');
   }
 }

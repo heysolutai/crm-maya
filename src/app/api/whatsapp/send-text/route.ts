@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { authenticate } from '@/lib/api/auth';
 import { getWhatsAppInstance, findOrCreateConversation, saveMessage, getUAZMessageId, getClientPhoneByConversationId } from '@/lib/api/database';
 import { sendToWhatsApp } from '@/lib/api/whatsapp';
@@ -8,6 +9,27 @@ import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 const apiError = (message: string, errorCode: string, status: number, extra?: Record<string, unknown>) =>
   jsonResponse({ success: false, error: errorCode, message, ...extra }, status);
 
+const sendTextSchema = z.object({
+  conversationId: z.string().uuid().optional(),
+  message: z.string().min(1, 'Message is required'),
+  phone: z.string().optional(),
+  fromAI: z.boolean().optional(),
+  replyToMessageId: z.string().uuid().optional(),
+  replyid: z.string().optional(),
+  linkPreview: z.boolean().optional(),
+  linkPreviewTitle: z.string().optional(),
+  linkPreviewDescription: z.string().optional(),
+  linkPreviewImage: z.string().optional(),
+  linkPreviewLarge: z.boolean().optional(),
+  mentions: z.any().optional(),
+  readchat: z.boolean().optional(),
+  readmessages: z.boolean().optional(),
+  delay: z.number().optional(),
+  forward: z.boolean().optional(),
+  track_source: z.string().optional(),
+  track_id: z.string().optional(),
+});
+
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
 export async function POST(req: NextRequest) {
@@ -15,13 +37,21 @@ export async function POST(req: NextRequest) {
     const t0 = Date.now();
     console.log('[send-message-text] Processing request...');
 
-    const payload = await req.json();
+    const body = await req.json();
+    const validation = sendTextSchema.safeParse(body);
+
+    if (!validation.success) {
+      return apiError('Dados inválidos', 'INVALID_PAYLOAD', 400, { details: validation.error.flatten().fieldErrors });
+    }
+
+    const payload = validation.data;
 
     // Fetch phone from conversation if not provided
     let phone = payload.phone;
     if (!phone && payload.conversationId) {
-      phone = await getClientPhoneByConversationId(payload.conversationId);
-      if (!phone) return apiError('Não foi possível encontrar o telefone do cliente para esta conversa.', 'CLIENT_PHONE_NOT_FOUND', 404);
+      const fetchedPhone = await getClientPhoneByConversationId(payload.conversationId);
+      if (!fetchedPhone) return apiError('Não foi possível encontrar o telefone do cliente para esta conversa.', 'CLIENT_PHONE_NOT_FOUND', 404);
+      phone = fetchedPhone;
       payload.phone = phone;
     }
 
@@ -37,11 +67,13 @@ export async function POST(req: NextRequest) {
     const [authResult, replyid] = await Promise.all([authPromise, replyPromise]);
     const { agentId, companyId } = authResult;
 
+    if (!companyId) return apiError('Empresa não identificada.', 'COMPANY_NOT_FOUND', 400);
+
     console.log('[send-message-text] Auth done:', Date.now() - t0, 'ms');
 
     // Parallel: instance + conversation
     const instancePromise = getWhatsAppInstance(companyId).catch(() => null);
-    const conversationPromise = payload.conversationId ? Promise.resolve(payload.conversationId) : findOrCreateConversation(payload.phone, companyId);
+    const conversationPromise = payload.conversationId ? Promise.resolve(payload.conversationId) : findOrCreateConversation(payload.phone || '', companyId);
     const [instance, conversationId] = await Promise.all([instancePromise, conversationPromise]);
 
     if (!instance) return apiError('WhatsApp não configurado ou desconectado.', 'WHATSAPP_NOT_CONNECTED', 503);
@@ -80,11 +112,6 @@ export async function POST(req: NextRequest) {
     return jsonResponse({ success: true, message_id: message.id, conversation_id: conversationId, sender_type: payload.fromAI ? 'ai' : 'agent' });
   } catch (error) {
     console.error('[send-message-text] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erro interno';
-    let message = 'Erro interno do servidor ao enviar mensagem.';
-    let errorCode = 'INTERNAL_ERROR';
-    if (errorMessage.includes('not authenticated') || errorMessage.includes('401')) { message = 'Sessão expirada. Faça login novamente.'; errorCode = 'UNAUTHENTICATED'; }
-    else if (errorMessage.includes('WhatsApp') || errorMessage.includes('instance')) { message = 'WhatsApp não configurado ou desconectado.'; errorCode = 'WHATSAPP_ERROR'; }
-    return apiError(message, errorCode, 500);
+    return apiError('Erro interno do servidor ao enviar mensagem.', 'INTERNAL_ERROR', 500);
   }
 }

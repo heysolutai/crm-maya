@@ -1,7 +1,13 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
+
+const updateSettingsSchema = z.object({
+  company_id: z.string().uuid('Invalid company_id format').optional(),
+  settings: z.record(z.string(), z.any()).refine(obj => Object.keys(obj).length > 0, { message: 'Settings object cannot be empty' }),
+});
 
 export async function OPTIONS(req: NextRequest) {
   return handleCors(req) || jsonResponse(null);
@@ -21,8 +27,9 @@ export async function GET(req: NextRequest) {
     }
 
     return jsonResponse({ success: true, settings: company.settings });
-  } catch (error: any) {
-    return errorResponse(error.message);
+  } catch (error) {
+    console.error('Erro:', error);
+    return errorResponse('Erro interno do servidor');
   }
 }
 
@@ -30,11 +37,14 @@ export async function PUT(req: NextRequest) {
   try {
     const { agentId, companyId: authCompanyId } = await authenticate(req);
 
-    const { company_id, settings } = await req.json();
+    const body = await req.json();
+    const validation = updateSettingsSchema.safeParse(body);
 
-    if (!settings) {
-      return badRequestResponse('settings is required');
+    if (!validation.success) {
+      return badRequestResponse('Invalid request data: ' + JSON.stringify(validation.error.flatten().fieldErrors));
     }
+
+    const { company_id, settings } = validation.data;
 
     // Determine target company: use company_id from body if super_admin, otherwise use auth company
     let targetCompanyId = authCompanyId;
@@ -69,8 +79,8 @@ export async function PUT(req: NextRequest) {
     });
 
     return jsonResponse({ success: true, settings: updated.settings });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[company/settings] Error:', error);
-    return errorResponse(error.message);
+    return errorResponse('Erro interno do servidor');
   }
 }

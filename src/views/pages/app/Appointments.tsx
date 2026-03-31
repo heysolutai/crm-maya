@@ -177,7 +177,7 @@ export default function Appointments() {
     setSelectedDate(undefined);
   };
 
-  const handleEdit = (appointment: any) => {
+  const handleEdit = (appointment: typeof appointments[0]) => {
     setEditingAppointment(appointment);
     const appointmentDate = appointment.scheduled_for ? new Date(appointment.scheduled_for) : undefined;
     setSelectedDate(appointmentDate);
@@ -198,7 +198,7 @@ export default function Appointments() {
   const [deleteFromGoogle, setDeleteFromGoogle] = useState(true);
 
   const handleDeleteClick = (id: string) => {
-    const appointment = appointments.find(a => a.id === id);
+    const appointment = appointments.find((a: typeof appointments[0]) => a.id === id);
     const hasGoogleEvent = !!appointment?.google_event_id;
     setDeleteFromGoogle(hasGoogleEvent);
     setDeleteConfirm({ open: true, id, hasGoogleEvent });
@@ -554,7 +554,7 @@ export default function Appointments() {
                   <TableCell colSpan={8} className="text-center py-8">Nenhum agendamento encontrado</TableCell>
                 </TableRow>
               ) : (
-                paginatedAppointments.map((appointment: any) => (
+                paginatedAppointments.map((appointment: typeof filteredAppointments[0]) => (
                     <TableRow key={appointment.id}>
                       <TableCell className="font-medium">{appointment.title}</TableCell>
                       <TableCell>{getClientName(appointment)}</TableCell>

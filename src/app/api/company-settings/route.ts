@@ -16,8 +16,9 @@ export async function GET(req: NextRequest) {
     if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 })
 
     return NextResponse.json(company.settings || {})
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
 
@@ -55,7 +56,8 @@ export async function PATCH(req: NextRequest) {
     })
 
     return NextResponse.json({ success: true, settings: newSettings })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (error) {
+    console.error('Erro:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

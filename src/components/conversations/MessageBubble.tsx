@@ -111,7 +111,7 @@ export const MessageBubble = memo(function MessageBubble({
           >
             {/* Preview da mensagem citada */}
             {msg.quoted_message_id && quotedMessage && (
-              <QuotedMessagePreview 
+              <QuotedMessagePreview
                 quotedMessage={quotedMessage}
                 isClient={isClient}
                 client={client}
@@ -122,12 +122,12 @@ export const MessageBubble = memo(function MessageBubble({
             {/* Conteúdo da mensagem */}
             {msg.message_type === 'image' && msg.media_url ? (
               <div className="space-y-2">
-                <SecureImage 
-                  src={msg.media_url} 
+                <SecureImage
+                  src={msg.media_url || ''}
                   alt="Imagem enviada"
                   className="max-w-sm max-h-96 w-auto h-auto rounded-lg object-contain cursor-pointer hover:opacity-90 transition-opacity"
                   loading="lazy"
-                  onClick={() => onSetSelectedImage(msg.media_url!)}
+                  onClick={() => onSetSelectedImage(msg.media_url || '')}
                 />
                 {msg.message_text && msg.message_text !== '[Media]' && (
                   <p className="text-sm">{msg.message_text}</p>
@@ -175,10 +175,10 @@ export const MessageBubble = memo(function MessageBubble({
               </div>
             ) : msg.message_type === 'video' && msg.media_url ? (
               <div className="space-y-2">
-                <SecureVideo 
-                  src={msg.media_url}
+                <SecureVideo
+                  src={msg.media_url || ''}
                   className="max-w-sm max-h-96 w-auto h-auto rounded-lg cursor-pointer"
-                  onClick={() => onSetSelectedImage(msg.media_url!)}
+                  onClick={() => onSetSelectedImage(msg.media_url || '')}
                 />
                 {msg.message_text && msg.message_text !== '[Media]' && (
                   <p className="text-sm">{msg.message_text}</p>
@@ -236,7 +236,7 @@ export const MessageBubble = memo(function MessageBubble({
               <span className={`text-[11px] ${
                 isClient ? 'text-muted-foreground' : 'text-white/70'
               }`}>
-                {formatMessageTime(msg.created_at)}
+                {formatMessageTime(msg.created_at || new Date().toISOString())}
               </span>
               
               {/* Checkmarks só para mensagens enviadas */}
@@ -250,7 +250,7 @@ export const MessageBubble = memo(function MessageBubble({
           {/* Menu de ações (aparece no hover) */}
           <MessageActions
             messageId={msg.id}
-            messageText={msg.message_text}
+            messageText={msg.message_text || ''}
             onReply={() => onReply(msg)}
             onDelete={() => onDelete(msg.id)}
             onReact={(emoji) => onReact(msg.id, emoji)}

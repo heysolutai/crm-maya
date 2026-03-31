@@ -7,7 +7,8 @@ export async function GET() {
   try {
     const userCount = await prisma.user.count()
     return NextResponse.json({ needsSetup: userCount === 0 })
-  } catch (error: any) {
+  } catch (error) {
+    console.error('Erro:', error);
     // If database is not ready, needs setup
     return NextResponse.json({ needsSetup: true, dbError: true })
   }
@@ -117,8 +118,8 @@ export async function POST(request: NextRequest) {
       user: { id: user.id, email: user.email, fullName: user.fullName },
       company: company ? { id: company.id, name: company.name } : null,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Setup] Error:', error)
-    return NextResponse.json({ error: error.message || 'Erro ao configurar o sistema' }, { status: 500 })
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }
