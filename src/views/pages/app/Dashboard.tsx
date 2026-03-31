@@ -306,7 +306,7 @@ export default function CompanyDashboard() {
           value={newClients}
           subtitle={periodLabel}
           icon={UserPlus}
-          iconColor="text-blue-500"
+          iconColor="text-mileto-green"
           trend={newClientsTrend}
           isLoading={isLoading}
         />
@@ -315,7 +315,7 @@ export default function CompanyDashboard() {
           value={activeConversations}
           subtitle={`${totalConversations} no período · ${aiPercentage.toFixed(0)}% IA`}
           icon={MessageSquare}
-          iconColor="text-amber-500"
+          iconColor="text-mileto-cyan"
           isLoading={isLoading}
         />
         <KpiCard
@@ -323,7 +323,7 @@ export default function CompanyDashboard() {
           value={todayAppointments}
           subtitle="para hoje"
           icon={CalendarCheck}
-          iconColor="text-violet-500"
+          iconColor="text-mileto-blue"
           isLoading={isLoading}
         />
         <KpiCard
@@ -331,7 +331,7 @@ export default function CompanyDashboard() {
           value={formatResponseTime(avgResponseTime)}
           subtitle="tempo médio hoje"
           icon={Clock}
-          iconColor="text-orange-500"
+          iconColor="text-mileto-cyan"
           invertTrend
           isLoading={isLoading}
         />
@@ -340,7 +340,7 @@ export default function CompanyDashboard() {
           value={formatCurrency(revenue)}
           subtitle={periodLabel}
           icon={DollarSign}
-          iconColor="text-emerald-500"
+          iconColor="text-mileto-green"
           trend={revenueTrend}
           isLoading={isLoading}
         />
@@ -447,8 +447,8 @@ export default function CompanyDashboard() {
             <AreaChart data={dailyRevenue} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(150, 60%, 45%)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="hsl(150, 60%, 45%)" stopOpacity={0} />
+                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={AXIS_LINE.stroke} />
@@ -462,10 +462,10 @@ export default function CompanyDashboard() {
               <Area
                 type="monotone"
                 dataKey="receita"
-                stroke="hsl(150, 60%, 45%)"
+                stroke="hsl(var(--primary))"
                 strokeWidth={2}
                 fill="url(#revenueGrad)"
-                dot={{ r: 3, fill: 'hsl(150, 60%, 45%)' }}
+                dot={{ r: 3, fill: 'hsl(var(--primary))' }}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -532,17 +532,17 @@ export default function CompanyDashboard() {
                 type="monotone"
                 dataKey="conversao"
                 name="Conversão"
-                stroke="hsl(150, 60%, 45%)"
+                stroke="hsl(var(--primary))"
                 strokeWidth={2}
-                dot={{ r: 3, fill: 'hsl(150, 60%, 45%)' }}
+                dot={{ r: 3, fill: 'hsl(var(--primary))' }}
               />
               <Line
                 type="monotone"
                 dataKey="noShow"
                 name="No-Show"
-                stroke="hsl(0, 70%, 55%)"
+                stroke="hsl(var(--destructive))"
                 strokeWidth={2}
-                dot={{ r: 3, fill: 'hsl(0, 70%, 55%)' }}
+                dot={{ r: 3, fill: 'hsl(var(--destructive))' }}
               />
             </LineChart>
           </ResponsiveContainer>

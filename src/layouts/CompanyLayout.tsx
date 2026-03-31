@@ -259,7 +259,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
             : 'w-64'
         )}>
           {/* ── Company Header ── */}
-          <div className="px-3 pt-[env(safe-area-inset-top)]">
+          <div className="px-3 pt-[env(safe-area-inset-top)] border-b border-sidebar-border">
             <div className="flex items-center gap-3 px-1 py-4">
               <div className="relative shrink-0">
                 {branding.logoUrl ? (
@@ -270,7 +270,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                 {/* WhatsApp status dot on logo */}
                 <span className={cn(
                   'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-sidebar',
-                  whatsAppStatus === 'connected' ? 'bg-emerald-500' :
+                  whatsAppStatus === 'connected' ? 'bg-mileto-green' :
                   whatsAppStatus === 'connecting' ? 'bg-amber-500 animate-pulse' :
                   'bg-gray-400'
                 )} />
@@ -450,7 +450,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                     <div className="flex items-center gap-1.5">
                       <span className={cn(
                         'h-1.5 w-1.5 rounded-full',
-                        whatsAppStatus === 'connected' ? 'bg-emerald-500' :
+                        whatsAppStatus === 'connected' ? 'bg-mileto-green' :
                         whatsAppStatus === 'connecting' ? 'bg-amber-500' :
                         'bg-red-500'
                       )} />

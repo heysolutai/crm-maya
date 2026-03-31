@@ -134,7 +134,7 @@ export default function AuthPage() {
           {/* Form Header */}
           <div className="text-center lg:text-left">
             <h2 className="text-3xl font-bold text-foreground">
-              {isLogin ? 'Bem-vindo de volta!' : 'Crie sua conta'}
+              {isLogin ? 'Bem-vindo!' : 'Crie sua conta'}
             </h2>
             <p className="mt-2 text-muted-foreground">
               {isLogin
