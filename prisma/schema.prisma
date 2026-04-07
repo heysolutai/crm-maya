@@ -112,6 +112,7 @@ model Company {
   reminders              Reminder[]
   followUpJobs           FollowUpJob[]
   whatsappInstances      WhatsappInstance[]
+  doctorSchedules        DoctorSchedule[]
   googleCalendarConn     GoogleCalendarConnection?
   aiConfigurations       AiConfiguration[]
   aiTokenUsage           AiTokenUsage[]
@@ -181,6 +182,7 @@ model User {
   supportTicketsCreated  SupportTicket[]     @relation("TicketCreator")
   supportTicketsResolved SupportTicket[]     @relation("TicketResolver")
   departmentMemberships  DepartmentMember[]
+  doctorSchedules        DoctorSchedule[]
 
   @@index([companyId], map: "idx_users_company")
   @@index([email], map: "idx_users_email")
@@ -543,10 +545,33 @@ model Sale {
 
 // ─── Appointments & Scheduling ──────────────────────
 
+model DoctorSchedule {
+  id                    String   @id @default(uuid()) @db.Uuid
+  companyId             String   @map("company_id") @db.Uuid
+  userId                String   @map("user_id") @db.Uuid
+  name                  String
+  color                 String   @default("#6366f1")
+  businessHours         Json     @default("{}") @map("business_hours")
+  appointmentSettings   Json     @default("{}") @map("appointment_settings")
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@unique([companyId, userId], map: "uq_doctor_schedule_company_user")
+  @@index([companyId], map: "idx_doctor_schedules_company")
+  @@index([userId], map: "idx_doctor_schedules_user")
+  @@map("doctor_schedules")
+}
+
 model Appointment {
   id                 String            @id @default(uuid()) @db.Uuid
   companyId          String            @map("company_id") @db.Uuid
   clientId           String?           @map("client_id") @db.Uuid
+  scheduleId         String?           @map("schedule_id") @db.Uuid
   title              String?
   description        String?
   scheduledFor       DateTime          @map("scheduled_for")
@@ -568,15 +593,17 @@ model Appointment {
   createdBy          String?           @map("created_by") @db.Uuid
   updatedAt          DateTime          @default(now()) @updatedAt @map("updated_at")
 
-  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  client      Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  assignee    User?   @relation("AppointmentAssignedTo", fields: [assignedTo], references: [id], onDelete: SetNull)
-  canceller   User?   @relation("AppointmentCancelledBy", fields: [cancelledBy], references: [id], onDelete: SetNull)
-  creator     User?   @relation("AppointmentCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client      Client?         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  schedule    DoctorSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  assignee    User?           @relation("AppointmentAssignedTo", fields: [assignedTo], references: [id], onDelete: SetNull)
+  canceller   User?           @relation("AppointmentCancelledBy", fields: [cancelledBy], references: [id], onDelete: SetNull)
+  creator     User?           @relation("AppointmentCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
   reminders   Reminder[]
 
   @@index([companyId], map: "idx_appointments_company")
   @@index([clientId], map: "idx_appointments_client")
+  @@index([scheduleId], map: "idx_appointments_schedule")
   @@index([assignedTo], map: "idx_appointments_assigned")
   @@index([scheduledFor], map: "idx_appointments_scheduled")
   @@index([status], map: "idx_appointments_status")

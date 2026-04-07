@@ -36,7 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Calendar as CalendarIcon, Pencil, Trash2, CheckCircle, List, ArrowLeft, MessageCircle, Search, ChevronLeft, ChevronRight, UserCog } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Pencil, Trash2, CheckCircle, List, ArrowLeft, MessageCircle, Search, ChevronLeft, ChevronRight, UserCog, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
@@ -44,6 +44,8 @@ import { ptBR } from 'date-fns/locale';
 import { ClientCombobox } from '@/components/appointments/ClientCombobox';
 import { AppointmentCalendar } from '@/components/appointments/AppointmentCalendar';
 import { AvailableSlotsPicker } from '@/components/appointments/AvailableSlotsPicker';
+import { MultiScheduleCalendar } from '@/components/appointments/MultiScheduleCalendar';
+import { useSchedules } from '@/hooks/useSchedules';
 
 const PAGE_SIZE = 25;
 
@@ -67,12 +69,14 @@ export default function Appointments() {
   const { appointments, loading, createAppointment, updateAppointment, deleteAppointment } = useAppointments();
   const { clients } = useClients();
   const { teamMembers } = useTeam();
+  const { schedules } = useSchedules();
   const { effectiveCompanyId } = useEffectiveCompanyId();
   const router = useRouter();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('calendar');
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState('');
   const [listPage, setListPage] = useState(1);
@@ -83,13 +87,23 @@ export default function Appointments() {
     description: '',
     client_id: '',
     assigned_to: '',
+    schedule_id: '',
     scheduled_for: '',
     duration_minutes: 60,
     location: '',
     notes: '',
   });
 
-  const filteredAppointments = appointments.filter((a: any) => {
+  const scheduleFilteredAppointments = appointments.filter((a: any) => {
+    if (selectedScheduleId === 'all') return true;
+    // Match by scheduleId or assignedTo matching the schedule's user
+    if (a.schedule_id === selectedScheduleId || a.scheduleId === selectedScheduleId) return true;
+    const schedule = schedules.find(s => s.id === selectedScheduleId);
+    if (schedule && (a.assigned_to === schedule.userId || a.assignedTo === schedule.userId)) return true;
+    return false;
+  });
+
+  const filteredAppointments = scheduleFilteredAppointments.filter((a: any) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return a.title?.toLowerCase().includes(q) || getClientName(a).toLowerCase().includes(q);
@@ -134,11 +148,12 @@ export default function Appointments() {
           return;
         }
       } else {
-        const { assigned_to, ...restFormData } = formData;
+        const { assigned_to, schedule_id, ...restFormData } = formData;
         const { data, error } = await invokeFn('create-appointment', {
             company_id: effectiveCompanyId,
             ...restFormData,
             ...(assigned_to ? { assigned_to } : {}),
+            ...(schedule_id ? { schedule_id } : {}),
             scheduled_for: scheduledDate.toISOString(),
           });
 
@@ -172,7 +187,7 @@ export default function Appointments() {
   };
 
   const resetForm = () => {
-    setFormData({ title: '', description: '', client_id: '', assigned_to: '', scheduled_for: '', duration_minutes: 60, location: '', notes: '' });
+    setFormData({ title: '', description: '', client_id: '', assigned_to: '', schedule_id: '', scheduled_for: '', duration_minutes: 60, location: '', notes: '' });
     setEditingAppointment(null);
     setSelectedDate(undefined);
   };
@@ -186,6 +201,7 @@ export default function Appointments() {
       description: appointment.description || '',
       client_id: appointment.client_id || '',
       assigned_to: appointment.assigned_to || '',
+      schedule_id: appointment.schedule_id || appointment.scheduleId || '',
       scheduled_for: appointment.scheduled_for ? format(appointmentDate!, "yyyy-MM-dd'T'HH:mm") : '',
       duration_minutes: appointment.duration_minutes || 60,
       location: appointment.location || '',
@@ -258,8 +274,14 @@ export default function Appointments() {
           <TabsList>
             <TabsTrigger value="calendar">
               <CalendarIcon className="h-4 w-4 mr-2" />
-              Calendário
+              Calendario
             </TabsTrigger>
+            {schedules.length > 0 && (
+              <TabsTrigger value="multi-agenda">
+                <Users className="h-4 w-4 mr-2" />
+                Multi-Agenda
+              </TabsTrigger>
+            )}
             <TabsTrigger value="list">
               <List className="h-4 w-4 mr-2" />
               Lista
@@ -267,7 +289,25 @@ export default function Appointments() {
           </TabsList>
         </Tabs>
 
-        <div className="flex items-center gap-3 flex-1 max-w-lg justify-end">
+        <div className="flex items-center gap-3 flex-1 max-w-2xl justify-end">
+          {schedules.length > 0 && activeTab !== 'multi-agenda' && (
+            <Select value={selectedScheduleId} onValueChange={setSelectedScheduleId}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Todas as agendas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as agendas</SelectItem>
+                {schedules.map(s => (
+                  <SelectItem key={s.id} value={s.id}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                      {s.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <div className="relative flex-1 max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -339,24 +379,63 @@ export default function Appointments() {
                     <ClientCombobox clients={clients} value={formData.client_id} onChange={(value) => setFormData({ ...formData, client_id: value })} placeholder="Buscar cliente..." />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="assigned_to">Profissional</Label>
-                    <Select
-                      value={formData.assigned_to || '_none'}
-                      onValueChange={(value) => setFormData({ ...formData, assigned_to: value === '_none' ? '' : value, scheduled_for: '' })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Qualquer profissional" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="_none">Qualquer profissional</SelectItem>
-                        {(teamMembers || []).map((member: any) => (
-                          <SelectItem key={member.id} value={member.id}>
-                            {member.full_name || member.email}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">Selecione o profissional responsável pelo atendimento</p>
+                    <Label htmlFor="assigned_to">Profissional / Agenda</Label>
+                    {schedules.length > 0 ? (
+                      <>
+                        <Select
+                          value={formData.schedule_id || '_none'}
+                          onValueChange={(value) => {
+                            if (value === '_none') {
+                              setFormData({ ...formData, schedule_id: '', assigned_to: '', scheduled_for: '' });
+                            } else {
+                              const schedule = schedules.find(s => s.id === value);
+                              setFormData({
+                                ...formData,
+                                schedule_id: value,
+                                assigned_to: schedule?.userId || '',
+                                scheduled_for: '',
+                              });
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a agenda" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="_none">Sem agenda especifica</SelectItem>
+                            {schedules.filter(s => s.isActive).map(s => (
+                              <SelectItem key={s.id} value={s.id}>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                                  {s.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">Selecione a agenda do profissional para ver horarios disponiveis</p>
+                      </>
+                    ) : (
+                      <>
+                        <Select
+                          value={formData.assigned_to || '_none'}
+                          onValueChange={(value) => setFormData({ ...formData, assigned_to: value === '_none' ? '' : value, scheduled_for: '' })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Qualquer profissional" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="_none">Qualquer profissional</SelectItem>
+                            {(teamMembers || []).map((member: any) => (
+                              <SelectItem key={member.id} value={member.id}>
+                                {member.full_name || member.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">Selecione o profissional responsavel pelo atendimento</p>
+                      </>
+                    )}
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="duration_minutes">Duração (min)</Label>
@@ -514,7 +593,7 @@ export default function Appointments() {
             <div className="text-center py-8 text-muted-foreground">Carregando...</div>
           ) : (
             <AppointmentCalendar
-              appointments={appointments}
+              appointments={scheduleFilteredAppointments}
               onSelectSlot={handleSelectSlot}
               onSelectEvent={handleSelectEvent}
               date={calendarDate}
@@ -522,6 +601,32 @@ export default function Appointments() {
               onNavigate={setCalendarDate}
               onView={(view) => setCalendarView(view as 'month' | 'week' | 'day')}
               searchQuery={searchQuery}
+            />
+          )}
+        </>
+      )}
+
+      {/* Multi-Agenda View */}
+      {activeTab === 'multi-agenda' && (
+        <>
+          {loading ? (
+            <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+          ) : (
+            <MultiScheduleCalendar
+              schedules={schedules}
+              appointments={appointments}
+              date={calendarDate}
+              onSelectEvent={handleSelectEvent}
+              onSelectSlot={(slotInfo) => {
+                setSelectedDate(slotInfo.start);
+                if (slotInfo.scheduleId) {
+                  const schedule = schedules.find(s => s.id === slotInfo.scheduleId);
+                  if (schedule) {
+                    setFormData(prev => ({ ...prev, assigned_to: schedule.userId, scheduled_for: format(slotInfo.start, "yyyy-MM-dd'T'HH:mm") }));
+                  }
+                }
+                setIsDialogOpen(true);
+              }}
             />
           )}
         </>

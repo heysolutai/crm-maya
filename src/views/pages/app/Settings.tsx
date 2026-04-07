@@ -16,6 +16,7 @@ import { Building2, Workflow, Plus, Trash2, Clock, Shield, Plug, Smartphone, Loa
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { AppointmentSettingsConfig } from '@/components/appointments/AppointmentSettingsConfig';
+import { ScheduleManagement } from '@/components/appointments/ScheduleManagement';
 import { RolePermissionsConfig } from '@/components/settings/RolePermissionsConfig';
 import { TeamSignaturesConfig } from '@/components/settings/TeamSignaturesConfig';
 import { ReminderSettingsConfig } from '@/components/appointments/ReminderSettingsConfig';
@@ -267,6 +268,7 @@ export default function Settings() {
       case 'appointments':
         return (
           <div className="space-y-4">
+            <ScheduleManagement />
             <AppointmentSettingsConfig variant="single-card" />
             <ReminderSettingsConfig />
           </div>

@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
     const dateFrom = url.searchParams.get('date_from');
     const dateTo = url.searchParams.get('date_to');
     const assignedTo = url.searchParams.get('assigned_to');
+    const scheduleId = url.searchParams.get('schedule_id');
 
     if (!clientId && phone) {
       const normalizedPhone = phone.replace(/\D/g, '');
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest) {
     if (status) whereClause.status = status;
     if (clientId) whereClause.clientId = clientId;
     if (assignedTo) whereClause.assignedTo = assignedTo;
+    if (scheduleId) whereClause.scheduleId = scheduleId;
     if (dateFrom || dateTo) {
       whereClause.scheduledFor = {};
       if (dateFrom) whereClause.scheduledFor.gte = new Date(dateFrom);
@@ -57,6 +59,7 @@ export async function GET(req: NextRequest) {
       include: {
         client: { select: { id: true, firstName: true, lastName: true, phone: true, email: true } },
         assignee: { select: { id: true, fullName: true } },
+        schedule: { select: { id: true, name: true, color: true } },
       },
       orderBy: { scheduledFor: 'asc' },
     });
@@ -81,7 +84,7 @@ export async function POST(req: NextRequest) {
     const companyId = company.id;
 
     const body = await req.json();
-    const { client_id, phone, title, scheduled_for, duration_minutes = 60, assigned_to, location, description, notes, patient_name } = body;
+    const { client_id, phone, title, scheduled_for, duration_minutes = 60, assigned_to, schedule_id, location, description, notes, patient_name } = body;
 
     if (!title || !scheduled_for) return apiError('Campos obrigatórios: title, scheduled_for.', 'MISSING_FIELDS', 200);
     if (!client_id && !phone) return apiError('Informe client_id ou phone.', 'MISSING_CLIENT_IDENTIFIER', 200);
@@ -147,14 +150,28 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // If schedule_id provided, validate and auto-resolve assignedTo
+    let resolvedScheduleId: string | null = null;
+    let resolvedAssignedTo: string | null = assigned_to || null;
+    if (schedule_id) {
+      const schedule = await prisma.doctorSchedule.findFirst({
+        where: { id: schedule_id, companyId },
+      });
+      if (schedule) {
+        resolvedScheduleId = schedule.id;
+        if (!resolvedAssignedTo) resolvedAssignedTo = schedule.userId;
+      }
+    }
+
     const appointment = await prisma.appointment.create({
       data: {
         companyId,
         clientId: resolvedClientId,
+        scheduleId: resolvedScheduleId,
         title,
         scheduledFor: new Date(normalizedScheduledFor),
         durationMinutes: duration_minutes,
-        assignedTo: assigned_to || null,
+        assignedTo: resolvedAssignedTo,
         location: location || null,
         description: description || null,
         notes: notes || null,
