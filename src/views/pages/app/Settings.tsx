@@ -12,10 +12,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Workflow, Plus, Trash2, Clock, Shield, Plug, Smartphone, Loader2, Eye, EyeOff, Copy, RefreshCw, QrCode, ExternalLink, Zap, Key } from 'lucide-react';
+import { Building2, Workflow, Plus, Trash2, Clock, Shield, Plug, Smartphone, Loader2, Eye, EyeOff, Copy, RefreshCw, QrCode, ExternalLink, Zap, Key, UserCog, Bell, CalendarClock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { AppointmentSettingsConfig } from '@/components/appointments/AppointmentSettingsConfig';
 import { ScheduleManagement } from '@/components/appointments/ScheduleManagement';
 import { RolePermissionsConfig } from '@/components/settings/RolePermissionsConfig';
 import { TeamSignaturesConfig } from '@/components/settings/TeamSignaturesConfig';
@@ -41,22 +40,28 @@ const menuGroups: MenuGroup[] = [
   {
     label: 'Geral',
     items: [
-      { id: 'company', label: 'Empresa', icon: Building2, description: 'Dados e configurações gerais' },
-      { id: 'permissions', label: 'Permissões', icon: Shield, description: 'Roles e assinaturas' },
+      { id: 'company', label: 'Empresa', icon: Building2, description: 'Dados e configuracoes gerais' },
+      { id: 'permissions', label: 'Permissoes', icon: Shield, description: 'Roles e assinaturas' },
     ],
   },
   {
-    label: 'Integrações',
+    label: 'Agenda',
     items: [
-      { id: 'connections', label: 'Conexões', icon: Plug, description: 'WhatsApp e integrações' },
-      { id: 'automations', label: 'Automações', icon: Zap, description: 'Follow-ups automáticos' },
-      { id: 'api-keys', label: 'API Keys', icon: Key, description: 'Chaves de acesso à API' },
+      { id: 'schedules', label: 'Profissionais', icon: UserCog, description: 'Agendas e horarios por medico' },
+      { id: 'reminders', label: 'Lembretes', icon: Bell, description: 'Lembretes automaticos' },
+      { id: 'follow-ups', label: 'Follow-ups', icon: CalendarClock, description: 'Acompanhamento automatico' },
+    ],
+  },
+  {
+    label: 'Integracoes',
+    items: [
+      { id: 'connections', label: 'Conexoes', icon: Plug, description: 'WhatsApp e integracoes' },
+      { id: 'api-keys', label: 'API Keys', icon: Key, description: 'Chaves de acesso a API' },
     ],
   },
   {
     label: 'Vendas',
     items: [
-      { id: 'appointments', label: 'Horários', icon: Clock, description: 'Agendamentos e lembretes' },
       { id: 'funnel', label: 'Funil', icon: Workflow, description: 'Etapas do funil de vendas' },
     ],
   },
@@ -261,18 +266,14 @@ export default function Settings() {
             toast={toast}
           />
         );
-      case 'automations':
+      case 'schedules':
+        return <ScheduleManagement />;
+      case 'reminders':
+        return <ReminderSettingsConfig />;
+      case 'follow-ups':
         return effectiveCompanyId ? <FollowUpsSubTab companyId={effectiveCompanyId} /> : null;
       case 'api-keys':
         return effectiveCompanyId ? <ApiKeysTab companyId={effectiveCompanyId} /> : null;
-      case 'appointments':
-        return (
-          <div className="space-y-4">
-            <ScheduleManagement />
-            <AppointmentSettingsConfig variant="single-card" />
-            <ReminderSettingsConfig />
-          </div>
-        );
       case 'funnel':
         return (
           <FunnelSection
