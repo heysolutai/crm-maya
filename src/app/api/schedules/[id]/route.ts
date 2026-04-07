@@ -7,7 +7,7 @@ const updateSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   color: z.string().max(20).optional(),
   isActive: z.boolean().optional(),
-  businessHours: z.record(z.object({
+  businessHours: z.record(z.string(), z.object({
     enabled: z.boolean(),
     start: z.string(),
     end: z.string(),
