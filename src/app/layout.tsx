@@ -3,8 +3,8 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 
 export const metadata: Metadata = {
-  title: "CRM Maya",
-  description: "CRM Multi-tenant com IA",
+  title: "Wyarp",
+  description: "CRM inteligente com IA",
 };
 
 export default function RootLayout({

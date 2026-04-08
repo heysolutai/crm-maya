@@ -13,12 +13,12 @@ export interface BrandingData {
 }
 
 const defaultBranding: BrandingData = {
-  systemName: 'MiletoIA',
+  systemName: 'Wyarp',
   logoUrl: null,
   faviconUrl: null,
-  primaryColor: '150 80% 36%',
-  secondaryColor: '170 70% 35%',
-  accentColor: '175 60% 32%',
+  primaryColor: '217 91% 50%',
+  secondaryColor: '217 70% 58%',
+  accentColor: '217 80% 38%',
   loginDescription: null,
 }
 

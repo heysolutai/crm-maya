@@ -72,17 +72,13 @@ export default function Auth() {
         
         {/* Content */}
         <div className="relative z-10 flex flex-col items-center justify-center w-full p-12">
-          <Image
-            src={logoMileto}
-            alt="MiletoIA Chat"
-            className="w-40 h-40 mb-8 drop-shadow-2xl"
-            width={160}
-            height={160}
-          />
+          <div className="w-28 h-28 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center mb-8">
+            <span className="text-white text-4xl font-bold">Wyarp</span>
+          </div>
           
           <h1 className="text-4xl font-bold text-white mb-4 text-center">
             <span className="bg-gradient-to-r from-mileto-green via-mileto-cyan to-mileto-blue bg-clip-text text-transparent">
-              MiletoIA Chat
+              Wyarp Chat
             </span>
           </h1>
           
@@ -119,15 +115,11 @@ export default function Auth() {
         <div className="w-full max-w-md space-y-8">
           {/* Mobile Logo */}
           <div className="lg:hidden flex flex-col items-center mb-8">
-            <Image
-              src={logoMileto}
-              alt="MiletoIA Chat"
-              className="w-24 h-24 mb-4"
-              width={96}
-              height={96}
-            />
+            <div className="w-20 h-20 rounded-xl bg-primary flex items-center justify-center mb-4">
+              <span className="text-primary-foreground text-2xl font-bold">Wyarp</span>
+            </div>
             <h1 className="text-2xl font-bold bg-gradient-to-r from-mileto-green via-mileto-cyan to-mileto-blue bg-clip-text text-transparent">
-              MiletoIA Chat
+              Wyarp Chat
             </h1>
           </div>
 

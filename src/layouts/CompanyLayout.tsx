@@ -300,7 +300,9 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                 {branding.logoUrl ? (
                   <Image src={branding.logoUrl} alt={branding.systemName} width={32} height={32} className="rounded-lg" />
                 ) : (
-                  <Image src="/logo-mileto.png" alt={branding.systemName} width={32} height={32} className="rounded-lg" />
+                  <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+                    <span className="text-primary-foreground text-sm font-bold">W</span>
+                  </div>
                 )}
                 <span className={cn(
                   'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-sidebar',

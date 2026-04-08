@@ -89,7 +89,9 @@ export default function AuthPage() {
           {branding.logoUrl ? (
             <Image src={branding.logoUrl} alt={branding.systemName} className="w-40 h-40 mb-8 drop-shadow-2xl" width={160} height={160} />
           ) : (
-            <Image src="/logo-mileto.png" alt={branding.systemName} className="w-40 h-40 mb-8 drop-shadow-2xl" width={160} height={160} />
+            <div className="w-28 h-28 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center mb-8">
+              <span className="text-white text-4xl font-bold">Wyarp</span>
+            </div>
           )}
 
           <h1 className="text-4xl font-bold text-white mb-4 text-center">
@@ -124,7 +126,9 @@ export default function AuthPage() {
             {branding.logoUrl ? (
               <Image src={branding.logoUrl} alt={branding.systemName} className="w-24 h-24 mb-4" width={96} height={96} />
             ) : (
-              <Image src="/logo-mileto.png" alt={branding.systemName} className="w-24 h-24 mb-4" width={96} height={96} />
+              <div className="w-20 h-20 rounded-xl bg-primary flex items-center justify-center mb-4">
+                <span className="text-primary-foreground text-2xl font-bold">Wyarp</span>
+              </div>
             )}
             <h1 className="text-2xl font-bold bg-gradient-to-r from-mileto-green via-mileto-cyan to-mileto-blue bg-clip-text text-transparent">
               {branding.systemName}

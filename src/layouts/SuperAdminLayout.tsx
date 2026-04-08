@@ -68,7 +68,9 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
         {branding.logoUrl ? (
           <Image src={branding.logoUrl} alt={branding.systemName} width={32} height={32} className="rounded-lg" />
         ) : (
-          <Image src="/logo-mileto.png" alt={branding.systemName} width={32} height={32} className="rounded-lg" />
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+            <span className="text-primary-foreground text-sm font-bold">W</span>
+          </div>
         )}
         <div className="flex flex-col">
           <span className="text-sm font-bold leading-tight">{branding.systemName}</span>

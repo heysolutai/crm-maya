@@ -3,8 +3,8 @@ import Image from 'next/image'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Termos de Uso - MiletoIA',
-  description: 'Termos e condicoes de uso da plataforma MiletoIA CRM.',
+  title: 'Termos de Uso - Wyarp',
+  description: 'Termos e condicoes de uso da plataforma Wyarp CRM.',
 }
 
 export default function TermsPage() {
@@ -13,8 +13,10 @@ export default function TermsPage() {
       <header className="border-b border-border">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2 hover:opacity-80">
-            <Image src="/logo-mileto.png" alt="MiletoIA" width={32} height={32} className="rounded-lg" />
-            <span className="text-lg font-bold">MiletoIA</span>
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+              <span className="text-primary-foreground text-sm font-bold">W</span>
+            </div>
+            <span className="text-lg font-bold">Wyarp</span>
           </Link>
         </div>
       </header>
@@ -27,7 +29,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-3">1. Aceitacao dos Termos</h2>
             <p>
-              Ao acessar e utilizar a plataforma MiletoIA CRM (&quot;Plataforma&quot;), disponivel em
+              Ao acessar e utilizar a plataforma Wyarp CRM (&quot;Plataforma&quot;), disponivel em
               crm.miletoia.com.br, voce concorda com estes Termos de Uso. Se voce nao concordar com
               qualquer parte destes termos, nao utilize a Plataforma.
             </p>
@@ -35,7 +37,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-3">2. Descricao do Servico</h2>
-            <p>A MiletoIA oferece uma plataforma de CRM que inclui:</p>
+            <p>A Wyarp oferece uma plataforma de CRM que inclui:</p>
             <ul className="list-disc pl-6 space-y-1">
               <li>Gestao de relacionamento com clientes (CRM)</li>
               <li>Integracao com WhatsApp para atendimento via UazAPI</li>
@@ -89,7 +91,7 @@ export default function TermsPage() {
             <p>
               A Plataforma integra-se com servicos de terceiros (WhatsApp via UazAPI, Google Calendar,
               provedores de IA). Ao ativar essas integracoes, voce concorda com os termos de uso de
-              cada servico. A MiletoIA nao se responsabiliza por interrupcoes ou alteracoes nos
+              cada servico. A Wyarp nao se responsabiliza por interrupcoes ou alteracoes nos
               servicos de terceiros.
             </p>
           </section>
@@ -97,7 +99,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-3">7. Propriedade Intelectual</h2>
             <ul className="list-disc pl-6 space-y-1">
-              <li>A Plataforma, incluindo seu codigo, design e marca, sao propriedade da MiletoIA</li>
+              <li>A Plataforma, incluindo seu codigo, design e marca, sao propriedade da Wyarp</li>
               <li>Voce mantem a propriedade sobre os dados que insere na Plataforma</li>
               <li>Voce nos concede licenca limitada para processar seus dados conforme necessario para a prestacao do servico</li>
               <li>Nao e permitido copiar, modificar ou redistribuir qualquer parte da Plataforma</li>
@@ -156,7 +158,7 @@ export default function TermsPage() {
             <h2 className="text-xl font-semibold text-foreground mb-3">13. Contato</h2>
             <p>Para duvidas sobre estes Termos de Uso, entre em contato:</p>
             <ul className="list-none pl-0 space-y-1 mt-2">
-              <li><strong className="text-foreground">Empresa:</strong> MiletoIA</li>
+              <li><strong className="text-foreground">Empresa:</strong> Wyarp</li>
               <li><strong className="text-foreground">Plataforma:</strong> crm.miletoia.com.br</li>
               <li><strong className="text-foreground">Email:</strong>{' '}
                 <a href="mailto:contato@miletoia.com.br" className="text-primary hover:underline">
@@ -170,7 +172,7 @@ export default function TermsPage() {
 
       <footer className="border-t border-border py-8">
         <div className="max-w-4xl mx-auto px-4 flex justify-between text-sm text-muted-foreground">
-          <span>&copy; 2024 MiletoIA. Todos os direitos reservados.</span>
+          <span>&copy; 2024 Wyarp. Todos os direitos reservados.</span>
           <div className="flex gap-4">
             <Link href="/privacy" className="hover:text-foreground">Privacidade</Link>
             <Link href="/terms" className="hover:text-foreground">Termos de Uso</Link>

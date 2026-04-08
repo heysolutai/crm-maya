@@ -4,9 +4,23 @@ import pg from 'pg'
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }
 
+function buildDatabaseUrl(): string | undefined {
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL
+  const host = process.env.DB_HOST
+  const port = process.env.DB_PORT || '5432'
+  const user = process.env.DB_USER
+  const pass = process.env.DB_PASSWORD
+  const name = process.env.DB_NAME
+  if (host && user && name) {
+    return `postgresql://${user}:${encodeURIComponent(pass || '')}@${host}:${port}/${name}`
+  }
+  return undefined
+}
+
 function createPrismaClient() {
+  const connectionString = buildDatabaseUrl()
   const pool = new pg.Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString,
     max: parseInt(process.env.DB_POOL_MAX || '50'),
     min: parseInt(process.env.DB_POOL_MIN || '5'),
     idleTimeoutMillis: 30_000,

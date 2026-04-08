@@ -93,7 +93,7 @@ const LandingPage = () => {
           {/* Logo */}
           <Image
             src={logoMileto}
-            alt="MiletoIA Chat"
+            alt="Wyarp Chat"
             className="h-36 md:h-48 mx-auto mb-8 drop-shadow-[0_0_30px_hsl(var(--mileto-cyan)/0.5)]"
             width={192}
             height={192}
@@ -218,7 +218,7 @@ const LandingPage = () => {
               O que nossos clientes dizem
             </h2>
             <p className="text-xl text-gray-400">
-              Óticas de todo Brasil já aumentaram suas vendas com MiletoIA
+              Óticas de todo Brasil já aumentaram suas vendas com Wyarp
             </p>
           </div>
           
@@ -273,7 +273,7 @@ const LandingPage = () => {
               Pronto para vender mais?
             </h2>
             <p className="text-xl text-gray-300 mb-8">
-              Junte-se a mais de 500 óticas que já aumentaram suas vendas com MiletoIA
+              Junte-se a mais de 500 óticas que já aumentaram suas vendas com Wyarp
             </p>
             <Button 
               size="lg"
@@ -291,9 +291,9 @@ const LandingPage = () => {
       <footer className="py-12 px-4 border-t border-[hsl(var(--mileto-cyan)/0.1)]">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <Image src={logoMileto} alt="MiletoIA Chat" className="h-10" width={40} height={40} />
+            <Image src={logoMileto} alt="Wyarp Chat" className="h-10" width={40} height={40} />
             <p className="text-gray-500 text-sm">
-              © 2024 MiletoIA. Todos os direitos reservados.
+              © 2024 Wyarp. Todos os direitos reservados.
             </p>
           </div>
         </div>

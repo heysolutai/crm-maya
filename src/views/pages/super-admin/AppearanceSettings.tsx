@@ -54,7 +54,7 @@ function hexToHsl(hex: string): string {
 }
 
 const defaults: BrandingData = {
-  systemName: 'MiletoIA',
+  systemName: 'Wyarp',
   logoUrl: null,
   faviconUrl: null,
   primaryColor: '150 80% 36%',

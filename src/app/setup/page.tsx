@@ -138,7 +138,7 @@ export default function SetupPage() {
               <div className="mx-auto bg-primary/10 rounded-full p-4 mb-4 w-fit">
                 <Server className="h-8 w-8 text-primary" />
               </div>
-              <CardTitle className="text-2xl">Bem-vindo ao CRM Maya</CardTitle>
+              <CardTitle className="text-2xl">Bem-vindo ao Wyarp</CardTitle>
               <CardDescription className="text-base">
                 Vamos configurar o sistema pela primeira vez
               </CardDescription>

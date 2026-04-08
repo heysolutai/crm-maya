@@ -3,8 +3,8 @@ import Image from 'next/image'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Politica de Privacidade - MiletoIA',
-  description: 'Politica de privacidade e protecao de dados da plataforma MiletoIA CRM.',
+  title: 'Politica de Privacidade - Wyarp',
+  description: 'Politica de privacidade e protecao de dados da plataforma Wyarp CRM.',
 }
 
 export default function PrivacyPage() {
@@ -13,8 +13,10 @@ export default function PrivacyPage() {
       <header className="border-b border-border">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2 hover:opacity-80">
-            <Image src="/logo-mileto.png" alt="MiletoIA" width={32} height={32} className="rounded-lg" />
-            <span className="text-lg font-bold">MiletoIA</span>
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+              <span className="text-primary-foreground text-sm font-bold">W</span>
+            </div>
+            <span className="text-lg font-bold">Wyarp</span>
           </Link>
         </div>
       </header>
@@ -27,7 +29,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-3">1. Introducao</h2>
             <p>
-              A MiletoIA (&quot;nos&quot;, &quot;nosso&quot; ou &quot;Empresa&quot;), operadora da plataforma de CRM disponivel em
+              A Wyarp (&quot;nos&quot;, &quot;nosso&quot; ou &quot;Empresa&quot;), operadora da plataforma de CRM disponivel em
               crm.miletoia.com.br, esta comprometida com a protecao da privacidade e dos dados pessoais de seus
               usuarios, em conformidade com a Lei Geral de Protecao de Dados Pessoais (LGPD - Lei n. 13.709/2018)
               e demais legislacoes aplicaveis.
@@ -166,7 +168,7 @@ export default function PrivacyPage() {
               entre em contato:
             </p>
             <ul className="list-none pl-0 space-y-1 mt-2">
-              <li><strong className="text-foreground">Empresa:</strong> MiletoIA</li>
+              <li><strong className="text-foreground">Empresa:</strong> Wyarp</li>
               <li><strong className="text-foreground">Plataforma:</strong> crm.miletoia.com.br</li>
               <li><strong className="text-foreground">Email:</strong>{' '}
                 <a href="mailto:privacidade@miletoia.com.br" className="text-primary hover:underline">
@@ -180,7 +182,7 @@ export default function PrivacyPage() {
 
       <footer className="border-t border-border py-8">
         <div className="max-w-4xl mx-auto px-4 flex justify-between text-sm text-muted-foreground">
-          <span>&copy; 2024 MiletoIA. Todos os direitos reservados.</span>
+          <span>&copy; 2024 Wyarp. Todos os direitos reservados.</span>
           <div className="flex gap-4">
             <Link href="/privacy" className="hover:text-foreground">Privacidade</Link>
             <Link href="/terms" className="hover:text-foreground">Termos de Uso</Link>
