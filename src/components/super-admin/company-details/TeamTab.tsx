@@ -188,7 +188,7 @@ export function TeamTab({ companyId }: TeamTabProps) {
                     <div>
                       <span className="text-muted-foreground">Criado em:</span>
                       <span className="ml-2">
-                        {format(new Date(user.created_at), 'dd/MM/yyyy', { locale: ptBR })}
+                        {user.created_at ? format(new Date(user.created_at), 'dd/MM/yyyy', { locale: ptBR }) : '-'}
                       </span>
                     </div>
                     {user.last_seen_at && (

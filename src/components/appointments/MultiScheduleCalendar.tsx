@@ -140,7 +140,7 @@ export function MultiScheduleCalendar({
   ];
 
   return (
-    <div className="rounded-xl border bg-card overflow-hidden">
+    <div className="rounded-xl border bg-card overflow-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
       {/* Header */}
       <div className="flex border-b sticky top-0 z-10 bg-card">
         {/* Time gutter */}

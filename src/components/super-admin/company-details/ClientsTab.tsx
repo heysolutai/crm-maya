@@ -133,7 +133,7 @@ export function ClientsTab({ companyId }: ClientsTabProps) {
                       )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {format(new Date(client.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      {client.created_at ? format(new Date(client.created_at), "dd/MM/yyyy 'as' HH:mm", { locale: ptBR }) : '-'}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">

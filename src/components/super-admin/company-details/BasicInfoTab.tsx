@@ -128,19 +128,23 @@ export function BasicInfoTab({ company }: BasicInfoTabProps) {
             </div>
           )}
 
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">Criado em</span>
-            <span className="text-sm font-medium">
-              {format(new Date(company.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-            </span>
-          </div>
+          {company.created_at && (
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Criado em</span>
+              <span className="text-sm font-medium">
+                {format(new Date(company.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+              </span>
+            </div>
+          )}
 
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">Última atualização</span>
-            <span className="text-sm font-medium">
-              {format(new Date(company.updated_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-            </span>
-          </div>
+          {company.updated_at && (
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Ultima atualizacao</span>
+              <span className="text-sm font-medium">
+                {format(new Date(company.updated_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+              </span>
+            </div>
+          )}
 
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted-foreground">ID da Empresa</span>
