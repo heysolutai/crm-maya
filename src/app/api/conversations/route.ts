@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
     const startDate = req.nextUrl.searchParams.get('startDate')
     const endDate = req.nextUrl.searchParams.get('endDate')
     const assignedTo = req.nextUrl.searchParams.get('assignedTo')
+    const departmentId = req.nextUrl.searchParams.get('departmentId')
 
     const where: any = { companyId }
     if (status) where.status = status
@@ -42,6 +43,7 @@ export async function GET(req: NextRequest) {
     if (startDate) where.startedAt = { ...where.startedAt, gte: new Date(startDate) }
     if (endDate) where.startedAt = { ...where.startedAt, lte: new Date(endDate) }
     if (assignedTo) where.transferredTo = assignedTo
+    if (departmentId) where.departmentId = departmentId
 
     const limit = parseInt(req.nextUrl.searchParams.get('limit') || '100')
     const offset = parseInt(req.nextUrl.searchParams.get('offset') || '0')

@@ -14,6 +14,7 @@ import { useConversationScroll } from '@/hooks/useConversationScroll';
 import { useCreateConversation } from '@/hooks/useCreateConversation';
 import { useMessageInput } from '@/hooks/useMessageInput';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useDepartmentQueue } from '@/hooks/useDepartmentQueue';
 import { usePresenceContext } from '@/hooks/usePresence';
 import { MessageCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -43,6 +44,7 @@ export default function Conversations() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('conversation') ? 'all' : 'active');
   const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   
   // Dialog states
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
@@ -62,6 +64,7 @@ export default function Conversations() {
     search,
     status: statusFilter !== 'all' && statusFilter !== 'unread' ? statusFilter : undefined,
     tags: tagFilters.length > 0 ? tagFilters : undefined,
+    departmentId: departmentFilter !== 'all' ? departmentFilter : undefined,
   };
 
   // Hooks
@@ -75,6 +78,7 @@ export default function Conversations() {
     conversationMessages,
     transferConversation,
     transferToDepartment,
+    pickupConversation,
     closeConversation,
     reopenConversation,
     sendMessage,
@@ -96,6 +100,7 @@ export default function Conversations() {
   const { uploadMedia, isUploading } = useMediaUpload();
   const { teamMembers } = useTeam();
   const { departments } = useDepartments();
+  const { queues: queueCounts } = useDepartmentQueue();
   const { onlineUserIds } = usePresenceContext();
   const { user, companyId } = useAuth();
   const queryClient = useQueryClient();
@@ -339,6 +344,10 @@ export default function Conversations() {
           onSearchChange={setSearch}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
+          departmentFilter={departmentFilter}
+          onDepartmentFilterChange={setDepartmentFilter}
+          departments={(departments || []).map((d: any) => ({ id: d.id, name: d.name, color: d.color || '#6b7280' }))}
+          queueCounts={queueCounts}
           tagFilters={tagFilters}
           onToggleTagFilter={toggleTagFilter}
           allTags={allTags}
@@ -347,6 +356,7 @@ export default function Conversations() {
           usePolling={usePolling}
           onRefresh={manualRefresh}
           onNewConversation={() => setNewConversationDialogOpen(true)}
+          onPickupConversation={(id) => pickupConversation(id)}
         />
       </div>
 
@@ -478,6 +488,7 @@ export default function Conversations() {
             teamMembers={teamMembers as TeamMember[]}
             departments={departments}
             onlineUserIds={onlineUserIds}
+            queueCounts={queueCounts}
             onTransfer={(userId) => transferConversation({ conversationId: selectedConv.id, userId })}
             onTransferToDepartment={(departmentId) => transferToDepartment({ conversationId: selectedConv.id, departmentId })}
           />

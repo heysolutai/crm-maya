@@ -30,11 +30,11 @@ const DEFAULT_BUSINESS_HOURS: Record<string, BusinessHours> = {
 
 const DAY_LABELS: Record<string, string> = {
   monday: "Segunda-feira",
-  tuesday: "Terca-feira",
+  tuesday: "Terça-feira",
   wednesday: "Quarta-feira",
   thursday: "Quinta-feira",
   friday: "Sexta-feira",
-  saturday: "Sabado",
+  saturday: "Sábado",
   sunday: "Domingo",
 };
 
@@ -118,7 +118,7 @@ export default function MySchedule() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Minha Agenda</h1>
         <p className="text-muted-foreground">
-          Configure seus horarios de atendimento e preferencias de agendamento.
+          Configure seus horários de atendimento e preferências de agendamento.
         </p>
       </div>
 
@@ -133,8 +133,8 @@ export default function MySchedule() {
               </CardTitle>
               <CardDescription>
                 {mySchedule
-                  ? "Sua agenda esta configurada e ativa."
-                  : "Voce ainda nao configurou sua agenda. Preencha abaixo para ativa-la."}
+                  ? "Sua agenda está configurada e ativa."
+                  : "Você ainda não configurou sua agenda. Preencha abaixo para ativá-la."}
               </CardDescription>
             </div>
             {mySchedule && (
@@ -149,8 +149,8 @@ export default function MySchedule() {
       {/* Color */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Cor no calendario</CardTitle>
-          <CardDescription>Escolha a cor que identifica sua agenda na visualizacao multi-profissional.</CardDescription>
+          <CardTitle className="text-base">Cor no calendário</CardTitle>
+          <CardDescription>Escolha a cor que identifica sua agenda na visualização multi-profissional.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2 flex-wrap">
@@ -172,10 +172,10 @@ export default function MySchedule() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            Horarios de Atendimento
+            Horários de Atendimento
           </CardTitle>
           <CardDescription>
-            Defina os dias e horarios em que voce atende.
+            Defina os dias e horários em que você atende.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-1">
@@ -197,7 +197,7 @@ export default function MySchedule() {
                 disabled={!businessHours[day]?.enabled}
                 className="w-28"
               />
-              <span className="text-muted-foreground text-sm">ate</span>
+              <span className="text-muted-foreground text-sm">até</span>
               <Input
                 type="time"
                 value={businessHours[day]?.end || "18:00"}
@@ -213,13 +213,13 @@ export default function MySchedule() {
       {/* Appointment Settings */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Configuracoes de Agendamento</CardTitle>
-          <CardDescription>Preferencias para criacao de consultas na sua agenda.</CardDescription>
+          <CardTitle className="text-base">Configurações de Agendamento</CardTitle>
+          <CardDescription>Preferências para criação de consultas na sua agenda.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
-              <Label className="text-sm">Duracao padrao (min)</Label>
+              <Label className="text-sm">Duração padrão (min)</Label>
               <Input
                 type="number"
                 value={apptSettings.default_duration_minutes}
@@ -249,7 +249,7 @@ export default function MySchedule() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm">Antecedencia minima (horas)</Label>
+              <Label className="text-sm">Antecedência mínima (horas)</Label>
               <Input
                 type="number"
                 value={apptSettings.min_notice_hours}
@@ -259,7 +259,7 @@ export default function MySchedule() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm">Antecedencia maxima (dias)</Label>
+              <Label className="text-sm">Antecedência máxima (dias)</Label>
               <Input
                 type="number"
                 value={apptSettings.advance_booking_days}
@@ -279,7 +279,7 @@ export default function MySchedule() {
             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
           )}
           <Save className="h-4 w-4 mr-2" />
-          {mySchedule ? "Salvar Alteracoes" : "Criar Minha Agenda"}
+          {mySchedule ? "Salvar Alterações" : "Criar Minha Agenda"}
         </Button>
       </div>
     </div>

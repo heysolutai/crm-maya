@@ -28,7 +28,7 @@ export async function GET(
   const auth = await authenticate(req);
   const companyId = auth.companyId;
   if (!companyId) {
-    return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
+    return NextResponse.json({ error: "Empresa não encontrada" }, { status: 403 });
   }
 
   try {
@@ -43,7 +43,7 @@ export async function GET(
     });
 
     if (!schedule) {
-      return NextResponse.json({ error: "Agenda nao encontrada" }, { status: 404 });
+      return NextResponse.json({ error: "Agenda não encontrada" }, { status: 404 });
     }
 
     return NextResponse.json({ data: schedule });
@@ -60,7 +60,7 @@ export async function PUT(
   const auth = await authenticate(req);
   const companyId = auth.companyId;
   if (!companyId) {
-    return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
+    return NextResponse.json({ error: "Empresa não encontrada" }, { status: 403 });
   }
 
   try {
@@ -69,7 +69,7 @@ export async function PUT(
     const validation = updateSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
-        { error: "Dados invalidos", details: validation.error.flatten().fieldErrors },
+        { error: "Dados inválidos", details: validation.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
@@ -78,7 +78,7 @@ export async function PUT(
       where: { id, companyId: companyId },
     });
     if (!existing) {
-      return NextResponse.json({ error: "Agenda nao encontrada" }, { status: 404 });
+      return NextResponse.json({ error: "Agenda não encontrada" }, { status: 404 });
     }
 
     const updated = await prisma.doctorSchedule.update({
@@ -103,7 +103,7 @@ export async function DELETE(
   const auth = await authenticate(req);
   const companyId = auth.companyId;
   if (!companyId) {
-    return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
+    return NextResponse.json({ error: "Empresa não encontrada" }, { status: 403 });
   }
 
   try {
@@ -113,7 +113,7 @@ export async function DELETE(
       where: { id, companyId: companyId },
     });
     if (!existing) {
-      return NextResponse.json({ error: "Agenda nao encontrada" }, { status: 404 });
+      return NextResponse.json({ error: "Agenda não encontrada" }, { status: 404 });
     }
 
     await prisma.doctorSchedule.delete({ where: { id, companyId } });

@@ -317,7 +317,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                 <p className="text-[11px] text-sidebar-foreground/50 truncate">
                   {whatsAppStatus === 'connected' ? 'WhatsApp conectado' :
                    whatsAppStatus === 'connecting' ? 'Conectando...' :
-                   whatsAppStatus === 'no_instance' ? 'WhatsApp nao configurado' :
+                   whatsAppStatus === 'no_instance' ? 'WhatsApp não configurado' :
                    'WhatsApp desconectado'}
                 </p>
               </div>
@@ -441,7 +441,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                             </TooltipTrigger>
                             {count > 0 && (
                               <TooltipContent side="right" className="text-xs">
-                                {item.countKey === 'unread' && `${count} conversa(s) nao lida(s)`}
+                                {item.countKey === 'unread' && `${count} conversa(s) não lida(s)`}
                                 {item.countKey === 'appointmentsToday' && `${count} agendamento(s) hoje`}
                                 {item.countKey === 'pendingFollowUps' && `${count} follow-up(s) pendente(s)`}
                               </TooltipContent>
@@ -474,7 +474,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                       <Settings className="h-3.5 w-3.5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">Configuracoes</TooltipContent>
+                  <TooltipContent side="top" className="text-xs">Configurações</TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>

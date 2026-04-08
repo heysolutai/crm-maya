@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Search, Plus, Tag, X, Image, Mic, FileText, MapPin, Video } from 'lucide-react';
+import { Search, Plus, Tag, X, Image, Mic, FileText, MapPin, Video, Building2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +37,12 @@ function getMessagePreview(msg: LastMessage | null | undefined): { icon?: React.
   }
 }
 
+interface Department {
+  id: string;
+  name: string;
+  color: string;
+}
+
 interface ConversationSidebarProps {
   conversations: Conversation[] | undefined;
   selectedConversation: string | null;
@@ -45,6 +51,10 @@ interface ConversationSidebarProps {
   onSearchChange: (value: string) => void;
   statusFilter: string;
   onStatusFilterChange: (value: string) => void;
+  departmentFilter: string;
+  onDepartmentFilterChange: (value: string) => void;
+  departments: Department[];
+  queueCounts: Record<string, number>;
   tagFilters: string[];
   onToggleTagFilter: (tag: string) => void;
   allTags: string[];
@@ -53,6 +63,7 @@ interface ConversationSidebarProps {
   usePolling: boolean;
   onRefresh: () => void;
   onNewConversation: () => void;
+  onPickupConversation?: (conversationId: string) => void;
 }
 
 export const ConversationSidebar = memo(function ConversationSidebar({
@@ -63,6 +74,10 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   onSearchChange,
   statusFilter,
   onStatusFilterChange,
+  departmentFilter,
+  onDepartmentFilterChange,
+  departments,
+  queueCounts,
   tagFilters,
   onToggleTagFilter,
   allTags,
@@ -71,6 +86,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   usePolling,
   onRefresh,
   onNewConversation,
+  onPickupConversation,
 }: ConversationSidebarProps) {
   const filteredConversations = statusFilter === 'unread'
     ? conversations?.filter((c) => (c.unread_count || 0) > 0)
@@ -119,6 +135,30 @@ export const ConversationSidebar = memo(function ConversationSidebar({
               <SelectItem value="transferred">Transferidas</SelectItem>
             </SelectContent>
           </Select>
+
+          {departments.length > 0 && (
+            <Select value={departmentFilter} onValueChange={onDepartmentFilterChange}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Departamento" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os dept.</SelectItem>
+                {departments.map(dept => (
+                  <SelectItem key={dept.id} value={dept.id}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dept.color }} />
+                      {dept.name}
+                      {(queueCounts[dept.id] || 0) > 0 && (
+                        <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1">
+                          {queueCounts[dept.id]} na fila
+                        </Badge>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           <Popover>
             <PopoverTrigger asChild>
@@ -259,6 +299,31 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                           : 'IA'
                         }
                       </span>
+                      {conv.department && (
+                        <>
+                          <span className="text-muted-foreground/40">·</span>
+                          <span
+                            className="text-[10px] px-1.5 py-0 h-4 inline-flex items-center rounded font-medium"
+                            style={{ backgroundColor: `${conv.department.color}20`, color: conv.department.color }}
+                          >
+                            {conv.department.name}
+                          </span>
+                        </>
+                      )}
+                      {conv.status === 'waiting' && onPickupConversation && (
+                        <>
+                          <span className="text-muted-foreground/40">·</span>
+                          <button
+                            className="text-[10px] text-primary font-semibold hover:underline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onPickupConversation(conv.id);
+                            }}
+                          >
+                            Atender
+                          </button>
+                        </>
+                      )}
                       {conv.tags && conv.tags.length > 0 && (
                         <>
                           <span className="text-muted-foreground/40">·</span>

@@ -93,7 +93,7 @@ export function useSchedules() {
       return res.json();
     },
     onSuccess: () => {
-      toast.success("Agenda excluida com sucesso!");
+      toast.success("Agenda excluída com sucesso!");
       invalidate();
     },
     onError: (error: Error) => {

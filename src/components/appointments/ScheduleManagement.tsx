@@ -46,11 +46,11 @@ const DEFAULT_BUSINESS_HOURS: Record<string, BusinessHours> = {
 
 const DAY_LABELS: Record<string, string> = {
   monday: "Segunda-feira",
-  tuesday: "Terca-feira",
+  tuesday: "Terça-feira",
   wednesday: "Quarta-feira",
   thursday: "Quinta-feira",
   friday: "Sexta-feira",
-  saturday: "Sabado",
+  saturday: "Sábado",
   sunday: "Domingo",
 };
 
@@ -133,7 +133,7 @@ export function ScheduleManagement() {
 
   const handleSave = async () => {
     if (!formData.name.trim()) {
-      toast.error("Nome da agenda e obrigatorio");
+      toast.error("Nome da agenda é obrigatório");
       return;
     }
 
@@ -180,7 +180,7 @@ export function ScheduleManagement() {
                 Agendas por Profissional
               </CardTitle>
               <CardDescription>
-                Cada profissional possui sua propria agenda com horarios e configuracoes independentes
+                Cada profissional possui sua própria agenda com horários e configurações independentes
               </CardDescription>
             </div>
             <Button onClick={openCreate} disabled={availableMembers.length === 0}>
@@ -196,7 +196,7 @@ export function ScheduleManagement() {
             <div className="text-center py-8 text-muted-foreground">
               <Calendar className="h-12 w-12 mx-auto mb-3 opacity-40" />
               <p>Nenhuma agenda criada ainda.</p>
-              <p className="text-sm">Crie agendas para seus profissionais configurarem horarios individuais.</p>
+              <p className="text-sm">Crie agendas para seus profissionais configurarem horários individuais.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -245,7 +245,7 @@ export function ScheduleManagement() {
               {editingSchedule ? `Editar Agenda: ${editingSchedule.name}` : "Nova Agenda"}
             </DialogTitle>
             <DialogDescription>
-              Configure os horarios e preferencias de agendamento
+              Configure os horários e preferências de agendamento
             </DialogDescription>
           </DialogHeader>
 
@@ -281,14 +281,14 @@ export function ScheduleManagement() {
                 <Input
                   value={formData.name}
                   onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Ex: Dr. Joao Silva"
+                  placeholder="Ex: Dr. João Silva"
                 />
               </div>
             </div>
 
             {/* Color picker */}
             <div className="space-y-2">
-              <Label>Cor no calendario</Label>
+              <Label>Cor no calendário</Label>
               <div className="flex gap-2 flex-wrap">
                 {COLORS.map(c => (
                   <button
@@ -307,7 +307,7 @@ export function ScheduleManagement() {
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Agenda ativa</Label>
-                  <p className="text-xs text-muted-foreground">Desativar oculta a agenda do calendario</p>
+                  <p className="text-xs text-muted-foreground">Desativar oculta a agenda do calendário</p>
                 </div>
                 <Switch
                   checked={editingSchedule.isActive}
@@ -322,7 +322,7 @@ export function ScheduleManagement() {
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
-                <Label className="text-base font-medium">Horarios de Atendimento</Label>
+                <Label className="text-base font-medium">Horários de Atendimento</Label>
               </div>
               <div className="space-y-1">
                 {Object.keys(DAY_LABELS).map(day => (
@@ -343,7 +343,7 @@ export function ScheduleManagement() {
                       disabled={!formData.businessHours[day]?.enabled}
                       className="w-28"
                     />
-                    <span className="text-muted-foreground text-sm">ate</span>
+                    <span className="text-muted-foreground text-sm">até</span>
                     <Input
                       type="time"
                       value={formData.businessHours[day]?.end || "18:00"}
@@ -358,10 +358,10 @@ export function ScheduleManagement() {
 
             {/* Appointment settings */}
             <div className="space-y-3">
-              <Label className="text-base font-medium">Configuracoes de Agendamento</Label>
+              <Label className="text-base font-medium">Configurações de Agendamento</Label>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1">
-                  <Label className="text-sm">Duracao padrao (min)</Label>
+                  <Label className="text-sm">Duração padrão (min)</Label>
                   <Input
                     type="number"
                     value={formData.appointmentSettings.default_duration_minutes}
@@ -391,7 +391,7 @@ export function ScheduleManagement() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-sm">Antecedencia minima (horas)</Label>
+                  <Label className="text-sm">Antecedência mínima (horas)</Label>
                   <Input
                     type="number"
                     value={formData.appointmentSettings.min_notice_hours}
@@ -401,7 +401,7 @@ export function ScheduleManagement() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-sm">Antecedencia maxima (dias)</Label>
+                  <Label className="text-sm">Antecedência máxima (dias)</Label>
                   <Input
                     type="number"
                     value={formData.appointmentSettings.advance_booking_days}
@@ -436,7 +436,7 @@ export function ScheduleManagement() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         title="Excluir Agenda"
-        description={`Tem certeza que deseja excluir a agenda "${editingSchedule?.name}"? Os agendamentos existentes serao desvinculados.`}
+        description={`Tem certeza que deseja excluir a agenda "${editingSchedule?.name}"? Os agendamentos existentes serão desvinculados.`}
         confirmLabel="Excluir"
         variant="destructive"
         onConfirm={handleDelete}

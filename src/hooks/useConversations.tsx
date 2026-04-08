@@ -14,6 +14,7 @@ export type ConversationFilters = {
   startDate?: string;
   endDate?: string;
   tags?: string[];
+  departmentId?: string;
 };
 
 export function useConversations(filters?: ConversationFilters) {
@@ -54,6 +55,7 @@ export function useConversations(filters?: ConversationFilters) {
       if (filters?.aiHandled !== undefined) params.set('aiHandled', String(filters.aiHandled));
       if (filters?.startDate) params.set('startDate', filters.startDate);
       if (filters?.endDate) params.set('endDate', filters.endDate);
+      if (filters?.departmentId) params.set('departmentId', filters.departmentId);
 
       const res = await fetch(`/api/conversations?${params}`);
       if (!res.ok) throw new Error('Failed to fetch conversations');
@@ -377,6 +379,28 @@ export function useConversations(filters?: ConversationFilters) {
     },
     onError: (error: any) => {
       toast({ title: 'Erro ao transferir conversa', description: getErrorMessage(error), variant: 'destructive' });
+    },
+  });
+
+  const pickupConversation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      const res = await fetch("/api/messaging/pickup-conversation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversation_id: conversationId }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Erro ao pegar conversa");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      toast({ title: "Conversa atribuída a você" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
     },
   });
 
@@ -810,6 +834,7 @@ export function useConversations(filters?: ConversationFilters) {
     updateConversation: updateConversation.mutate,
     transferConversation: transferConversation.mutate,
     transferToDepartment: transferToDepartment.mutate,
+    pickupConversation: pickupConversation.mutate,
     closeConversation: closeConversation.mutate,
     reopenConversation: reopenConversation.mutate,
     sendMessage: sendMessage.mutate,

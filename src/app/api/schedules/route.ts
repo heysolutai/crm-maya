@@ -24,7 +24,7 @@ const createSchema = z.object({
 export async function GET(req: NextRequest) {
   const auth = await authenticate(req);
   if (!auth.companyId) {
-    return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
+    return NextResponse.json({ error: "Empresa não encontrada" }, { status: 403 });
   }
 
   try {
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   const auth = await authenticate(req);
   const companyId = auth.companyId;
   if (!companyId) {
-    return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
+    return NextResponse.json({ error: "Empresa não encontrada" }, { status: 403 });
   }
 
   try {
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     const validation = createSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
-        { error: "Dados invalidos", details: validation.error.flatten().fieldErrors },
+        { error: "Dados inválidos", details: validation.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       where: { id: userId, companyId },
     });
     if (!user) {
-      return NextResponse.json({ error: "Usuario nao encontrado nesta empresa" }, { status: 400 });
+      return NextResponse.json({ error: "Usuário não encontrado nesta empresa" }, { status: 400 });
     }
 
     // Check if user already has a schedule
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       where: { companyId, userId },
     });
     if (existing) {
-      return NextResponse.json({ error: "Este profissional ja possui uma agenda" }, { status: 409 });
+      return NextResponse.json({ error: "Este profissional já possui uma agenda" }, { status: 409 });
     }
 
     const schedule = await prisma.doctorSchedule.create({

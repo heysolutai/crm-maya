@@ -60,11 +60,11 @@ export default function SetupPage() {
       return
     }
     if (adminData.password.length < 6) {
-      setError('A senha deve ter no minimo 6 caracteres')
+      setError('A senha deve ter no mínimo 6 caracteres')
       return
     }
     if (adminData.password !== adminData.confirmPassword) {
-      setError('As senhas nao coincidem')
+      setError('As senhas não coincidem')
       return
     }
 
@@ -96,7 +96,7 @@ export default function SetupPage() {
       setResult(data)
       setStep('done')
     } catch (err: any) {
-      setError(err.message || 'Erro de conexao')
+      setError(err.message || 'Erro de conexão')
     }
 
     setLoading(false)
@@ -146,9 +146,9 @@ export default function SetupPage() {
             <CardContent className="space-y-4">
               {dbError && (
                 <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3">
-                  <p className="text-sm text-destructive font-medium">Banco de dados nao acessivel</p>
+                  <p className="text-sm text-destructive font-medium">Banco de dados não acessível</p>
                   <p className="text-xs text-destructive/80 mt-1">
-                    Verifique se o PostgreSQL esta rodando e o DATABASE_URL esta correto no .env
+                    Verifique se o PostgreSQL está rodando e o DATABASE_URL está correto no .env
                   </p>
                 </div>
               )}
@@ -165,7 +165,7 @@ export default function SetupPage() {
                   <Building2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                   <div>
                     <p className="font-medium text-foreground">Criar Primeira Empresa</p>
-                    <p>Com funil de vendas padrao ja configurado</p>
+                    <p>Com funil de vendas padrão já configurado</p>
                   </div>
                 </div>
               </div>
@@ -191,7 +191,7 @@ export default function SetupPage() {
                 <User className="h-8 w-8 text-primary" />
               </div>
               <CardTitle className="text-xl">Criar Super Admin</CardTitle>
-              <CardDescription>Essa sera a conta principal do sistema</CardDescription>
+              <CardDescription>Essa será a conta principal do sistema</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -218,7 +218,7 @@ export default function SetupPage() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Minimo 6 caracteres"
+                  placeholder="Mínimo 6 caracteres"
                   value={adminData.password}
                   onChange={e => setAdminData(d => ({ ...d, password: e.target.value }))}
                 />
@@ -239,7 +239,7 @@ export default function SetupPage() {
               )}
 
               <Button className="w-full" size="lg" onClick={handleCreateAdmin}>
-                Proximo: Empresa
+                Próximo: Empresa
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </CardContent>

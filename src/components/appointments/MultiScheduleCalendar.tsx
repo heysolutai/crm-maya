@@ -127,7 +127,7 @@ export function MultiScheduleCalendar({
     return (
       <div className="text-center py-12 text-muted-foreground border rounded-xl bg-card">
         <p>Nenhuma agenda ativa encontrada.</p>
-        <p className="text-sm mt-1">Crie agendas para profissionais em Configuracoes.</p>
+        <p className="text-sm mt-1">Crie agendas para profissionais em Configurações.</p>
       </div>
     );
   }

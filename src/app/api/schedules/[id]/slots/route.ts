@@ -15,7 +15,7 @@ export async function GET(
   const auth = await authenticate(req);
   const companyId = auth.companyId;
   if (!companyId) {
-    return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
+    return NextResponse.json({ error: "Empresa não encontrada" }, { status: 403 });
   }
 
   try {
@@ -25,7 +25,7 @@ export async function GET(
     const requestedDuration = parseInt(url.searchParams.get("duration_minutes") ?? "", 10);
 
     if (!date) {
-      return NextResponse.json({ error: "Parametro date e obrigatorio (YYYY-MM-DD)" }, { status: 400 });
+      return NextResponse.json({ error: "Parâmetro date é obrigatório (YYYY-MM-DD)" }, { status: 400 });
     }
 
     // Load schedule with company fallback
@@ -37,7 +37,7 @@ export async function GET(
     });
 
     if (!schedule) {
-      return NextResponse.json({ error: "Agenda nao encontrada" }, { status: 404 });
+      return NextResponse.json({ error: "Agenda não encontrada" }, { status: 404 });
     }
 
     // Use schedule-specific settings, falling back to company settings
@@ -64,7 +64,7 @@ export async function GET(
     const dayHours = businessHours[dayOfWeek];
 
     if (!dayHours?.enabled) {
-      return NextResponse.json({ data: { date, available_slots: [], message: "Dia nao util para este profissional." } });
+      return NextResponse.json({ data: { date, available_slots: [], message: "Dia não útil para este profissional." } });
     }
 
     // Check company holidays

@@ -274,7 +274,7 @@ export default function Appointments() {
           <TabsList>
             <TabsTrigger value="calendar">
               <CalendarIcon className="h-4 w-4 mr-2" />
-              Calendario
+              Calendário
             </TabsTrigger>
             {schedules.length > 0 && (
               <TabsTrigger value="multi-agenda">
@@ -423,7 +423,7 @@ export default function Appointments() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">Selecione a agenda do profissional para ver horarios disponiveis</p>
+                        <p className="text-xs text-muted-foreground">Selecione a agenda do profissional para ver horários disponíveis</p>
                       </>
                     ) : (
                       <>
@@ -443,7 +443,7 @@ export default function Appointments() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">Selecione o profissional responsavel pelo atendimento</p>
+                        <p className="text-xs text-muted-foreground">Selecione o profissional responsável pelo atendimento</p>
                       </>
                     )}
                   </div>

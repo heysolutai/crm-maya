@@ -12,6 +12,7 @@ interface TransferDialogProps {
   teamMembers: TeamMember[] | undefined;
   departments: Department[] | undefined;
   onlineUserIds: string[];
+  queueCounts?: Record<string, number>;
   onTransfer: (userId: string) => void;
   onTransferToDepartment: (departmentId: string) => void;
 }
@@ -24,6 +25,7 @@ export function TransferDialog({
   onlineUserIds,
   onTransfer,
   onTransferToDepartment,
+  queueCounts = {},
 }: TransferDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -114,11 +116,15 @@ export function TransferDialog({
                           {onlineCount}/{totalMembers} online
                         </div>
                       </div>
-                      {onlineCount === 0 && (
+                      {onlineCount === 0 ? (
                         <Badge variant="secondary" className="text-xs ml-2">
-                          Fila
+                          Fila{(queueCounts[dept.id] || 0) > 0 ? ` (${queueCounts[dept.id]})` : ''}
                         </Badge>
-                      )}
+                      ) : (queueCounts[dept.id] || 0) > 0 ? (
+                        <Badge variant="outline" className="text-xs ml-2 text-yellow-600 border-yellow-500/50">
+                          {queueCounts[dept.id]} aguardando
+                        </Badge>
+                      ) : null}
                     </Button>
                   );
                 })

@@ -40,23 +40,23 @@ const menuGroups: MenuGroup[] = [
   {
     label: 'Geral',
     items: [
-      { id: 'company', label: 'Empresa', icon: Building2, description: 'Dados e configuracoes gerais' },
-      { id: 'permissions', label: 'Permissoes', icon: Shield, description: 'Roles e assinaturas' },
+      { id: 'company', label: 'Empresa', icon: Building2, description: 'Dados e configurações gerais' },
+      { id: 'permissions', label: 'Permissões', icon: Shield, description: 'Roles e assinaturas' },
     ],
   },
   {
     label: 'Agenda',
     items: [
-      { id: 'schedules', label: 'Profissionais', icon: UserCog, description: 'Agendas e horarios por medico' },
-      { id: 'reminders', label: 'Lembretes', icon: Bell, description: 'Lembretes automaticos' },
-      { id: 'follow-ups', label: 'Follow-ups', icon: CalendarClock, description: 'Acompanhamento automatico' },
+      { id: 'schedules', label: 'Profissionais', icon: UserCog, description: 'Agendas e horários por médico' },
+      { id: 'reminders', label: 'Lembretes', icon: Bell, description: 'Lembretes automáticos' },
+      { id: 'follow-ups', label: 'Follow-ups', icon: CalendarClock, description: 'Acompanhamento automático' },
     ],
   },
   {
-    label: 'Integracoes',
+    label: 'Integrações',
     items: [
-      { id: 'connections', label: 'Conexoes', icon: Plug, description: 'WhatsApp e integracoes' },
-      { id: 'api-keys', label: 'API Keys', icon: Key, description: 'Chaves de acesso a API' },
+      { id: 'connections', label: 'Conexões', icon: Plug, description: 'WhatsApp e integrações' },
+      { id: 'api-keys', label: 'API Keys', icon: Key, description: 'Chaves de acesso à API' },
     ],
   },
   {
