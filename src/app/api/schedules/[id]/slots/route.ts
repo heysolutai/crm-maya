@@ -13,7 +13,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await authenticate(req);
-  const companyId = req.nextUrl.searchParams.get("companyId") || companyId;
+  const companyId = auth.companyId;
   if (!companyId) {
     return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
   }

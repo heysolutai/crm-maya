@@ -24,7 +24,8 @@ export async function authenticate(req: Request): Promise<AuthResult> {
     const isSuperAdmin = session.user.isSuperAdmin ?? false
 
     // Super admin impersonation: accept companyId from query string
-    if (isSuperAdmin && !companyId) {
+    // ONLY super admins can override — regular users always use their session companyId
+    if (isSuperAdmin) {
       try {
         const url = new URL(req.url)
         const qsCompanyId = url.searchParams.get('companyId')

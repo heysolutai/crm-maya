@@ -23,14 +23,13 @@ const createSchema = z.object({
 
 export async function GET(req: NextRequest) {
   const auth = await authenticate(req);
-  const companyId = req.nextUrl.searchParams.get("companyId") || auth.companyId;
-  if (!companyId) {
+  if (!auth.companyId) {
     return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
   }
 
   try {
     const schedules = await prisma.doctorSchedule.findMany({
-      where: { companyId },
+      where: { companyId: auth.companyId },
       include: {
         user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
         _count: { select: { appointments: true } },
@@ -47,7 +46,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const auth = await authenticate(req);
-  const companyId = auth.companyId || req.nextUrl.searchParams.get("companyId");
+  const companyId = auth.companyId;
   if (!companyId) {
     return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
   }
