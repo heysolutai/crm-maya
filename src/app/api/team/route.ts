@@ -48,7 +48,21 @@ export async function GET(req: NextRequest) {
       orderBy: { fullName: 'asc' },
     })
 
-    return NextResponse.json(members)
+    // Normalize to snake_case for frontend compatibility
+    const normalized = members.map(m => ({
+      id: m.id,
+      email: m.email,
+      full_name: m.fullName,
+      phone: m.phone,
+      is_active: m.isActive,
+      is_online: m.isOnline,
+      last_seen_at: m.lastSeenAt,
+      avatar_url: m.avatarUrl,
+      created_at: m.createdAt,
+      user_roles: m.userRoles.map(r => ({ role: r.role, company_id: r.companyId })),
+    }))
+
+    return NextResponse.json(normalized)
   } catch (error) {
     console.error('Erro:', error)
     return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
