@@ -23,13 +23,14 @@ const createSchema = z.object({
 
 export async function GET(req: NextRequest) {
   const auth = await authenticate(req);
-  if (!auth.companyId) {
+  const companyId = req.nextUrl.searchParams.get("companyId") || auth.companyId;
+  if (!companyId) {
     return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
   }
 
   try {
     const schedules = await prisma.doctorSchedule.findMany({
-      where: { companyId: auth.companyId },
+      where: { companyId },
       include: {
         user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
         _count: { select: { appointments: true } },
@@ -46,7 +47,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const auth = await authenticate(req);
-  if (!auth.companyId) {
+  const companyId = auth.companyId || req.nextUrl.searchParams.get("companyId");
+  if (!companyId) {
     return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
   }
 
@@ -64,7 +66,7 @@ export async function POST(req: NextRequest) {
 
     // Validate user belongs to company
     const user = await prisma.user.findFirst({
-      where: { id: userId, companyId: auth.companyId },
+      where: { id: userId, companyId },
     });
     if (!user) {
       return NextResponse.json({ error: "Usuario nao encontrado nesta empresa" }, { status: 400 });
@@ -72,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     // Check if user already has a schedule
     const existing = await prisma.doctorSchedule.findFirst({
-      where: { companyId: auth.companyId, userId },
+      where: { companyId, userId },
     });
     if (existing) {
       return NextResponse.json({ error: "Este profissional ja possui uma agenda" }, { status: 409 });
@@ -80,7 +82,7 @@ export async function POST(req: NextRequest) {
 
     const schedule = await prisma.doctorSchedule.create({
       data: {
-        companyId: auth.companyId,
+        companyId,
         userId,
         name,
         color: color || "#6366f1",

@@ -26,7 +26,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await authenticate(req);
-  if (!auth.companyId) {
+  const companyId = req.nextUrl.searchParams.get("companyId") || auth.companyId;
+  if (!companyId) {
     return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
   }
 
@@ -34,7 +35,7 @@ export async function GET(
     const { id } = await params;
 
     const schedule = await prisma.doctorSchedule.findFirst({
-      where: { id, companyId: auth.companyId },
+      where: { id, companyId: companyId },
       include: {
         user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
         _count: { select: { appointments: true } },
@@ -57,7 +58,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await authenticate(req);
-  if (!auth.companyId) {
+  const companyId = req.nextUrl.searchParams.get("companyId") || auth.companyId;
+  if (!companyId) {
     return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
   }
 
@@ -73,7 +75,7 @@ export async function PUT(
     }
 
     const existing = await prisma.doctorSchedule.findFirst({
-      where: { id, companyId: auth.companyId },
+      where: { id, companyId: companyId },
     });
     if (!existing) {
       return NextResponse.json({ error: "Agenda nao encontrada" }, { status: 404 });
@@ -99,7 +101,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await authenticate(req);
-  if (!auth.companyId) {
+  const companyId = req.nextUrl.searchParams.get("companyId") || auth.companyId;
+  if (!companyId) {
     return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
   }
 
@@ -107,7 +110,7 @@ export async function DELETE(
     const { id } = await params;
 
     const existing = await prisma.doctorSchedule.findFirst({
-      where: { id, companyId: auth.companyId },
+      where: { id, companyId: companyId },
     });
     if (!existing) {
       return NextResponse.json({ error: "Agenda nao encontrada" }, { status: 404 });

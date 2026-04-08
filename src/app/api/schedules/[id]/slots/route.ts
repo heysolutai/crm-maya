@@ -13,7 +13,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await authenticate(req);
-  if (!auth.companyId) {
+  const companyId = req.nextUrl.searchParams.get("companyId") || companyId;
+  if (!companyId) {
     return NextResponse.json({ error: "Empresa nao encontrada" }, { status: 403 });
   }
 
@@ -29,7 +30,7 @@ export async function GET(
 
     // Load schedule with company fallback
     const schedule = await prisma.doctorSchedule.findFirst({
-      where: { id, companyId: auth.companyId },
+      where: { id, companyId: companyId },
       include: {
         company: { select: { settings: true } },
       },
@@ -83,7 +84,7 @@ export async function GET(
     // Fetch existing appointments for this schedule (or this user)
     const existing = await prisma.appointment.findMany({
       where: {
-        companyId: auth.companyId,
+        companyId: companyId,
         scheduledFor: { gte: dayStart, lte: dayEnd },
         status: { not: "cancelled" },
         OR: [
