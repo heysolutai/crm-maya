@@ -66,7 +66,7 @@ export function useTeam() {
         throw new Error('Você não pode alterar sua própria role');
       }
 
-      const res = await fetch('/api/team', {
+      const res = await fetch(`/api/team?companyId=${companyId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'updateRole', userId, companyId, role }),
@@ -95,10 +95,10 @@ export function useTeam() {
         throw new Error('Você não pode desativar seu próprio usuário');
       }
 
-      const res = await fetch('/api/team', {
+      const res = await fetch(`/api/team?companyId=${companyId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'toggleStatus', userId, isActive }),
+        body: JSON.stringify({ action: 'toggleStatus', userId, companyId, isActive }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -124,7 +124,7 @@ export function useTeam() {
         throw new Error('Você não pode remover seu próprio usuário');
       }
 
-      const res = await fetch('/api/team', {
+      const res = await fetch(`/api/team?companyId=${companyId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'remove', userId, companyId }),

@@ -29,7 +29,7 @@ export function useSchedules() {
   const { data: schedules = [], isLoading: loading } = useQuery({
     queryKey: ["schedules", companyId],
     queryFn: async () => {
-      const res = await fetch("/api/schedules");
+      const res = await fetch(`/api/schedules?companyId=${companyId}`);
       if (!res.ok) throw new Error("Falha ao buscar agendas");
       const json = await res.json();
       return (json.data || []) as DoctorSchedule[];
@@ -41,7 +41,7 @@ export function useSchedules() {
 
   const createSchedule = useMutation({
     mutationFn: async (data: { userId: string; name: string; color?: string; businessHours?: Record<string, unknown>; appointmentSettings?: Record<string, unknown> }) => {
-      const res = await fetch("/api/schedules", {
+      const res = await fetch(`/api/schedules?companyId=${companyId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -63,7 +63,7 @@ export function useSchedules() {
 
   const updateSchedule = useMutation({
     mutationFn: async ({ id, ...data }: { id: string; name?: string; color?: string; isActive?: boolean; businessHours?: Record<string, unknown>; appointmentSettings?: Record<string, unknown> }) => {
-      const res = await fetch(`/api/schedules/${id}`, {
+      const res = await fetch(`/api/schedules/${id}?companyId=${companyId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -85,7 +85,7 @@ export function useSchedules() {
 
   const deleteSchedule = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/schedules/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/schedules/${id}?companyId=${companyId}`, { method: "DELETE" });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || "Erro ao excluir agenda");
