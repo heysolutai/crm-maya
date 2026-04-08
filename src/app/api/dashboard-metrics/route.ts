@@ -4,7 +4,8 @@ import { authenticate } from '@/lib/api/auth'
 
 export async function GET(req: NextRequest) {
   try {
-    const { companyId } = await authenticate(req)
+    const auth = await authenticate(req)
+    const companyId = req.nextUrl.searchParams.get('companyId') || auth.companyId
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
     const from = req.nextUrl.searchParams.get('from') || new Date(Date.now() - 86400000).toISOString()

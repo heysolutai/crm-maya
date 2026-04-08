@@ -4,7 +4,8 @@ import { authenticate } from '@/lib/api/auth'
 
 export async function GET(req: NextRequest) {
   try {
-    const { companyId } = await authenticate(req)
+    const auth = await authenticate(req)
+    const companyId = req.nextUrl.searchParams.get('companyId') || auth.companyId
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
     // Optimized: count distinct conversations with unread messages (not messages themselves)

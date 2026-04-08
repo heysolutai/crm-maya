@@ -13,16 +13,31 @@ export function isInternalRequest(req: Request): boolean {
 
 /**
  * Authenticate a request via NextAuth session or x-api-key header.
+ * Super admins can impersonate a company via ?companyId= query param.
  */
 export async function authenticate(req: Request): Promise<AuthResult> {
   // Try NextAuth session first
   const session = await auth()
 
   if (session?.user) {
+    let companyId = session.user.companyId ?? null
+    const isSuperAdmin = session.user.isSuperAdmin ?? false
+
+    // Super admin impersonation: accept companyId from query string
+    if (isSuperAdmin && !companyId) {
+      try {
+        const url = new URL(req.url)
+        const qsCompanyId = url.searchParams.get('companyId')
+        if (qsCompanyId) companyId = qsCompanyId
+      } catch {
+        // ignore URL parse errors
+      }
+    }
+
     return {
       agentId: session.user.id,
-      companyId: session.user.companyId ?? null,
-      isSuperAdmin: session.user.isSuperAdmin ?? false,
+      companyId,
+      isSuperAdmin,
     }
   }
 
