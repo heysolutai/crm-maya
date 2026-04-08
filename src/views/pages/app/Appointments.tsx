@@ -36,7 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Calendar as CalendarIcon, Pencil, Trash2, CheckCircle, List, ArrowLeft, MessageCircle, Search, ChevronLeft, ChevronRight, UserCog, Users } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Pencil, Trash2, CheckCircle, List, ArrowLeft, MessageCircle, Search, ChevronLeft, ChevronRight, UserCog, Users, Settings2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
@@ -317,6 +317,16 @@ export default function Appointments() {
               className="pl-9"
             />
           </div>
+
+          <Button
+            variant="outline"
+            size="icon"
+            className="shrink-0"
+            onClick={() => router.push('/app/my-schedule')}
+            title="Configurar minha agenda"
+          >
+            <Settings2 className="h-4 w-4" />
+          </Button>
 
           <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>

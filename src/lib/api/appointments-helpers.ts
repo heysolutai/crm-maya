@@ -65,33 +65,71 @@ export function getEffectiveAppointmentSettings(raw: Partial<AppointmentSettings
 }
 
 export async function authenticateApiKey(req: Request) {
+  // 1. Try API key first
   const apiKey = req.headers.get('x-api-key');
-  if (!apiKey) return { error: apiError('Chave de API não fornecida.', 'API_KEY_REQUIRED', 401) };
+  if (apiKey) {
+    const keyData = await prisma.apiKey.findFirst({
+      where: { key: apiKey },
+      select: { companyId: true, isActive: true, id: true },
+    });
 
-  const keyData = await prisma.apiKey.findFirst({
-    where: { key: apiKey },
-    select: { companyId: true, isActive: true, id: true },
-  });
+    if (!keyData || !keyData.isActive) {
+      return { error: apiError('Chave de API invalida ou inativa.', 'INVALID_API_KEY', 401) };
+    }
 
-  if (!keyData || !keyData.isActive) {
-    return { error: apiError('Chave de API inválida ou inativa.', 'INVALID_API_KEY', 401) };
+    const company = await prisma.company.findUnique({
+      where: { id: keyData.companyId },
+      select: { id: true, name: true, settings: true },
+    });
+
+    if (!company) {
+      return { error: apiError('Empresa nao encontrada.', 'COMPANY_NOT_FOUND', 404) };
+    }
+
+    await prisma.apiKey.update({
+      where: { id: keyData.id },
+      data: { lastUsedAt: new Date() },
+    });
+
+    return { company, settings: (company.settings || {}) as CompanySettings };
   }
 
-  const company = await prisma.company.findUnique({
-    where: { id: keyData.companyId },
-    select: { id: true, name: true, settings: true },
-  });
+  // 2. Fallback to session auth (for dashboard usage)
+  try {
+    const { auth } = await import('@/lib/auth');
+    const session = await auth();
+    if (session?.user) {
+      const companyId = session.user.companyId as string | null;
 
-  if (!company) {
-    return { error: apiError('Empresa não encontrada.', 'COMPANY_NOT_FOUND', 404) };
-  }
+      // Super admin: check query string for impersonated companyId
+      const isSuperAdmin = session.user.isSuperAdmin ?? false;
+      let effectiveCompanyId = companyId;
+      if (isSuperAdmin) {
+        try {
+          const url = new URL(req.url);
+          const qsCompanyId = url.searchParams.get('company_id') || url.searchParams.get('companyId');
+          if (qsCompanyId) effectiveCompanyId = qsCompanyId;
+        } catch { /* ignore */ }
+      }
 
-  await prisma.apiKey.update({
-    where: { id: keyData.id },
-    data: { lastUsedAt: new Date() },
-  });
+      if (!effectiveCompanyId) {
+        return { error: apiError('Empresa nao encontrada na sessao.', 'NO_COMPANY', 403) };
+      }
 
-  return { company, settings: (company.settings || {}) as CompanySettings };
+      const company = await prisma.company.findUnique({
+        where: { id: effectiveCompanyId },
+        select: { id: true, name: true, settings: true },
+      });
+
+      if (!company) {
+        return { error: apiError('Empresa nao encontrada.', 'COMPANY_NOT_FOUND', 404) };
+      }
+
+      return { company, settings: (company.settings || {}) as CompanySettings };
+    }
+  } catch { /* session auth failed, continue to error */ }
+
+  return { error: apiError('Autenticacao necessaria. Fornexa x-api-key ou faca login.', 'AUTH_REQUIRED', 401) };
 }
 
 export async function syncWithGoogleCalendar(companyId: string, appointmentId: string, action: 'create' | 'update' | 'delete', googleEventId?: string | null) {

@@ -59,7 +59,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!isValid) return null
 
         const superAdminRole = user.userRoles.find(r => r.role === 'super_admin')
-        const companyRole = user.userRoles.find(r => r.companyId)
+        // Pick the highest-privilege company role for this user's company
+        const roleHierarchy = ['company_admin', 'manager', 'agent', 'viewer']
+        const companyRoles = user.userRoles
+          .filter(r => r.companyId)
+          .sort((a, b) => roleHierarchy.indexOf(a.role) - roleHierarchy.indexOf(b.role))
+        const companyRole = companyRoles[0] || null
 
         return {
           id: user.id,
