@@ -34,7 +34,7 @@ export function BasicInfoTab({ company }: BasicInfoTabProps) {
       cancelled: { label: 'Cancelado', variant: 'destructive' as const },
       suspended: { label: 'Suspenso', variant: 'destructive' as const },
     };
-    return statusMap[company.subscription_status];
+    return statusMap[company.subscription_status] || { label: company.subscription_status || 'Desconhecido', variant: 'secondary' as const };
   };
 
   return (
