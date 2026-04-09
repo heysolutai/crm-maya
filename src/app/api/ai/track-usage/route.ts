@@ -45,13 +45,12 @@ export async function OPTIONS(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { companyId } = await authenticate(req);
+    const auth = await authenticate(req);
 
-    if (!companyId) {
-      return unauthorizedResponse('Authentication required');
-    }
+    const body = await req.json();
 
     const {
+      company_id,
       conversation_id,
       message_id,
       model,
@@ -60,10 +59,16 @@ export async function POST(req: NextRequest) {
       request_type = 'chat',
       client_id,
       metadata = {},
-    } = await req.json();
+    } = body;
+
+    // Accept company_id from body (N8N calls) or from auth session
+    const companyId = auth.companyId || company_id;
+    if (!companyId) {
+      return unauthorizedResponse('company_id é obrigatório');
+    }
 
     if (!model || input_tokens === undefined || output_tokens === undefined) {
-      return badRequestResponse('Missing required fields: model, input_tokens, output_tokens');
+      return badRequestResponse('Campos obrigatórios: model, input_tokens, output_tokens');
     }
 
     const costs = calculateCost(model, input_tokens, output_tokens);
@@ -73,8 +78,8 @@ export async function POST(req: NextRequest) {
     const data = await prisma.aiTokenUsage.create({
       data: {
         companyId,
-        conversationId: conversation_id,
-        messageId: message_id,
+        conversationId: conversation_id || null,
+        messageId: message_id || null,
         model,
         provider,
         inputTokens: input_tokens,
@@ -95,7 +100,12 @@ export async function POST(req: NextRequest) {
       success: true,
       data: {
         id: data.id,
+        model,
+        input_tokens,
+        output_tokens,
         total_tokens: totalTokens,
+        input_cost: costs.inputCost,
+        output_cost: costs.outputCost,
         total_cost: costs.totalCost,
       },
     });

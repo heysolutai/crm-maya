@@ -4,12 +4,20 @@ import { useAuth } from './useAuth';
 export interface TokenUsageSummary {
   totalCost: number;
   totalTokens: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalInputCost: number;
+  totalOutputCost: number;
   totalRequests: number;
   byModel: Array<{
     model: string;
     requests: number;
     totalTokens: number;
+    inputTokens: number;
+    outputTokens: number;
     totalCost: number;
+    inputCost: number;
+    outputCost: number;
     avgTokensPerRequest: number;
   }>;
   byCompany: Array<{
@@ -17,7 +25,20 @@ export interface TokenUsageSummary {
     companyName: string;
     totalCost: number;
     totalTokens: number;
+    inputTokens: number;
+    outputTokens: number;
     requests: number;
+  }>;
+  byConversation: Array<{
+    conversationId: string;
+    companyId: string;
+    companyName: string;
+    requests: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    totalCost: number;
+    lastActivity: string;
   }>;
   dailyUsage: Array<{
     date: string;
