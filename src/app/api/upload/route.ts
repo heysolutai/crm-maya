@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
+import { uploadToB2, MIME_TO_EXT } from '@/lib/storage'
 import { randomUUID } from 'crypto'
 
-const UPLOAD_DIR = join(process.cwd(), 'public', 'uploads')
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 
 export async function POST(request: NextRequest) {
@@ -26,32 +24,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File too large (max 50MB)' }, { status: 400 })
     }
 
-    // Sanitize bucket name
+    // Build B2 key: media/<bucket>/<uuid>.<ext>
+    const mimeType = file.type || 'application/octet-stream'
+    const ext = MIME_TO_EXT[mimeType] || file.name.split('.').pop() || 'bin'
     const safeBucket = bucket.replace(/[^a-zA-Z0-9-_]/g, '')
-    const dir = join(UPLOAD_DIR, safeBucket)
-    await mkdir(dir, { recursive: true })
+    const key = `media/${safeBucket}/${randomUUID()}.${ext}`
 
-    // Generate unique filename
-    const ext = file.name.split('.').pop() || 'bin'
-    const filename = `${randomUUID()}.${ext}`
-    const filepath = join(dir, filename)
-
-    // Write file
     const bytes = await file.arrayBuffer()
-    await writeFile(filepath, Buffer.from(bytes))
+    const buffer = Buffer.from(bytes)
 
-    // Return public URL path
-    const publicPath = `/uploads/${safeBucket}/${filename}`
+    const publicUrl = await uploadToB2(buffer, key, mimeType)
 
     return NextResponse.json({
-      path: publicPath,
-      url: publicPath,
-      filename,
+      path: publicUrl,
+      url: publicUrl,
+      key,
+      filename: `${randomUUID()}.${ext}`,
       size: file.size,
-      contentType: file.type,
+      contentType: mimeType,
     })
   } catch (error: any) {
     console.error('[Upload] Error:', error)
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
+    return NextResponse.json({ error: error.message || 'Upload failed' }, { status: 500 })
   }
 }
+

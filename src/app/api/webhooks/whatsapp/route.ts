@@ -3,8 +3,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
 import { enqueueInboundMessage, enqueueN8NWebhook, enqueueTranscription, enqueueMediaProcessing } from '@/lib/queue';
-import fs from 'fs';
-import path from 'path';
+import { uploadToB2, buildB2Key, MIME_TO_EXT } from '@/lib/storage';
 
 // Schema de validação para o payload da UAZapi
 const UAZapiPayloadSchema = z.object({
@@ -473,7 +472,7 @@ async function downloadMediaFromWhatsApp(
 }
 
 /**
- * Upload de mídia para o filesystem local (public/uploads/)
+ * Upload de mídia para o Backblaze B2 (S3-compatible)
  */
 async function uploadMediaToStorage(
   base64Data: string,
@@ -483,39 +482,18 @@ async function uploadMediaToStorage(
   mimeType: string
 ): Promise<string | null> {
   try {
-    console.log('[Storage Upload] Starting upload, type:', messageType, 'mime:', mimeType);
+    console.log('[Storage Upload] Starting B2 upload, type:', messageType, 'mime:', mimeType);
 
-    // Converter base64 para Buffer
     const buffer = Buffer.from(base64Data, 'base64');
+    const extension = MIME_TO_EXT[mimeType] || mimeType.split('/')[1] || 'bin';
+    const key = buildB2Key(messageType, companyId, conversationId, extension);
 
-    // Determinar extensão do arquivo
-    const extensionMap: Record<string, string> = {
-      'image/jpeg': 'jpg',
-      'image/png': 'png',
-      'image/webp': 'webp',
-      'audio/ogg': 'ogg',
-      'audio/mpeg': 'mp3',
-      'audio/mp4': 'm4a',
-      'video/mp4': 'mp4',
-      'application/pdf': 'pdf',
-    };
-    const extension = extensionMap[mimeType] || mimeType.split('/')[1] || 'bin';
+    const publicUrl = await uploadToB2(buffer, key, mimeType);
 
-    // Caminho do arquivo no filesystem
-    const fileName = `${messageType}_${conversationId}_${Date.now()}.${extension}`;
-    const relativePath = `${messageType}s/${companyId}/${fileName}`;
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', `${messageType}s`, companyId);
-
-    // Ensure directory exists
-    fs.mkdirSync(uploadDir, { recursive: true });
-
-    const filePath = path.join(uploadDir, fileName);
-    fs.writeFileSync(filePath, buffer);
-
-    console.log('[Storage Upload] Success, path:', relativePath);
-    return relativePath;
+    console.log('[Storage Upload] B2 success, url:', publicUrl);
+    return publicUrl;
   } catch (error) {
-    console.error('[Storage Upload] Exception:', error);
+    console.error('[Storage Upload] B2 Exception:', error);
     return null;
   }
 }
