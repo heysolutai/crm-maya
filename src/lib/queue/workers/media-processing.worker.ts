@@ -2,8 +2,7 @@ import { Worker, Job } from 'bullmq'
 import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type MediaProcessingJob, enqueueN8NWebhook } from '../queues'
 import { prisma } from '@/lib/db'
-import fs from 'fs'
-import path from 'path'
+import { uploadToB2, buildB2Key, MIME_TO_EXT } from '@/lib/storage'
 
 // Download media via UazAPI /message/download endpoint (only reliable method — WhatsApp URLs are encrypted)
 async function downloadViaUazAPI(
@@ -40,26 +39,39 @@ async function downloadViaUazAPI(
     const result = await response.json()
     console.log(`[Media Worker] UazAPI response keys: ${Object.keys(result).join(', ')}`)
 
-    const base64Data = result.base64 || result.data
-    if (!base64Data) {
-      console.error('[Media Worker] UazAPI returned no base64 data:', Object.keys(result))
-      return null
+    // UazAPI pode retornar base64 em diferentes campos
+    const rawBase64 = result.base64Data || result.base64 || result.data || result.file || result.content
+    const mimeType = result.mimetype || result.mimeType || result.mime_type || 'application/octet-stream'
+
+    if (rawBase64 && rawBase64.length > 10) {
+      // Strip data URI prefix if present
+      let cleanBase64 = rawBase64
+      const commaIdx = cleanBase64.indexOf(',')
+      if (commaIdx !== -1 && commaIdx < 100) cleanBase64 = cleanBase64.substring(commaIdx + 1)
+      cleanBase64 = cleanBase64.replace(/[\s\r\n]/g, '')
+      const buffer = Buffer.from(cleanBase64, 'base64')
+      console.log(`[Media Worker] Base64 decoded: ${buffer.length} bytes, mime: ${mimeType}`)
+      return { buffer, mimeType }
     }
 
-    // Strip data URI prefix if present (e.g. "data:image/jpeg;base64,...")
-    let cleanBase64 = base64Data
-    const commaIdx = cleanBase64.indexOf(',')
-    if (commaIdx !== -1 && commaIdx < 100) {
-      cleanBase64 = cleanBase64.substring(commaIdx + 1)
+    // Fallback: se a UazAPI retornou um fileURL, baixar diretamente
+    const fileUrl = result.fileURL || result.fileUrl || result.url || result.link
+    if (fileUrl && typeof fileUrl === 'string' && fileUrl.startsWith('http')) {
+      console.log(`[Media Worker] base64 vazio, tentando fileURL: ${fileUrl}`)
+      const fileRes = await fetch(fileUrl)
+      if (!fileRes.ok) {
+        console.error(`[Media Worker] fileURL download failed (${fileRes.status})`)
+        return null
+      }
+      const arrayBuf = await fileRes.arrayBuffer()
+      const buffer = Buffer.from(arrayBuf)
+      const fileMime = fileRes.headers.get('content-type') || mimeType
+      console.log(`[Media Worker] fileURL downloaded: ${buffer.length} bytes, mime: ${fileMime}`)
+      return { buffer, mimeType: fileMime.split(';')[0].trim() }
     }
-    // Remove any whitespace/newlines
-    cleanBase64 = cleanBase64.replace(/[\s\r\n]/g, '')
 
-    const buffer = Buffer.from(cleanBase64, 'base64')
-    const mimeType = result.mimetype || result.mimeType || 'application/octet-stream'
-    console.log(`[Media Worker] Base64 decoded: ${buffer.length} bytes, mime: ${mimeType}, first bytes: ${buffer.slice(0, 8).toString('hex')}`)
-
-    return { buffer, mimeType }
+    console.error('[Media Worker] UazAPI returned no base64 data:', Object.keys(result))
+    return null
   } catch (err: any) {
     console.error('[Media Worker] UazAPI download exception:', err.message)
     return null
@@ -76,7 +88,7 @@ function detectImageFormat(buffer: Buffer): string | null {
   return null
 }
 
-// Upload buffer to local filesystem (public/uploads/)
+// Upload buffer to Backblaze B2
 async function uploadToStorage(
   buffer: Buffer,
   mediaType: string,
@@ -86,31 +98,13 @@ async function uploadToStorage(
 ): Promise<string | null> {
   try {
     const baseMime = mimeType.split(';')[0].trim()
-
-    const extensions: Record<string, string> = {
-      'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
-      'video/mp4': 'mp4', 'video/3gpp': '3gp',
-      'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a',
-      'application/pdf': 'pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
-    }
-    const ext = extensions[baseMime] || baseMime.split('/')[1] || 'bin'
-    const fileName = `${mediaType}_${conversationId}_${Date.now()}.${ext}`
-    const storagePath = `uploads/conversation-media/${mediaType}s/${companyId}/${fileName}`
-    const fullPath = path.join(process.cwd(), 'public', storagePath)
-
-    // Ensure directory exists
-    const dir = path.dirname(fullPath)
-    await fs.promises.mkdir(dir, { recursive: true })
-
-    console.log(`[Media Worker] Uploading ${storagePath} (${buffer.length} bytes, type: ${baseMime})`)
-
-    await fs.promises.writeFile(fullPath, buffer)
-
-    return storagePath
+    const ext = MIME_TO_EXT[baseMime] || baseMime.split('/')[1] || 'bin'
+    const key = buildB2Key(mediaType, companyId, conversationId, ext)
+    const publicUrl = await uploadToB2(buffer, key, baseMime)
+    console.log(`[Media Worker] B2 upload success: ${publicUrl}`)
+    return publicUrl
   } catch (error) {
-    console.error('[Media Worker] Upload exception:', error)
+    console.error('[Media Worker] B2 upload exception:', error)
     return null
   }
 }
@@ -174,22 +168,19 @@ async function processMedia(job: Job<MediaProcessingJob>) {
 
   console.log(`[Media Worker] Uploaded to: ${storagePath}`)
 
-  // Send N8N webhook with public URL
+  // Send N8N webhook with public URL (B2 URL já é pública)
   if (n8nWebhookUrl && n8nPayload) {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const publicUrl = `${baseUrl}/${storagePath}`
-
     await enqueueN8NWebhook({
       webhookUrl: n8nWebhookUrl,
       payload: {
         ...n8nPayload,
-        media_url: publicUrl,
+        media_url: storagePath, // storagePath agora é a URL pública do B2
       },
       companyId,
       conversationId,
       messageId,
     })
-    console.log(`[Media Worker] N8N webhook URL: ${publicUrl}`)
+    console.log(`[Media Worker] N8N webhook media_url: ${storagePath}`)
   }
 
   return { messageId, storagePath }

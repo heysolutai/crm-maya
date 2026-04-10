@@ -125,10 +125,11 @@ export async function POST(req: NextRequest) {
 
     switch (action) {
       case "list": {
-        // Try with jid first; if empty, try without it
         const listBody: Record<string, unknown> = {};
         if (jid) listBody.jid = jid;
         const result = await callUazapi(apiUrl, "/business/catalog/list", token, listBody);
+        console.log("[Catalog] UazAPI response ok:", result.ok, "status:", result.status);
+        console.log("[Catalog] UazAPI catalog data:", JSON.stringify(result.data).substring(0, 500));
         if (!result.ok) {
           console.error("[Catalog] Erro ao listar catálogo:", JSON.stringify(result.data));
           return NextResponse.json(
