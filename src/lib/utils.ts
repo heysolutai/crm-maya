@@ -14,8 +14,10 @@ export function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function formatMessageTime(date: Date | string): string {
+export function formatMessageTime(date: Date | string | null | undefined): string {
+  if (!date) return '';
   const parsedDate = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(parsedDate.getTime())) return '';
   
   if (isToday(parsedDate)) {
     return format(parsedDate, 'HH:mm', { locale: ptBR });
@@ -32,9 +34,11 @@ export function formatMessageTime(date: Date | string): string {
   return format(parsedDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
 }
 
-export function formatRelativeTime(date: Date | string): string {
+export function formatRelativeTime(date: Date | string | null | undefined): string {
+  if (!date) return '';
   const now = new Date();
   const msgDate = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(msgDate.getTime())) return '';
   
   if (isToday(msgDate)) {
     const diffMinutes = Math.floor((now.getTime() - msgDate.getTime()) / (1000 * 60));
@@ -46,8 +50,6 @@ export function formatRelativeTime(date: Date | string): string {
   }
   
   if (isYesterday(msgDate)) {
-    const diffMinutes = Math.floor((now.getTime() - msgDate.getTime()) / (1000 * 60));
-    const diffHours = Math.floor(diffMinutes / 60);
     return `Ontem às ${format(msgDate, 'HH:mm', { locale: ptBR })}`;
   }
   

@@ -17,18 +17,67 @@ import { authenticate } from "@/lib/api/auth";
 async function getInstance(companyId: string) {
   const instance = await prisma.whatsappInstance.findFirst({
     where: { companyId, isActive: true },
-    select: { apiUrl: true, instanceApiKey: true, metadata: true, status: true },
+    select: { id: true, apiUrl: true, instanceApiKey: true, instanceName: true, metadata: true, status: true },
   });
 
   if (!instance) return { error: "Instância do WhatsApp não encontrada" };
   if (!instance.apiUrl || !instance.instanceApiKey) {
-    return { error: "Instância não configurada corretamente" };
-  }
-  if (!instance.status || instance.status.toLowerCase() !== "connected") {
-    return { error: `WhatsApp não está conectado (status: ${instance.status || 'desconhecido'})` };
+    return { error: "Instância não configurada corretamente (faltam apiUrl ou token)" };
   }
 
-  // Extract phone from metadata (owner JID)
+  // Verificar status em tempo real na UazAPI (não confiar no banco que pode estar desatualizado)
+  try {
+    const statusRes = await fetch(`${instance.apiUrl}/instance/status`, {
+      method: "GET",
+      headers: { "Accept": "application/json", "token": instance.instanceApiKey },
+    });
+
+    if (statusRes.ok) {
+      const statusData = await statusRes.json();
+      const hasStatusObj = typeof statusData.status === "object" && statusData.status !== null;
+      const isConnected = hasStatusObj
+        ? (statusData.status?.connected === true || statusData.status?.loggedIn === true)
+        : (statusData.instance?.status === "connected" || statusData.instance?.status === "open");
+
+      // Remove device suffix (:35) → "556291873663:35@s.whatsapp.net" → "556291873663@s.whatsapp.net"
+      const cleanJid = (raw: string) => raw.replace(/:(\d+)@/, "@");
+
+      const rawJid = hasStatusObj
+        ? (statusData.status?.jid as string) || ""
+        : (statusData.instance?.owner as string) || "";
+      const ownerJid = rawJid ? cleanJid(rawJid) : "";
+
+      console.log(`[Catalog] Instância "${instance.instanceName}" liveStatus connected=${isConnected} jid=${ownerJid}`);
+
+      if (!isConnected) {
+        const rawStatus = hasStatusObj ? JSON.stringify(statusData.status) : statusData.instance?.status;
+        return { error: `WhatsApp não está conectado. Status atual: ${rawStatus || 'desconhecido'}` };
+      }
+
+      // Atualizar banco como efeito colateral (sem bloquear)
+      prisma.whatsappInstance.update({
+        where: { id: instance.id },
+        data: { status: "connected" },
+      }).catch(() => {});
+
+      return {
+        apiUrl: instance.apiUrl,
+        token: instance.instanceApiKey,
+        jid: ownerJid,
+      };
+    }
+  } catch (e) {
+    console.error(`[Catalog] Erro ao verificar status live da instância:`, e);
+    // Se não conseguiu checar ao vivo, cai no status do banco como fallback
+  }
+
+  // Fallback: usar status do banco
+  const CONNECTED_STATES = ["connected", "open", "online", "inchat"];
+  const isDbConnected = CONNECTED_STATES.some(s => s === (instance.status || "").toLowerCase());
+  if (!isDbConnected) {
+    return { error: `WhatsApp não está conectado (status no banco: "${instance.status || 'desconhecido'}"). Clique em "Atualizar" nas configurações.` };
+  }
+
   const metadata = (instance.metadata || {}) as Record<string, unknown>;
   const ownerJid = (metadata.owner as string) || (metadata.wid as string) || "";
 
@@ -66,7 +115,7 @@ export async function POST(req: NextRequest) {
 
     const instance = await getInstance(companyId);
     if ("error" in instance) {
-      return NextResponse.json({ error: instance.error }, { status: 400 });
+      return NextResponse.json({ error: instance.error }, { status: 503 });
     }
 
     const { apiUrl, token, jid } = instance;

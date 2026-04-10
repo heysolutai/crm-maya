@@ -74,7 +74,9 @@ export const ConversationHeader = memo(function ConversationHeader({
               {statusLabels[conversation.status as ConversationStatus]}
             </Badge>
             <span className="text-[11px] text-muted-foreground truncate">
-              {format(new Date(conversation.started_at), "dd/MM/yy HH:mm", { locale: ptBR })}
+              {conversation.started_at
+                ? (() => { try { const d = new Date(conversation.started_at); return isNaN(d.getTime()) ? '' : format(d, "dd/MM/yy HH:mm", { locale: ptBR }); } catch { return ''; } })()
+                : ''}
             </span>
           </div>
         </div>
