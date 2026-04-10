@@ -101,7 +101,7 @@ const navGroups: NavGroup[] = [
     label: 'Vendas',
     items: [
       { name: 'Clientes', href: '/app/clients', icon: Users, roles: ['viewer', 'agent', 'manager', 'company_admin'], requirePermission: 'can_access_crm' },
-      { name: 'Produtos', href: '/app/products', icon: Package, roles: ['agent', 'manager', 'company_admin'] },
+      { name: 'Catálogo', href: '/app/catalog', icon: Package, roles: ['agent', 'manager', 'company_admin'] },
       { name: 'Agenda', href: '/app/appointments', icon: Calendar, roles: ['agent', 'manager', 'company_admin'], countKey: 'appointmentsToday' },
       { name: 'Follow-ups', href: '/app/follow-ups', icon: Clock, roles: ['manager', 'company_admin'], countKey: 'pendingFollowUps' },
     ],
