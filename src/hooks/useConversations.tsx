@@ -38,6 +38,31 @@ export function useConversations(filters?: ConversationFilters) {
 
   const pollingIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Normalize message from camelCase (Prisma) to snake_case (frontend Message type)
+  const normalizeMessage = (m: any) => ({
+    ...m,
+    id: m.id,
+    conversation_id: m.conversationId || m.conversation_id,
+    message_text: m.messageText ?? m.message_text ?? null,
+    message_type: m.messageType || m.message_type || 'text',
+    sender_type: m.senderType || m.sender_type || 'client',
+    sender_id: m.senderId || m.sender_id || null,
+    media_url: m.mediaUrl || m.media_url || null,
+    is_read: m.isRead ?? m.is_read ?? false,
+    read_at: m.readAt || m.read_at || null,
+    read_status: m.readStatus || m.read_status || null,
+    quoted_message_id: m.quotedMessageId || m.quoted_message_id || null,
+    uaz_message_id: m.uazMessageId || m.uaz_message_id || null,
+    created_at: m.createdAt || m.created_at || null,
+    metadata: m.metadata || null,
+    sender: m.sender ? {
+      full_name: m.sender.fullName || m.sender.full_name || null,
+      avatar_url: m.sender.avatarUrl || m.sender.avatar_url || null,
+    } : null,
+    // Keep _optimistic flag if present
+    _optimistic: m._optimistic || false,
+  });
+
   const { data: conversations, isLoading } = useQuery({
     queryKey: ['conversations', companyId, filters],
     queryFn: async () => {
@@ -93,8 +118,25 @@ export function useConversations(filters?: ConversationFilters) {
 
       results = results.map((conv: any) => {
         const lastMsg = conv.messages?.[0] || null;
+        // Normalize client fields from camelCase (Prisma) to snake_case (frontend types)
+        const client = conv.client ? {
+          id: conv.client.id,
+          first_name: conv.client.firstName || conv.client.first_name || '',
+          last_name: conv.client.lastName || conv.client.last_name || null,
+          phone: conv.client.phone || null,
+          email: conv.client.email || null,
+          avatar_url: conv.client.avatarUrl || conv.client.avatar_url || null,
+          ai_paused: conv.client.aiPaused ?? conv.client.ai_paused ?? false,
+        } : null;
+        // Normalize transferAgent → transferred_user
+        const transferred_user = conv.transferAgent
+          ? { full_name: conv.transferAgent.fullName || conv.transferAgent.full_name || null }
+          : (conv.transferred_user || null);
         return {
           ...conv,
+          client,
+          started_at: conv.startedAt || conv.started_at,
+          transferred_user,
           unread_count: countMap[conv.id] || 0,
           last_message: lastMsg ? {
             text: lastMsg.messageText || lastMsg.message_text,
@@ -135,7 +177,7 @@ export function useConversations(filters?: ConversationFilters) {
 
     try {
       const data = await fetchMessagesForConversation(conversationId);
-      const reversedData = [...data].reverse();
+      const reversedData = [...data].map(normalizeMessage).reverse();
 
       setConversationMessages(prev => ({
         ...prev,
@@ -169,7 +211,7 @@ export function useConversations(filters?: ConversationFilters) {
       Object.keys(conversationMessages).forEach(convId => {
         if (conversationMessages[convId]?.initialLoaded) {
           fetchMessagesForConversation(convId).then(data => {
-            const reversedData = [...data].reverse();
+            const reversedData = [...data].map(normalizeMessage).reverse();
             setConversationMessages(prev => {
               const state = prev[convId];
               if (!state) return prev;
@@ -257,7 +299,7 @@ export function useConversations(filters?: ConversationFilters) {
 
     try {
       const data = await fetchMessagesForConversation(conversationId, state.oldestCursor || undefined);
-      const reversedData = [...data].reverse();
+      const reversedData = [...data].map(normalizeMessage).reverse();
 
       setConversationMessages(prev => ({
         ...prev,

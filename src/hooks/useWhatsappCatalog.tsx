@@ -56,6 +56,9 @@ function extractProducts(data: unknown): CatalogProduct[] {
   if (Array.isArray(obj.catalog)) return (obj.catalog as Record<string, unknown>[]).map(normalizeProduct);
   if (Array.isArray(obj.items)) return (obj.items as Record<string, unknown>[]).map(normalizeProduct);
   if (Array.isArray(obj.data)) return (obj.data as Record<string, unknown>[]).map(normalizeProduct);
+  if (Array.isArray(obj.result)) return (obj.result as Record<string, unknown>[]).map(normalizeProduct);
+  // If the response is a single object with an id, treat it as a single product
+  if (obj.id) return [normalizeProduct(obj)];
   return [];
 }
 

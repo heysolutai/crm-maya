@@ -24,8 +24,8 @@ async function getInstance(companyId: string) {
   if (!instance.apiUrl || !instance.instanceApiKey) {
     return { error: "Instância não configurada corretamente" };
   }
-  if (instance.status !== "connected") {
-    return { error: "WhatsApp não está conectado" };
+  if (!instance.status || instance.status.toLowerCase() !== "connected") {
+    return { error: `WhatsApp não está conectado (status: ${instance.status || 'desconhecido'})` };
   }
 
   // Extract phone from metadata (owner JID)
@@ -76,8 +76,12 @@ export async function POST(req: NextRequest) {
 
     switch (action) {
       case "list": {
-        const result = await callUazapi(apiUrl, "/business/catalog/list", token, { jid });
+        // Try with jid first; if empty, try without it
+        const listBody: Record<string, unknown> = {};
+        if (jid) listBody.jid = jid;
+        const result = await callUazapi(apiUrl, "/business/catalog/list", token, listBody);
         if (!result.ok) {
+          console.error("[Catalog] Erro ao listar catálogo:", JSON.stringify(result.data));
           return NextResponse.json(
             { error: "Erro ao listar catálogo", details: result.data },
             { status: result.status }
