@@ -31,34 +31,65 @@ async function callCatalogApi(action: string, body: Record<string, unknown> = {}
 }
 
 function normalizeProduct(raw: Record<string, unknown>): CatalogProduct {
-  // UazAPI retorna nomes variados, tentamos mapear
+  // UazAPI retorna PascalCase: ID, Name, Price.Amount, Images[0].OriginalImageUrl
+  const price = raw.Price as Record<string, string> | undefined;
+  const images = raw.Images as Array<Record<string, unknown>> | undefined;
+
+  // Formatar preço: Amount vem em centavos * 1000 (ex: 19900000 = R$199,00)
+  let formattedPrice: string | undefined;
+  if (price?.Amount) {
+    const amount = parseFloat(price.Amount) / 1000;
+    formattedPrice = amount.toLocaleString("pt-BR", { style: "currency", currency: price.Currency || "BRL" });
+  }
+
+  const imageUrl =
+    (images?.[0]?.OriginalImageUrl as string) ||
+    (images?.[0]?.RequestImageUrl as string) ||
+    (raw.imageUrl as string) ||
+    (raw.image_url as string) ||
+    undefined;
+
   return {
-    id: (raw.id as string) || (raw.productId as string) || (raw.product_id as string) || "",
-    name: (raw.name as string) || (raw.title as string) || "",
-    description: (raw.description as string) || undefined,
-    price: (raw.price as string) || (raw.priceString as string) || undefined,
-    currency: (raw.currency as string) || undefined,
-    imageUrl: (raw.imageUrl as string) || (raw.image_url as string) || (raw.image as string) || undefined,
-    availability: (raw.availability as string) || undefined,
-    isHidden: (raw.isHidden as boolean) || (raw.is_hidden as boolean) || false,
-    retailerId: (raw.retailerId as string) || (raw.retailer_id as string) || undefined,
-    url: (raw.url as string) || undefined,
+    // PascalCase (UazAPI real)
+    id: (raw.ID as string) || (raw.id as string) || (raw.productId as string) || "",
+    name: (raw.Name as string) || (raw.name as string) || (raw.title as string) || "",
+    description: (raw.Description as string) || (raw.description as string) || undefined,
+    price: formattedPrice || (raw.price as string) || (raw.priceString as string) || undefined,
+    currency: price?.Currency || (raw.currency as string) || undefined,
+    imageUrl,
+    availability: (raw.Availability as string) || (raw.availability as string) || undefined,
+    isHidden: (raw.IsHidden as boolean) ?? (raw.isHidden as boolean) ?? false,
+    retailerId: (raw.RetailerID as string) || (raw.retailerId as string) || undefined,
+    url: (raw.Url as string) || (raw.url as string) || undefined,
     ...raw,
   };
 }
 
 function extractProducts(data: unknown): CatalogProduct[] {
   if (!data) return [];
-  // A API da UazAPI pode retornar em formatos variados
-  if (Array.isArray(data)) return data.map(normalizeProduct);
+
   const obj = data as Record<string, unknown>;
+
+  // Formato real da UazAPI: { response: { Products: [...] } }
+  if (obj.response) {
+    const resp = obj.response as Record<string, unknown>;
+    if (Array.isArray(resp.Products)) {
+      return (resp.Products as Record<string, unknown>[]).map(normalizeProduct);
+    }
+  }
+
+  // Outros formatos possíveis
+  if (Array.isArray(data)) return (data as Record<string, unknown>[]).map(normalizeProduct);
+  if (Array.isArray(obj.Products)) return (obj.Products as Record<string, unknown>[]).map(normalizeProduct);
   if (Array.isArray(obj.products)) return (obj.products as Record<string, unknown>[]).map(normalizeProduct);
   if (Array.isArray(obj.catalog)) return (obj.catalog as Record<string, unknown>[]).map(normalizeProduct);
   if (Array.isArray(obj.items)) return (obj.items as Record<string, unknown>[]).map(normalizeProduct);
   if (Array.isArray(obj.data)) return (obj.data as Record<string, unknown>[]).map(normalizeProduct);
   if (Array.isArray(obj.result)) return (obj.result as Record<string, unknown>[]).map(normalizeProduct);
-  // If the response is a single object with an id, treat it as a single product
-  if (obj.id) return [normalizeProduct(obj)];
+
+  // Objeto único com ID
+  if (obj.ID || obj.id) return [normalizeProduct(obj)];
+
   return [];
 }
 
