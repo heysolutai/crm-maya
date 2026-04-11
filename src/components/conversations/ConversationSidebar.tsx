@@ -1,13 +1,13 @@
-import { memo } from 'react';
-import { Search, Plus, Tag, X, Image, Mic, FileText, MapPin, Video, Building2 } from 'lucide-react';
+import { memo, useState } from 'react';
+import { Search, Plus, Tag, X, Image, Mic, FileText, MapPin, Video } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RealtimeStatusIndicator } from '@/components/conversations/RealtimeStatusIndicator';
+import { ConversationFilters } from '@/components/conversations/ConversationFilters';
 import { ConversationListSkeleton } from '@/components/ui/skeleton-list';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { getInitials, type Conversation, type LastMessage } from './types';
@@ -88,6 +88,8 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   onNewConversation,
   onPickupConversation,
 }: ConversationSidebarProps) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
   const filteredConversations = statusFilter === 'unread'
     ? conversations?.filter((c) => (c.unread_count || 0) > 0)
     : conversations;
@@ -121,49 +123,30 @@ export const ConversationSidebar = memo(function ConversationSidebar({
           />
         </div>
 
-        <div className="flex gap-2">
-          <Select value={statusFilter} onValueChange={onStatusFilterChange}>
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="unread">Não lidas</SelectItem>
-              <SelectItem value="active">Ativas</SelectItem>
-              <SelectItem value="waiting">Aguardando</SelectItem>
-              <SelectItem value="closed">Fechadas</SelectItem>
-              <SelectItem value="transferred">Transferidas</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {departments.length > 0 && (
-            <Select value={departmentFilter} onValueChange={onDepartmentFilterChange}>
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Departamento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os dept.</SelectItem>
-                {departments.map(dept => (
-                  <SelectItem key={dept.id} value={dept.id}>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dept.color }} />
-                      {dept.name}
-                      {(queueCounts[dept.id] || 0) > 0 && (
-                        <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1">
-                          {queueCounts[dept.id]} na fila
-                        </Badge>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <ConversationFilters
+              open={filtersOpen}
+              onOpenChange={setFiltersOpen}
+              conversations={conversations}
+              departments={departments}
+              queueCounts={queueCounts}
+              statusFilter={statusFilter}
+              onStatusFilterChange={onStatusFilterChange}
+              departmentFilter={departmentFilter}
+              onDepartmentFilterChange={onDepartmentFilterChange}
+            />
+          </div>
 
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="icon" className="shrink-0" aria-label="Filtrar por etiquetas">
                 <Tag className="h-4 w-4" />
+                {tagFilters.length > 0 && (
+                  <Badge className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[9px] bg-primary text-primary-foreground">
+                    {tagFilters.length}
+                  </Badge>
+                )}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-64">

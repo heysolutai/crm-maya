@@ -19,7 +19,7 @@ export const ReactionPicker = ({ onReactionSelect }: ReactionPickerProps) => {
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="h-7 w-7 opacity-60 hover:opacity-100 transition-opacity"
         >
           <Smile className="h-4 w-4" />
         </Button>
