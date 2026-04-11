@@ -200,48 +200,95 @@ export function useConversations(filters?: ConversationFilters) {
     }
   };
 
-  // Polling for new messages (replaces Supabase realtime)
+  // Realtime via Server-Sent Events (push do backend -> frontend).
+  // O polling de fallback continua rodando em intervalo maior, pra casos de
+  // desconexao do SSE ou mensagens perdidas durante um reconnect.
   useEffect(() => {
     if (!companyId) return;
 
+    const es = new EventSource('/api/conversations/events');
+
+    es.addEventListener('message', (evt: MessageEvent) => {
+      try {
+        const data = JSON.parse(evt.data);
+
+        if (data.type === 'message:new' && data.conversationId && data.message) {
+          const incoming = normalizeMessage(data.message);
+          setConversationMessages(prev => {
+            const state = prev[data.conversationId];
+            if (!state?.initialLoaded) return prev;
+            if (state.messages.some(m => m.id === incoming.id)) return prev;
+            const merged = [...state.messages.filter(m => !m._optimistic), incoming]
+              .sort((a, b) => new Date(a.createdAt || a.created_at).getTime() - new Date(b.createdAt || b.created_at).getTime());
+            return { ...prev, [data.conversationId]: { ...state, messages: merged } };
+          });
+          queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
+          return;
+        }
+
+        if (data.type === 'message:delete' && data.conversationId && data.messageId) {
+          setConversationMessages(prev => {
+            const state = prev[data.conversationId];
+            if (!state) return prev;
+            return {
+              ...prev,
+              [data.conversationId]: {
+                ...state,
+                messages: state.messages.filter(m => m.id !== data.messageId),
+              },
+            };
+          });
+          queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
+          return;
+        }
+
+        if (data.type === 'message:update' && data.conversationId && data.messageId && data.patch) {
+          const patch = data.patch as Record<string, any>;
+          setConversationMessages(prev => {
+            const state = prev[data.conversationId];
+            if (!state) return prev;
+            return {
+              ...prev,
+              [data.conversationId]: {
+                ...state,
+                messages: state.messages.map(m =>
+                  m.id === data.messageId
+                    ? {
+                        ...m,
+                        ...patch,
+                        read_status: patch.readStatus ?? m.read_status,
+                        read_at: patch.readAt ?? m.read_at,
+                      }
+                    : m
+                ),
+              },
+            };
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn('[SSE] parse error:', err);
+      }
+    });
+
+    es.addEventListener('error', () => {
+      // O browser reconecta sozinho; so logamos
+      console.warn('[SSE] conexao caiu, reconectando...');
+    });
+
+    // Polling de fallback (intervalo maior, so pra cobrir buracos de SSE)
     pollingIntervalRef.current = setInterval(() => {
       queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
-
-      // Reload messages for loaded conversations
-      Object.keys(conversationMessages).forEach(convId => {
-        if (conversationMessages[convId]?.initialLoaded) {
-          fetchMessagesForConversation(convId).then(data => {
-            const reversedData = [...data].map(normalizeMessage).reverse();
-            setConversationMessages(prev => {
-              const state = prev[convId];
-              if (!state) return prev;
-
-              // Merge: keep existing, add new ones
-              const existingIds = new Set(state.messages.filter(m => !m._optimistic).map(m => m.id));
-              const newMessages = reversedData.filter((m: any) => !existingIds.has(m.id));
-
-              if (newMessages.length === 0) return prev;
-
-              const merged = [...state.messages.filter(m => !m._optimistic), ...newMessages]
-                .sort((a, b) => new Date(a.createdAt || a.created_at).getTime() - new Date(b.createdAt || b.created_at).getTime());
-
-              return {
-                ...prev,
-                [convId]: { ...state, messages: merged },
-              };
-            });
-          }).catch(() => { /* ignore polling errors */ });
-        }
-      });
-    }, 3000); // Poll every 3 seconds for near-realtime chat
+    }, 15_000);
 
     return () => {
+      es.close();
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
       }
     };
-  }, [companyId, queryClient, Object.keys(conversationMessages).join(',')]);
+  }, [companyId, queryClient]);
 
   // Manual refresh
   const manualRefresh = async () => {
@@ -699,9 +746,14 @@ export function useConversations(filters?: ConversationFilters) {
 
   const deleteMessage = useMutation({
     mutationFn: async ({ messageId, conversationId }: { messageId: string; conversationId: string }) => {
-      const res = await fetch(`/api/messages?id=${messageId}`, { method: 'DELETE' });
+      // Chama o endpoint que revoga no WhatsApp (via UazAPI /message/delete) e deleta do banco
+      const res = await fetch('/api/whatsapp/delete-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId }),
+      });
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to delete message');
       }
       return { messageId, conversationId };

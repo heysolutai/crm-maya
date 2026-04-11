@@ -48,38 +48,51 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, isClient = false 
 
   // Process audio and extract waveform data once
   useEffect(() => {
+    const SAMPLES = 48;
+
+    // Fallback determinístico baseado no src — garante barras visíveis mesmo se
+    // o decode falhar (CORS, formato não suportado, etc)
+    const fakeWaveform = () => {
+      let seed = 0;
+      for (let i = 0; i < src.length; i++) seed = (seed * 31 + src.charCodeAt(i)) | 0;
+      const rand = () => {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        return seed / 0x7fffffff;
+      };
+      return Array.from({ length: SAMPLES }, () => 0.25 + rand() * 0.75);
+    };
+
     const processAudio = async () => {
       try {
         const audioContext = new AudioContext();
-        const response = await fetch(src);
+        const response = await fetch(src, { mode: 'cors' });
+        if (!response.ok) throw new Error(`fetch failed (${response.status})`);
         const arrayBuffer = await response.arrayBuffer();
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-        
-        // Extract amplitude data
+
         const rawData = audioBuffer.getChannelData(0);
-        const samples = 40; // Number of bars in waveform
-        const blockSize = Math.floor(rawData.length / samples);
+        const blockSize = Math.floor(rawData.length / SAMPLES);
         const amplitudes: number[] = [];
-        
-        for (let i = 0; i < samples; i++) {
+
+        for (let i = 0; i < SAMPLES; i++) {
           let sum = 0;
           for (let j = 0; j < blockSize; j++) {
             sum += Math.abs(rawData[i * blockSize + j]);
           }
           amplitudes.push(sum / blockSize);
         }
-        
-        // Normalize amplitudes
-        const max = Math.max(...amplitudes);
-        const normalized = amplitudes.map(amp => amp / max);
-        
+
+        const max = Math.max(...amplitudes) || 1;
+        const normalized = amplitudes.map((amp) => Math.max(0.15, amp / max));
+
         setWaveformData(normalized);
         audioContextRef.current = audioContext;
       } catch (error) {
-        console.error('Error processing audio:', error);
+        console.warn('[AudioPlayer] decode falhou, usando waveform fallback:', error);
+        setWaveformData(fakeWaveform());
       }
     };
-    
+
     processAudio();
   }, [src]);
 
@@ -97,16 +110,17 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, isClient = false 
     canvas.height = rect.height * window.devicePixelRatio;
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
 
-    // Get computed colors
+    // Cores: mensagens incoming usam primary/muted; outgoing (fundo verde) usam branco
     const getColor = (variable: string): string => {
       const style = getComputedStyle(document.documentElement);
       const hslValue = style.getPropertyValue(variable).trim();
       return `hsl(${hslValue})`;
     };
 
-    const primaryColor = getColor('--primary');
-    const accentColor = getColor('--accent');
-    const mutedColor = getColor('--muted-foreground');
+    const playedColor = isClient ? getColor('--primary') : '#ffffff';
+    const unplayedColor = isClient
+      ? 'hsla(0, 0%, 50%, 0.35)'
+      : 'rgba(255, 255, 255, 0.35)';
 
     const draw = () => {
       const width = canvas.width / window.devicePixelRatio;
@@ -115,26 +129,35 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, isClient = false 
       ctx.clearRect(0, 0, width, height);
 
       const barCount = waveformData.length;
-      const barWidth = 2;
+      const barWidth = 2.5;
       const gap = 2;
       const totalWidth = barCount * (barWidth + gap);
-      const startX = (width - totalWidth) / 2;
+      const startX = Math.max(0, (width - totalWidth) / 2);
       const progress = duration > 0 ? currentTime / duration : 0;
 
       for (let i = 0; i < barCount; i++) {
         const amplitude = waveformData[i];
-        const barHeight = Math.max(4, amplitude * height * 0.6);
+        const barHeight = Math.max(3, amplitude * height * 0.85);
         const x = startX + i * (barWidth + gap);
         const y = (height - barHeight) / 2;
 
-        // Change color based on progress
         const isPlayed = (i / barCount) < progress;
-        const color = isPlayed 
-          ? (isClient ? primaryColor : accentColor)
-          : mutedColor.replace('hsl(', 'hsla(').replace(')', ' / 0.3)');
-        
-        ctx.fillStyle = color;
-        ctx.fillRect(x, y, barWidth, barHeight);
+        ctx.fillStyle = isPlayed ? playedColor : unplayedColor;
+
+        // Barras arredondadas
+        const radius = barWidth / 2;
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + barWidth - radius, y);
+        ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
+        ctx.lineTo(x + barWidth, y + barHeight - radius);
+        ctx.quadraticCurveTo(x + barWidth, y + barHeight, x + barWidth - radius, y + barHeight);
+        ctx.lineTo(x + radius, y + barHeight);
+        ctx.quadraticCurveTo(x, y + barHeight, x, y + barHeight - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        ctx.fill();
       }
     };
 
@@ -180,36 +203,39 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, isClient = false 
   };
 
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 min-w-[280px]">
-      <audio ref={audioRef} src={src} preload="metadata" />
-      
+    <div className="flex items-center gap-2 min-w-[260px]">
+      <audio ref={audioRef} src={src} preload="metadata" crossOrigin="anonymous" />
+
       <Button
         onClick={togglePlayPause}
         size="icon"
         variant="ghost"
         className={cn(
-          "rounded-full h-10 w-10 flex-shrink-0",
-          isClient ? "hover:bg-primary/10" : "hover:bg-accent/10"
+          'rounded-full h-9 w-9 flex-shrink-0',
+          isClient ? 'hover:bg-primary/10' : 'hover:bg-white/10 text-white'
         )}
       >
         {isPlaying ? (
-          <Pause className="h-5 w-5" />
+          <Pause className="h-4 w-4" />
         ) : (
-          <Play className="h-5 w-5 ml-0.5" />
+          <Play className="h-4 w-4 ml-0.5" />
         )}
       </Button>
 
-      <div className="flex-1">
-        <canvas
-          ref={canvasRef}
-          onClick={handleSeek}
-          className="w-full h-10 cursor-pointer"
-          style={{ width: '100%', height: '40px' }}
-        />
-      </div>
+      <canvas
+        ref={canvasRef}
+        onClick={handleSeek}
+        className="flex-1 h-10 cursor-pointer"
+        style={{ height: '40px' }}
+      />
 
-      <span className="text-xs text-muted-foreground font-mono flex-shrink-0 min-w-[45px]">
-        {formatTime(currentTime)} / {formatTime(duration)}
+      <span
+        className={cn(
+          'text-[11px] font-mono flex-shrink-0 min-w-[40px] text-right',
+          isClient ? 'text-muted-foreground' : 'text-white/70'
+        )}
+      >
+        {formatTime(isPlaying || currentTime > 0 ? currentTime : duration)}
       </span>
     </div>
   );

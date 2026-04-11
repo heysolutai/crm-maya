@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
 import { enqueueInboundMessage, enqueueN8NWebhook, enqueueTranscription, enqueueMediaProcessing } from '@/lib/queue';
 import { uploadToB2, buildB2Key, MIME_TO_EXT } from '@/lib/storage';
+import { publishEvent } from '@/lib/realtime';
 
 // Schema de validação para o payload da UAZapi
 const UAZapiPayloadSchema = z.object({
@@ -852,6 +853,31 @@ export async function POST(req: NextRequest) {
 
       console.log(`[ReadReceipt] Successfully updated ${updatedCount} messages`);
 
+      // Publica eventos realtime para as mensagens afetadas
+      if (updatedCount > 0) {
+        const updated = await prisma.message.findMany({
+          where: {
+            OR: [
+              { uazMessageId: { in: messageIds } },
+              ...messageIds.map((mid) => ({ uazMessageId: { endsWith: mid } })),
+            ],
+          },
+          select: {
+            id: true,
+            conversationId: true,
+            conversation: { select: { companyId: true } },
+          },
+        });
+        for (const m of updated) {
+          publishEvent(m.conversation.companyId, {
+            type: 'message:update',
+            conversationId: m.conversationId,
+            messageId: m.id,
+            patch: { readStatus, ...(state === 'Read' ? { readAt: new Date().toISOString() } : {}) },
+          });
+        }
+      }
+
       return jsonResponse({
         success: true,
         message: 'Message status updated',
@@ -860,6 +886,83 @@ export async function POST(req: NextRequest) {
       });
     }
     // ===== FIM: PROCESSAMENTO DE READ RECEIPTS =====
+
+    // ===== PROCESSAMENTO DE DELETE / REVOKE DE MENSAGEM =====
+    // UazAPI pode sinalizar revoke de varias formas:
+    //   1. rawPayload.type === 'MessageUpdate' com state === 'Revoked'/'Deleted'
+    //   2. message.messageType === 'ProtocolMessage' com type REVOKE
+    //   3. rawPayload.EventType === 'messages.delete'
+    const isDeleteEvent = (() => {
+      if (rawPayload.type === 'MessageUpdate' && ['Revoked', 'Deleted', 'revoked', 'deleted'].includes(rawPayload.state)) return true;
+      if (['messages.delete', 'message.revoke', 'message.delete'].includes((rawPayload.EventType || '').toLowerCase())) return true;
+      const msgType = rawPayload.message?.messageType || rawPayload.message?.type;
+      if (msgType === 'ProtocolMessage') {
+        const protocolType = rawPayload.message?.content?.type || rawPayload.message?.content?.protocolType;
+        if (protocolType === 'REVOKE' || protocolType === 0) return true;
+      }
+      return false;
+    })();
+
+    if (isDeleteEvent) {
+      // Coleta IDs da mensagem alvo: pode vir em varios campos
+      const targetIds: string[] = [
+        ...(rawPayload.event?.MessageIDs || []),
+        rawPayload.message?.content?.key?.id,
+        rawPayload.message?.content?.stanzaId,
+        rawPayload.message?.content?.messageId,
+        rawPayload.message?.quoted,
+        rawPayload.message?.quotedMsg?.messageid,
+      ].filter((v: unknown): v is string => typeof v === 'string' && v.length > 0);
+
+      if (targetIds.length === 0) {
+        console.log('[MessageDelete] Evento de delete sem IDs alvo, ignorando');
+        return jsonResponse({ status: 'ignored', reason: 'no_target_ids' });
+      }
+
+      console.log('[MessageDelete] Deletando mensagens com uazMessageIds:', targetIds);
+
+      // Primeiro busca as mensagens (para pegar companyId/conversationId e publicar o evento)
+      const toDelete = await prisma.message.findMany({
+        where: {
+          OR: [
+            { uazMessageId: { in: targetIds } },
+            ...targetIds.map((tid) => ({ uazMessageId: { endsWith: tid } })),
+          ],
+        },
+        select: {
+          id: true,
+          conversationId: true,
+          conversation: { select: { companyId: true } },
+        },
+      });
+
+      if (toDelete.length === 0) {
+        console.log('[MessageDelete] Nenhuma mensagem encontrada para os IDs');
+        return jsonResponse({ success: true, deleted_count: 0 });
+      }
+
+      const ids = toDelete.map((m) => m.id);
+      const deleted = await prisma.message.deleteMany({ where: { id: { in: ids } } });
+      const deletedCount = deleted.count;
+
+      // Publica evento para cada conversa afetada
+      for (const m of toDelete) {
+        publishEvent(m.conversation.companyId, {
+          type: 'message:delete',
+          conversationId: m.conversationId,
+          messageId: m.id,
+        });
+      }
+
+      console.log(`[MessageDelete] Deletadas ${deletedCount} mensagens`);
+
+      return jsonResponse({
+        success: true,
+        message: 'Message(s) deleted',
+        deleted_count: deletedCount,
+      });
+    }
+    // ===== FIM: PROCESSAMENTO DE DELETE / REVOKE =====
 
     // ===== FAST PATH: Validate format and enqueue for async processing =====
     // This allows the webhook to respond in <5ms even under 5000+ concurrent messages
@@ -1305,6 +1408,24 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('Created message:', message.id);
+
+    // Publica evento realtime para clientes SSE conectados
+    publishEvent(companyId, {
+      type: 'message:new',
+      conversationId,
+      message: {
+        id: message.id,
+        conversationId,
+        senderType,
+        messageText: payload.message,
+        messageType: payload.message_type || 'text',
+        mediaUrl: payload.media_url,
+        uazMessageId: payload.uaz_message_id,
+        quotedMessageId: payload.quoted_message_id,
+        createdAt: message.createdAt,
+        metadata: payload.metadata,
+      },
+    });
 
     // 5. Enviar webhook para N8N via fila (non-blocking)
     if (payload.type === 'incoming' || payload.type === 'outgoing') {

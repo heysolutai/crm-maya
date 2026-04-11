@@ -122,9 +122,12 @@ export async function middleware(request: NextRequest) {
     const role = session.user.role as string | null
     const pathname = request.nextUrl.pathname
 
+    // Super admin tem acesso a tudo (necessario para impersonation/debugging)
+    const isSuperAdmin = role === 'super_admin'
+
     // Pages restricted to company_admin only
     const adminOnlyPages = ['/app/settings', '/app/team', '/app/departments', '/app/ai-settings']
-    if (adminOnlyPages.some(p => pathname.startsWith(p)) && role !== 'company_admin') {
+    if (adminOnlyPages.some(p => pathname.startsWith(p)) && !isSuperAdmin && role !== 'company_admin') {
       const url = request.nextUrl.clone()
       url.pathname = '/app/dashboard'
       return NextResponse.redirect(url)
@@ -132,7 +135,7 @@ export async function middleware(request: NextRequest) {
 
     // Pages restricted to manager+ (manager, company_admin)
     const managerPages = ['/app/follow-ups', '/app/api-docs']
-    if (managerPages.some(p => pathname.startsWith(p)) && !['manager', 'company_admin'].includes(role || '')) {
+    if (managerPages.some(p => pathname.startsWith(p)) && !isSuperAdmin && !['manager', 'company_admin'].includes(role || '')) {
       const url = request.nextUrl.clone()
       url.pathname = '/app/dashboard'
       return NextResponse.redirect(url)
@@ -140,7 +143,7 @@ export async function middleware(request: NextRequest) {
 
     // Pages restricted to agent+ (agent, manager, company_admin)
     const agentPages = ['/app/conversations', '/app/crm', '/app/products', '/app/catalog', '/app/appointments', '/app/my-schedule', '/app/daily-report']
-    if (agentPages.some(p => pathname.startsWith(p)) && !['agent', 'manager', 'company_admin'].includes(role || '')) {
+    if (agentPages.some(p => pathname.startsWith(p)) && !isSuperAdmin && !['agent', 'manager', 'company_admin'].includes(role || '')) {
       const url = request.nextUrl.clone()
       url.pathname = '/app/dashboard'
       return NextResponse.redirect(url)
