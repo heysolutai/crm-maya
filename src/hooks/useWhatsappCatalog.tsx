@@ -50,6 +50,10 @@ function normalizeProduct(raw: Record<string, unknown>): CatalogProduct {
     (raw.image_url as string) ||
     undefined;
 
+  const allImages: string[] = (images ?? [])
+    .map((img) => (img?.OriginalImageUrl as string) || (img?.RequestImageUrl as string) || "")
+    .filter((url): url is string => Boolean(url));
+
   return {
     // PascalCase (UazAPI real)
     id: (raw.ID as string) || (raw.id as string) || (raw.productId as string) || "",
@@ -58,6 +62,7 @@ function normalizeProduct(raw: Record<string, unknown>): CatalogProduct {
     price: formattedPrice || (raw.price as string) || (raw.priceString as string) || undefined,
     currency: price?.Currency || (raw.currency as string) || undefined,
     imageUrl,
+    images: allImages,
     availability: (raw.Availability as string) || (raw.availability as string) || undefined,
     isHidden: (raw.IsHidden as boolean) ?? (raw.isHidden as boolean) ?? false,
     retailerId: (raw.RetailerID as string) || (raw.retailerId as string) || undefined,
