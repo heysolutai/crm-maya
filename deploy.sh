@@ -191,7 +191,7 @@ cmd_update() {
   fi
 
   # Prisma db push depois, aplicando o schema (unique constraints, colunas novas, etc)
-  npx prisma db push --skip-generate 2>&1 || warn "db push falhou (pode ser normal se nao houve mudancas)"
+  npx prisma db push 2>&1 || warn "db push falhou (pode ser normal se nao houve mudancas)"
 
   # Indexes
   if [ -f "prisma/indexes.sql" ] && [ -n "$DB_URL" ]; then
