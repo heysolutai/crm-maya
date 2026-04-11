@@ -1,12 +1,10 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { getWhatsAppInstance, findOrCreateConversation, saveMessage, getClientPhoneByConversationId } from '@/lib/api/database';
 import { sendToWhatsApp } from '@/lib/api/whatsapp';
-import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
-import fs from 'fs';
-import path from 'path';
+import { handleCors, jsonResponse } from '@/lib/api/cors';
+import { uploadToB2, buildB2Key, MIME_TO_EXT } from '@/lib/storage';
 
 const sendAudioSchema = z.object({
   audioBase64: z.string(),
@@ -49,44 +47,43 @@ export async function POST(req: NextRequest) {
     const instance = await getWhatsAppInstance(companyId);
     if (!conversationId) conversationId = await findOrCreateConversation(phone || '', companyId);
 
-    // Convert base64 to Buffer and save to filesystem
+    // Upload audio para o B2 (mesmo padrão usado pelo restante do sistema)
     const buffer = Buffer.from(audioBase64, 'base64');
+    const normalizedMime = mimeType?.includes('mp4')
+      ? 'audio/mp4'
+      : mimeType?.includes('webm')
+        ? 'audio/webm'
+        : mimeType?.includes('ogg')
+          ? 'audio/ogg'
+          : mimeType?.includes('mpeg') || mimeType?.includes('mp3')
+            ? 'audio/mpeg'
+            : 'audio/ogg';
+    const extension = MIME_TO_EXT[normalizedMime] || 'ogg';
+    const key = buildB2Key('audio', companyId, conversationId, extension);
 
-    const extension = mimeType?.includes('mp4') ? 'mp4' : mimeType?.includes('webm') ? 'webm' : mimeType?.includes('ogg') ? 'ogg' : 'webm';
-    const fileName = `audio_${conversationId}_${Date.now()}.${extension}`;
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'audios', companyId);
+    const publicUrl = await uploadToB2(buffer, key, normalizedMime);
+    console.log('[send-audio-message] Audio uploaded to B2:', publicUrl);
 
-    // Ensure directory exists
-    fs.mkdirSync(uploadDir, { recursive: true });
+    const message = await saveMessage(
+      conversationId,
+      '',
+      'audio',
+      fromAI || false,
+      agentId,
+      publicUrl,
+      { duration, mime_type: normalizedMime, storage: 'b2' }
+    );
 
-    const filePath = path.join(uploadDir, fileName);
-    fs.writeFileSync(filePath, buffer);
-
-    const mediaPath = `audios/${companyId}/${fileName}`;
-    console.log('[send-audio-message] Audio saved to:', mediaPath);
-
-    // Generate a URL for WhatsApp
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const fileUrl = `${appUrl}/uploads/${mediaPath}`;
-
-    const message = await saveMessage(conversationId, `🎤 Áudio (${duration || 0}s)`, 'audio', fromAI || false, agentId, mediaPath, { duration, file_path: mediaPath, mime_type: mimeType });
-
-    const uazPayload = { phone, type: 'ptt', file: fileUrl, fromAI: fromAI || false, company_id: companyId };
+    const uazPayload = { phone, type: 'ptt', file: publicUrl, fromAI: fromAI || false, company_id: companyId };
     const { success, error: whatsappError } = await sendToWhatsApp(instance, '/send/media', uazPayload, message.id);
     if (!success) console.error('[send-audio-message] Failed to send WhatsApp audio:', whatsappError);
 
-    // Optional external webhook
-    const webhookUrl = process.env.EXTERNAL_WEBHOOK_URL;
-    if (webhookUrl) {
-      try {
-        await fetch(webhookUrl, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message_type: 'audio', audio_url: mediaPath, duration, phone, instance_name: (instance as any).instance_name || (instance as any).instanceName, timestamp: new Date().toISOString() }),
-        });
-      } catch (e) { console.error('[send-audio-message] Webhook failed:', e); }
-    }
-
-    return jsonResponse({ success: true, message_id: message.id, conversation_id: conversationId, audio_url: mediaPath, webhook_sent: !!webhookUrl });
+    return jsonResponse({
+      success: true,
+      message_id: message.id,
+      conversation_id: conversationId,
+      audio_url: publicUrl,
+    });
   } catch (error) {
     console.error('[send-audio-message] Error:', error);
     return jsonResponse({ error: 'Erro interno do servidor' }, 500);

@@ -114,11 +114,7 @@ export async function POST(req: NextRequest) {
       if (uazMessageId) replyid = uazMessageId;
     }
 
-    const messageText = payload.text ||
-      (payload.type === 'audio' || payload.type === 'myaudio' || payload.type === 'ptt' ? '🎤 Áudio' :
-       payload.type === 'image' ? '🖼️ Imagem' :
-       payload.type === 'video' ? '🎥 Vídeo' :
-       payload.type === 'document' ? `📄 ${payload.docName || 'Documento'}` : '📎 Sticker');
+    const messageText = payload.text || '';
 
     const message = await saveMessage(conversationId, messageText, payload.type, payload.fromAI || false, agentId, payload.file, {
       uaz_payload: payload, text: payload.text, docName: payload.docName, fileSize: payload.fileSize, mimeType: payload.mimeType,

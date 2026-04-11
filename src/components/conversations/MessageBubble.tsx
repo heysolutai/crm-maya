@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { Bot, Loader2, FileText } from 'lucide-react';
+import { memo, useState } from 'react';
+import { Bot, Loader2, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AudioPlayer } from './AudioPlayer';
@@ -52,9 +52,29 @@ export const MessageBubble = memo(function MessageBubble({
   isTranscribing,
 }: MessageBubbleProps) {
   const msg = message;
-  const clientName = client 
+  const [showTranscription, setShowTranscription] = useState(false);
+
+  const clientName = client
     ? `${client.first_name} ${client.last_name || ''}`.trim()
     : 'Cliente';
+
+  const meta = (msg.metadata as any) || {};
+  const storedTranscription: string | null =
+    meta.transcription ||
+    (meta.transcribed && msg.message_text && !['🎤 Áudio', '[Áudio]', '[Media]'].includes(msg.message_text)
+      ? msg.message_text
+      : null);
+
+  const isAudioMessage = (msg.message_type === 'audio' || msg.message_type === 'ptt') && !!msg.media_url;
+
+  const handleTranscribeClick = () => {
+    if (storedTranscription) {
+      setShowTranscription((v) => !v);
+      return;
+    }
+    onTranscribe(msg.id);
+    setShowTranscription(true);
+  };
 
   return (
     <div
@@ -133,44 +153,50 @@ export const MessageBubble = memo(function MessageBubble({
                   <p className="text-sm">{msg.message_text}</p>
                 )}
               </div>
-            ) : msg.message_type === 'audio' && msg.media_url ? (
+            ) : isAudioMessage ? (
               <div className="space-y-2">
-                <SecureAudioSource src={msg.media_url}>
+                <SecureAudioSource src={msg.media_url!}>
                   {(signedUrl) => signedUrl ? (
-                    <AudioPlayer 
+                    <AudioPlayer
                       src={signedUrl}
                       isClient={msg.sender_type === 'client'}
                     />
                   ) : null}
                 </SecureAudioSource>
-                
-                {/* Transcrição ou botão para transcrever */}
-                {msg.message_text && msg.message_text !== '[Media]' && msg.message_text !== '[Áudio]' ? (
-                  <div className={`mt-2 p-2 rounded ${
-                    isClient ? 'bg-black/5 dark:bg-white/5' : 'bg-white/10'
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`h-auto py-1 px-2 text-xs ${
+                    isClient ? '' : 'text-white/90 hover:text-white hover:bg-white/10'
+                  }`}
+                  onClick={handleTranscribeClick}
+                  disabled={isTranscribing && !storedTranscription}
+                >
+                  {isTranscribing && !storedTranscription ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      Transcrevendo...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-3 w-3 mr-1" />
+                      {showTranscription && storedTranscription ? 'Ocultar transcrição' : 'Ver transcrição'}
+                      {storedTranscription ? (
+                        showTranscription
+                          ? <ChevronUp className="h-3 w-3 ml-1" />
+                          : <ChevronDown className="h-3 w-3 ml-1" />
+                      ) : null}
+                    </>
+                  )}
+                </Button>
+
+                {showTranscription && storedTranscription && (
+                  <div className={`mt-1 p-2 rounded text-xs italic ${
+                    isClient ? 'bg-black/5 dark:bg-white/5 text-foreground/80' : 'bg-white/10 text-white/90'
                   }`}>
-                    <p className="text-xs opacity-70 italic">{msg.message_text}</p>
+                    {storedTranscription}
                   </div>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="mt-2 h-auto py-1 px-2 text-xs"
-                    onClick={() => onTranscribe(msg.id)}
-                    disabled={isTranscribing}
-                  >
-                    {isTranscribing ? (
-                      <>
-                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                        Transcrevendo...
-                      </>
-                    ) : (
-                      <>
-                        <FileText className="h-3 w-3 mr-1" />
-                        Ver transcrição
-                      </>
-                    )}
-                  </Button>
                 )}
               </div>
             ) : msg.message_type === 'video' && msg.media_url ? (
@@ -226,9 +252,17 @@ export const MessageBubble = memo(function MessageBubble({
                 isClient={isClient}
               />
             ) : (
-              <p className="text-sm whitespace-pre-wrap break-words">
-                {renderTextWithLinks(msg.message_text || '')}
-              </p>
+              (() => {
+                // Filtra labels legados de mídia que não devem mais aparecer como texto
+                const legacyLabels = ['🖼️ Imagem', '🎥 Vídeo', '🎤 Áudio', '📄 Documento', '📍 Localização', '📎 Mídia', '[Media]', '[Áudio]'];
+                const text = msg.message_text || '';
+                if (!text || legacyLabels.includes(text.trim())) return null;
+                return (
+                  <p className="text-sm whitespace-pre-wrap break-words">
+                    {renderTextWithLinks(text)}
+                  </p>
+                );
+              })()
             )}
             
             {/* Timestamp + Status na mesma linha */}

@@ -38,8 +38,16 @@ export async function POST(req: NextRequest) {
 
     if (!message.uazMessageId) throw new Error('Message does not have UAZ message ID');
 
-    // Return cached transcription if available
-    if (message.messageText && message.messageText !== '[Áudio]' && message.messageText !== '[Media]') {
+    // Return cached transcription if available (metadata.transcription tem prioridade)
+    const cachedMeta = (message.metadata as any) || {};
+    if (cachedMeta.transcription) {
+      return jsonResponse({ success: true, transcription: cachedMeta.transcription, cached: true });
+    }
+    if (
+      message.messageText &&
+      !['[Áudio]', '[Media]', '🎤 Áudio'].includes(message.messageText) &&
+      cachedMeta.transcribed
+    ) {
       return jsonResponse({ success: true, transcription: message.messageText, cached: true });
     }
 
@@ -79,8 +87,13 @@ export async function POST(req: NextRequest) {
     await prisma.message.update({
       where: { id: messageId },
       data: {
-        messageText: transcription,
-        metadata: { ...(message.metadata as any || {}), transcribed: true, transcription_source: 'uazapi_openai', transcribed_at: new Date().toISOString() },
+        metadata: {
+          ...(message.metadata as any || {}),
+          transcription,
+          transcribed: true,
+          transcription_source: 'uazapi_openai',
+          transcribed_at: new Date().toISOString(),
+        },
       },
     });
 

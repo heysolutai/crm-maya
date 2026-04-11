@@ -221,15 +221,10 @@ function validateAndAdaptPayload(rawPayload: unknown): {
       messageType = 'location';
     }
 
-    // Extrair texto da mensagem com fallback baseado no tipo
+    // Extrair texto da mensagem (sem fallback de label — estilo WhatsApp: a mídia é o conteúdo)
     const messageText = uazPayload.message.text
       || (typeof uazPayload.message.content === 'string' ? uazPayload.message.content : '')
-      || (messageType === 'image' ? '🖼️ Imagem' :
-          messageType === 'video' ? '🎥 Vídeo' :
-          messageType === 'audio' || messageType === 'ptt' ? '🎤 Áudio' :
-          messageType === 'document' ? '📄 Documento' :
-          messageType === 'location' ? '📍 Localização' :
-          mediaUrl ? '📎 Mídia' : '');
+      || '';
 
     // Validar que mensagem não está vazia (localização é válida mesmo sem texto)
     if (!messageText && !mediaUrl && messageType !== 'location') {
@@ -1223,27 +1218,91 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // 4.1 Rede de segurança para ecos outgoing: se UAZapi não sinalizou was_sent_by_api,
+    // tentar "casar" este webhook com uma Message recém-criada pelo send-* route
+    // (mesma conversa, sender agent/ai, sem uazMessageId, últimos 2 minutos).
+    // Quando casa, faz UPDATE do uazMessageId em vez de criar duplicata.
+    if (payload.type === 'outgoing') {
+      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+      const candidate = await prisma.message.findFirst({
+        where: {
+          conversationId,
+          senderType: { in: ['agent', 'ai'] },
+          uazMessageId: null,
+          createdAt: { gte: twoMinutesAgo },
+          ...(payload.message_type ? { messageType: payload.message_type } : {}),
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+
+      if (candidate) {
+        try {
+          await prisma.message.update({
+            where: { id: candidate.id },
+            data: { uazMessageId: payload.uaz_message_id },
+          });
+          console.log('[Duplicate Prevention] Matched echo to existing message, updated uazMessageId:', candidate.id);
+          return jsonResponse({
+            success: true,
+            message: 'Outgoing echo matched to existing message',
+            message_id: candidate.id,
+          });
+        } catch (matchErr: any) {
+          // Se já existe outra mensagem com esse uazMessageId (unique constraint), é duplicata: ignora
+          if (matchErr?.code === 'P2002') {
+            console.log('[Duplicate Prevention] uazMessageId already exists, treating as duplicate');
+            return jsonResponse({
+              success: true,
+              message: 'Duplicate outgoing echo ignored',
+            });
+          }
+          throw matchErr;
+        }
+      }
+    }
+
     // 5. Determinar sender_type e inserir mensagem
     const senderType = payload.type === 'incoming' ? 'client' : 'agent';
-    const message = await prisma.message.create({
-      data: {
-        conversationId,
-        senderType,
-        messageText: payload.message,
-        messageType: payload.message_type || 'text',
-        mediaUrl: payload.media_url,
-        uazMessageId: payload.uaz_message_id,
-        quotedMessageId: payload.quoted_message_id,
-        metadata: {
-          ...payload.metadata,
-          channel: payload.channel as any,
-          profile_picture_url: payload.profile_picture_url,
-          uaz_message_id: payload.uaz_message_id,
-          quoted_message_id: payload.quoted_message_id,
+    let message: { id: string; createdAt: Date };
+    try {
+      message = await prisma.message.create({
+        data: {
+          conversationId,
+          senderType,
+          messageText: payload.message,
+          messageType: payload.message_type || 'text',
+          mediaUrl: payload.media_url,
+          uazMessageId: payload.uaz_message_id,
+          quotedMessageId: payload.quoted_message_id,
+          metadata: {
+            ...payload.metadata,
+            channel: payload.channel as any,
+            profile_picture_url: payload.profile_picture_url,
+            uaz_message_id: payload.uaz_message_id,
+            quoted_message_id: payload.quoted_message_id,
+          },
         },
-      },
-      select: { id: true, createdAt: true },
-    });
+        select: { id: true, createdAt: true },
+      });
+    } catch (createErr: any) {
+      // P2002: outro processo/worker já criou a mesma mensagem (uazMessageId unique)
+      if (createErr?.code === 'P2002') {
+        const existing = await prisma.message.findFirst({
+          where: { uazMessageId: payload.uaz_message_id },
+          select: { id: true, createdAt: true },
+        });
+        if (existing) {
+          console.log('[Duplicate Prevention] Race caught by unique constraint:', existing.id);
+          return jsonResponse({
+            success: true,
+            message: 'Duplicate message ignored (unique constraint)',
+            message_id: existing.id,
+          });
+        }
+      }
+      throw createErr;
+    }
 
     console.log('Created message:', message.id);
 

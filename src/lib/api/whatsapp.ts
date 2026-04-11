@@ -73,19 +73,26 @@ export async function sendToWhatsApp(
     const uazMessageId = responseData.message_id || responseData.id || responseData.key?.id;
     console.log('[WhatsApp API] Success, UAZ ID:', uazMessageId);
 
-    prisma.message.update({
-      where: { id: messageId },
-      data: {
-        uazMessageId,
-        readStatus: 'sent',
-        metadata: {
-          whatsapp_message_id: uazMessageId,
-          whatsapp_status: responseData.status || 'sent',
-          sent_via: 'uaz_api_direct',
-          sent_successfully_at: new Date().toISOString(),
-        } as any,
-      },
-    }).catch((e: any) => console.warn('[WhatsApp API] Metadata update failed:', e));
+    // IMPORTANTE: await síncrono para garantir que o uazMessageId esteja persistido
+    // ANTES do webhook de eco da UAZapi chegar. Sem isso, o webhook pode não
+    // encontrar a mensagem na verificação de duplicata e criar uma cópia.
+    try {
+      await prisma.message.update({
+        where: { id: messageId },
+        data: {
+          uazMessageId,
+          readStatus: 'sent',
+          metadata: {
+            whatsapp_message_id: uazMessageId,
+            whatsapp_status: responseData.status || 'sent',
+            sent_via: 'uaz_api_direct',
+            sent_successfully_at: new Date().toISOString(),
+          } as any,
+        },
+      });
+    } catch (updateError) {
+      console.warn('[WhatsApp API] Failed to persist uazMessageId:', updateError);
+    }
 
     return { success: true };
 

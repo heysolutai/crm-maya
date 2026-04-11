@@ -741,7 +741,16 @@ export function useConversations(filters?: ConversationFilters) {
           [data.conversationId]: {
             ...state,
             messages: state.messages.map(m =>
-              m.id === data.messageId ? { ...m, message_text: data.transcription, messageText: data.transcription } : m
+              m.id === data.messageId
+                ? {
+                    ...m,
+                    metadata: {
+                      ...((m.metadata as any) || {}),
+                      transcription: data.transcription,
+                      transcribed: true,
+                    },
+                  }
+                : m
             ),
           },
         };

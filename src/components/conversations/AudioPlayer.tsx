@@ -163,12 +163,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, isClient = false 
     setIsPlaying(!isPlaying);
   };
 
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!audioRef.current) return;
-    
+  const handleSeek = (e: React.MouseEvent<HTMLElement>) => {
+    if (!audioRef.current || !duration) return;
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const percentage = x / rect.width;
+    const percentage = Math.max(0, Math.min(1, x / rect.width));
     audioRef.current.currentTime = percentage * duration;
   };
 
@@ -178,8 +178,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, isClient = false 
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
-
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 min-w-[280px]">
@@ -201,32 +199,13 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, isClient = false 
         )}
       </Button>
 
-      <div className="flex-1 space-y-1">
+      <div className="flex-1">
         <canvas
           ref={canvasRef}
-          className="w-full h-8"
-          style={{ width: '100%', height: '32px' }}
-        />
-        
-        <div
-          className="relative h-1 bg-muted rounded-full cursor-pointer group"
           onClick={handleSeek}
-        >
-          <div
-            className={cn(
-              "absolute h-full rounded-full transition-all",
-              isClient ? "bg-primary" : "bg-accent"
-            )}
-            style={{ width: `${progress}%` }}
-          />
-          <div
-            className={cn(
-              "absolute h-3 w-3 rounded-full -top-1 transition-all opacity-0 group-hover:opacity-100",
-              isClient ? "bg-primary" : "bg-accent"
-            )}
-            style={{ left: `calc(${progress}% - 6px)` }}
-          />
-        </div>
+          className="w-full h-10 cursor-pointer"
+          style={{ width: '100%', height: '40px' }}
+        />
       </div>
 
       <span className="text-xs text-muted-foreground font-mono flex-shrink-0 min-w-[45px]">
