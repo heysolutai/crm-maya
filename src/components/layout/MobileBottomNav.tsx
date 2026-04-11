@@ -4,9 +4,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   MessageSquare,
-  Kanban,
+  Users,
   Calendar,
-  Menu,
+  MoreHorizontal,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -26,8 +26,8 @@ interface MobileBottomNavProps {
 }
 
 /**
- * Bottom nav flutuante estilo PWA: pill branco arredondado com indicador
- * circular que desliza pro item ativo, tipo "bolha" saindo da barra.
+ * Bottom nav flat: 5 items com labels visiveis e circulo roxo centralizado
+ * ao redor do icone ativo.
  */
 export function MobileBottomNav({
   unreadCount = 0,
@@ -38,20 +38,17 @@ export function MobileBottomNav({
   const router = useRouter();
 
   const items: NavItem[] = [
-    { label: 'Início',    href: '/app/dashboard',     icon: LayoutDashboard },
+    { label: 'Home',      href: '/app/dashboard',     icon: LayoutDashboard },
     { label: 'Conversas', href: '/app/conversations', icon: MessageSquare, badge: unreadCount },
-    { label: 'CRM',       href: '/app/crm',           icon: Kanban },
+    { label: 'Leads',     href: '/app/clients',       icon: Users },
     { label: 'Agenda',    href: '/app/appointments',  icon: Calendar, badge: appointmentsToday },
-    { label: 'Menu',      icon: Menu, action: 'open-menu' },
+    { label: 'Mais',      icon: MoreHorizontal, action: 'open-menu' },
   ];
 
-  // Descobre qual item está ativo baseado no pathname
-  const activeIndex = (() => {
-    const idx = items.findIndex(
-      (it) => it.href && (pathname === it.href || pathname.startsWith(it.href + '/'))
-    );
-    return idx === -1 ? 0 : idx;
-  })();
+  const isItemActive = (item: NavItem) => {
+    if (!item.href) return false;
+    return pathname === item.href || pathname.startsWith(item.href + '/');
+  };
 
   const handleClick = (item: NavItem) => {
     if (item.action === 'open-menu') {
@@ -62,70 +59,69 @@ export function MobileBottomNav({
   };
 
   return (
-    <div
-      className="fixed bottom-0 left-0 right-0 z-40 flex justify-center px-4 md:hidden pointer-events-none"
-      style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-card/95 backdrop-blur-md border-t border-border"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      aria-label="Navegação inferior"
     >
-      <nav
-        className="pointer-events-auto relative w-full max-w-[420px] h-[68px] rounded-2xl bg-card border border-border shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
-        aria-label="Navegação inferior"
-      >
-        {/* Indicador circular que desliza */}
-        <div
-          className="absolute top-[-22px] h-[68px] rounded-full bg-primary border-[6px] border-background transition-transform duration-[400ms] ease-out shadow-lg"
-          style={{
-            width: `${100 / items.length}%`,
-            left: 0,
-            transform: `translateX(${activeIndex * 100}%)`,
-          }}
-          aria-hidden="true"
-        />
+      <ul className="flex items-stretch h-[64px] px-1">
+        {items.map((item) => {
+          const active = isItemActive(item);
+          const Icon = item.icon;
+          const badgeValue = item.badge ?? 0;
+          const showBadge = !active && badgeValue > 0;
 
-        <ul className="relative z-10 flex w-full h-full">
-          {items.map((item, index) => {
-            const isActive = index === activeIndex;
-            const Icon = item.icon;
-            const badgeValue = item.badge ?? 0;
-            const showBadge = !isActive && badgeValue > 0;
-
-            return (
-              <li key={item.label} className="flex-1 flex items-center justify-center">
-                <button
-                  onClick={() => handleClick(item)}
-                  className="relative flex flex-col items-center justify-center w-full h-full group"
-                  aria-label={item.label}
-                  aria-current={isActive ? 'page' : undefined}
-                >
+          return (
+            <li key={item.label} className="flex-1">
+              <button
+                onClick={() => handleClick(item)}
+                className="flex flex-col items-center justify-center gap-1 w-full h-full group"
+                aria-label={item.label}
+                aria-current={active ? 'page' : undefined}
+              >
+                {/* Container fixo para alinhar verticalmente todos os icones */}
+                <div className="relative h-9 w-9 flex items-center justify-center">
+                  {/* Circulo roxo atras do icone ativo */}
+                  <div
+                    className={cn(
+                      'absolute inset-0 rounded-full transition-all duration-200',
+                      active
+                        ? 'bg-[#8b5cf6] scale-100 opacity-100 shadow-[0_4px_12px_rgba(139,92,246,0.35)]'
+                        : 'scale-0 opacity-0'
+                    )}
+                    aria-hidden="true"
+                  />
                   <Icon
                     className={cn(
-                      'transition-all duration-300',
-                      isActive
-                        ? 'h-6 w-6 -translate-y-[26px] text-primary-foreground'
-                        : 'h-5 w-5 text-muted-foreground group-hover:text-foreground'
+                      'relative transition-colors',
+                      active
+                        ? 'h-[19px] w-[19px] text-white'
+                        : 'h-[22px] w-[22px] text-muted-foreground group-hover:text-foreground'
                     )}
                   />
-                  <span
-                    className={cn(
-                      'absolute text-[10px] font-medium transition-all duration-300',
-                      isActive
-                        ? 'opacity-100 translate-y-[12px] text-foreground'
-                        : 'opacity-0 translate-y-[20px]'
-                    )}
-                  >
-                    {item.label}
-                  </span>
 
                   {showBadge ? (
-                    <span className="absolute top-2 right-[22%] flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground ring-2 ring-card">
+                    <span className="absolute -top-0.5 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground ring-2 ring-card">
                       {badgeValue > 99 ? '99+' : badgeValue}
                     </span>
                   ) : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-    </div>
+                </div>
+
+                <span
+                  className={cn(
+                    'text-[10px] leading-none transition-colors',
+                    active
+                      ? 'text-[#8b5cf6] font-semibold'
+                      : 'text-muted-foreground font-medium group-hover:text-foreground'
+                  )}
+                >
+                  {item.label}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }

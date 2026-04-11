@@ -72,7 +72,7 @@ export function usePushNotifications() {
       const reg = await waitForServiceWorker();
       if (!reg) return { ok: false, error: 'Service worker nao registrado' };
 
-      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_KEY;
       if (!vapidKey) return { ok: false, error: 'VAPID nao configurado' };
 
       // Reusa subscription existente ou cria nova
