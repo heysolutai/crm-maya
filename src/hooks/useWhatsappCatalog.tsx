@@ -9,6 +9,7 @@ export interface CatalogProduct {
   price?: string;
   currency?: string;
   imageUrl?: string;
+  images: string[];
   availability?: string;
   isHidden?: boolean;
   retailerId?: string;
