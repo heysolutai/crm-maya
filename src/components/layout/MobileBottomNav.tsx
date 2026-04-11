@@ -85,7 +85,8 @@ export function MobileBottomNav({
           {items.map((item, index) => {
             const isActive = index === activeIndex;
             const Icon = item.icon;
-            const showBadge = !isActive && item.badge && item.badge > 0;
+            const badgeValue = item.badge ?? 0;
+            const showBadge = !isActive && badgeValue > 0;
 
             return (
               <li key={item.label} className="flex-1 flex items-center justify-center">
@@ -114,11 +115,11 @@ export function MobileBottomNav({
                     {item.label}
                   </span>
 
-                  {showBadge && (
-                    <span className="absolute top-2 right-[30%] flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
-                      {item.badge! > 99 ? '99+' : item.badge}
+                  {showBadge ? (
+                    <span className="absolute top-2 right-[22%] flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground ring-2 ring-card">
+                      {badgeValue > 99 ? '99+' : badgeValue}
                     </span>
-                  )}
+                  ) : null}
                 </button>
               </li>
             );

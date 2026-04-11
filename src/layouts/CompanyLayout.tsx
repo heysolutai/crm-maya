@@ -72,6 +72,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { WhatsAppStatusIndicator } from '@/components/WhatsAppStatusIndicator';
 import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 import { PushNotificationsToggle } from '@/components/PushNotificationsToggle';
+import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
 import { cn } from '@/lib/utils';
 import { useBranding } from '@/hooks/useBranding';
 
@@ -640,6 +641,9 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
           onOpenMenu={() => setSidebarOpen(true)}
         />
       )}
+
+      {/* Banner de instalacao PWA (Android + iOS com instrucoes) */}
+      <PwaInstallPrompt />
 
       {/* ── Command Palette (Ctrl+K) ── */}
       <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
