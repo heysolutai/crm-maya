@@ -5,21 +5,17 @@ interface MessageStatusProps {
   isClient: boolean;
 }
 
+// Cores do WhatsApp Web: cor atual semitransparente pra sent/delivered, azul #53bdeb pra read
 export const MessageStatus = ({ status = 'sent', isClient }: MessageStatusProps) => {
-  // Não mostrar status para mensagens de clientes
   if (isClient) return null;
-  
+
+  const baseClass = 'h-[15px] w-[15px] shrink-0';
+
   return (
-    <span className="inline-flex ml-1 items-center">
-      {status === 'sent' && (
-        <Check className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />
-      )}
-      {status === 'delivered' && (
-        <CheckCheck className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />
-      )}
-      {status === 'read' && (
-        <CheckCheck className="h-3.5 w-3.5 text-blue-500" />
-      )}
+    <span className="inline-flex items-center">
+      {status === 'sent' && <Check className={`${baseClass} opacity-60`} />}
+      {status === 'delivered' && <CheckCheck className={`${baseClass} opacity-60`} />}
+      {status === 'read' && <CheckCheck className={`${baseClass} text-[#53bdeb]`} />}
     </span>
   );
 };

@@ -1,14 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 interface AudioPlayerProps {
   src: string;
+  // Mantido como opcional pra compatibilidade, nao mais usado (cores herdadas via text-current)
   isClient?: boolean;
 }
 
-export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, isClient = false }) => {
+export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -110,17 +110,14 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, isClient = false 
     canvas.height = rect.height * window.devicePixelRatio;
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
 
-    // Cores: mensagens incoming usam primary/muted; outgoing (fundo verde) usam branco
-    const getColor = (variable: string): string => {
-      const style = getComputedStyle(document.documentElement);
-      const hslValue = style.getPropertyValue(variable).trim();
-      return `hsl(${hslValue})`;
-    };
-
-    const playedColor = isClient ? getColor('--primary') : '#ffffff';
-    const unplayedColor = isClient
-      ? 'hsla(0, 0%, 50%, 0.35)'
-      : 'rgba(255, 255, 255, 0.35)';
+    // Usa a cor de texto herdada do balao pai (text-current) pras barras — assim
+    // se adapta automaticamente ao modo claro/escuro e cor do bubble.
+    const currentColor = getComputedStyle(canvas).color || 'rgb(0, 168, 132)';
+    // Extrai r,g,b pra construir rgba com opacidade correta pras barras nao tocadas
+    const rgbMatch = currentColor.match(/\d+/g);
+    const [r, g, b] = rgbMatch ? rgbMatch.map(Number) : [0, 168, 132];
+    const playedColor = `rgb(${r}, ${g}, ${b})`;
+    const unplayedColor = `rgba(${r}, ${g}, ${b}, 0.3)`;
 
     const draw = () => {
       const width = canvas.width / window.devicePixelRatio;
@@ -173,7 +170,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, isClient = false 
         cancelAnimationFrame(animationIdRef.current);
       }
     };
-  }, [waveformData, currentTime, duration, isClient]);
+  }, [waveformData, currentTime, duration]);
 
   const togglePlayPause = async () => {
     if (!audioRef.current) return;
@@ -203,22 +200,19 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, isClient = false 
   };
 
   return (
-    <div className="flex items-center gap-2 min-w-[260px]">
+    <div className="flex items-center gap-2 min-w-[240px]">
       <audio ref={audioRef} src={src} preload="metadata" crossOrigin="anonymous" />
 
       <Button
         onClick={togglePlayPause}
         size="icon"
         variant="ghost"
-        className={cn(
-          'rounded-full h-9 w-9 flex-shrink-0',
-          isClient ? 'hover:bg-primary/10' : 'hover:bg-white/10 text-white'
-        )}
+        className="rounded-full h-9 w-9 flex-shrink-0 hover:bg-black/5 dark:hover:bg-white/10"
       >
         {isPlaying ? (
-          <Pause className="h-4 w-4" />
+          <Pause className="h-4 w-4 fill-current" />
         ) : (
-          <Play className="h-4 w-4 ml-0.5" />
+          <Play className="h-4 w-4 ml-0.5 fill-current" />
         )}
       </Button>
 
@@ -229,12 +223,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, isClient = false 
         style={{ height: '40px' }}
       />
 
-      <span
-        className={cn(
-          'text-[11px] font-mono flex-shrink-0 min-w-[40px] text-right',
-          isClient ? 'text-muted-foreground' : 'text-white/70'
-        )}
-      >
+      <span className="text-[11px] tabular-nums flex-shrink-0 min-w-[34px] text-right opacity-70">
         {formatTime(isPlaying || currentTime > 0 ? currentTime : duration)}
       </span>
     </div>

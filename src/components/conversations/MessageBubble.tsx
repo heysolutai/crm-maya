@@ -101,12 +101,10 @@ export const MessageBubble = memo(function MessageBubble({
       {/* Container da mensagem */}
       <div className={`flex flex-col ${
         !isClient ? 'items-end' : 'items-start'
-      } max-w-[70%]`}>
+      } max-w-[65%]`}>
         {/* Nome do remetente - só na primeira do grupo */}
         {isFirstInGroup && (
-          <span className={`text-xs mb-1 ${
-            isClient ? 'text-muted-foreground' : 'text-muted-foreground'
-          }`}>
+          <span className="text-[11px] mb-0.5 px-1 text-muted-foreground/80 font-medium">
             {isClient
               ? clientName
               : isAI
@@ -115,18 +113,18 @@ export const MessageBubble = memo(function MessageBubble({
             }
           </span>
         )}
-        
+
         {/* Bolha da mensagem */}
-        <div className={`flex items-center gap-2 ${
+        <div className={`flex items-center gap-1.5 ${
           !isClient ? 'self-end' : 'self-start'
         }`}>
           <div
-            className={`rounded-lg px-3 py-1.5 shadow-sm ${
+            className={`relative rounded-lg px-[9px] py-[6px] shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] ${
               isClient
-                ? `bg-card text-card-foreground border border-border ${
+                ? `bg-white dark:bg-[#202c33] text-foreground ${
                     isFirstInGroup ? 'rounded-tl-none' : ''
                   }`
-                : `bg-[#005C4B] text-white ${
+                : `bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-white ${
                     isFirstInGroup ? 'rounded-tr-none' : ''
                   }`
             }`}
@@ -169,9 +167,7 @@ export const MessageBubble = memo(function MessageBubble({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={`h-auto py-1 px-2 text-xs ${
-                    isClient ? '' : 'text-white/90 hover:text-white hover:bg-white/10'
-                  }`}
+                  className="h-auto py-1 px-2 text-[11px] opacity-80 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10"
                   onClick={handleTranscribeClick}
                   disabled={isTranscribing && !storedTranscription}
                 >
@@ -194,9 +190,7 @@ export const MessageBubble = memo(function MessageBubble({
                 </Button>
 
                 {showTranscription && storedTranscription && (
-                  <div className={`mt-1 p-2 rounded text-xs italic ${
-                    isClient ? 'bg-black/5 dark:bg-white/5 text-foreground/80' : 'bg-white/10 text-white/90'
-                  }`}>
+                  <div className="mt-1 p-2 rounded text-[12px] leading-[17px] italic bg-black/5 dark:bg-white/10">
                     {storedTranscription}
                   </div>
                 )}
@@ -255,29 +249,29 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ) : (
               (() => {
-                // Filtra labels legados de mídia que não devem mais aparecer como texto
                 const legacyLabels = ['🖼️ Imagem', '🎥 Vídeo', '🎤 Áudio', '📄 Documento', '📍 Localização', '📎 Mídia', '[Media]', '[Áudio]'];
                 const text = msg.message_text || '';
                 if (!text || legacyLabels.includes(text.trim())) return null;
                 return (
-                  <p className="text-sm whitespace-pre-wrap break-words">
+                  <p className="text-[14.2px] leading-[19px] whitespace-pre-wrap break-words">
                     {renderTextWithLinks(text)}
                   </p>
                 );
               })()
             )}
-            
-            {/* Timestamp + Status na mesma linha */}
-            <div className="flex items-center justify-end gap-1 mt-1">
-              <span className={`text-[11px] ${
-                isClient ? 'text-muted-foreground' : 'text-white/70'
+
+            {/* Timestamp + Status inline, estilo WhatsApp (flutuante no canto) */}
+            <div className="flex items-center justify-end gap-1 mt-0.5 -mb-0.5 -mr-0.5">
+              <span className={`text-[10.5px] leading-none ${
+                isClient
+                  ? 'text-foreground/50'
+                  : 'text-[#111b21]/60 dark:text-white/60'
               }`}>
                 {formatMessageTime(msg.created_at || new Date().toISOString())}
               </span>
-              
-              {/* Checkmarks só para mensagens enviadas */}
-              <MessageStatus 
-                status={(msg as any).read_status || 'sent'} 
+
+              <MessageStatus
+                status={(msg as any).read_status || 'sent'}
                 isClient={isClient}
               />
             </div>
