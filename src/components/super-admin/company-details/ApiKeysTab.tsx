@@ -58,8 +58,11 @@ export function ApiKeysTab({ companyId }: ApiKeysTabProps) {
     return `${key.substring(0, 8)}${'•'.repeat(32)}${key.substring(key.length - 4)}`;
   };
 
-  const formatDate = (dateString: string) => {
-    return format(new Date(dateString), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return '—';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '—';
+    return format(d, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
   };
 
   if (isLoading) {
@@ -156,8 +159,8 @@ export function ApiKeysTab({ companyId }: ApiKeysTabProps) {
                         <div className="flex-1 space-y-3">
                           <div className="flex items-center gap-2">
                             <h4 className="font-semibold text-lg">{key.name}</h4>
-                            <Badge variant={key.is_active ? 'default' : 'secondary'}>
-                              {key.is_active ? 'Ativa' : 'Inativa'}
+                            <Badge variant={((key as any).isActive ?? (key as any).is_active) ? 'default' : 'secondary'}>
+                              {((key as any).isActive ?? (key as any).is_active) ? 'Ativa' : 'Inativa'}
                             </Badge>
                           </div>
 
@@ -188,9 +191,9 @@ export function ApiKeysTab({ companyId }: ApiKeysTabProps) {
                           </div>
 
                           <div className="text-xs text-muted-foreground space-y-1">
-                            <div>Criada em: {formatDate(key.created_at!)}</div>
-                            {key.last_used_at && (
-                              <div>Último uso: {formatDate(key.last_used_at)}</div>
+                            <div>Criada em: {formatDate((key as any).createdAt ?? (key as any).created_at)}</div>
+                            {((key as any).lastUsedAt ?? (key as any).last_used_at) && (
+                              <div>Último uso: {formatDate((key as any).lastUsedAt ?? (key as any).last_used_at)}</div>
                             )}
                           </div>
                         </div>
@@ -199,10 +202,10 @@ export function ApiKeysTab({ companyId }: ApiKeysTabProps) {
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => toggleApiKeyStatus({ keyId: key.id, isActive: key.is_active! })}
-                            title={key.is_active ? 'Desativar' : 'Ativar'}
+                            onClick={() => toggleApiKeyStatus({ keyId: key.id, isActive: ((key as any).isActive ?? (key as any).is_active) })}
+                            title={((key as any).isActive ?? (key as any).is_active) ? 'Desativar' : 'Ativar'}
                           >
-                            {key.is_active ? (
+                            {((key as any).isActive ?? (key as any).is_active) ? (
                               <PowerOff className="h-4 w-4" />
                             ) : (
                               <Power className="h-4 w-4" />
