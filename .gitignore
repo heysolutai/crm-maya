@@ -49,3 +49,9 @@ supabase/supabase/.temp/storage-migration
 supabase/supabase/.temp/storage-version
 
 /src/generated/prisma
+
+# Service worker gerado pelo Serwist
+/public/sw.js
+/public/sw.js.map
+/public/swe-worker-*.js
+/public/swe-worker-*.js.map

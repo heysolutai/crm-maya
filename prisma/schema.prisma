@@ -453,6 +453,22 @@ model Message {
   @@map("messages")
 }
 
+model PushSubscription {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  companyId  String   @map("company_id") @db.Uuid
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+  lastUsedAt DateTime @default(now()) @map("last_used_at")
+
+  @@index([userId], map: "idx_push_subscriptions_user")
+  @@index([companyId], map: "idx_push_subscriptions_company")
+  @@map("push_subscriptions")
+}
+
 model MessageReaction {
   id        String   @id @default(uuid()) @db.Uuid
   messageId String   @map("message_id") @db.Uuid

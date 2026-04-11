@@ -5,6 +5,7 @@ import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/l
 import { enqueueInboundMessage, enqueueN8NWebhook, enqueueTranscription, enqueueMediaProcessing } from '@/lib/queue';
 import { uploadToB2, buildB2Key, MIME_TO_EXT, deleteMediaFromUrl } from '@/lib/storage';
 import { publishEvent } from '@/lib/realtime';
+import { sendPushToCompany } from '@/lib/push';
 
 // Schema de validação para o payload da UAZapi
 const UAZapiPayloadSchema = z.object({
@@ -1430,6 +1431,30 @@ export async function POST(req: NextRequest) {
         metadata: payload.metadata,
       },
     });
+
+    // Push notification: so para mensagens incoming (cliente enviou)
+    if (payload.type === 'incoming') {
+      const notifTitle = payload.sender_name || payload.metadata?.chat_name || 'Nova mensagem';
+      const notifBody =
+        payload.message_type === 'image' ? '📷 Imagem' :
+        payload.message_type === 'video' ? '🎥 Vídeo' :
+        payload.message_type === 'audio' || payload.message_type === 'ptt' ? '🎤 Áudio' :
+        payload.message_type === 'document' ? '📄 Documento' :
+        payload.message_type === 'location' ? '📍 Localização' :
+        (payload.message || '').substring(0, 120);
+
+      sendPushToCompany(companyId, {
+        title: notifTitle,
+        body: notifBody,
+        tag: `conversation-${conversationId}`,
+        icon: payload.profile_picture_url || '/icon-192x192.png',
+        data: {
+          url: `/app/conversations?conversation=${conversationId}`,
+          conversationId,
+          messageId: message.id,
+        },
+      }).catch((err) => console.warn('[Push] falha ao enviar:', err));
+    }
 
     // 5. Enviar webhook para N8N via fila (non-blocking)
     if (payload.type === 'incoming' || payload.type === 'outgoing') {

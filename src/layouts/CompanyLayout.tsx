@@ -70,6 +70,8 @@ import {
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { WhatsAppStatusIndicator } from '@/components/WhatsAppStatusIndicator';
+import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
+import { PushNotificationsToggle } from '@/components/PushNotificationsToggle';
 import { cn } from '@/lib/utils';
 import { useBranding } from '@/hooks/useBranding';
 
@@ -496,6 +498,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                   <TooltipContent side="top" className="text-xs">Suporte</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+              <PushNotificationsToggle variant="compact" />
               <div className="flex-1" />
               <ThemeToggle />
             </div>
@@ -620,12 +623,23 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
             'flex-1',
             pathname === '/app/conversations'
               ? 'overflow-hidden'
-              : 'overflow-y-auto p-4 md:p-6'
+              : 'overflow-y-auto p-4 md:p-6',
+            // Espaco extra no mobile pro bottom nav nao cobrir o conteudo
+            isMobile && pathname !== '/app/conversations' && 'pb-28'
           )}>
             {children}
           </main>
         </div>
       </div>
+
+      {/* Bottom nav flutuante (mobile) */}
+      {isMobile && (
+        <MobileBottomNav
+          unreadCount={unreadCount}
+          appointmentsToday={appointmentsToday}
+          onOpenMenu={() => setSidebarOpen(true)}
+        />
+      )}
 
       {/* ── Command Palette (Ctrl+K) ── */}
       <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>

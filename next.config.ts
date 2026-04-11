@@ -1,12 +1,24 @@
 import type { NextConfig } from "next";
+import withSerwistInit from "@serwist/next";
+
+const withSerwist = withSerwistInit({
+  swSrc: "src/app/sw.ts",
+  swDest: "public/sw.js",
+  // Nao registrar automaticamente em dev pra nao atrapalhar hot reload
+  disable: process.env.NODE_ENV === "development",
+  // Rotas que nao devem ser cacheadas pelo SW
+  exclude: [
+    /\/api\/webhooks\//,
+    /\/api\/conversations\/events/,
+    /\/api\/cron\//,
+  ],
+});
 
 const nextConfig: NextConfig = {
-  // Output as standalone for Docker deployment
   output: "standalone",
   eslint: {
-    // Nao bloquear o build por warnings/errors do ESLint
     ignoreDuringBuilds: true,
   },
 };
 
-export default nextConfig;
+export default withSerwist(nextConfig);

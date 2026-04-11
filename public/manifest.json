@@ -1,28 +1,47 @@
 {
-  "name": "Mileto IA - CRM",
-  "short_name": "Mileto IA",
-  "description": "CRM com Inteligência Artificial",
-  "start_url": "/auth",
+  "name": "Wyarp CRM",
+  "short_name": "Wyarp",
+  "description": "CRM inteligente com IA e automação WhatsApp",
+  "start_url": "/app/dashboard",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#10b981",
   "orientation": "portrait-primary",
+  "background_color": "#0b0c10",
+  "theme_color": "#005c4b",
+  "categories": ["business", "productivity"],
+  "lang": "pt-BR",
   "icons": [
     {
       "src": "/icon-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/icon-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Conversas",
+      "short_name": "Conversas",
+      "url": "/app/conversations",
+      "description": "Abrir conversas ativas"
+    },
+    {
+      "name": "Agenda",
+      "short_name": "Agenda",
+      "url": "/app/appointments",
+      "description": "Ver agendamentos"
     }
   ]
 }
