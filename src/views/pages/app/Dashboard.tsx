@@ -134,43 +134,57 @@ function KpiCard({
   return (
     <div
       className={cn(
-        'group relative rounded-2xl border border-border/60 p-4 transition-all',
-        'hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:border-border',
+        'group relative overflow-hidden rounded-2xl border p-5 transition-all duration-200',
+        'hover:-translate-y-1 hover:shadow-[0_12px_32px_rgba(0,0,0,0.12)] dark:hover:shadow-[0_12px_32px_rgba(0,0,0,0.4)]',
         highlight
-          ? 'bg-gradient-to-br from-primary/5 via-background to-background shadow-[0_4px_12px_rgba(59,124,255,0.04)]'
-          : 'bg-card shadow-[0_1px_3px_rgba(0,0,0,0.02)]'
+          ? 'border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card shadow-[0_4px_16px_rgba(59,124,255,0.08)] dark:shadow-[0_4px_16px_rgba(59,124,255,0.15)]'
+          : 'border-border/80 bg-card shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.2)]'
       )}
     >
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <span className="text-[12.5px] font-medium text-muted-foreground flex items-center gap-2">
+      {/* Icone grande no canto superior direito — decorativo */}
+      <div
+        className={cn(
+          'absolute -top-2 -right-2 flex h-16 w-16 items-center justify-center rounded-2xl opacity-[0.08] transition-transform group-hover:scale-110 group-hover:opacity-[0.12]',
+          iconBg?.replace('/10', '/40').replace('/15', '/50') || 'bg-muted'
+        )}
+      >
+        <Icon className={cn('h-10 w-10', iconColor)} />
+      </div>
+
+      <div className="relative">
+        <div className="flex items-center gap-2.5 mb-4">
           <span
             className={cn(
-              'flex h-7 w-7 items-center justify-center rounded-lg',
-              iconBg || 'bg-muted'
+              'flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-inset',
+              iconBg || 'bg-muted',
+              iconColor.replace('text-', 'ring-') + '/20'
             )}
           >
-            <Icon className={cn('h-3.5 w-3.5', iconColor)} />
+            <Icon className={cn('h-[18px] w-[18px]', iconColor)} />
           </span>
-          {title}
-        </span>
+          <span className="text-[12.5px] font-medium text-muted-foreground leading-tight">
+            {title}
+          </span>
+        </div>
+
+        {isLoading ? (
+          <Skeleton className="h-9 w-24" />
+        ) : (
+          <>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[32px] font-bold tracking-tight leading-none text-foreground">
+                {value}
+              </span>
+              {trend != null && <TrendBadge value={trend} invert={invertTrend} />}
+            </div>
+            {subtitle && (
+              <p className="text-[11.5px] text-muted-foreground mt-2 leading-tight font-medium">
+                {subtitle}
+              </p>
+            )}
+          </>
+        )}
       </div>
-      {isLoading ? (
-        <Skeleton className="h-8 w-20" />
-      ) : (
-        <>
-          <div className="flex items-baseline gap-2">
-            <span className="text-[28px] font-bold tracking-tight leading-none text-foreground">
-              {value}
-            </span>
-            {trend != null && <TrendBadge value={trend} invert={invertTrend} />}
-          </div>
-          {subtitle && (
-            <p className="text-[11.5px] text-muted-foreground mt-2 leading-tight">
-              {subtitle}
-            </p>
-          )}
-        </>
-      )}
     </div>
   );
 }
