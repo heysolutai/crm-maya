@@ -81,6 +81,7 @@ interface NavItem {
   requirePermission?: string;
   impersonationOnly?: boolean;
   countKey?: 'unread' | 'appointmentsToday' | 'pendingFollowUps';
+  iconColor?: string;
 }
 
 interface NavGroup {
@@ -92,36 +93,35 @@ const navGroups: NavGroup[] = [
   {
     label: 'Principal',
     items: [
-      { name: 'Dashboard', href: '/app/dashboard', icon: LayoutDashboard, roles: ['viewer', 'agent', 'manager', 'company_admin'] },
-      { name: 'Conversas', href: '/app/conversations', icon: MessageSquare, roles: ['agent', 'manager', 'company_admin'], countKey: 'unread' },
-      { name: 'CRM', href: '/app/crm', icon: Kanban, roles: ['agent', 'manager', 'company_admin'] },
+      { name: 'Dashboard', href: '/app/dashboard', icon: LayoutDashboard, roles: ['viewer', 'agent', 'manager', 'company_admin'], iconColor: 'text-blue-500' },
+      { name: 'Conversas', href: '/app/conversations', icon: MessageSquare, roles: ['agent', 'manager', 'company_admin'], countKey: 'unread', iconColor: 'text-sky-500' },
+      { name: 'CRM', href: '/app/crm', icon: Kanban, roles: ['agent', 'manager', 'company_admin'], iconColor: 'text-indigo-500' },
     ],
   },
   {
     label: 'Vendas',
     items: [
-      { name: 'Clientes', href: '/app/clients', icon: Users, roles: ['viewer', 'agent', 'manager', 'company_admin'], requirePermission: 'can_access_crm' },
-      { name: 'Catálogo', href: '/app/catalog', icon: Package, roles: ['agent', 'manager', 'company_admin'] },
-      { name: 'Agenda', href: '/app/appointments', icon: Calendar, roles: ['agent', 'manager', 'company_admin'], countKey: 'appointmentsToday' },
-      { name: 'Follow-ups', href: '/app/follow-ups', icon: Clock, roles: ['manager', 'company_admin'], countKey: 'pendingFollowUps' },
+      { name: 'Clientes', href: '/app/clients', icon: Users, roles: ['viewer', 'agent', 'manager', 'company_admin'], requirePermission: 'can_access_crm', iconColor: 'text-orange-500' },
+      { name: 'Catálogo', href: '/app/catalog', icon: Package, roles: ['agent', 'manager', 'company_admin'], iconColor: 'text-amber-500' },
+      { name: 'Agenda', href: '/app/appointments', icon: Calendar, roles: ['agent', 'manager', 'company_admin'], countKey: 'appointmentsToday', iconColor: 'text-purple-500' },
+      { name: 'Follow-ups', href: '/app/follow-ups', icon: Clock, roles: ['manager', 'company_admin'], countKey: 'pendingFollowUps', iconColor: 'text-cyan-500' },
     ],
   },
   {
     label: 'Relatórios',
     items: [
-      { name: 'Relatório', href: '/app/daily-report', icon: FileText, roles: ['agent', 'manager', 'company_admin'] },
+      { name: 'Relatório', href: '/app/daily-report', icon: FileText, roles: ['agent', 'manager', 'company_admin'], iconColor: 'text-emerald-500' },
     ],
   },
   {
     label: 'Administração',
     items: [
-      { name: 'Equipe', href: '/app/team', icon: UserCog, roles: ['company_admin'] },
-      { name: 'Departamentos', href: '/app/departments', icon: Building2, roles: ['company_admin'] },
-      { name: 'IA', href: '/app/ai-settings', icon: Bot, roles: ['company_admin'] },
-      // { name: 'Prompts', href: '/app/prompt-library', icon: BookOpen, roles: ['viewer', 'agent', 'manager', 'company_admin'] },
-      { name: 'API Docs', href: '/app/api-docs', icon: Code, roles: ['manager', 'company_admin'] },
-      { name: 'Configurações', href: '/app/settings', icon: Settings, roles: ['company_admin'] },
-      { name: 'Suporte', href: '/app/support', icon: LifeBuoy, roles: ['viewer', 'agent', 'manager', 'company_admin'] },
+      { name: 'Equipe', href: '/app/team', icon: UserCog, roles: ['company_admin'], iconColor: 'text-rose-500' },
+      { name: 'Departamentos', href: '/app/departments', icon: Building2, roles: ['company_admin'], iconColor: 'text-pink-500' },
+      { name: 'IA', href: '/app/ai-settings', icon: Bot, roles: ['company_admin'], iconColor: 'text-violet-500' },
+      { name: 'API Docs', href: '/app/api-docs', icon: Code, roles: ['manager', 'company_admin'], iconColor: 'text-teal-500' },
+      { name: 'Configurações', href: '/app/settings', icon: Settings, roles: ['company_admin'], iconColor: 'text-slate-500' },
+      { name: 'Suporte', href: '/app/support', icon: LifeBuoy, roles: ['viewer', 'agent', 'manager', 'company_admin'], iconColor: 'text-fuchsia-500' },
     ],
   },
 ];
@@ -292,33 +292,36 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
             ? `fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-200 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`
             : 'w-64'
         )}>
-          {/* ── Company Header ── */}
-          <div className="px-3 pt-[env(safe-area-inset-top)]">
-            <div className="flex items-center gap-3 px-1 py-4">
+          {/* ── Company Header (card) ── */}
+          <div
+            className="px-3"
+            style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+          >
+            <div className="flex items-center gap-3 rounded-xl border border-sidebar-border/60 bg-sidebar-accent/30 px-3 py-3 backdrop-blur-sm">
               <div className="relative shrink-0">
                 {branding.logoUrl ? (
-                  <Image src={branding.logoUrl} alt={branding.systemName} width={32} height={32} className="rounded-lg" />
+                  <Image src={branding.logoUrl} alt={branding.systemName} width={36} height={36} className="rounded-xl" />
                 ) : (
-                  <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                    <span className="text-primary-foreground text-sm font-bold">W</span>
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-sm">
+                    <span className="text-primary-foreground text-sm font-bold tracking-tight">W</span>
                   </div>
                 )}
                 <span className={cn(
-                  'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-sidebar',
-                  whatsAppStatus === 'connected' ? 'bg-mileto-green' :
+                  'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-sidebar',
+                  whatsAppStatus === 'connected' ? 'bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]' :
                   whatsAppStatus === 'connecting' ? 'bg-amber-500 animate-pulse' :
                   'bg-gray-400'
                 )} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-sidebar-foreground truncate">
+                <p className="text-[13px] font-semibold text-sidebar-foreground truncate tracking-tight">
                   {effectiveCompanyName || branding.systemName}
                 </p>
-                <p className="text-[11px] text-sidebar-foreground/50 truncate">
-                  {whatsAppStatus === 'connected' ? 'WhatsApp conectado' :
-                   whatsAppStatus === 'connecting' ? 'Conectando...' :
-                   whatsAppStatus === 'no_instance' ? 'WhatsApp não configurado' :
-                   'WhatsApp desconectado'}
+                <p className="text-[10.5px] text-sidebar-foreground/50 truncate mt-0.5">
+                  {whatsAppStatus === 'connected' ? '● WhatsApp conectado' :
+                   whatsAppStatus === 'connecting' ? '● Conectando...' :
+                   whatsAppStatus === 'no_instance' ? '○ Não configurado' :
+                   '○ Desconectado'}
                 </p>
               </div>
               {isMobile && (
@@ -330,52 +333,52 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
           </div>
 
           {/* ── Search Trigger (Cmd+K) ── */}
-          <div className="px-3 pb-3">
+          <div className="px-3 pt-3">
             <button
               onClick={() => setCommandOpen(true)}
-              className="flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/50 px-3 py-2 text-sm text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              className="flex w-full items-center gap-2 rounded-xl border border-sidebar-border/60 bg-sidebar-accent/30 px-3 py-2.5 text-sm text-sidebar-foreground/50 transition-all hover:bg-sidebar-accent/60 hover:text-sidebar-foreground hover:border-sidebar-border"
             >
               <Search className="h-3.5 w-3.5" />
-              <span className="flex-1 text-left text-xs">Buscar...</span>
-              <kbd className="pointer-events-none hidden h-5 select-none items-center gap-0.5 rounded border border-sidebar-border bg-sidebar px-1.5 font-mono text-[10px] font-medium text-sidebar-foreground/40 sm:flex">
-                <span className="text-[11px]">Ctrl</span>K
+              <span className="flex-1 text-left text-[12.5px]">Buscar...</span>
+              <kbd className="pointer-events-none hidden h-5 select-none items-center gap-0.5 rounded-md border border-sidebar-border bg-sidebar/50 px-1.5 font-mono text-[10px] font-medium text-sidebar-foreground/40 sm:flex">
+                <span className="text-[11px]">⌘</span>K
               </kbd>
             </button>
           </div>
 
-          {/* ── Day at a Glance ── */}
+          {/* ── Day at a Glance (card destacado) ── */}
           {totalDayActivity > 0 && (
-            <div className="px-3 pb-3">
-              <div className="rounded-lg bg-sidebar-accent/60 p-3 space-y-2">
-                <div className="flex items-center gap-2">
+            <div className="px-3 pt-3">
+              <div className="rounded-xl border border-sidebar-border/60 bg-gradient-to-br from-sidebar-accent/50 to-sidebar-accent/20 p-3.5 space-y-2.5">
+                <div className="flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-sidebar-primary" />
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
+                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/60">
                     Hoje
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-1">
                   {unreadCount > 0 && (
-                    <Link href="/app/conversations" className="text-center group/stat">
-                      <p className="text-lg font-bold text-sidebar-foreground leading-none group-hover/stat:text-sidebar-primary transition-colors">
+                    <Link href="/app/conversations" className="text-center group/stat rounded-lg py-1 hover:bg-sidebar-accent/40 transition-colors">
+                      <p className="text-xl font-bold text-sidebar-foreground leading-none group-hover/stat:text-sidebar-primary transition-colors tabular-nums">
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </p>
-                      <p className="text-[10px] text-sidebar-foreground/50 mt-0.5">mensagens</p>
+                      <p className="text-[9.5px] text-sidebar-foreground/50 mt-1 font-medium">mensagens</p>
                     </Link>
                   )}
                   {appointmentsToday > 0 && (
-                    <Link href="/app/appointments" className="text-center group/stat">
-                      <p className="text-lg font-bold text-sidebar-foreground leading-none group-hover/stat:text-sidebar-primary transition-colors">
+                    <Link href="/app/appointments" className="text-center group/stat rounded-lg py-1 hover:bg-sidebar-accent/40 transition-colors">
+                      <p className="text-xl font-bold text-sidebar-foreground leading-none group-hover/stat:text-sidebar-primary transition-colors tabular-nums">
                         {appointmentsToday}
                       </p>
-                      <p className="text-[10px] text-sidebar-foreground/50 mt-0.5">consultas</p>
+                      <p className="text-[9.5px] text-sidebar-foreground/50 mt-1 font-medium">consultas</p>
                     </Link>
                   )}
                   {pendingFollowUps > 0 && (
-                    <Link href="/app/follow-ups" className="text-center group/stat">
-                      <p className="text-lg font-bold text-sidebar-foreground leading-none group-hover/stat:text-sidebar-primary transition-colors">
+                    <Link href="/app/follow-ups" className="text-center group/stat rounded-lg py-1 hover:bg-sidebar-accent/40 transition-colors">
+                      <p className="text-xl font-bold text-sidebar-foreground leading-none group-hover/stat:text-sidebar-primary transition-colors tabular-nums">
                         {pendingFollowUps}
                       </p>
-                      <p className="text-[10px] text-sidebar-foreground/50 mt-0.5">follow-ups</p>
+                      <p className="text-[9.5px] text-sidebar-foreground/50 mt-1 font-medium">follow-ups</p>
                     </Link>
                   )}
                 </div>
@@ -383,24 +386,21 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
             </div>
           )}
 
-          <Separator className="bg-sidebar-border" />
+          <div className="h-3" />
 
           {/* ── Navigation ── */}
-          <ScrollArea className="flex-1 py-3">
+          <ScrollArea className="flex-1 py-2">
             <TooltipProvider delayDuration={0}>
               {navGroups.map((group, groupIndex) => {
                 const visibleItems = group.items.filter(filterNavItem);
                 if (visibleItems.length === 0) return null;
 
                 return (
-                  <div key={group.label} className={cn(groupIndex > 0 && 'mt-5')}>
-                    <div className="flex items-center gap-2 px-4 mb-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-                        {group.label}
-                      </p>
-                      <div className="flex-1 h-px bg-sidebar-border/60" />
-                    </div>
-                    <nav className="space-y-0.5 px-2">
+                  <div key={group.label} className={cn('px-3', groupIndex > 0 && 'mt-5')}>
+                    <p className="text-[9.5px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/40 mb-2 px-2">
+                      {group.label}
+                    </p>
+                    <nav className="space-y-0.5">
                       {visibleItems.map((item) => {
                         const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
                         const count = getCountForItem(item);
@@ -411,28 +411,34 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                               <Link
                                 href={item.href}
                                 className={cn(
-                                  'group/nav flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
+                                  'group/nav relative flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-[13px] font-medium transition-all duration-150',
                                   isActive
-                                    ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
-                                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                                    ? 'bg-sidebar-accent/70 text-sidebar-foreground shadow-sm'
+                                    : 'text-sidebar-foreground/65 hover:bg-sidebar-accent/40 hover:text-sidebar-foreground'
                                 )}
                               >
-                                <item.icon className={cn(
-                                  'h-4 w-4 shrink-0 transition-colors',
+                                {isActive && (
+                                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-sidebar-primary" />
+                                )}
+                                <div className={cn(
+                                  'flex h-7 w-7 items-center justify-center rounded-lg transition-colors shrink-0',
                                   isActive
-                                    ? 'text-sidebar-primary-foreground'
-                                    : 'text-sidebar-foreground/50 group-hover/nav:text-sidebar-accent-foreground'
-                                )} />
-                                <span className="flex-1 truncate">{item.name}</span>
+                                    ? 'bg-sidebar-primary/15'
+                                    : 'bg-sidebar-accent/40 group-hover/nav:bg-sidebar-accent/70'
+                                )}>
+                                  <item.icon className={cn(
+                                    'h-[14px] w-[14px] transition-colors',
+                                    item.iconColor || 'text-sidebar-foreground/60'
+                                  )} />
+                                </div>
+                                <span className="flex-1 truncate tracking-tight">{item.name}</span>
 
                                 {count > 0 && (
                                   <span className={cn(
                                     'ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums',
-                                    isActive
-                                      ? 'bg-sidebar-primary-foreground/20 text-sidebar-primary-foreground'
-                                      : item.countKey === 'unread'
-                                        ? 'bg-destructive text-destructive-foreground'
-                                        : 'bg-sidebar-foreground/10 text-sidebar-foreground/70'
+                                    item.countKey === 'unread'
+                                      ? 'bg-destructive text-destructive-foreground shadow-sm'
+                                      : 'bg-sidebar-foreground/10 text-sidebar-foreground/80'
                                   )}>
                                     {count > 99 ? '99+' : count}
                                   </span>
@@ -497,24 +503,24 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
             {/* User card */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-sidebar-accent cursor-pointer">
+                <button className="flex w-full items-center gap-3 rounded-xl border border-sidebar-border/60 bg-sidebar-accent/30 px-3 py-2.5 text-sm transition-all hover:bg-sidebar-accent/60 hover:border-sidebar-border cursor-pointer">
                   <div className="relative">
                     <Avatar className="h-9 w-9 shrink-0">
-                      <AvatarFallback className="text-xs font-semibold bg-sidebar-primary text-sidebar-primary-foreground">
+                      <AvatarFallback className="text-xs font-semibold bg-gradient-to-br from-sidebar-primary to-sidebar-primary/80 text-sidebar-primary-foreground">
                         {userInitials}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-sidebar bg-mileto-green" />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-sidebar bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]" />
                   </div>
                   <div className="flex-1 min-w-0 text-left">
-                    <p className="text-sm font-medium text-sidebar-foreground truncate">
+                    <p className="text-[13px] font-semibold text-sidebar-foreground truncate tracking-tight">
                       {userName}
                     </p>
-                    <p className="text-[11px] text-sidebar-foreground/50 truncate">
+                    <p className="text-[10.5px] text-sidebar-foreground/50 truncate mt-0.5">
                       {roleDisplayNames[role || ''] || role}
                     </p>
                   </div>
-                  <ChevronsUpDown className="h-4 w-4 text-sidebar-foreground/30 shrink-0" />
+                  <ChevronsUpDown className="h-3.5 w-3.5 text-sidebar-foreground/30 shrink-0" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" align="start" className="w-60">
