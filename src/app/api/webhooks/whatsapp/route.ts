@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
 import { enqueueInboundMessage, enqueueN8NWebhook, enqueueTranscription, enqueueMediaProcessing } from '@/lib/queue';
-import { uploadToB2, buildB2Key, MIME_TO_EXT } from '@/lib/storage';
+import { uploadToB2, buildB2Key, MIME_TO_EXT, deleteMediaFromUrl } from '@/lib/storage';
 import { publishEvent } from '@/lib/realtime';
 
 // Schema de validação para o payload da UAZapi
@@ -932,6 +932,7 @@ export async function POST(req: NextRequest) {
         select: {
           id: true,
           conversationId: true,
+          mediaUrl: true,
           conversation: { select: { companyId: true } },
         },
       });
@@ -945,8 +946,11 @@ export async function POST(req: NextRequest) {
       const deleted = await prisma.message.deleteMany({ where: { id: { in: ids } } });
       const deletedCount = deleted.count;
 
-      // Publica evento para cada conversa afetada
+      // Cleanup das midias no B2 e publica evento realtime
       for (const m of toDelete) {
+        if (m.mediaUrl) {
+          deleteMediaFromUrl(m.mediaUrl).catch(() => {});
+        }
         publishEvent(m.conversation.companyId, {
           type: 'message:delete',
           conversationId: m.conversationId,

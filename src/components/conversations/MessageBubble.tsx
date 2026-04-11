@@ -30,6 +30,7 @@ interface MessageBubbleProps {
   onDelete: (messageId: string) => void;
   onReact: (messageId: string, emoji: string) => void;
   onRemoveReaction?: (messageId: string) => void;
+  onForward?: (message: Message) => void;
   onTranscribe: (messageId: string) => void;
   isTranscribing: boolean;
 }
@@ -48,6 +49,7 @@ export const MessageBubble = memo(function MessageBubble({
   onDelete,
   onReact,
   onRemoveReaction,
+  onForward,
   onTranscribe,
   isTranscribing,
 }: MessageBubbleProps) {
@@ -281,13 +283,14 @@ export const MessageBubble = memo(function MessageBubble({
             </div>
           </div>
           
-          {/* Menu de ações (aparece no hover) */}
+          {/* Menu de ações */}
           <MessageActions
             messageId={msg.id}
             messageText={msg.message_text || ''}
             onReply={() => onReply(msg)}
             onDelete={() => onDelete(msg.id)}
             onReact={(emoji) => onReact(msg.id, emoji)}
+            onForward={onForward ? () => onForward(msg) : undefined}
             isClient={isClient}
           />
         </div>

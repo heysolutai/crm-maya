@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse } from '@/lib/api/cors';
 import { publishEvent } from '@/lib/realtime';
+import { deleteMediaFromUrl } from '@/lib/storage';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest) {
         id: true,
         uazMessageId: true,
         conversationId: true,
+        mediaUrl: true,
       },
     });
 
@@ -79,6 +81,11 @@ export async function POST(req: NextRequest) {
 
     // Deleta do banco (se o revoke falhou, pelo menos some do CRM)
     await prisma.message.delete({ where: { id: messageId } });
+
+    // Cleanup da midia no B2 (best-effort, nao bloqueia resposta)
+    if (message.mediaUrl) {
+      deleteMediaFromUrl(message.mediaUrl).catch(() => {});
+    }
 
     // Publica para outras abas/dispositivos atualizarem em tempo real
     publishEvent(auth.companyId, {

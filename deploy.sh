@@ -2,12 +2,25 @@
 set -euo pipefail
 
 # ============================================================
-#  CRM Maya — Script de Deploy para Linux (Ubuntu/Debian)
+#  CRM — Script de Deploy para Linux (Ubuntu/Debian)
 # ============================================================
 #
+#  Variaveis suportadas (env vars ou .deployrc em /var/www/<app>/):
+#    APP_NAME          Nome da aplicacao          (default: crm-wyarp)
+#    APP_DIR           Diretorio de instalacao    (default: /var/www/<app>)
+#    APP_PORT          Porta da aplicacao         (default: 3000)
+#    DOMAIN            Dominio do site            (ex: crm.seudominio.com.br)
+#    GITHUB_REPO       Repo no formato user/repo  (ex: heysolutai/crm-wyarp)
+#    GITHUB_TOKEN      PAT para repos privados    (opcional)
+#    GITHUB_BRANCH     Branch a usar              (default: main)
+#    NODE_VERSION      Versao do Node.js          (default: 20)
+#    PG_DB             Nome do banco              (default: crm_wyarp)
+#    PG_USER           Usuario do Postgres        (default: wyarp)
+#
 #  Uso:
-#    Primeiro deploy (instala tudo):
-#      chmod +x deploy.sh && sudo ./deploy.sh setup
+#    Primeiro deploy (full — clona, builda, sobe servicos e SSL):
+#      sudo DOMAIN=crm.dominio.com GITHUB_REPO=user/repo \\
+#           GITHUB_TOKEN=ghp_xxx ./deploy.sh setup
 #
 #    Atualizar (git pull + rebuild):
 #      ./deploy.sh update
@@ -15,15 +28,28 @@ set -euo pipefail
 #    Apenas reiniciar:       ./deploy.sh restart
 #    Ver status:             ./deploy.sh status
 #    Ver logs:               ./deploy.sh logs
-#    Configurar SSL:         sudo ./deploy.sh ssl seudominio.com
+#    Configurar SSL manual:  sudo ./deploy.sh ssl seudominio.com
+#    Ver config atual:       ./deploy.sh config
 # ============================================================
 
-APP_NAME="crm-maya"
-APP_DIR="/var/www/${APP_NAME}"
-APP_PORT=3000
-NODE_VERSION=20
-PG_DB="crm_maya"
-PG_USER="maya"
+# ── Defaults (sobrescreviveis via env ou .deployrc) ──────────
+APP_NAME="${APP_NAME:-crm-wyarp}"
+APP_DIR_DEFAULT="/var/www/${APP_NAME}"
+APP_DIR="${APP_DIR:-$APP_DIR_DEFAULT}"
+APP_PORT="${APP_PORT:-3000}"
+NODE_VERSION="${NODE_VERSION:-20}"
+PG_DB="${PG_DB:-crm_wyarp}"
+PG_USER="${PG_USER:-wyarp}"
+DOMAIN="${DOMAIN:-}"
+GITHUB_REPO="${GITHUB_REPO:-}"
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+GITHUB_BRANCH="${GITHUB_BRANCH:-main}"
+
+# Carrega .deployrc do APP_DIR se existir (persistencia entre runs)
+if [ -f "${APP_DIR}/.deployrc" ]; then
+  # shellcheck disable=SC1091
+  source "${APP_DIR}/.deployrc"
+fi
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -35,6 +61,62 @@ log()  { echo -e "${GREEN}[DEPLOY]${NC} $1"; }
 warn() { echo -e "${YELLOW}[AVISO]${NC} $1"; }
 err()  { echo -e "${RED}[ERRO]${NC} $1"; exit 1; }
 step() { echo -e "\n${CYAN}━━━ $1 ━━━${NC}"; }
+
+# Prompt interativo se rodando em TTY e variavel vazia
+prompt_if_empty() {
+  local var_name="$1"
+  local label="$2"
+  local default="${3:-}"
+  if [ -z "${!var_name:-}" ] && [ -t 0 ]; then
+    local prompt_msg="${label}"
+    [ -n "$default" ] && prompt_msg="${label} [${default}]"
+    read -rp "  ${prompt_msg}: " value
+    eval "${var_name}=\"\${value:-$default}\""
+  fi
+}
+
+# Salva as variaveis em .deployrc pro proximo run
+save_deployrc() {
+  local rc_file="${APP_DIR}/.deployrc"
+  mkdir -p "$APP_DIR"
+  cat > "$rc_file" <<RC
+# Gerado por deploy.sh — variaveis persistidas entre runs
+APP_NAME="${APP_NAME}"
+APP_DIR="${APP_DIR}"
+APP_PORT="${APP_PORT}"
+NODE_VERSION="${NODE_VERSION}"
+PG_DB="${PG_DB}"
+PG_USER="${PG_USER}"
+DOMAIN="${DOMAIN}"
+GITHUB_REPO="${GITHUB_REPO}"
+GITHUB_BRANCH="${GITHUB_BRANCH}"
+RC
+  # GITHUB_TOKEN fica em arquivo separado com permissao restrita
+  if [ -n "$GITHUB_TOKEN" ]; then
+    local token_file="${APP_DIR}/.github_token"
+    echo "GITHUB_TOKEN=\"${GITHUB_TOKEN}\"" > "$token_file"
+    chmod 600 "$token_file"
+    echo "[ -f \"${token_file}\" ] && source \"${token_file}\"" >> "$rc_file"
+  fi
+  chmod 644 "$rc_file"
+  log "Config salva em ${rc_file}"
+}
+
+# Mostra config atual
+cmd_config() {
+  echo ""
+  step "Config atual"
+  printf "  %-15s %s\n" "APP_NAME:"      "${APP_NAME}"
+  printf "  %-15s %s\n" "APP_DIR:"       "${APP_DIR}"
+  printf "  %-15s %s\n" "APP_PORT:"      "${APP_PORT}"
+  printf "  %-15s %s\n" "DOMAIN:"        "${DOMAIN:-<nao definido>}"
+  printf "  %-15s %s\n" "GITHUB_REPO:"   "${GITHUB_REPO:-<nao definido>}"
+  printf "  %-15s %s\n" "GITHUB_BRANCH:" "${GITHUB_BRANCH}"
+  printf "  %-15s %s\n" "GITHUB_TOKEN:"  "$([ -n "$GITHUB_TOKEN" ] && echo "<definido>" || echo "<nao definido>")"
+  printf "  %-15s %s\n" "PG_DB:"         "${PG_DB}"
+  printf "  %-15s %s\n" "PG_USER:"       "${PG_USER}"
+  echo ""
+}
 
 # ──────────────────────────────────────────────
 #  SETUP — Primeiro deploy (rodar com sudo)
@@ -92,31 +174,81 @@ cmd_setup() {
   systemctl enable redis-server
   systemctl start redis-server
 
-  step "7/8 — Preparando diretorio da aplicacao"
-  if [ ! -d "$APP_DIR" ]; then
-    mkdir -p "$APP_DIR"
-    warn "Diretorio criado: ${APP_DIR}"
-    warn "Clone o repositorio: git clone SEU_REPO ${APP_DIR}"
+  step "7/8 — Clonando repositorio"
+  prompt_if_empty GITHUB_REPO "GITHUB_REPO (user/repo)" ""
+  [ -z "$GITHUB_REPO" ] && err "GITHUB_REPO obrigatorio para clonar"
+  prompt_if_empty GITHUB_BRANCH "GITHUB_BRANCH" "main"
+
+  if [ ! -d "${APP_DIR}/.git" ]; then
+    mkdir -p "$(dirname "$APP_DIR")"
+    local clone_url
+    if [ -n "$GITHUB_TOKEN" ]; then
+      clone_url="https://${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git"
+      log "Clonando (com token)..."
+    else
+      clone_url="https://github.com/${GITHUB_REPO}.git"
+      log "Clonando (publico)..."
+    fi
+    git clone --branch "$GITHUB_BRANCH" "$clone_url" "$APP_DIR" || err "Falha ao clonar"
+    # Remove token da URL do remote pra nao vazar no git config
+    if [ -n "$GITHUB_TOKEN" ]; then
+      git -C "$APP_DIR" remote set-url origin "https://github.com/${GITHUB_REPO}.git"
+    fi
+  else
+    log "Repo ja existe em ${APP_DIR}, pulando clone"
+  fi
+
+  # Copia deploy.sh pra dentro do APP_DIR (se rodamos fora)
+  if [ -f "${APP_DIR}/deploy.sh" ]; then
+    chmod +x "${APP_DIR}/deploy.sh"
   fi
 
   step "8/8 — Configurando Nginx"
-  cat > "/etc/nginx/sites-available/${APP_NAME}" <<'NGINX'
+  prompt_if_empty DOMAIN "DOMAIN (ex: crm.seudominio.com.br)" ""
+  [ -z "$DOMAIN" ] && err "DOMAIN obrigatorio"
+
+  # Map para Connection header: upgrade pra websocket, close pra requests normais
+  cat > "/etc/nginx/conf.d/${APP_NAME}-upgrade.conf" <<'UPGRADE'
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+UPGRADE
+
+  cat > "/etc/nginx/sites-available/${APP_NAME}" <<NGINX
 server {
     listen 80;
-    server_name _;
+    server_name ${DOMAIN};
 
     client_max_body_size 50M;
 
-    location / {
-        proxy_pass http://127.0.0.1:3000;
+    # SSE: Server-Sent Events realtime (requer buffering off)
+    location /api/conversations/events {
+        proxy_pass http://127.0.0.1:${APP_PORT};
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Connection '';
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+        gzip off;
+        chunked_transfer_encoding off;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:${APP_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$connection_upgrade;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
     }
@@ -125,26 +257,25 @@ NGINX
   ln -sf "/etc/nginx/sites-available/${APP_NAME}" "/etc/nginx/sites-enabled/"
   rm -f /etc/nginx/sites-enabled/default
   nginx -t && systemctl reload nginx
-  log "Nginx configurado"
+  log "Nginx configurado para ${DOMAIN}"
 
-  # Gerar secrets de exemplo
-  step "Secrets gerados para .env"
-  echo ""
-  echo "  NEXTAUTH_SECRET=\"$(openssl rand -base64 32)\""
-  echo "  INTERNAL_API_SECRET=\"$(openssl rand -hex 32)\""
-  echo "  CRON_SECRET=\"$(openssl rand -hex 32)\""
-  echo ""
+  # Salva config pra proximos runs
+  save_deployrc
 
   echo ""
   log "Setup concluido!"
   echo ""
   echo "  Proximos passos:"
   echo "  ─────────────────────────────────────────────"
-  echo "  1. Clone o repo:    git clone SEU_REPO ${APP_DIR}"
-  echo "  2. Configure .env:  cp ${APP_DIR}/.env.example ${APP_DIR}/.env"
-  echo "                      nano ${APP_DIR}/.env"
-  echo "  3. Deploy:          cd ${APP_DIR} && ./deploy.sh update"
-  echo "  4. SSL:             sudo ./deploy.sh ssl seudominio.com"
+  echo "  1. Configure .env:   nano ${APP_DIR}/.env"
+  echo "     Use os secrets gerados abaixo:"
+  echo ""
+  echo "     NEXTAUTH_SECRET=\"$(openssl rand -base64 32)\""
+  echo "     INTERNAL_API_SECRET=\"$(openssl rand -hex 32)\""
+  echo "     CRON_SECRET=\"$(openssl rand -hex 32)\""
+  echo ""
+  echo "  2. Primeiro deploy:  cd ${APP_DIR} && ./deploy.sh update"
+  echo "  3. SSL:              sudo ./deploy.sh ssl"
   echo "  ─────────────────────────────────────────────"
   echo ""
 }
@@ -153,8 +284,8 @@ NGINX
 #  UPDATE — Pull + build + deploy
 # ──────────────────────────────────────────────
 cmd_update() {
-  # Aceitar rodar de qualquer lugar (se esta no APP_DIR ou nao)
-  if [ -f "package.json" ] && grep -q "crm-maya" package.json 2>/dev/null; then
+  # Aceitar rodar de qualquer lugar: se tem package.json na pasta atual, usa ela
+  if [ -f "package.json" ]; then
     APP_DIR="$(pwd)"
   fi
   cd "$APP_DIR" || err "Diretorio ${APP_DIR} nao encontrado."
@@ -283,24 +414,28 @@ cmd_logs() {
 #  SSL — Configurar HTTPS com Let's Encrypt
 # ──────────────────────────────────────────────
 cmd_ssl() {
-  local domain="${2:-}"
+  # Usa DOMAIN do .deployrc/env se nao foi passado como argumento
+  local domain="${2:-$DOMAIN}"
   if [ -z "$domain" ]; then
-    err "Uso: sudo ./deploy.sh ssl seudominio.com"
+    err "Uso: sudo ./deploy.sh ssl [dominio]\n  Ou defina DOMAIN no .deployrc"
   fi
 
   if [ "$EUID" -ne 0 ]; then
     err "Rode com sudo: sudo ./deploy.sh ssl ${domain}"
   fi
 
-  # Atualizar server_name no nginx
+  # Garante que o server_name no nginx esta correto
   sed -i "s/server_name _;/server_name ${domain};/" "/etc/nginx/sites-available/${APP_NAME}" 2>/dev/null || true
-  sed -i "s/server_name .*/server_name ${domain};/" "/etc/nginx/sites-available/${APP_NAME}" 2>/dev/null || true
   nginx -t && systemctl reload nginx
 
   certbot --nginx -d "$domain" --non-interactive --agree-tos --redirect -m "admin@${domain}" || {
     warn "Certbot automatico falhou. Tente:"
     warn "  sudo certbot --nginx -d ${domain}"
   }
+
+  # Atualiza DOMAIN no .deployrc
+  DOMAIN="$domain"
+  save_deployrc
 
   log "SSL configurado para ${domain}"
   warn "Atualize NEXTAUTH_URL e NEXT_PUBLIC_APP_URL no .env para https://${domain}"
@@ -312,25 +447,33 @@ cmd_ssl() {
 # ──────────────────────────────────────────────
 cmd_help() {
   echo ""
-  echo "  CRM Maya — Script de Deploy"
+  echo "  CRM — Script de Deploy"
   echo ""
   echo "  Uso: ./deploy.sh <comando>"
   echo ""
   echo "  Comandos:"
-  echo "    setup           Instalar tudo (PostgreSQL, Redis, Nginx, Node) — requer sudo"
-  echo "    update          Git pull + build + restart"
+  echo "    setup           Instala tudo + clona repo + configura nginx — requer sudo"
+  echo "    update          Git pull + migrations + build + restart"
   echo "    restart         Apenas reiniciar a aplicacao"
   echo "    status          Ver status dos servicos, disco e memoria"
   echo "    logs [N]        Ver ultimas N linhas de log (padrao: 100)"
-  echo "    ssl DOMINIO     Configurar HTTPS com Let's Encrypt — requer sudo"
+  echo "    ssl [DOMINIO]   Configurar HTTPS com Let's Encrypt — requer sudo"
+  echo "    config          Mostrar configuracao atual"
   echo ""
-  echo "  Primeiro deploy:"
-  echo "    sudo ./deploy.sh setup"
-  echo "    git clone SEU_REPO /var/www/crm-maya"
-  echo "    cd /var/www/crm-maya"
-  echo "    cp .env.example .env && nano .env"
-  echo "    ./deploy.sh update"
-  echo "    sudo ./deploy.sh ssl seudominio.com"
+  echo "  Variaveis (env vars ou .deployrc em ${APP_DIR}):"
+  echo "    DOMAIN          Dominio do site (ex: crm.dominio.com.br)"
+  echo "    GITHUB_REPO     Repo (ex: user/nome-repo)"
+  echo "    GITHUB_TOKEN    PAT para repos privados (opcional)"
+  echo "    GITHUB_BRANCH   Branch a usar (default: main)"
+  echo "    APP_NAME        Nome da app (default: crm-wyarp)"
+  echo "    APP_DIR         Diretorio (default: /var/www/<app>)"
+  echo "    PG_DB / PG_USER Banco e usuario Postgres"
+  echo ""
+  echo "  Primeiro deploy (one-liner):"
+  echo "    sudo DOMAIN=crm.dominio.com GITHUB_REPO=user/repo \\\\"
+  echo "         GITHUB_TOKEN=ghp_xxx ./deploy.sh setup"
+  echo ""
+  echo "    cd ${APP_DIR} && nano .env && ./deploy.sh update && sudo ./deploy.sh ssl"
   echo ""
 }
 
@@ -344,6 +487,7 @@ case "${1:-help}" in
   status)  cmd_status ;;
   logs)    cmd_logs "$@" ;;
   ssl)     cmd_ssl "$@" ;;
+  config)  cmd_config ;;
   help|-h|--help) cmd_help ;;
   *)       warn "Comando desconhecido: $1"; cmd_help ;;
 esac

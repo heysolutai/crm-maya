@@ -892,6 +892,72 @@ export function useConversations(filters?: ConversationFilters) {
     },
   });
 
+  // Forward message to another conversation
+  const forwardMessage = useMutation({
+    mutationFn: async ({
+      message,
+      targetConversationId,
+    }: {
+      message: any;
+      targetConversationId: string;
+    }) => {
+      const target = conversations?.find((c: any) => c.id === targetConversationId);
+      if (!target?.client?.phone) throw new Error('Conversa destino invalida');
+
+      const mediaType = (message.message_type || message.messageType || 'text') as string;
+      const mediaUrl = message.media_url || message.mediaUrl;
+      const messageText = message.message_text || message.messageText || '';
+
+      // Texto puro
+      if (!mediaUrl || mediaType === 'text') {
+        if (!messageText.trim()) throw new Error('Mensagem vazia');
+        const { data, error } = await invokeFn('send-message-text', {
+          conversationId: targetConversationId,
+          message: messageText,
+          phone: target.client.phone,
+        });
+        if (error) throw error;
+        return data;
+      }
+
+      // Audio/ptt: send-media nao aceita esses tipos diretamente
+      if (['audio', 'ptt'].includes(mediaType)) {
+        throw new Error('Encaminhamento de audio ainda nao suportado');
+      }
+
+      // Midia (image / video / document / sticker): manda o URL direto
+      // O backend send-media faz fetch(url) e converte pra base64
+      const forwardType: 'image' | 'video' | 'document' =
+        mediaType === 'image' ? 'image' :
+        mediaType === 'video' ? 'video' : 'document';
+
+      const docName = (message.metadata as any)?.docName || (message.metadata as any)?.fileName;
+
+      const { data, error } = await invokeFn('send-message-media', {
+        phone: target.client.phone,
+        type: forwardType,
+        file: mediaUrl,
+        text: messageText || undefined,
+        docName: forwardType === 'document' ? docName : undefined,
+        conversationId: targetConversationId,
+        fromAI: false,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      toast({ title: 'Mensagem encaminhada', description: 'Enviada com sucesso.' });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao encaminhar',
+        description: getErrorMessage(error),
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Toggle AI paused for client
   const toggleClientAIPaused = useMutation({
     mutationFn: async ({ clientId, currentValue }: { clientId: string; currentValue: boolean }) => {
@@ -949,6 +1015,8 @@ export function useConversations(filters?: ConversationFilters) {
     addTag: addTag.mutate,
     removeTag: removeTag.mutate,
     deleteMessage: deleteMessage.mutate,
+    forwardMessage: forwardMessage.mutate,
+    isForwarding: forwardMessage.isPending,
     transcribeMessage: transcribeMessage.mutate,
     isTranscribing: transcribeMessage.isPending,
     realtimeStatus,

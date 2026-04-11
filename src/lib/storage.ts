@@ -72,6 +72,50 @@ export async function deleteFromB2(key: string): Promise<void> {
 }
 
 /**
+ * Extrai a key do B2 a partir de uma URL pública (ou retorna null se nao parecer B2).
+ * Suporta tanto o formato path-style (endpoint/bucket/key) quanto o B2_PUBLIC_URL customizado.
+ */
+export function extractB2Key(url: string | null | undefined): string | null {
+  if (!url) return null;
+
+  const bucket = process.env.B2_BUCKET_NAME;
+  const publicUrl = (process.env.B2_PUBLIC_URL || "").replace(/\/$/, "");
+  const endpoint = (process.env.B2_ENDPOINT || "").replace(/\/$/, "");
+
+  // 1) Match contra B2_PUBLIC_URL customizado (CDN, etc)
+  if (publicUrl && url.startsWith(publicUrl + "/")) {
+    return url.slice(publicUrl.length + 1);
+  }
+
+  // 2) Match contra endpoint/bucket/...
+  if (endpoint && bucket && url.startsWith(`${endpoint}/${bucket}/`)) {
+    return url.slice(`${endpoint}/${bucket}/`.length);
+  }
+
+  // 3) Fallback: se a URL contem "/media/" e parece ser nosso padrao de key, extrai
+  const mediaIdx = url.indexOf("/media/");
+  if (mediaIdx !== -1) {
+    return url.slice(mediaIdx + 1); // remove a "/" inicial
+  }
+
+  return null;
+}
+
+/**
+ * Deleta mídia do B2 silenciosamente (nao propaga erros — cleanup best-effort).
+ */
+export async function deleteMediaFromUrl(url: string | null | undefined): Promise<void> {
+  const key = extractB2Key(url);
+  if (!key) return;
+  try {
+    await deleteFromB2(key);
+    console.log("[Storage] Deletado do B2:", key);
+  } catch (err) {
+    console.warn("[Storage] Falha ao deletar do B2:", key, err);
+  }
+}
+
+/**
  * Monta a chave (path) do arquivo no B2.
  * Ex: "media/company-abc/images/image_conv-xyz_1234567890.jpg"
  */

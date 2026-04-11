@@ -33,6 +33,7 @@ import { TransferDialog } from '@/components/conversations/dialogs/TransferDialo
 import { CloseConversationDialog } from '@/components/conversations/dialogs/CloseConversationDialog';
 import { NewConversationDialog } from '@/components/conversations/dialogs/NewConversationDialog';
 import { DeleteMessageDialog } from '@/components/conversations/dialogs/DeleteMessageDialog';
+import { ForwardMessageDialog } from '@/components/conversations/dialogs/ForwardMessageDialog';
 import type { Message, Conversation, TeamMember } from '@/components/conversations/types';
 
 export default function Conversations() {
@@ -54,6 +55,8 @@ export default function Conversations() {
   const [newConversationDialogOpen, setNewConversationDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
+  const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
+  const [messageToForward, setMessageToForward] = useState<Message | null>(null);
   
   // Media state
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -88,6 +91,8 @@ export default function Conversations() {
     addTag,
     removeTag,
     deleteMessage,
+    forwardMessage,
+    isForwarding,
     transcribeMessage,
     isTranscribing,
     realtimeStatus,
@@ -433,6 +438,7 @@ export default function Conversations() {
                         onDelete={handleDelete}
                         onReact={(msgId, emoji) => addReaction({ messageId: msgId, emoji })}
                         onRemoveReaction={removeReaction}
+                        onForward={(m) => { setMessageToForward(m); setForwardDialogOpen(true); }}
                         onTranscribe={(msgId) => transcribeMessage({ messageId: msgId, conversationId: selectedConversation! })}
                         isTranscribing={isTranscribing}
                       />
@@ -508,6 +514,23 @@ export default function Conversations() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         onConfirm={confirmDelete}
+      />
+
+      <ForwardMessageDialog
+        open={forwardDialogOpen}
+        onOpenChange={(v) => {
+          setForwardDialogOpen(v);
+          if (!v) setMessageToForward(null);
+        }}
+        conversations={conversations as any}
+        excludeConversationId={selectedConversation}
+        isForwarding={isForwarding}
+        onForward={(targetId) => {
+          if (!messageToForward) return;
+          forwardMessage({ message: messageToForward, targetConversationId: targetId });
+          setForwardDialogOpen(false);
+          setMessageToForward(null);
+        }}
       />
 
       <ImageModal 
