@@ -17,7 +17,7 @@ interface MessageActionsProps {
   onDelete: () => void;
   onReact: (emoji: string) => void;
   onForward?: () => void;
-  isClient: boolean;
+  isClient?: boolean;
 }
 
 export const MessageActions = ({
@@ -26,7 +26,6 @@ export const MessageActions = ({
   onDelete,
   onReact,
   onForward,
-  isClient,
 }: MessageActionsProps) => {
   const handleCopy = () => {
     if (!messageText) return;
@@ -67,18 +66,14 @@ export const MessageActions = ({
               Copiar
             </DropdownMenuItem>
           )}
-          {!isClient && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={onDelete}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Apagar
-              </DropdownMenuItem>
-            </>
-          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={onDelete}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Apagar
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
