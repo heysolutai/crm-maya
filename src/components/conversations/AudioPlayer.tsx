@@ -201,7 +201,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
 
   return (
     <div className="flex items-center gap-2 min-w-[240px]">
-      <audio ref={audioRef} src={src} preload="metadata" crossOrigin="anonymous" />
+      <audio ref={audioRef} src={src} preload="metadata" />
 
       <Button
         onClick={togglePlayPause}

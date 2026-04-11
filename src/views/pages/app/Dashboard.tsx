@@ -114,70 +114,116 @@ function KpiCard({
   subtitle,
   icon: Icon,
   iconColor,
+  iconBg,
   trend,
   invertTrend,
   isLoading,
+  highlight,
 }: {
   title: string;
   value: string | number;
   subtitle?: string;
   icon: React.ElementType;
   iconColor: string;
+  iconBg?: string;
   trend?: number | null;
   invertTrend?: boolean;
   isLoading?: boolean;
+  highlight?: boolean;
 }) {
   return (
-    <Card className="bg-gradient-to-br from-background to-muted/30">
-      <CardContent className="pt-4 pb-3 px-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-muted-foreground">{title}</span>
-          <Icon className={cn('h-4 w-4', iconColor)} />
-        </div>
-        {isLoading ? (
-          <Skeleton className="h-7 w-16" />
-        ) : (
-          <>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold">{value}</span>
-              {trend != null && <TrendBadge value={trend} invert={invertTrend} />}
-            </div>
-            {subtitle && <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>}
-          </>
-        )}
-      </CardContent>
-    </Card>
+    <div
+      className={cn(
+        'group relative rounded-2xl border border-border/60 p-4 transition-all',
+        'hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:border-border',
+        highlight
+          ? 'bg-gradient-to-br from-primary/5 via-background to-background shadow-[0_4px_12px_rgba(59,124,255,0.04)]'
+          : 'bg-card shadow-[0_1px_3px_rgba(0,0,0,0.02)]'
+      )}
+    >
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <span className="text-[12.5px] font-medium text-muted-foreground flex items-center gap-2">
+          <span
+            className={cn(
+              'flex h-7 w-7 items-center justify-center rounded-lg',
+              iconBg || 'bg-muted'
+            )}
+          >
+            <Icon className={cn('h-3.5 w-3.5', iconColor)} />
+          </span>
+          {title}
+        </span>
+      </div>
+      {isLoading ? (
+        <Skeleton className="h-8 w-20" />
+      ) : (
+        <>
+          <div className="flex items-baseline gap-2">
+            <span className="text-[28px] font-bold tracking-tight leading-none text-foreground">
+              {value}
+            </span>
+            {trend != null && <TrendBadge value={trend} invert={invertTrend} />}
+          </div>
+          {subtitle && (
+            <p className="text-[11.5px] text-muted-foreground mt-2 leading-tight">
+              {subtitle}
+            </p>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
 function ChartCard({
   title,
+  icon: Icon,
+  iconColor,
+  iconBg,
   children,
   isLoading,
   isEmpty,
+  emptyMessage = 'Nenhum dado disponível',
 }: {
   title: string;
+  icon?: React.ElementType;
+  iconColor?: string;
+  iconBg?: string;
   children: React.ReactNode;
   isLoading?: boolean;
   isEmpty?: boolean;
+  emptyMessage?: string;
 }) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-2">
-        {isLoading ? (
-          <Skeleton className="h-[280px] w-full" />
-        ) : isEmpty ? (
-          <div className="h-[280px] flex items-center justify-center text-sm text-muted-foreground">
-            Nenhum dado disponível
+    <div className="rounded-2xl border border-border/60 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.02)] p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-[15px] font-semibold tracking-tight flex items-center gap-2.5">
+          {Icon && (
+            <span
+              className={cn(
+                'flex h-7 w-7 items-center justify-center rounded-lg',
+                iconBg || 'bg-muted'
+              )}
+            >
+              <Icon className={cn('h-3.5 w-3.5', iconColor)} />
+            </span>
+          )}
+          {title}
+        </h3>
+      </div>
+      {isLoading ? (
+        <Skeleton className="h-[280px] w-full" />
+      ) : isEmpty ? (
+        <div className="h-[280px] flex flex-col items-center justify-center text-sm text-muted-foreground gap-2 bg-muted/20 rounded-xl border border-dashed border-border/60">
+          <div className="h-12 w-12 rounded-full bg-muted/40 flex items-center justify-center">
+            {Icon && <Icon className="h-5 w-5 text-muted-foreground/50" />}
           </div>
-        ) : (
-          children
-        )}
-      </CardContent>
-    </Card>
+          <span className="font-medium">{emptyMessage}</span>
+        </div>
+      ) : (
+        children
+      )}
+    </div>
   );
 }
 
@@ -232,8 +278,16 @@ export default function CompanyDashboard() {
       {/* Header + Date Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">Visão geral das métricas da sua empresa</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-[28px] font-bold tracking-tight">Dashboard</h1>
+            {!isLoading && totalAgents > 0 && (
+              <span className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card px-3 py-1 text-[12px] font-medium shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]" />
+                Agentes online · <strong>{agentsOnline}/{totalAgents}</strong>
+              </span>
+            )}
+          </div>
+          <p className="text-muted-foreground text-[14px] mt-1">Visão geral das métricas da sua empresa</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {PRESETS.map(p => (
@@ -300,13 +354,14 @@ export default function CompanyDashboard() {
       </div>
 
       {/* Row 1: KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <KpiCard
           title="Novos Leads"
           value={newClients}
           subtitle={periodLabel}
           icon={UserPlus}
-          iconColor="text-mileto-green"
+          iconColor="text-blue-500"
+          iconBg="bg-blue-500/10"
           trend={newClientsTrend}
           isLoading={isLoading}
         />
@@ -315,7 +370,8 @@ export default function CompanyDashboard() {
           value={activeConversations}
           subtitle={`${totalConversations} no período · ${aiPercentage.toFixed(0)}% IA`}
           icon={MessageSquare}
-          iconColor="text-mileto-cyan"
+          iconColor="text-orange-500"
+          iconBg="bg-orange-500/10"
           isLoading={isLoading}
         />
         <KpiCard
@@ -323,7 +379,8 @@ export default function CompanyDashboard() {
           value={todayAppointments}
           subtitle="para hoje"
           icon={CalendarCheck}
-          iconColor="text-mileto-blue"
+          iconColor="text-purple-500"
+          iconBg="bg-purple-500/10"
           isLoading={isLoading}
         />
         <KpiCard
@@ -331,7 +388,8 @@ export default function CompanyDashboard() {
           value={formatResponseTime(avgResponseTime)}
           subtitle="tempo médio hoje"
           icon={Clock}
-          iconColor="text-mileto-cyan"
+          iconColor="text-cyan-500"
+          iconBg="bg-cyan-500/10"
           invertTrend
           isLoading={isLoading}
         />
@@ -340,16 +398,19 @@ export default function CompanyDashboard() {
           value={formatCurrency(revenue)}
           subtitle={periodLabel}
           icon={DollarSign}
-          iconColor="text-mileto-green"
+          iconColor="text-emerald-500"
+          iconBg="bg-emerald-500/10"
           trend={revenueTrend}
           isLoading={isLoading}
         />
         <KpiCard
           title="Agentes Online"
           value={`${agentsOnline}/${totalAgents}`}
-          subtitle="conectados"
+          subtitle={agentsOnline === totalAgents && totalAgents > 0 ? '✓ todos conectados' : 'conectados'}
           icon={Users}
-          iconColor="text-primary"
+          iconColor="text-blue-600"
+          iconBg="bg-blue-500/15"
+          highlight
           isLoading={isLoading}
         />
       </div>
@@ -358,6 +419,9 @@ export default function CompanyDashboard() {
       <div className="grid gap-4 md:grid-cols-2">
         <ChartCard
           title="Atendimentos por Hora (Hoje)"
+          icon={MessageSquare}
+          iconColor="text-blue-500"
+          iconBg="bg-blue-500/10"
           isLoading={isLoading}
           isEmpty={hourlyData.every(d => d.mensagens === 0)}
         >
@@ -387,6 +451,10 @@ export default function CompanyDashboard() {
 
         <ChartCard
           title="Performance por Agente"
+          icon={Users}
+          iconColor="text-orange-500"
+          iconBg="bg-orange-500/10"
+          emptyMessage="Os atendimentos aparecerão aqui"
           isLoading={isLoading}
           isEmpty={agentData.length === 0}
         >
@@ -415,6 +483,9 @@ export default function CompanyDashboard() {
       <div className="grid gap-4 md:grid-cols-2">
         <ChartCard
           title="Funil de Conversão"
+          icon={UserPlus}
+          iconColor="text-purple-500"
+          iconBg="bg-purple-500/10"
           isLoading={isLoading}
           isEmpty={funnelData.length === 0}
         >
@@ -440,6 +511,9 @@ export default function CompanyDashboard() {
 
         <ChartCard
           title="Evolução de Receita"
+          icon={DollarSign}
+          iconColor="text-emerald-500"
+          iconBg="bg-emerald-500/10"
           isLoading={isLoading}
           isEmpty={dailyRevenue.length === 0}
         >
@@ -476,6 +550,9 @@ export default function CompanyDashboard() {
       <div className="grid gap-4 md:grid-cols-2">
         <ChartCard
           title="Atendimentos por Departamento"
+          icon={Users}
+          iconColor="text-cyan-500"
+          iconBg="bg-cyan-500/10"
           isLoading={isLoading}
           isEmpty={departmentData.length === 0}
         >
@@ -514,6 +591,9 @@ export default function CompanyDashboard() {
 
         <ChartCard
           title="Conversão vs No-Show"
+          icon={CalendarCheck}
+          iconColor="text-pink-500"
+          iconBg="bg-pink-500/10"
           isLoading={isLoading}
           isEmpty={dailyRates.length === 0}
         >
