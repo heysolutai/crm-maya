@@ -178,27 +178,25 @@ cmd_update() {
   npx prisma generate
 
   step "4/7 — Aplicando schema no banco"
-  npx prisma db push --skip-generate 2>&1 || warn "db push falhou (pode ser normal se nao houve mudancas)"
 
-  # Migrations SQL manuais
-  if [ -d "prisma/migrations" ]; then
-    DB_URL=$(grep -E "^DATABASE_URL=" .env | head -1 | cut -d'"' -f2)
-    if [ -n "$DB_URL" ]; then
-      for sql_file in prisma/migrations/*.sql; do
-        [ -f "$sql_file" ] || continue
-        log "Executando: $(basename "$sql_file")"
-        psql "$DB_URL" -f "$sql_file" 2>/dev/null || warn "Ja aplicada ou erro: $(basename "$sql_file")"
-      done
-    fi
+  # Migrations SQL manuais PRIMEIRO (limpam duplicatas, normalizam dados, etc)
+  # antes do prisma db push, que pode falhar se os dados nao estiverem preparados
+  DB_URL=$(grep -E "^DATABASE_URL=" .env | head -1 | cut -d'"' -f2 | tr -d "'")
+  if [ -d "prisma/migrations" ] && [ -n "$DB_URL" ]; then
+    for sql_file in prisma/migrations/*.sql; do
+      [ -f "$sql_file" ] || continue
+      log "Executando: $(basename "$sql_file")"
+      psql "$DB_URL" -f "$sql_file" 2>/dev/null || warn "Ja aplicada ou erro: $(basename "$sql_file")"
+    done
   fi
 
+  # Prisma db push depois, aplicando o schema (unique constraints, colunas novas, etc)
+  npx prisma db push --skip-generate 2>&1 || warn "db push falhou (pode ser normal se nao houve mudancas)"
+
   # Indexes
-  if [ -f "prisma/indexes.sql" ]; then
-    DB_URL=$(grep -E "^DATABASE_URL=" .env | head -1 | cut -d'"' -f2)
-    [ -n "$DB_URL" ] && {
-      log "Aplicando indexes..."
-      psql "$DB_URL" -f prisma/indexes.sql 2>/dev/null || true
-    }
+  if [ -f "prisma/indexes.sql" ] && [ -n "$DB_URL" ]; then
+    log "Aplicando indexes..."
+    psql "$DB_URL" -f prisma/indexes.sql 2>/dev/null || true
   fi
 
   step "5/7 — Build"
