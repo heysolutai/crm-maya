@@ -134,24 +134,14 @@ function KpiCard({
   return (
     <div
       className={cn(
-        'group relative overflow-hidden rounded-2xl border p-5 transition-all duration-200',
+        'group relative rounded-2xl border p-5 transition-all duration-200',
         'hover:-translate-y-1 hover:shadow-[0_12px_32px_rgba(0,0,0,0.12)] dark:hover:shadow-[0_12px_32px_rgba(0,0,0,0.4)]',
         highlight
           ? 'border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card shadow-[0_4px_16px_rgba(59,124,255,0.08)] dark:shadow-[0_4px_16px_rgba(59,124,255,0.15)]'
           : 'border-border/80 bg-card shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.2)]'
       )}
     >
-      {/* Icone grande no canto superior direito — decorativo */}
-      <div
-        className={cn(
-          'absolute -top-2 -right-2 flex h-16 w-16 items-center justify-center rounded-2xl opacity-[0.08] transition-transform group-hover:scale-110 group-hover:opacity-[0.12]',
-          iconBg?.replace('/10', '/40').replace('/15', '/50') || 'bg-muted'
-        )}
-      >
-        <Icon className={cn('h-10 w-10', iconColor)} />
-      </div>
-
-      <div className="relative">
+      <div>
         <div className="flex items-center gap-2.5 mb-4">
           <span
             className={cn(

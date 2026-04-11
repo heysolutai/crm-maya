@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, X, Share } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const DISMISS_KEY = 'pwa-install-dismissed';
+const INSTALLED_KEY = 'pwa-installed';
 const DISMISS_DAYS = 7;
 
 function isIOS(): boolean {
@@ -28,6 +29,15 @@ function isStandalone(): boolean {
   );
 }
 
+function wasInstalled(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem(INSTALLED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
 function wasDismissedRecently(): boolean {
   if (typeof window === 'undefined') return false;
   try {
@@ -42,26 +52,38 @@ function wasDismissedRecently(): boolean {
   }
 }
 
+function shouldSuppress(): boolean {
+  return isStandalone() || wasInstalled() || wasDismissedRecently();
+}
+
 export function PwaInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
   const [platform, setPlatform] = useState<'chrome' | 'ios' | null>(null);
+  // Ref serve pra o handler checar o estado atual sem re-registrar
+  const suppressedRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (isStandalone()) return; // Ja instalado
-    if (wasDismissedRecently()) return;
+    if (shouldSuppress()) {
+      suppressedRef.current = true;
+      return;
+    }
 
     // iOS: Safari nao dispara beforeinstallprompt, mostramos instrucoes manuais
     if (isIOS()) {
       setPlatform('ios');
-      const t = setTimeout(() => setVisible(true), 4000);
+      const t = setTimeout(() => {
+        if (!suppressedRef.current) setVisible(true);
+      }, 4000);
       return () => clearTimeout(t);
     }
 
     // Android/Desktop Chrome: captura o evento
     const handler = (e: Event) => {
       e.preventDefault();
+      // Re-checa em tempo real — dismiss/install podem ter sido marcados depois do mount
+      if (shouldSuppress() || suppressedRef.current) return;
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setPlatform('chrome');
       setVisible(true);
@@ -69,8 +91,14 @@ export function PwaInstallPrompt() {
 
     window.addEventListener('beforeinstallprompt', handler);
 
-    // Se o app for instalado, some
+    // Se o app for instalado, marca e nao mostra mais
     const installed = () => {
+      suppressedRef.current = true;
+      try {
+        localStorage.setItem(INSTALLED_KEY, 'true');
+      } catch {
+        // ignore
+      }
       setVisible(false);
       setDeferredPrompt(null);
     };
@@ -88,17 +116,33 @@ export function PwaInstallPrompt() {
       await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
-        setVisible(false);
+        suppressedRef.current = true;
+        try {
+          localStorage.setItem(INSTALLED_KEY, 'true');
+        } catch {
+          // ignore
+        }
+      } else {
+        // Usuario recusou no prompt nativo: trata como dismiss
+        suppressedRef.current = true;
+        try {
+          localStorage.setItem(DISMISS_KEY, Date.now().toString());
+        } catch {
+          // ignore
+        }
       }
     } catch {
       // ignore
     } finally {
+      setVisible(false);
       setDeferredPrompt(null);
     }
   };
 
   const handleDismiss = () => {
+    suppressedRef.current = true;
     setVisible(false);
+    setDeferredPrompt(null);
     try {
       localStorage.setItem(DISMISS_KEY, Date.now().toString());
     } catch {
