@@ -4,16 +4,18 @@ import { toast } from "sonner";
 
 export interface CatalogProduct {
   id: string;
+  waProductId: string;
   name: string;
   description?: string;
   price?: string;
+  priceAmount?: string;
   currency?: string;
-  imageUrl?: string;
-  images: string[];
   availability?: string;
-  isHidden?: boolean;
+  isHidden: boolean;
   retailerId?: string;
   url?: string;
+  images: Array<{ id: string; originalUrl: string; thumbUrl: string }>;
+  syncedAt: string;
   // Raw fields from UazAPI (fallback)
   [key: string]: unknown;
 }
@@ -31,89 +33,53 @@ async function callCatalogApi(action: string, body: Record<string, unknown> = {}
   return res.json();
 }
 
-function normalizeProduct(raw: Record<string, unknown>): CatalogProduct {
-  // UazAPI retorna PascalCase: ID, Name, Price.Amount, Images[0].OriginalImageUrl
-  const price = raw.Price as Record<string, string> | undefined;
-  const images = raw.Images as Array<Record<string, unknown>> | undefined;
-
-  // Formatar preço: Amount vem em centavos * 1000 (ex: 19900000 = R$199,00)
-  let formattedPrice: string | undefined;
-  if (price?.Amount) {
-    const amount = parseFloat(price.Amount) / 1000;
-    formattedPrice = amount.toLocaleString("pt-BR", { style: "currency", currency: price.Currency || "BRL" });
-  }
-
-  const imageUrl =
-    (images?.[0]?.OriginalImageUrl as string) ||
-    (images?.[0]?.RequestImageUrl as string) ||
-    (raw.imageUrl as string) ||
-    (raw.image_url as string) ||
-    undefined;
-
-  const allImages: string[] = (images ?? [])
-    .map((img) => (img?.OriginalImageUrl as string) || (img?.RequestImageUrl as string) || "")
-    .filter((url): url is string => Boolean(url));
-
-  return {
-    // PascalCase (UazAPI real)
-    id: (raw.ID as string) || (raw.id as string) || (raw.productId as string) || "",
-    name: (raw.Name as string) || (raw.name as string) || (raw.title as string) || "",
-    description: (raw.Description as string) || (raw.description as string) || undefined,
-    price: formattedPrice || (raw.price as string) || (raw.priceString as string) || undefined,
-    currency: price?.Currency || (raw.currency as string) || undefined,
-    imageUrl,
-    images: allImages,
-    availability: (raw.Availability as string) || (raw.availability as string) || undefined,
-    isHidden: (raw.IsHidden as boolean) ?? (raw.isHidden as boolean) ?? false,
-    retailerId: (raw.RetailerID as string) || (raw.retailerId as string) || undefined,
-    url: (raw.Url as string) || (raw.url as string) || undefined,
-    ...raw,
-  };
-}
-
-function extractProducts(data: unknown): CatalogProduct[] {
-  if (!data) return [];
-
-  const obj = data as Record<string, unknown>;
-
-  // Formato real da UazAPI: { response: { Products: [...] } }
-  if (obj.response) {
-    const resp = obj.response as Record<string, unknown>;
-    if (Array.isArray(resp.Products)) {
-      return (resp.Products as Record<string, unknown>[]).map(normalizeProduct);
-    }
-  }
-
-  // Outros formatos possíveis
-  if (Array.isArray(data)) return (data as Record<string, unknown>[]).map(normalizeProduct);
-  if (Array.isArray(obj.Products)) return (obj.Products as Record<string, unknown>[]).map(normalizeProduct);
-  if (Array.isArray(obj.products)) return (obj.products as Record<string, unknown>[]).map(normalizeProduct);
-  if (Array.isArray(obj.catalog)) return (obj.catalog as Record<string, unknown>[]).map(normalizeProduct);
-  if (Array.isArray(obj.items)) return (obj.items as Record<string, unknown>[]).map(normalizeProduct);
-  if (Array.isArray(obj.data)) return (obj.data as Record<string, unknown>[]).map(normalizeProduct);
-  if (Array.isArray(obj.result)) return (obj.result as Record<string, unknown>[]).map(normalizeProduct);
-
-  // Objeto único com ID
-  if (obj.ID || obj.id) return [normalizeProduct(obj)];
-
-  return [];
-}
-
-export function useWhatsappCatalog() {
+export function useWhatsappCatalog(search = "") {
   const { effectiveCompanyId: companyId } = useEffectiveCompanyId();
   const queryClient = useQueryClient();
 
-  const { data: products = [], isLoading, error, refetch } = useQuery({
-    queryKey: ["whatsapp-catalog", companyId],
+  // Lê produtos do banco local
+  const { data: products = [], isLoading, error, refetch } = useQuery<CatalogProduct[]>({
+    queryKey: ["whatsapp-catalog", companyId, search],
     queryFn: async () => {
-      const json = await callCatalogApi("list");
-      return extractProducts(json.data);
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      const res = await fetch(`/api/catalog?${params.toString()}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Erro ao buscar catálogo");
+      }
+      const json = await res.json();
+      return json.data ?? [];
     },
     enabled: !!companyId,
     retry: false,
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["whatsapp-catalog", companyId] });
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["whatsapp-catalog", companyId] });
+
+  // Importa produtos do WhatsApp para o banco
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/catalog/sync", { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Erro ao importar catálogo");
+      }
+      return res.json();
+    },
+    onSuccess: (data: { synced: number; total: number; message?: string }) => {
+      if (data.message) {
+        toast.info(data.message);
+      } else {
+        toast.success(`${data.synced} produto(s) importado(s) com sucesso`);
+      }
+      invalidate();
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
 
   const getProductInfo = useMutation({
     mutationFn: async (productId: string) => {
@@ -129,8 +95,14 @@ export function useWhatsappCatalog() {
     mutationFn: async (productId: string) => {
       return callCatalogApi("show", { productId });
     },
-    onSuccess: () => {
+    onSuccess: async (_data, productId) => {
       toast.success("Produto exibido no catálogo");
+      // Atualiza isHidden no banco local
+      await fetch(`/api/catalog/${productId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isHidden: false }),
+      });
       invalidate();
     },
     onError: (error: Error) => {
@@ -142,8 +114,14 @@ export function useWhatsappCatalog() {
     mutationFn: async (productId: string) => {
       return callCatalogApi("hide", { productId });
     },
-    onSuccess: () => {
+    onSuccess: async (_data, productId) => {
       toast.success("Produto ocultado do catálogo");
+      // Atualiza isHidden no banco local
+      await fetch(`/api/catalog/${productId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isHidden: true }),
+      });
       invalidate();
     },
     onError: (error: Error) => {
@@ -153,7 +131,9 @@ export function useWhatsappCatalog() {
 
   const deleteProduct = useMutation({
     mutationFn: async (productId: string) => {
-      return callCatalogApi("delete", { productId });
+      await callCatalogApi("delete", { productId });
+      // Remove do banco local também
+      await fetch(`/api/catalog/${productId}`, { method: "DELETE" });
     },
     onSuccess: () => {
       toast.success("Produto deletado do catálogo");
@@ -169,10 +149,15 @@ export function useWhatsappCatalog() {
     isLoading,
     error,
     refetch,
+    syncFromWhatsApp: syncMutation.mutate,
+    isSyncing: syncMutation.isPending,
     getProductInfo: getProductInfo.mutateAsync,
     showProduct: showProduct.mutate,
     hideProduct: hideProduct.mutate,
     deleteProduct: deleteProduct.mutate,
-    isMutating: showProduct.isPending || hideProduct.isPending || deleteProduct.isPending,
+    isMutating:
+      showProduct.isPending ||
+      hideProduct.isPending ||
+      deleteProduct.isPending,
   };
 }

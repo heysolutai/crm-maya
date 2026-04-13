@@ -28,23 +28,27 @@ import {
   Info,
   AlertCircle,
   ExternalLink,
+  Download,
 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export default function Catalog() {
+  const [searchTerm, setSearchTerm] = useState("");
+
   const {
     products,
     isLoading,
     error,
     refetch,
+    syncFromWhatsApp,
+    isSyncing,
     getProductInfo,
     showProduct,
     hideProduct,
     deleteProduct,
     isMutating,
-  } = useWhatsappCatalog();
+  } = useWhatsappCatalog(searchTerm);
 
-  const [searchTerm, setSearchTerm] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
   const [infoDialogOpen, setInfoDialogOpen] = useState(false);
   const [productInfo, setProductInfo] = useState<Record<string, unknown> | null>(null);
@@ -70,7 +74,7 @@ export default function Catalog() {
     setLoadingInfo(true);
     setProductInfo(null);
     try {
-      const info = await getProductInfo(product.id);
+      const info = await getProductInfo(product.waProductId);
       setProductInfo(info as Record<string, unknown>);
     } catch {
       // toast já é mostrado pelo hook
@@ -87,7 +91,7 @@ export default function Catalog() {
   };
 
   // Error state — WhatsApp não conectado
-  if (error) {
+  if (error && products.length === 0) {
     return (
       <div className="space-y-6">
         <div>
@@ -128,10 +132,23 @@ export default function Catalog() {
             Produtos do catálogo do WhatsApp Business
           </p>
         </div>
-        <Button variant="outline" onClick={() => refetch()} disabled={isLoading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          Atualizar
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => syncFromWhatsApp()}
+            disabled={isSyncing}
+          >
+            {isSyncing ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
+            Importar do WhatsApp
+          </Button>
+          <Button variant="outline" onClick={() => refetch()} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            Atualizar
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -194,104 +211,105 @@ export default function Catalog() {
         <EmptyState
           icon={ShoppingBag}
           title="Catálogo vazio"
-          description="Nenhum produto encontrado no catálogo do WhatsApp Business. Adicione produtos no aplicativo oficial do WhatsApp Business."
+          description="Nenhum produto importado ainda. Clique em 'Importar do WhatsApp' para sincronizar os produtos do seu catálogo do WhatsApp Business."
         />
       )}
 
       {/* Products grid */}
       {!isLoading && filteredProducts.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredProducts.map((product) => (
-            <Card key={product.id} className="overflow-hidden">
-              {/* Image */}
-              <div className="aspect-square bg-muted relative">
-                {product.imageUrl ? (
-                  <Image
-                    src={product.imageUrl}
-                    alt={product.name}
-                    fill
-                    unoptimized
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="h-full w-full flex items-center justify-center">
-                    <Package className="h-12 w-12 text-muted-foreground/40" />
-                  </div>
-                )}
-                {product.isHidden && (
-                  <Badge variant="secondary" className="absolute top-2 right-2">
-                    <EyeOff className="h-3 w-3 mr-1" />
-                    Oculto
-                  </Badge>
-                )}
-              </div>
+          {filteredProducts.map((product) => {
+            const imageUrl = product.images?.[0]?.originalUrl || undefined;
+            return (
+              <Card key={product.id} className="overflow-hidden">
+                {/* Image */}
+                <div className="aspect-square bg-muted relative">
+                  {imageUrl ? (
+                    <Image
+                      src={imageUrl}
+                      alt={product.name}
+                      fill
+                      unoptimized
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <Package className="h-12 w-12 text-muted-foreground/40" />
+                    </div>
+                  )}
+                  {product.isHidden && (
+                    <Badge variant="secondary" className="absolute top-2 right-2">
+                      <EyeOff className="h-3 w-3 mr-1" />
+                      Oculto
+                    </Badge>
+                  )}
+                </div>
 
-              <CardContent className="p-4 space-y-3">
-                <div>
-                  <h3 className="font-semibold truncate" title={product.name}>
-                    {product.name || "Sem nome"}
-                  </h3>
-                  {product.price && (
-                    <p className="text-lg font-bold text-primary">
-                      {product.currency} {product.price}
+                <CardContent className="p-4 space-y-3">
+                  <div>
+                    <h3 className="font-semibold truncate" title={product.name}>
+                      {product.name || "Sem nome"}
+                    </h3>
+                    {product.price && (
+                      <p className="text-lg font-bold text-primary">{product.price}</p>
+                    )}
+                  </div>
+
+                  {product.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-2">
+                      {product.description}
                     </p>
                   )}
-                </div>
 
-                {product.description && (
-                  <p className="text-xs text-muted-foreground line-clamp-2">
-                    {product.description}
-                  </p>
-                )}
-
-                {/* Actions */}
-                <div className="flex items-center gap-1 pt-2 border-t">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => handleViewInfo(product)}
-                    title="Ver informações"
-                  >
-                    <Info className="h-4 w-4" />
-                  </Button>
-                  {product.isHidden ? (
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 pt-2 border-t">
                     <Button
                       variant="ghost"
                       size="sm"
                       className="flex-1"
-                      onClick={() => showProduct(product.id)}
-                      disabled={isMutating}
-                      title="Mostrar"
+                      onClick={() => handleViewInfo(product)}
+                      title="Ver informações"
                     >
-                      <Eye className="h-4 w-4" />
+                      <Info className="h-4 w-4" />
                     </Button>
-                  ) : (
+                    {product.isHidden ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => showProduct(product.waProductId)}
+                        disabled={isMutating}
+                        title="Mostrar"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => hideProduct(product.waProductId)}
+                        disabled={isMutating}
+                        title="Ocultar"
+                      >
+                        <EyeOff className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="flex-1"
-                      onClick={() => hideProduct(product.id)}
+                      className="flex-1 text-destructive hover:text-destructive"
+                      onClick={() => setDeleteConfirm(product.id)}
                       disabled={isMutating}
-                      title="Ocultar"
+                      title="Deletar"
                     >
-                      <EyeOff className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="flex-1 text-destructive hover:text-destructive"
-                    onClick={() => setDeleteConfirm(product.id)}
-                    disabled={isMutating}
-                    title="Deletar"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -311,10 +329,10 @@ export default function Catalog() {
             </div>
           ) : productInfo ? (
             <div className="space-y-4">
-              {selectedProduct?.imageUrl && (
+              {selectedProduct?.images?.[0]?.originalUrl && (
                 <div className="aspect-video relative bg-muted rounded-lg overflow-hidden">
                   <Image
-                    src={selectedProduct.imageUrl}
+                    src={selectedProduct.images[0].originalUrl}
                     alt={selectedProduct.name}
                     fill
                     unoptimized
@@ -339,7 +357,7 @@ export default function Catalog() {
 
               {selectedProduct?.url && (
                 <Button variant="outline" className="w-full" asChild>
-                  <a href={selectedProduct.url} target="_blank" rel="noopener noreferrer">
+                  <a href={selectedProduct.url as string} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-4 w-4 mr-2" />
                     Ver produto
                   </a>
@@ -365,7 +383,7 @@ export default function Catalog() {
         open={!!deleteConfirm}
         onOpenChange={(open) => !open && setDeleteConfirm(null)}
         title="Deletar produto"
-        description="Tem certeza que deseja deletar este produto do catálogo do WhatsApp? Esta ação não pode ser desfeita."
+        description="Tem certeza que deseja deletar este produto do catálogo? Esta ação remove o produto do CRM e do WhatsApp Business."
         confirmLabel="Deletar"
         variant="destructive"
         onConfirm={handleDelete}
