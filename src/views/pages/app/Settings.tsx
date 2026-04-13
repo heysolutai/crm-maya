@@ -12,7 +12,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Workflow, Plus, Trash2, Clock, Shield, Plug, Smartphone, Loader2, Eye, EyeOff, Copy, RefreshCw, QrCode, ExternalLink, Zap, Key, UserCog, Bell, CalendarClock } from 'lucide-react';
+import { Building2, Workflow, Plus, Trash2, Clock, Shield, Plug, Smartphone, Loader2, Eye, EyeOff, Copy, RefreshCw, QrCode, ExternalLink, Zap, Key, UserCog, Bell, CalendarClock, HelpCircle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ScheduleManagement } from '@/components/appointments/ScheduleManagement';
@@ -529,6 +530,39 @@ function ConnectionsSection({
   setDeleteWaConfirm, isConnecting, isReconnecting, isDisconnecting,
   isDeleting, isUpdating, toast,
 }: any) {
+  const [catalogBusinessId, setCatalogBusinessId] = useState<Record<string, string>>({});
+  const [savingCatalogId, setSavingCatalogId] = useState<Record<string, boolean>>({});
+
+  // Preenche o campo com o valor já salvo
+  useEffect(() => {
+    if (!instances) return;
+    const initial: Record<string, string> = {};
+    for (const inst of instances) {
+      const meta = (inst.metadata as any) || {};
+      if (meta.catalogBusinessId) initial[inst.id] = meta.catalogBusinessId;
+    }
+    setCatalogBusinessId(initial);
+  }, [instances]);
+
+  const saveCatalogBusinessId = async (instanceId: string) => {
+    const value = catalogBusinessId[instanceId]?.trim();
+    if (!value) return;
+    setSavingCatalogId(prev => ({ ...prev, [instanceId]: true }));
+    try {
+      const res = await fetch("/api/whatsapp/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instanceId, catalogBusinessId: value }),
+      });
+      if (res.ok) toast({ title: "ID do catálogo salvo!" });
+      else toast({ title: "Erro ao salvar", variant: "destructive" });
+    } catch {
+      toast({ title: "Erro ao salvar", variant: "destructive" });
+    } finally {
+      setSavingCatalogId(prev => ({ ...prev, [instanceId]: false }));
+    }
+  };
+
   return (
     <div className="space-y-4">
       <Card>
@@ -620,6 +654,46 @@ function ConnectionsSection({
                       </div>
                     </div>
                   )}
+
+                  {/* ID do Catálogo WhatsApp */}
+                  <div className="space-y-1 pt-2 border-t">
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-xs text-muted-foreground">ID do Catálogo (para links de produto)</Label>
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help shrink-0" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-xs">
+                            <p className="font-medium mb-1">Como encontrar este ID:</p>
+                            <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                              <li>Abra o WhatsApp Business no celular</li>
+                              <li>Vá em <strong>Mais opções → Catálogo</strong></li>
+                              <li>Toque em qualquer produto e selecione <strong>Compartilhar</strong></li>
+                              <li>O link gerado tem o formato:<br /><span className="font-mono">wa.me/p/ID_PRODUTO/<strong>ID_AQUI</strong></span></li>
+                              <li>Copie o número após a última barra</li>
+                            </ol>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <div className="flex gap-1">
+                      <Input
+                        placeholder="ex: 20113466069044"
+                        value={catalogBusinessId[inst.id] || ""}
+                        onChange={e => setCatalogBusinessId(prev => ({ ...prev, [inst.id]: e.target.value }))}
+                        className="h-8 font-mono text-xs"
+                      />
+                      <Button
+                        size="sm"
+                        className="h-8 px-3"
+                        onClick={() => saveCatalogBusinessId(inst.id)}
+                        disabled={savingCatalogId[inst.id] || !catalogBusinessId[inst.id]?.trim()}
+                      >
+                        {savingCatalogId[inst.id] ? <Loader2 className="h-3 w-3 animate-spin" /> : "Salvar"}
+                      </Button>
+                    </div>
+                  </div>
 
                   {inst.error_message && (
                     <div className="p-3 bg-destructive/10 border border-destructive rounded text-sm text-destructive">

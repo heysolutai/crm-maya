@@ -274,7 +274,9 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            apiMetadata = { ...statusData, connected_phone: connectedPhone };
+            // Preserva catalogBusinessId se já estava salvo no metadata
+            const existingMeta = (targetInstance.metadata as Record<string, unknown>) || {};
+            apiMetadata = { ...statusData, connected_phone: connectedPhone, ...(existingMeta.catalogBusinessId ? { catalogBusinessId: existingMeta.catalogBusinessId } : {}) };
 
             if (hasStatusObject) {
               updatedStatus = isLoggedIn ? 'connected' : isConnected ? 'connecting' : (apiStatus === 'connecting' || apiStatus === 'qrcode') ? 'connecting' : 'disconnected';
