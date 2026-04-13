@@ -22,6 +22,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Instância não configurada corretamente (faltam apiUrl ou token)" }, { status: 503 });
     }
 
+    // Buscar JID da instância (exigido pela UazAPI no endpoint de catálogo)
+    let jid = "";
+    try {
+      const statusRes = await fetch(`${instance.apiUrl}/instance/status`, {
+        method: "GET",
+        headers: { "Accept": "application/json", token: instance.instanceApiKey },
+      });
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        const cleanJid = (raw: string) => raw.replace(/:(\d+)@/, "@");
+        const hasStatusObj = typeof statusData.status === "object" && statusData.status !== null;
+        const rawJid = hasStatusObj
+          ? (statusData.status?.jid as string) || ""
+          : (statusData.instance?.owner as string) || "";
+        jid = rawJid ? cleanJid(rawJid) : "";
+      }
+    } catch {
+      // Se não conseguir o JID, tenta sem ele
+    }
+
     // Buscar catálogo na UazAPI
     const uazRes = await fetch(`${instance.apiUrl}/business/catalog/list`, {
       method: "POST",
@@ -29,7 +49,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
         token: instance.instanceApiKey,
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify(jid ? { jid } : {}),
     });
 
     if (!uazRes.ok) {
