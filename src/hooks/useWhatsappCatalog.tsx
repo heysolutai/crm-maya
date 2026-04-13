@@ -20,28 +20,33 @@ export interface CatalogProduct {
   [key: string]: unknown;
 }
 
-async function callCatalogApi(action: string, body: Record<string, unknown> = {}) {
-  const res = await fetch(`/api/whatsapp/catalog?action=${action}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || "Erro na operação do catálogo");
-  }
-  return res.json();
+function makeCatalogApiFn(companyId: string | null | undefined) {
+  return async function callCatalogApi(action: string, body: Record<string, unknown> = {}) {
+    const qs = companyId ? `&companyId=${companyId}` : "";
+    const res = await fetch(`/api/whatsapp/catalog?action=${action}${qs}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Erro na operação do catálogo");
+    }
+    return res.json();
+  };
 }
 
 export function useWhatsappCatalog(search = "") {
   const { effectiveCompanyId: companyId } = useEffectiveCompanyId();
   const queryClient = useQueryClient();
+  const callCatalogApi = makeCatalogApiFn(companyId);
 
   // Lê produtos do banco local
   const { data: products = [], isLoading, error, refetch } = useQuery<CatalogProduct[]>({
     queryKey: ["whatsapp-catalog", companyId, search],
     queryFn: async () => {
       const params = new URLSearchParams();
+      if (companyId) params.set("companyId", companyId);
       if (search) params.set("search", search);
       const res = await fetch(`/api/catalog?${params.toString()}`);
       if (!res.ok) {
@@ -61,7 +66,8 @@ export function useWhatsappCatalog(search = "") {
   // Importa produtos do WhatsApp para o banco
   const syncMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/catalog/sync", { method: "POST" });
+      const url = companyId ? `/api/catalog/sync?companyId=${companyId}` : "/api/catalog/sync";
+      const res = await fetch(url, { method: "POST" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || "Erro ao importar catálogo");
@@ -97,8 +103,8 @@ export function useWhatsappCatalog(search = "") {
     },
     onSuccess: async (_data, productId) => {
       toast.success("Produto exibido no catálogo");
-      // Atualiza isHidden no banco local
-      await fetch(`/api/catalog/${productId}`, {
+      const qs = companyId ? `?companyId=${companyId}` : "";
+      await fetch(`/api/catalog/${productId}${qs}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isHidden: false }),
@@ -116,8 +122,8 @@ export function useWhatsappCatalog(search = "") {
     },
     onSuccess: async (_data, productId) => {
       toast.success("Produto ocultado do catálogo");
-      // Atualiza isHidden no banco local
-      await fetch(`/api/catalog/${productId}`, {
+      const qs = companyId ? `?companyId=${companyId}` : "";
+      await fetch(`/api/catalog/${productId}${qs}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isHidden: true }),
@@ -132,8 +138,8 @@ export function useWhatsappCatalog(search = "") {
   const deleteProduct = useMutation({
     mutationFn: async (productId: string) => {
       await callCatalogApi("delete", { productId });
-      // Remove do banco local também
-      await fetch(`/api/catalog/${productId}`, { method: "DELETE" });
+      const qs = companyId ? `?companyId=${companyId}` : "";
+      await fetch(`/api/catalog/${productId}${qs}`, { method: "DELETE" });
     },
     onSuccess: () => {
       toast.success("Produto deletado do catálogo");
