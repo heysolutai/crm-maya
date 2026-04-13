@@ -10,7 +10,14 @@ export async function getWhatsAppInstance(companyId: string): Promise<WhatsAppIn
     throw new Error(`WhatsApp instance not found for company ${companyId}`);
   }
 
-  return instance as unknown as WhatsAppInstance;
+  return {
+    id: instance.id,
+    instance_name: instance.instanceName,
+    api_url: instance.apiUrl ?? '',
+    instance_api_key: instance.instanceApiKey ?? '',
+    company_id: instance.companyId,
+    is_active: instance.isActive,
+  };
 }
 
 export async function findOrCreateConversation(
