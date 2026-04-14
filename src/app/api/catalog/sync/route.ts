@@ -47,7 +47,11 @@ export async function POST(req: NextRequest) {
     } catch {
       // Tenta sem JID
     }
-    console.log("[Catalog Sync] JID:", jid, "| catalogBusinessId:", catalogBusinessId);
+    // Extrai o número do JID (sem @s.whatsapp.net) — usado para montar o link do produto
+    const jidPhone = jid ? jid.split("@")[0] : "";
+    // Prioriza o JID. Se não tiver, usa o catalogBusinessId configurado manualmente
+    const catalogLinkId = jidPhone || catalogBusinessId;
+    console.log("[Catalog Sync] JID:", jid, "| jidPhone:", jidPhone, "| linkId final:", catalogLinkId);
 
     // 2. Buscar todos os produtos — tenta diferentes estratégias de paginação
     const allRawProducts = await fetchAllProducts(apiUrl, token, jid);
@@ -92,10 +96,10 @@ export async function POST(req: NextRequest) {
       const name = (raw.Name as string) || (raw.name as string) || "Sem nome";
       const description = (raw.Description as string) || (raw.description as string) || null;
 
-      // Constrói o link do catálogo se o catalogBusinessId estiver configurado
+      // Link do produto no catálogo: wa.me/p/{waProductId}/{numeroDoJid}
       const rawUrl = (raw.Url as string) || (raw.url as string) || "";
-      const productUrl = catalogBusinessId
-        ? `https://wa.me/p/${waProductId}/${catalogBusinessId}`
+      const productUrl = catalogLinkId
+        ? `https://wa.me/p/${waProductId}/${catalogLinkId}`
         : (rawUrl || null);
 
       await prisma.catalogProduct.upsert({
