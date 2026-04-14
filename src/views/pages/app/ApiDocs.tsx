@@ -1,85 +1,241 @@
+'use client';
+
+import { useState } from 'react';
 import { ApiEndpointCard } from '@/components/api-docs/ApiEndpointCard';
 import { ApiSection } from '@/components/api-docs/ApiSection';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { Calendar, MessageSquare, Phone, Users, Bot, Shield, BarChart3, HelpCircle, Settings } from 'lucide-react';
+import {
+  Calendar,
+  MessageSquare,
+  Phone,
+  Users,
+  Bot,
+  Shield,
+  BarChart3,
+  HelpCircle,
+  KeyRound,
+  AlertTriangle,
+  Copy,
+  Check,
+  BookOpen,
+  Zap,
+} from 'lucide-react';
 
 export default function ApiDocs() {
-  const sections = [
-    { id: 'whatsapp', label: 'WhatsApp', icon: Phone },
-    { id: 'messages', label: 'Mensagens', icon: MessageSquare },
-    { id: 'appointments', label: 'Agendamentos', icon: Calendar },
-    { id: 'faq', label: 'FAQ / Knowledge', icon: HelpCircle },
-    { id: 'ai', label: 'IA / Configuração', icon: Bot },
-    { id: 'calendar', label: 'Google Calendar', icon: Calendar },
-    { id: 'reports', label: 'Relatórios', icon: BarChart3 },
-    { id: 'company', label: 'Empresa / Usuários', icon: Users },
-    { id: 'admin', label: 'Admin', icon: Shield },
+  const baseUrl =
+    typeof window !== 'undefined'
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_APP_URL || 'https://seu-dominio.com';
+
+  const [copied, setCopied] = useState(false);
+  const copyBaseUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(baseUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* noop */
+    }
+  };
+
+  const navSections = [
+    {
+      title: 'Geral',
+      items: [
+        { id: 'autenticacao', label: 'Autenticação', icon: KeyRound },
+        { id: 'codigos-erro', label: 'Códigos de Erro', icon: AlertTriangle },
+      ],
+    },
+    {
+      title: 'Endpoints',
+      items: [
+        { id: 'whatsapp', label: 'WhatsApp', icon: Phone },
+        { id: 'messages', label: 'Mensagens', icon: MessageSquare },
+        { id: 'appointments', label: 'Agendamentos', icon: Calendar },
+        { id: 'faq', label: 'FAQ / Knowledge', icon: HelpCircle },
+        { id: 'ai', label: 'IA / Configuração', icon: Bot },
+        { id: 'calendar', label: 'Google Calendar', icon: Calendar },
+        { id: 'reports', label: 'Relatórios', icon: BarChart3 },
+        { id: 'company', label: 'Empresa / Usuários', icon: Users },
+        { id: 'admin', label: 'Admin', icon: Shield },
+      ],
+    },
+  ];
+
+  const errorCodes = [
+    { code: 400, description: 'Dados inválidos no body ou query params' },
+    { code: 401, description: 'Não autenticado — Token ausente ou inválido' },
+    { code: 403, description: 'Sem permissão para este recurso' },
+    { code: 404, description: 'Recurso não encontrado' },
+    { code: 422, description: 'Erro de validação nos dados enviados' },
+    { code: 429, description: 'Rate limit excedido — muitas requisições' },
+    { code: 500, description: 'Erro interno do servidor' },
+    { code: 503, description: 'Serviço indisponível ou não configurado' },
   ];
 
   return (
-    <div className="h-full">
-      <div className="flex h-full">
+    <div className="min-h-screen bg-background">
+      <div className="flex">
         {/* Sidebar */}
-        <aside className="w-64 border-r bg-card hidden lg:block">
+        <aside className="w-64 border-r border-border/50 bg-card/50 hidden lg:block sticky top-0 h-screen">
           <ScrollArea className="h-full py-6 px-4">
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-semibold mb-2">Navegação</h3>
-                <nav className="space-y-1">
-                  {sections.map((section) => (
-                    <a
-                      key={section.id}
-                      href={`#${section.id}`}
-                      className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-colors"
-                    >
-                      <section.icon className="h-4 w-4" />
-                      {section.label}
-                    </a>
-                  ))}
-                </nav>
+            <div className="flex items-center gap-2 px-2 mb-1">
+              <div className="h-8 w-8 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center">
+                <BookOpen className="h-4 w-4 text-red-400" />
               </div>
+              <div>
+                <h3 className="font-bold text-lg leading-none">
+                  <span className="text-foreground">API</span>{' '}
+                  <span className="text-red-400">Docs</span>
+                </h3>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Maya CRM — v2.0</p>
+              </div>
+            </div>
+
+            <div className="mt-6 space-y-6">
+              {navSections.map((section) => (
+                <div key={section.title}>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-2 mb-2">
+                    {section.title}
+                  </h4>
+                  <nav className="space-y-0.5">
+                    {section.items.map((item) => (
+                      <a
+                        key={item.id}
+                        href={`#${item.id}`}
+                        className="flex items-center gap-2.5 px-2 py-1.5 text-sm rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+                      >
+                        <item.icon className="h-3.5 w-3.5 text-red-400/70" />
+                        <span className="truncate">{item.label}</span>
+                      </a>
+                    ))}
+                  </nav>
+                </div>
+              ))}
             </div>
           </ScrollArea>
         </aside>
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="container max-w-4xl py-8 space-y-8">
-            {/* Header */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <h1 className="text-4xl font-bold">Documentação da API</h1>
-                <Badge variant="outline">v2.0</Badge>
+          <div className="mx-auto max-w-5xl px-6 py-12 space-y-12">
+            {/* Hero */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-red-400">
+                <Zap className="h-3.5 w-3.5" />
+                REST API
               </div>
-              <p className="text-lg text-muted-foreground">
-                Referência completa dos endpoints disponíveis na API Next.js. Autenticação via Bearer Token ou x-api-key conforme indicado.
+              <h1 className="text-5xl font-bold tracking-tight">
+                <span className="text-foreground">API </span>
+                <span className="text-red-400">Documentation</span>
+              </h1>
+              <p className="text-lg text-muted-foreground max-w-2xl">
+                Referência completa da API REST do Maya CRM. Todas as respostas são em JSON.
+                Autenticação via Bearer Token (session) ou x-api-key conforme indicado em cada endpoint.
               </p>
-              <div className="bg-muted p-4 rounded-lg">
-                <p className="text-sm font-mono">
-                  Base URL: <span className="text-primary">{process.env.NEXT_PUBLIC_APP_URL || 'https://seu-dominio.com'}</span>
-                </p>
-              </div>
-              <div className="bg-muted/50 p-4 rounded-lg border space-y-2">
-                <h4 className="font-semibold text-sm">Métodos de Autenticação</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                  <div className="bg-background p-2 rounded font-mono">
-                    <span className="text-muted-foreground">Bearer Token:</span> Authorization: Bearer &lt;token&gt;
-                  </div>
-                  <div className="bg-background p-2 rounded font-mono">
-                    <span className="text-muted-foreground">API Key:</span> x-api-key: &lt;chave&gt;
-                  </div>
-                </div>
+
+              {/* Base URL */}
+              <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-card/40 px-4 py-3 max-w-2xl">
+                <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Base URL:
+                </span>
+                <code className="flex-1 text-sm font-mono text-red-400 truncate">{baseUrl}</code>
+                <button
+                  type="button"
+                  onClick={copyBaseUrl}
+                  className="shrink-0 h-7 w-7 rounded-md hover:bg-accent flex items-center justify-center transition-colors"
+                  title="Copiar"
+                >
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </button>
               </div>
             </div>
 
-            <Separator />
+            {/* Autenticação */}
+            <section id="autenticacao" className="scroll-mt-24 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center">
+                  <KeyRound className="h-5 w-5 text-red-400" />
+                </div>
+                <h2 className="text-2xl font-bold">Autenticação</h2>
+              </div>
+              <p className="text-muted-foreground">
+                Rotas protegidas exigem autenticação via sessão NextAuth (cookies) ou API Key no header.
+              </p>
+              <div className="rounded-lg border border-border/50 bg-card/40 p-5 space-y-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <KeyRound className="h-4 w-4 text-red-400" />
+                    <h4 className="font-semibold text-sm">Header obrigatório</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Inclua o token no header de todas as requisições autenticadas:
+                  </p>
+                  <pre className="rounded-md bg-background/80 border border-border/50 p-3 text-xs font-mono text-foreground/90 overflow-x-auto">
+{`Authorization: Bearer <seu_token>
+Accept: application/json`}
+                  </pre>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-md bg-background/50 border border-border/50 p-3">
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground block mb-1">
+                      Bearer Token
+                    </span>
+                    <code className="font-mono text-foreground/90">
+                      Authorization: Bearer &lt;token&gt;
+                    </code>
+                  </div>
+                  <div className="rounded-md bg-background/50 border border-border/50 p-3">
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground block mb-1">
+                      API Key
+                    </span>
+                    <code className="font-mono text-foreground/90">
+                      x-api-key: &lt;chave&gt;
+                    </code>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Códigos de Erro */}
+            <section id="codigos-erro" className="scroll-mt-24 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center">
+                  <AlertTriangle className="h-5 w-5 text-red-400" />
+                </div>
+                <h2 className="text-2xl font-bold">Códigos de Erro</h2>
+              </div>
+              <p className="text-muted-foreground">
+                Respostas de erro seguem um formato padrão:{' '}
+                <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">
+                  {`{ "error": "mensagem" }`}
+                </code>
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {errorCodes.map((err) => (
+                  <div
+                    key={err.code}
+                    className="rounded-lg border border-border/50 bg-card/40 p-4"
+                  >
+                    <div className="text-3xl font-bold text-amber-400 mb-1">{err.code}</div>
+                    <div className="text-xs text-muted-foreground leading-snug">
+                      {err.description}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
 
             {/* ==================== WHATSAPP ==================== */}
             <ApiSection
               id="whatsapp"
               title="WhatsApp"
+              icon={Phone}
               description="Endpoints para envio de mensagens, mídia, áudio, reações e gerenciamento de instâncias WhatsApp."
             >
               <div className="mb-6 bg-muted/50 p-4 rounded-lg border">
@@ -344,6 +500,7 @@ curl -X POST "/api/whatsapp/connect" \\
             <ApiSection
               id="messages"
               title="Mensagens"
+              icon={MessageSquare}
               description="Webhook de recebimento, transferência de conversas e transcrição de áudio."
             >
               <ApiEndpointCard
@@ -604,6 +761,7 @@ curl "/api/conversations?status=transferred" \\
             <ApiSection
               id="appointments"
               title="Agendamentos"
+              icon={Calendar}
               description="API completa para gerenciar agendamentos, consultar disponibilidade, criar, remarcar e cancelar."
             >
               <div className="mb-6 bg-muted/50 p-4 rounded-lg border">
@@ -828,6 +986,7 @@ curl "/api/conversations?status=transferred" \\
             <ApiSection
               id="faq"
               title="FAQ / Knowledge Base"
+              icon={HelpCircle}
               description="Gerenciar perguntas frequentes, upload de arquivos para transcrição e sincronização com base de conhecimento."
             >
               <div className="mb-6 bg-muted/50 p-4 rounded-lg border">
@@ -1035,6 +1194,7 @@ curl -X POST "/api/knowledge/faq" \\
             <ApiSection
               id="ai"
               title="IA / Configuração"
+              icon={Bot}
               description="Configurações de IA, prompts, tracking de uso de tokens e integração com ElevenLabs."
             >
               <ApiEndpointCard
@@ -1192,6 +1352,7 @@ curl -X POST "/api/knowledge/faq" \\
             <ApiSection
               id="calendar"
               title="Google Calendar"
+              icon={Calendar}
               description="Integração com Google Calendar: autenticação OAuth, sincronização de agendamentos e bulk sync."
             >
               <ApiEndpointCard
@@ -1288,6 +1449,7 @@ curl -X POST "/api/knowledge/faq" \\
             <ApiSection
               id="reports"
               title="Relatórios"
+              icon={BarChart3}
               description="Geração de relatórios diários com métricas de atendimento."
             >
               <ApiEndpointCard
@@ -1330,6 +1492,7 @@ curl -X POST "/api/knowledge/faq" \\
             <ApiSection
               id="company"
               title="Empresa / Usuários"
+              icon={Users}
               description="Criação de empresas, adição de usuários e gerenciamento de senhas. Requer role super_admin."
             >
               <div className="mb-6 bg-amber-50 dark:bg-amber-950 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
@@ -1475,6 +1638,7 @@ curl -X POST "/api/knowledge/faq" \\
             <ApiSection
               id="admin"
               title="Admin / Monitoramento"
+              icon={Shield}
               description="Monitoramento de filas BullMQ e status do sistema. Requer role super_admin."
             >
               <ApiEndpointCard
@@ -1525,9 +1689,9 @@ curl -X POST "/api/knowledge/faq" \\
             </ApiSection>
 
             {/* Footer */}
-            <div className="mt-12 pt-6 border-t">
-              <p className="text-sm text-muted-foreground text-center">
-                Documentação da API · Versão 2.0 · Última atualização: Março 2026
+            <div className="mt-16 pt-8 border-t border-border/50">
+              <p className="text-xs text-muted-foreground text-center">
+                <span className="text-red-400 font-semibold">API Docs</span> · Maya CRM · v2.0
               </p>
             </div>
           </div>
