@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ApiEndpointCard } from '@/components/api-docs/ApiEndpointCard';
 import { ApiSection } from '@/components/api-docs/ApiSection';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import {
   Calendar,
   MessageSquare,
