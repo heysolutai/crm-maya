@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { authenticate } from "@/lib/api/auth";
-import { parseProductName } from "@/lib/services/catalog-parser";
 
 // POST /api/catalog/sync — importa todos os produtos da UazAPI e salva no banco
 export async function POST(req: NextRequest) {
@@ -97,19 +96,6 @@ export async function POST(req: NextRequest) {
       const name = (raw.Name as string) || (raw.name as string) || "Sem nome";
       const description = (raw.Description as string) || (raw.description as string) || null;
 
-      // Extrai atributos estruturados do nome (marca, cc, ano) para filtros precisos.
-      // Se o parser falhar, segue sem esses campos — não pode derrubar o sync inteiro.
-      let parsed: { brand: string | null; displacementCc: number | null; vehicleYear: string | null } = {
-        brand: null,
-        displacementCc: null,
-        vehicleYear: null,
-      };
-      try {
-        parsed = parseProductName(name);
-      } catch (parseErr) {
-        console.warn("[Catalog Sync] Parser falhou para:", name, parseErr);
-      }
-
       // Link do produto no catálogo: wa.me/p/{waProductId}/{numeroDoJid}
       const rawUrl = (raw.Url as string) || (raw.url as string) || "";
       const productUrl = catalogLinkId
@@ -135,11 +121,11 @@ export async function POST(req: NextRequest) {
           url: productUrl,
           images: imageList as any,
           rawData: Prisma.DbNull,
-          brand: parsed.brand,
-          displacementCc: parsed.displacementCc,
-          vehicleYear: parsed.vehicleYear,
+          // attributes começa vazio; populado externamente (ex: n8n)
+          attributes: {},
           syncedAt: new Date(),
         },
+        // No update NÃO mexemos em `attributes` — preserva o que o n8n já populou
         update: {
           instanceId: instance.id,
           name,
@@ -153,9 +139,6 @@ export async function POST(req: NextRequest) {
           url: productUrl,
           images: imageList as any,
           rawData: Prisma.DbNull,
-          brand: parsed.brand,
-          displacementCc: parsed.displacementCc,
-          vehicleYear: parsed.vehicleYear,
           syncedAt: new Date(),
         },
       });

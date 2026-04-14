@@ -4,10 +4,21 @@ import { authenticate } from "@/lib/api/auth";
 import { z } from "zod";
 
 const patchSchema = z.object({
-  isHidden: z.boolean(),
+  isHidden: z.boolean().optional(),
+  // attributes: objeto livre (vai ser salvo como JSONB).
+  // Pode ser populado externamente (ex: n8n extrai e faz PATCH aqui).
+  attributes: z.record(z.string(), z.unknown()).optional(),
+  // mergeAttributes: se true, faz merge com os attributes existentes;
+  // se false ou ausente, substitui o JSON inteiro.
+  mergeAttributes: z.boolean().optional(),
 });
 
-// PATCH /api/catalog/[id] — atualiza visibilidade no banco local
+// PATCH /api/catalog/[id] — atualiza produto (visibilidade e/ou attributes)
+//
+// Body examples:
+//   { "isHidden": true }                                     → oculta produto
+//   { "attributes": {"cc": 250, "brand": "Honda"} }          → substitui attributes
+//   { "attributes": {"ram": "8GB"}, "mergeAttributes": true} → faz merge
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await authenticate(req);
   if (!auth.companyId) {
@@ -19,7 +30,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const body = await req.json();
     const validation = patchSchema.safeParse(body);
     if (!validation.success) {
-      return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
+      return NextResponse.json({ error: "Dados inválidos", details: validation.error.flatten().fieldErrors }, { status: 400 });
     }
 
     const existing = await prisma.catalogProduct.findFirst({
@@ -29,9 +40,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 });
     }
 
+    const data: Record<string, unknown> = {};
+    const { isHidden, attributes, mergeAttributes } = validation.data;
+
+    if (isHidden !== undefined) data.isHidden = isHidden;
+
+    if (attributes !== undefined) {
+      if (mergeAttributes) {
+        const current = (existing.attributes as Record<string, unknown>) || {};
+        data.attributes = { ...current, ...attributes };
+      } else {
+        data.attributes = attributes;
+      }
+    }
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: "Nenhum campo para atualizar" }, { status: 400 });
+    }
+
     const updated = await prisma.catalogProduct.update({
       where: { id },
-      data: { isHidden: validation.data.isHidden },
+      data,
     });
 
     return NextResponse.json({ data: updated });
