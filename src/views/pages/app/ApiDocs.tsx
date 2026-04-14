@@ -53,6 +53,7 @@ export default function ApiDocs() {
       items: [
         { id: 'whatsapp', label: 'WhatsApp', icon: Phone },
         { id: 'messages', label: 'Mensagens', icon: MessageSquare },
+        { id: 'departments', label: 'Departamentos', icon: Users },
         { id: 'appointments', label: 'Agendamentos', icon: Calendar },
         { id: 'faq', label: 'FAQ / Knowledge', icon: HelpCircle },
         { id: 'ai', label: 'IA / Configuração', icon: Bot },
@@ -688,10 +689,47 @@ curl "/api/conversations?status=transferred" \\
               />
 
               <ApiEndpointCard
+                method="POST"
+                path="/api/messaging/transcribe"
+                name="Transcrever Áudio"
+                description="Transcreve o áudio de uma mensagem usando a OpenAI Whisper. Retorna cache se já foi transcrito."
+                authentication="bearer"
+                bodyParameters={[
+                  { name: 'messageId', type: 'UUID', required: true, description: 'ID da mensagem com áudio' },
+                ]}
+                exampleRequest={`curl -X POST "/api/messaging/transcribe" \\
+  -H "Authorization: Bearer <token>" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "messageId": "uuid-da-mensagem"
+  }'`}
+                exampleResponse={`{
+  "success": true,
+  "transcription": "Olá, gostaria de saber mais sobre o produto...",
+  "cached": false
+}`}
+                errors={[
+                  { code: 'UNAUTHORIZED', status: 401, message: 'Token inválido' },
+                  { code: 'MISSING_MESSAGE', status: 400, message: 'messageId é obrigatório' },
+                  { code: 'NO_AUDIO', status: 400, message: 'Mensagem não contém áudio' },
+                ]}
+              />
+            </ApiSection>
+
+            <Separator />
+
+            {/* ==================== DEPARTAMENTOS ==================== */}
+            <ApiSection
+              id="departments"
+              title="Departamentos"
+              icon={Users}
+              description="Endpoints para listar departamentos, consultar membros e fazer peek do round-robin (próximo vendedor/agente da vez) sem consumir o turno."
+            >
+              <ApiEndpointCard
                 method="GET"
                 path="/api/departments"
                 name="Listar Departamentos"
-                description="Lista todos os departamentos ativos da empresa, com seus membros. Use o campo id do retorno para informar no departmentId ao transferir uma conversa."
+                description="Lista todos os departamentos ativos da empresa, com seus membros. Use o campo id do retorno para informar no departmentId ao transferir uma conversa ou no department_id do peek."
                 authentication="bearer"
                 queryParameters={[
                   { name: 'companyId', type: 'UUID', required: false, description: 'Apenas super_admin em impersonation — usa o companyId da sessão por padrão' },
@@ -769,33 +807,6 @@ curl -X GET "/api/departments/next-agent" \\
                 errors={[
                   { code: 'UNAUTHORIZED', status: 403, message: 'Empresa não encontrada' },
                   { code: 'DEPARTMENT_NOT_FOUND', status: 404, message: 'Departamento não encontrado ou inativo' },
-                ]}
-              />
-
-              <ApiEndpointCard
-                method="POST"
-                path="/api/messaging/transcribe"
-                name="Transcrever Áudio"
-                description="Transcreve o áudio de uma mensagem usando a OpenAI Whisper. Retorna cache se já foi transcrito."
-                authentication="bearer"
-                bodyParameters={[
-                  { name: 'messageId', type: 'UUID', required: true, description: 'ID da mensagem com áudio' },
-                ]}
-                exampleRequest={`curl -X POST "/api/messaging/transcribe" \\
-  -H "Authorization: Bearer <token>" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "messageId": "uuid-da-mensagem"
-  }'`}
-                exampleResponse={`{
-  "success": true,
-  "transcription": "Olá, gostaria de saber mais sobre o produto...",
-  "cached": false
-}`}
-                errors={[
-                  { code: 'UNAUTHORIZED', status: 401, message: 'Token inválido' },
-                  { code: 'MISSING_MESSAGE', status: 400, message: 'messageId é obrigatório' },
-                  { code: 'NO_AUDIO', status: 400, message: 'Mensagem não contém áudio' },
                 ]}
               />
             </ApiSection>
