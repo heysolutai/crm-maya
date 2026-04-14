@@ -20,6 +20,7 @@ import {
   Check,
   BookOpen,
   Zap,
+  Settings,
 } from 'lucide-react';
 
 export default function ApiDocs() {
