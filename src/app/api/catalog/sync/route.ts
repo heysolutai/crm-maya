@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { authenticate } from "@/lib/api/auth";
 
@@ -115,7 +116,7 @@ export async function POST(req: NextRequest) {
           retailerId: (raw.RetailerID as string) || null,
           url: productUrl,
           images: imageList as any,
-          rawData: null,
+          rawData: Prisma.DbNull,
           syncedAt: new Date(),
         },
         update: {
@@ -130,7 +131,7 @@ export async function POST(req: NextRequest) {
           retailerId: (raw.RetailerID as string) || null,
           url: productUrl,
           images: imageList as any,
-          rawData: null,
+          rawData: Prisma.DbNull,
           syncedAt: new Date(),
         },
       });
