@@ -24,6 +24,8 @@ export async function POST(req: NextRequest) {
 
     const apiUrl = instance.apiUrl;
     const token = instance.instanceApiKey;
+    const instanceMeta = (instance.metadata as Record<string, unknown>) || {};
+    const catalogBusinessId = (instanceMeta.catalogBusinessId as string) || "";
 
     // 1. Buscar JID da instância
     let jid = "";
@@ -44,94 +46,11 @@ export async function POST(req: NextRequest) {
     } catch {
       // Tenta sem JID
     }
-    const instanceMeta = (instance.metadata as Record<string, unknown>) || {};
-    const catalogBusinessId = (instanceMeta.catalogBusinessId as string) || "";
     console.log("[Catalog Sync] JID:", jid, "| catalogBusinessId:", catalogBusinessId);
 
-    // 2. Paginar todos os produtos da listagem
-    const allRawProducts: Record<string, unknown>[] = [];
-    const seenProductIds = new Set<string>();
-    let cursor: string | undefined = undefined;
-    let page = 0;
-    const PAGE_LIMIT = 100; // Tenta pedir mais produtos por página
-
-    do {
-      page++;
-      const body: Record<string, unknown> = { limit: PAGE_LIMIT };
-      if (jid) body.jid = jid;
-      if (cursor) {
-        body.cursor = cursor;
-        body.after = cursor; // Algumas APIs usam "after"
-      }
-
-      console.log("[Catalog Sync] Pedindo página", page, "body:", JSON.stringify(body));
-
-      const listRes = await fetch(`${apiUrl}/business/catalog/list`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", token },
-        body: JSON.stringify(body),
-      });
-
-      if (!listRes.ok) {
-        const errText = await listRes.text();
-        console.error("[Catalog Sync] Erro na listagem página", page, listRes.status, errText);
-        if (page === 1) {
-          return NextResponse.json(
-            { error: "Erro ao buscar catálogo no WhatsApp", details: errText },
-            { status: listRes.status }
-          );
-        }
-        break;
-      }
-
-      const listData = await listRes.json();
-
-      // Log completo da PRIMEIRA página para diagnóstico
-      if (page === 1) {
-        console.log("[Catalog Sync] ===== PRIMEIRA PÁGINA COMPLETA =====");
-        console.log(JSON.stringify(listData, null, 2).substring(0, 3000));
-        console.log("[Catalog Sync] ===== FIM PRIMEIRA PÁGINA =====");
-      }
-
-      const pageProducts = extractRawProducts(listData);
-
-      // Adiciona apenas produtos que ainda não vimos (protege contra loops)
-      let newProductsThisPage = 0;
-      for (const p of pageProducts) {
-        const pid = (p.ID as string) || (p.id as string) || "";
-        if (pid && !seenProductIds.has(pid)) {
-          seenProductIds.add(pid);
-          allRawProducts.push(p);
-          newProductsThisPage++;
-        }
-      }
-
-      const nextCursor = extractNextCursor(listData);
-      console.log(
-        "[Catalog Sync] Página", page,
-        "| produtos retornados:", pageProducts.length,
-        "| novos:", newProductsThisPage,
-        "| total acumulado:", allRawProducts.length,
-        "| próximo cursor:", nextCursor ?? "nenhum"
-      );
-
-      // Se a página não trouxe produtos novos, para (evita loop infinito)
-      if (newProductsThisPage === 0 && page > 1) {
-        console.log("[Catalog Sync] Página sem produtos novos — interrompendo paginação");
-        break;
-      }
-
-      // Se não há cursor E a página retornou menos que o limite, chegamos ao fim
-      if (!nextCursor && pageProducts.length < PAGE_LIMIT) {
-        console.log("[Catalog Sync] Sem próximo cursor e página < limite — fim da paginação");
-        cursor = undefined;
-        break;
-      }
-
-      cursor = nextCursor;
-    } while (cursor && page < 100);
-
-    console.log("[Catalog Sync] Total de produtos encontrados:", allRawProducts.length);
+    // 2. Buscar todos os produtos — tenta diferentes estratégias de paginação
+    const allRawProducts = await fetchAllProducts(apiUrl, token, jid);
+    console.log("[Catalog Sync] Total de produtos obtidos:", allRawProducts.length);
 
     if (allRawProducts.length === 0) {
       return NextResponse.json({
@@ -141,37 +60,15 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Para cada produto, buscar detalhes completos (descrição + fotos)
+    // 3. Salvar no banco (o /list já retorna tudo que precisamos)
     let synced = 0;
     for (const raw of allRawProducts) {
       const waProductId =
         (raw.ID as string) || (raw.id as string) || (raw.productId as string) || "";
       if (!waProductId) continue;
 
-      // Buscar info detalhada do produto
-      let detailedRaw = raw;
-      try {
-        const infoRes = await fetch(`${apiUrl}/business/catalog/info`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", token },
-          body: JSON.stringify({ jid, id: waProductId }),
-        });
-        if (infoRes.ok) {
-          const infoData = await infoRes.json();
-          // Log completo do primeiro produto para diagnóstico
-          if (synced === 0) {
-            console.log("[Catalog Sync] INFO response completo (primeiro produto):", JSON.stringify(infoData));
-          }
-          // Mescla os dados detalhados com os básicos (detalhados têm prioridade)
-          const infoProduct = extractSingleProduct(infoData) || infoData;
-          detailedRaw = { ...raw, ...infoProduct };
-        }
-      } catch {
-        // Usa os dados básicos da listagem
-      }
-
-      const price = detailedRaw.Price as Record<string, string> | undefined;
-      const images = detailedRaw.Images as Array<Record<string, unknown>> | undefined;
+      const price = raw.Price as Record<string, string> | undefined;
+      const images = raw.Images as Array<Record<string, unknown>> | undefined;
 
       let formattedPrice: string | undefined;
       if (price?.Amount) {
@@ -191,35 +88,14 @@ export async function POST(req: NextRequest) {
         }))
         .filter((img) => img.originalUrl);
 
-      const name =
-        (detailedRaw.Name as string) ||
-        (detailedRaw.name as string) ||
-        (detailedRaw.title as string) ||
-        "Sem nome";
+      const name = (raw.Name as string) || (raw.name as string) || "Sem nome";
+      const description = (raw.Description as string) || (raw.description as string) || null;
 
-      const description =
-        (detailedRaw.Description as string) ||
-        (detailedRaw.description as string) ||
-        (detailedRaw.body as string) ||
-        (detailedRaw.Body as string) ||
-        null;
-
-      // Constrói o link do produto usando o catalogBusinessId configurado nas settings
-      const catalogLink = catalogBusinessId
+      // Constrói o link do catálogo se o catalogBusinessId estiver configurado
+      const rawUrl = (raw.Url as string) || (raw.url as string) || "";
+      const productUrl = catalogBusinessId
         ? `https://wa.me/p/${waProductId}/${catalogBusinessId}`
-        : null;
-
-      const productUrl =
-        catalogLink ||
-        (detailedRaw.Url as string) ||
-        (detailedRaw.url as string) ||
-        (detailedRaw.ShareLink as string) ||
-        (detailedRaw.shareLink as string) ||
-        null;
-
-      console.log(
-        `[Catalog Sync] Produto "${name}" | desc: ${!!description} | imagens: ${imageList.length}`
-      );
+        : (rawUrl || null);
 
       await prisma.catalogProduct.upsert({
         where: {
@@ -231,56 +107,122 @@ export async function POST(req: NextRequest) {
           waProductId,
           name,
           description,
-          price: formattedPrice || (detailedRaw.price as string) || null,
+          price: formattedPrice || null,
           priceAmount: price?.Amount || null,
           currency: price?.Currency || "BRL",
-          availability:
-            (detailedRaw.Availability as string) ||
-            (detailedRaw.availability as string) ||
-            null,
-          isHidden: (detailedRaw.IsHidden as boolean) ?? false,
-          retailerId:
-            (detailedRaw.RetailerID as string) ||
-            (detailedRaw.retailerId as string) ||
-            null,
+          availability: (raw.Availability as string) || null,
+          isHidden: (raw.IsHidden as boolean) ?? false,
+          retailerId: (raw.RetailerID as string) || null,
           url: productUrl,
           images: imageList as any,
-          rawData: detailedRaw as any,
+          rawData: raw as any,
           syncedAt: new Date(),
         },
         update: {
           instanceId: instance.id,
           name,
           description,
-          price: formattedPrice || (detailedRaw.price as string) || null,
+          price: formattedPrice || null,
           priceAmount: price?.Amount || null,
           currency: price?.Currency || "BRL",
-          availability:
-            (detailedRaw.Availability as string) ||
-            (detailedRaw.availability as string) ||
-            null,
-          isHidden: (detailedRaw.IsHidden as boolean) ?? false,
-          retailerId:
-            (detailedRaw.RetailerID as string) ||
-            (detailedRaw.retailerId as string) ||
-            null,
+          availability: (raw.Availability as string) || null,
+          isHidden: (raw.IsHidden as boolean) ?? false,
+          retailerId: (raw.RetailerID as string) || null,
           url: productUrl,
           images: imageList as any,
-          rawData: detailedRaw as any,
+          rawData: raw as any,
           syncedAt: new Date(),
         },
       });
       synced++;
     }
 
-    return NextResponse.json({ success: true, synced, total: allRawProducts.length });
+    return NextResponse.json({
+      success: true,
+      synced,
+      total: allRawProducts.length,
+    });
   } catch (error) {
     console.error("[POST /api/catalog/sync] Erro:", error);
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
 
-// Extrai array de produtos de qualquer formato da UazAPI
+// Busca todos os produtos paginando com cursor (paging.after)
+async function fetchAllProducts(
+  apiUrl: string,
+  token: string,
+  jid: string
+): Promise<Record<string, unknown>[]> {
+  const seen = new Set<string>();
+  const all: Record<string, unknown>[] = [];
+  let cursor: string | undefined = undefined;
+  let page = 0;
+  const MAX_PAGES = 100;
+
+  do {
+    page++;
+    const body: Record<string, unknown> = {};
+    if (jid) body.jid = jid;
+    if (cursor) body.after = cursor;
+
+    console.log(
+      `[Catalog Sync] Página ${page} | body:`,
+      JSON.stringify({ ...body, after: cursor ? `${cursor.substring(0, 20)}...` : undefined })
+    );
+
+    const res = await fetch(`${apiUrl}/business/catalog/list`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", token },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[Catalog Sync] Erro página ${page}:`, res.status, errText);
+      break;
+    }
+
+    const data = await res.json();
+
+    // Na primeira página, loga a estrutura e a parte do paging para diagnóstico
+    if (page === 1) {
+      const meta = extractResponseMeta(data);
+      console.log("[Catalog Sync] Estrutura da resposta:", JSON.stringify(meta));
+      // Loga o paging literal se existir
+      const resp = (data as any)?.response || data;
+      if (resp?.paging || resp?.Paging) {
+        console.log("[Catalog Sync] paging encontrado:", JSON.stringify(resp.paging || resp.Paging));
+      }
+    }
+
+    const products = extractRawProducts(data);
+    let added = 0;
+    for (const p of products) {
+      const pid = (p.ID as string) || (p.id as string) || "";
+      if (pid && !seen.has(pid)) {
+        seen.add(pid);
+        all.push(p);
+        added++;
+      }
+    }
+
+    const nextCursor = extractNextCursor(data);
+    console.log(
+      `[Catalog Sync] Página ${page}: retornados ${products.length}, novos ${added}, total ${all.length}, próximo cursor: ${nextCursor ? "sim" : "não"}`
+    );
+
+    // Condições de parada
+    if (added === 0) break;
+    if (!nextCursor) break;
+    if (nextCursor === cursor) break;
+
+    cursor = nextCursor;
+  } while (cursor && page < MAX_PAGES);
+
+  return all;
+}
+
 function extractRawProducts(data: unknown): Record<string, unknown>[] {
   if (!data) return [];
   const obj = data as Record<string, unknown>;
@@ -294,69 +236,69 @@ function extractRawProducts(data: unknown): Record<string, unknown>[] {
   if (Array.isArray(data)) return data as Record<string, unknown>[];
   if (Array.isArray(obj.Products)) return obj.Products as Record<string, unknown>[];
   if (Array.isArray(obj.products)) return obj.products as Record<string, unknown>[];
-  if (Array.isArray(obj.catalog)) return obj.catalog as Record<string, unknown>[];
-  if (Array.isArray(obj.items)) return obj.items as Record<string, unknown>[];
   if (Array.isArray(obj.data)) return obj.data as Record<string, unknown>[];
-  if (obj.ID || obj.id) return [obj];
 
   return [];
 }
 
-// Extrai produto único de resposta de /info
-function extractSingleProduct(data: unknown): Record<string, unknown> | null {
-  if (!data) return null;
+// Loga os campos de topo da resposta (sem o array de Products) para diagnóstico
+function extractResponseMeta(data: unknown): Record<string, unknown> {
+  if (!data || typeof data !== "object") return {};
   const obj = data as Record<string, unknown>;
+  const meta: Record<string, unknown> = {};
 
-  if (obj.response) {
-    const resp = obj.response as Record<string, unknown>;
-    if (resp.ID || resp.id) return resp;
-    const products = extractRawProducts(obj.response);
-    if (products.length > 0) return products[0];
-  }
+  const walk = (src: Record<string, unknown>, target: Record<string, unknown>) => {
+    for (const [k, v] of Object.entries(src)) {
+      if (k === "Products" || k === "products") {
+        target[k] = `[array com ${Array.isArray(v) ? v.length : 0} items]`;
+      } else if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+        target[k] = {};
+        walk(v as Record<string, unknown>, target[k] as Record<string, unknown>);
+      } else {
+        target[k] = v;
+      }
+    }
+  };
 
-  if (obj.ID || obj.id) return obj;
-  if (obj.data) return obj.data as Record<string, unknown>;
-
-  return null;
+  walk(obj, meta);
+  return meta;
 }
 
-// Extrai cursor para próxima página
 function extractNextCursor(data: unknown): string | undefined {
   if (!data) return undefined;
   const obj = data as Record<string, unknown>;
 
-  // Formato direto
+  const fromPaging = (paging: unknown): string | undefined => {
+    if (!paging || typeof paging !== "object") return undefined;
+    const p = paging as Record<string, unknown>;
+    // UazAPI usa Paging.After (PascalCase)
+    if (typeof p.After === "string" && p.After) return p.After;
+    if (typeof p.after === "string" && p.after) return p.after;
+    if (typeof p.Next === "string" && p.Next) return p.Next;
+    if (typeof p.next === "string" && p.next) return p.next;
+    // Formato aninhado: paging.cursors.after
+    const cursors = p.cursors as Record<string, string> | undefined;
+    if (cursors?.after) return cursors.after;
+    return undefined;
+  };
+
   if (typeof obj.cursor === "string" && obj.cursor) return obj.cursor;
   if (typeof obj.next_cursor === "string" && obj.next_cursor) return obj.next_cursor;
+  if (typeof obj.nextCursor === "string" && obj.nextCursor) return obj.nextCursor;
+  const topPaging = fromPaging(obj.paging);
+  if (topPaging) return topPaging;
+  const topPagingUpper = fromPaging(obj.Paging);
+  if (topPagingUpper) return topPagingUpper;
 
-  // Dentro de response
   if (obj.response) {
     const resp = obj.response as Record<string, unknown>;
     if (typeof resp.cursor === "string" && resp.cursor) return resp.cursor;
-    if (typeof resp.next_cursor === "string" && resp.next_cursor) return resp.next_cursor;
-
-    // Formato Facebook/WhatsApp: paging.cursors.after
-    if (resp.paging) {
-      const paging = resp.paging as Record<string, unknown>;
-      if (typeof paging.next === "string" && paging.next) {
-        // URL completa — extrai só o cursor
-        try {
-          const after = new URL(paging.next).searchParams.get("after");
-          return after || undefined;
-        } catch {
-          return paging.next;
-        }
-      }
-      const cursors = paging.cursors as Record<string, string> | undefined;
-      if (cursors?.after) return cursors.after;
-    }
-  }
-
-  // Paging no nível raiz
-  if (obj.paging) {
-    const paging = obj.paging as Record<string, unknown>;
-    const cursors = paging.cursors as Record<string, string> | undefined;
-    if (cursors?.after) return cursors.after;
+    if (typeof resp.NextCursor === "string" && resp.NextCursor) return resp.NextCursor;
+    if (typeof resp.nextCursor === "string" && resp.nextCursor) return resp.nextCursor;
+    const respPaging = fromPaging(resp.paging);
+    if (respPaging) return respPaging;
+    const respPagingUpper = fromPaging(resp.Paging);
+    if (respPagingUpper) return respPagingUpper;
   }
 
   return undefined;
