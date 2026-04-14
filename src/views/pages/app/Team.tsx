@@ -6,7 +6,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
-import { UserPlus, Search, Shield, User, Eye, Crown, Users, UserCheck, UserX, Clock } from 'lucide-react';
+import { UserPlus, Search, Shield, User, Eye, Crown, Users, UserCheck, UserX, Clock, MoreVertical, KeyRound, Loader2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -36,16 +38,41 @@ function getAvatarColor(name: string) {
 }
 
 export default function Team() {
-  const { teamMembers, isLoading, inviteMember, updateMemberRole, toggleMemberStatus } = useTeam();
+  const { teamMembers, isLoading, inviteMember, updateMemberRole, toggleMemberStatus, setPassword, isSettingPassword } = useTeam();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [passwordTarget, setPasswordTarget] = useState<{ id: string; name: string } | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [formData, setFormData] = useState({
     email: '',
     full_name: '',
     phone: '',
     role: 'agent' as 'company_admin' | 'manager' | 'agent' | 'viewer',
   });
+
+  const handleSetPassword = async () => {
+    setPasswordError('');
+    if (newPassword.length < 8) {
+      setPasswordError('A senha deve ter no mínimo 8 caracteres');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('As senhas não coincidem');
+      return;
+    }
+    if (!passwordTarget) return;
+    try {
+      await setPassword({ userId: passwordTarget.id, password: newPassword });
+      setPasswordTarget(null);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch {
+      // toast já exibido pelo hook
+    }
+  };
 
   const stats = useMemo((): StatItem[] => {
     const members = teamMembers || [];
@@ -198,6 +225,7 @@ export default function Team() {
                   <TableHead>Função</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Último Acesso</TableHead>
+                  <TableHead className="w-[60px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -261,6 +289,23 @@ export default function Team() {
                         {member.last_seen_at
                           ? format(new Date(member.last_seen_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
                           : <span className="text-xs italic">Nunca acessou</span>}
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => setPasswordTarget({ id: member.id, name: member.full_name || member.email })}
+                            >
+                              <KeyRound className="h-4 w-4 mr-2" />
+                              Redefinir senha
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   );
@@ -326,10 +371,27 @@ export default function Team() {
                           <SelectItem value="company_admin">Administrador</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Switch
-                        checked={member.is_active}
-                        onCheckedChange={(checked) => toggleMemberStatus({ userId: member.id, isActive: checked })}
-                      />
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={member.is_active}
+                          onCheckedChange={(checked) => toggleMemberStatus({ userId: member.id, isActive: checked })}
+                        />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => setPasswordTarget({ id: member.id, name: member.full_name || member.email })}
+                            >
+                              <KeyRound className="h-4 w-4 mr-2" />
+                              Redefinir senha
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                     {member.last_seen_at && (
                       <p className="text-[11px] text-muted-foreground mt-2">
@@ -343,6 +405,67 @@ export default function Team() {
           </div>
         )}
       </div>
+
+      {/* Dialog de redefinir senha */}
+      <Dialog
+        open={!!passwordTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPasswordTarget(null);
+            setNewPassword('');
+            setConfirmPassword('');
+            setPasswordError('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Redefinir senha</DialogTitle>
+            <DialogDescription>
+              Defina uma nova senha para <span className="font-medium">{passwordTarget?.name}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="new-password">Nova senha</Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Mínimo 8 caracteres"
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirmar senha</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repita a senha"
+                autoComplete="new-password"
+              />
+            </div>
+            {passwordError && (
+              <p className="text-sm text-destructive">{passwordError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPasswordTarget(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSetPassword}
+              disabled={isSettingPassword || !newPassword || !confirmPassword}
+            >
+              {isSettingPassword && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar senha
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

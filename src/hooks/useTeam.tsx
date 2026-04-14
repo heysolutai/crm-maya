@@ -147,6 +147,28 @@ export function useTeam() {
     },
   });
 
+  const setPassword = useMutation({
+    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
+      const { data: result, error } = await invokeFn('set-user-password', {
+        userId,
+        password,
+      });
+      if (error) throw new Error(error);
+      if (!result?.success) throw new Error(result?.error || 'Failed to set password');
+      return result;
+    },
+    onSuccess: () => {
+      toast({ title: 'Senha redefinida com sucesso' });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao redefinir senha',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   return {
     teamMembers,
     isLoading,
@@ -154,5 +176,7 @@ export function useTeam() {
     updateMemberRole: updateMemberRole.mutate,
     toggleMemberStatus: toggleMemberStatus.mutate,
     removeMember: removeMember.mutate,
+    setPassword: setPassword.mutateAsync,
+    isSettingPassword: setPassword.isPending,
   };
 }

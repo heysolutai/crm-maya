@@ -35,7 +35,8 @@
       "Bash(ls -la /Users/andreferrari/development/flow/app/api/tenant/forms/[id\\\\\\)/)",
       "Bash(npm test:*)",
       "Bash(ls -la /Users/andreferrari/development/flow/app/\\\\\\(tenant\\\\\\)/)",
-      "Bash(ls -la /Users/andreferrari/development/flow/app/\\\\\\(tenant\\\\\\)/automations/)"
+      "Bash(ls -la /Users/andreferrari/development/flow/app/\\\\\\(tenant\\\\\\)/automations/)",
+      "Bash(xargs grep:*)"
     ],
     "additionalDirectories": [
       "/tmp"

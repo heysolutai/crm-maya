@@ -22,15 +22,7 @@ export async function POST(req: NextRequest) {
     const { agentId } = await authenticate(req);
 
     if (!agentId) {
-      return errorResponse('Super admin authentication required (Bearer token)', 403);
-    }
-
-    const roleCheck = await prisma.userRole.findFirst({
-      where: { userId: agentId, role: 'super_admin' },
-    });
-
-    if (!roleCheck) {
-      return errorResponse('Only super admins can add users to companies', 403);
+      return errorResponse('Autenticação necessária', 403);
     }
 
     const body = await req.json();
@@ -41,6 +33,21 @@ export async function POST(req: NextRequest) {
     }
 
     const { company_id, email, full_name, phone, role } = validation.data;
+
+    // Super admin pode adicionar em qualquer empresa.
+    // Company admin pode adicionar APENAS na própria empresa.
+    const isSuperAdmin = await prisma.userRole.findFirst({
+      where: { userId: agentId, role: 'super_admin' },
+    });
+
+    if (!isSuperAdmin) {
+      const isCompanyAdmin = await prisma.userRole.findFirst({
+        where: { userId: agentId, role: 'company_admin', companyId: company_id },
+      });
+      if (!isCompanyAdmin) {
+        return errorResponse('Você não tem permissão para adicionar usuários nesta empresa', 403);
+      }
+    }
 
     const company = await prisma.company.findUnique({
       where: { id: company_id },

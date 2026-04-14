@@ -52,8 +52,23 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const { companyId } = await authenticate(req)
+    const { agentId, companyId } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
+    if (!agentId) return NextResponse.json({ error: 'Autenticação necessária' }, { status: 403 })
+
+    // Só super_admin ou company_admin podem editar permissões de roles
+    const isSuperAdmin = await prisma.userRole.findFirst({
+      where: { userId: agentId, role: 'super_admin' },
+    })
+    if (!isSuperAdmin) {
+      const isCompanyAdmin = await prisma.userRole.findFirst({
+        where: { userId: agentId, role: 'company_admin', companyId },
+      })
+      if (!isCompanyAdmin) {
+        return NextResponse.json({ error: 'Você não tem permissão para alterar permissões de roles' }, { status: 403 })
+      }
+    }
+
     const body = await req.json()
 
     const baseValidation = updateRolePermissionSchema.safeParse({
@@ -64,16 +79,47 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid request data', details: baseValidation.error.flatten().fieldErrors }, { status: 400 })
     }
 
-    const { role, companyId: _ignore, ...updates } = body
+    const { role } = body
 
-    await prisma.rolePermission.updateMany({
+    // Mapeia os campos snake_case (frontend) para camelCase (Prisma).
+    // Aceita ambos os formatos por segurança.
+    const data: Record<string, unknown> = {}
+    const conversationAccess = body.conversation_access ?? body.conversationAccess
+    const crmAccess = body.crm_access ?? body.crmAccess
+    const appointmentsAccess = body.appointments_access ?? body.appointmentsAccess
+    const salesAccess = body.sales_access ?? body.salesAccess
+    const canEditSettings = body.can_edit_settings ?? body.canEditSettings
+
+    if (conversationAccess !== undefined) data.conversationAccess = conversationAccess
+    if (crmAccess !== undefined) data.crmAccess = crmAccess
+    if (appointmentsAccess !== undefined) data.appointmentsAccess = appointmentsAccess
+    if (salesAccess !== undefined) data.salesAccess = salesAccess
+    if (canEditSettings !== undefined) data.canEditSettings = canEditSettings
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: 'Nenhum campo válido para atualizar' }, { status: 400 })
+    }
+
+    // Upsert: se não existir a permissão para essa role, cria com defaults e aplica as mudanças
+    const existing = await prisma.rolePermission.findFirst({
       where: { companyId, role },
-      data: updates,
     })
+
+    if (existing) {
+      await prisma.rolePermission.update({
+        where: { id: existing.id },
+        data,
+      })
+    } else {
+      const defaults = DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS.viewer
+      await prisma.rolePermission.create({
+        data: { companyId, role, ...defaults, ...data },
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Erro:', error);
+    console.error('[PUT /api/role-permissions] Erro:', error);
     return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
   }
 }

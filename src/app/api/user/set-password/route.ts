@@ -19,16 +19,7 @@ export async function POST(req: NextRequest) {
     const { agentId } = await authenticate(req);
 
     if (!agentId) {
-      return errorResponse('Super admin authentication required (Bearer token)', 403);
-    }
-
-    const roleData = await prisma.userRole.findFirst({
-      where: { userId: agentId, role: 'super_admin', companyId: null },
-      select: { role: true },
-    });
-
-    if (!roleData) {
-      return errorResponse('Only super admins can set passwords', 403);
+      return errorResponse('Autenticação necessária', 403);
     }
 
     const body = await req.json();
@@ -42,11 +33,29 @@ export async function POST(req: NextRequest) {
 
     const targetUser = await prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true, fullName: true },
+      select: { email: true, fullName: true, companyId: true },
     });
 
     if (!targetUser) {
       return notFoundResponse('User not found');
+    }
+
+    // Super admin pode redefinir qualquer senha.
+    // Company admin pode redefinir senha de usuários da própria empresa.
+    const isSuperAdmin = await prisma.userRole.findFirst({
+      where: { userId: agentId, role: 'super_admin' },
+    });
+
+    if (!isSuperAdmin) {
+      if (!targetUser.companyId) {
+        return errorResponse('Você não tem permissão para redefinir a senha deste usuário', 403);
+      }
+      const isCompanyAdmin = await prisma.userRole.findFirst({
+        where: { userId: agentId, role: 'company_admin', companyId: targetUser.companyId },
+      });
+      if (!isCompanyAdmin) {
+        return errorResponse('Você não tem permissão para redefinir a senha deste usuário', 403);
+      }
     }
 
     const hash = await bcrypt.hash(password, 12);
