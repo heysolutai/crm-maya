@@ -97,8 +97,18 @@ export async function POST(req: NextRequest) {
       const name = (raw.Name as string) || (raw.name as string) || "Sem nome";
       const description = (raw.Description as string) || (raw.description as string) || null;
 
-      // Extrai atributos estruturados do nome (marca, cc, ano) para filtros precisos
-      const parsed = parseProductName(name);
+      // Extrai atributos estruturados do nome (marca, cc, ano) para filtros precisos.
+      // Se o parser falhar, segue sem esses campos — não pode derrubar o sync inteiro.
+      let parsed: { brand: string | null; displacementCc: number | null; vehicleYear: string | null } = {
+        brand: null,
+        displacementCc: null,
+        vehicleYear: null,
+      };
+      try {
+        parsed = parseProductName(name);
+      } catch (parseErr) {
+        console.warn("[Catalog Sync] Parser falhou para:", name, parseErr);
+      }
 
       // Link do produto no catálogo: wa.me/p/{waProductId}/{numeroDoJid}
       const rawUrl = (raw.Url as string) || (raw.url as string) || "";
@@ -158,7 +168,24 @@ export async function POST(req: NextRequest) {
       total: allRawProducts.length,
     });
   } catch (error) {
-    console.error("[POST /api/catalog/sync] Erro:", error);
+    // Log detalhado no servidor
+    console.error("[POST /api/catalog/sync] Erro completo:", error);
+    if (error instanceof Error) {
+      console.error("[POST /api/catalog/sync] Message:", error.message);
+      console.error("[POST /api/catalog/sync] Stack:", error.stack);
+    }
+
+    // Detecta erros comuns do Prisma e retorna mensagem útil (sem vazar dados internos)
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("Unknown argument") || msg.includes("does not exist")) {
+      return NextResponse.json(
+        {
+          error: "Banco de dados desatualizado. Rode 'prisma db push' no servidor para aplicar as novas colunas.",
+        },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
