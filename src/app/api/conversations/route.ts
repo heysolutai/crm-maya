@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { logAction } from '@/lib/services/audit'
+import { phoneVariants, canonicalPhone } from '@/lib/api/utils'
 import { z } from 'zod'
 
 const createConversationSchema = z.object({
@@ -91,31 +92,34 @@ export async function POST(req: NextRequest) {
     const companyId = data.companyId || data.company_id || authCompanyId
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
-    const cleanPhone = (data.phone || '').replace(/[^0-9]/g, '')
-    if (cleanPhone.length < 10) {
+    const rawPhone = (data.phone || '').replace(/[^0-9]/g, '')
+    if (rawPhone.length < 10) {
       return NextResponse.json({ error: 'Número de telefone inválido' }, { status: 400 })
     }
 
-    // Check if client exists with this phone or whatsapp_lid
+    const variants = phoneVariants(rawPhone)
+    const canonical = canonicalPhone(rawPhone)
+
+    // Check if client exists — matching em todas as variações (com/sem 9)
     let client = await prisma.client.findFirst({
       where: {
         companyId,
         OR: [
-          { phone: cleanPhone },
-          { whatsappLid: cleanPhone },
+          { phone: { in: variants } },
+          { whatsappLid: { in: variants } },
         ],
       },
       select: { id: true },
       orderBy: { createdAt: 'asc' },
     })
 
-    // Create client if not found
+    // Create client if not found (usa forma canônica)
     if (!client) {
       client = await prisma.client.create({
         data: {
           companyId,
-          phone: cleanPhone,
-          firstName: cleanPhone,
+          phone: canonical,
+          firstName: canonical,
           source: 'manual',
         },
         select: { id: true },

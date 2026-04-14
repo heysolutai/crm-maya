@@ -784,6 +784,7 @@ model AiConfiguration {
   variables          Json?    @default("{}")
   knowledge          String?
   memoryKey          String?  @map("memory_key")
+  productsKnowledge  String?  @map("products_knowledge")
   whatsappInstanceId String?  @map("whatsapp_instance_id") @db.Uuid
   n8nWebhookUrl      String?  @map("n8n_webhook_url")
   followUpEnabled    Boolean  @default(false) @map("follow_up_enabled")

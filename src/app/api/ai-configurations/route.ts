@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+import { normalizeCompanySlug } from '@/lib/api/utils'
 import { Prisma } from '@prisma/client'
 
 const createAiConfigurationSchema = z.object({
@@ -28,6 +29,8 @@ const updateAiConfigurationSchema = z.object({
   api_keys: z.record(z.string(), z.any()).optional(),
   behavior_settings: z.record(z.string(), z.any()).optional(),
   knowledge: z.any().optional(),
+  memory_key: z.string().optional().nullable(),
+  products_knowledge: z.string().optional().nullable(),
   n8n_webhook_url: z.string().optional(),
   conditions: z.any().optional(),
   variables: z.any().optional(),
@@ -65,6 +68,12 @@ export async function POST(req: NextRequest) {
     const companyId = validatedData.company_id || authCompanyId
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
+    const company = await prisma.company.findFirst({
+      where: { id: companyId },
+      select: { name: true },
+    })
+    const slug = normalizeCompanySlug(company?.name || '')
+
     const config = await prisma.aiConfiguration.create({
       data: {
         companyId,
@@ -77,6 +86,9 @@ export async function POST(req: NextRequest) {
         apiKeys: (validatedData.api_keys || {}) as Prisma.InputJsonValue,
         behaviorSettings: (validatedData.behavior_settings || {}) as Prisma.InputJsonValue,
         createdBy: agentId || validatedData.created_by,
+        memoryKey: slug ? `memory_${slug}` : null,
+        knowledge: slug ? `know_${slug}` : null,
+        productsKnowledge: slug ? `products_${slug}` : null,
       },
     })
 
@@ -116,6 +128,8 @@ export async function PUT(req: NextRequest) {
     if (updates.api_keys !== undefined) data.apiKeys = updates.api_keys
     if (updates.behavior_settings !== undefined) data.behaviorSettings = updates.behavior_settings
     if (updates.knowledge !== undefined) data.knowledge = updates.knowledge
+    if (updates.memory_key !== undefined) data.memoryKey = updates.memory_key
+    if (updates.products_knowledge !== undefined) data.productsKnowledge = updates.products_knowledge
     if (updates.n8n_webhook_url !== undefined) data.n8nWebhookUrl = updates.n8n_webhook_url
     if (updates.conditions !== undefined) data.conditions = updates.conditions
     if (updates.variables !== undefined) data.variables = updates.variables

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import type { WhatsAppInstance } from './types';
+import { phoneVariants, canonicalPhone } from './utils';
 
 export async function getWhatsAppInstance(companyId: string): Promise<WhatsAppInstance> {
   const instance = await prisma.whatsappInstance.findFirst({
@@ -24,7 +25,9 @@ export async function findOrCreateConversation(
   phone: string,
   companyId: string
 ): Promise<string> {
-  const cleanPhone = phone.replace(/[^0-9]/g, '');
+  // Gera todas as variações possíveis (com/sem 9) para match robusto de celulares br
+  const variants = phoneVariants(phone);
+  const canonical = canonicalPhone(phone);
 
   // Use transaction to prevent race conditions creating duplicate clients/conversations
   return await prisma.$transaction(async (tx) => {
@@ -32,8 +35,8 @@ export async function findOrCreateConversation(
       where: {
         companyId,
         OR: [
-          { phone: cleanPhone },
-          { whatsappLid: cleanPhone },
+          { phone: { in: variants } },
+          { whatsappLid: { in: variants } },
         ],
       },
       select: { id: true },
@@ -46,9 +49,9 @@ export async function findOrCreateConversation(
     if (!client) {
       client = await tx.client.create({
         data: {
-          phone: cleanPhone,
+          phone: canonical,
           companyId,
-          firstName: cleanPhone,
+          firstName: canonical,
           source: 'whatsapp',
         },
         select: { id: true },

@@ -36,7 +36,10 @@
       "Bash(npm test:*)",
       "Bash(ls -la /Users/andreferrari/development/flow/app/\\\\\\(tenant\\\\\\)/)",
       "Bash(ls -la /Users/andreferrari/development/flow/app/\\\\\\(tenant\\\\\\)/automations/)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(cmd.exe //c \"npx prisma db push --skip-generate\")",
+      "Bash(where node:*)",
+      "Bash(where npm:*)"
     ],
     "additionalDirectories": [
       "/tmp"

@@ -24,6 +24,7 @@ interface ApiEndpointCardProps {
   name: string;
   description: string;
   authentication: 'bearer' | 'webhook-token' | 'api-key' | 'none';
+  pathParameters?: Parameter[];
   queryParameters?: Parameter[];
   bodyParameters?: Parameter[];
   exampleRequest: string;
@@ -45,6 +46,7 @@ export function ApiEndpointCard({
   name,
   description,
   authentication,
+  pathParameters = [],
   queryParameters = [],
   bodyParameters = [],
   exampleRequest,
@@ -88,6 +90,9 @@ export function ApiEndpointCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {pathParameters.length > 0 && (
+          <ParameterTable parameters={pathParameters} title="Path Parameters" />
+        )}
         {queryParameters.length > 0 && (
           <ParameterTable parameters={queryParameters} title="Query Parameters" />
         )}

@@ -48,6 +48,8 @@ export interface AIConfiguration {
   behavior_settings: BehaviorSettings;
   n8n_webhook_url: string | null;
   knowledge: string | null;
+  memory_key: string | null;
+  products_knowledge: string | null;
 }
 
 function mapConfig(item: any): AIConfiguration {
@@ -71,6 +73,8 @@ function mapConfig(item: any): AIConfiguration {
     } as BehaviorSettings,
     n8n_webhook_url: item.n8nWebhookUrl ?? item.n8n_webhook_url ?? null,
     knowledge: item.knowledge ?? null,
+    memory_key: item.memoryKey ?? item.memory_key ?? null,
+    products_knowledge: item.productsKnowledge ?? item.products_knowledge ?? null,
     prompts: {
       // Preserve all existing fields (including prompt_completo)
       ...rawPrompts,

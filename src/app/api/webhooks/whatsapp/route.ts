@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
+import { phoneVariants, canonicalPhone } from '@/lib/api/utils';
 import { enqueueInboundMessage, enqueueN8NWebhook, enqueueTranscription, enqueueMediaProcessing } from '@/lib/queue';
 import { uploadToB2, buildB2Key, MIME_TO_EXT, deleteMediaFromUrl } from '@/lib/storage';
 import { publishEvent } from '@/lib/realtime';
@@ -1107,7 +1108,9 @@ export async function POST(req: NextRequest) {
       // CENÁRIO 2: Phone é número normal (10-13 dígitos)
       console.log('[Normal Scenario] Phone is regular number:', payload.phone);
 
-      const orConditions: any[] = [{ phone: payload.phone }];
+      // Gera todas as variações (com/sem 9 na frente) para matching robusto
+      const variants = phoneVariants(payload.phone);
+      const orConditions: any[] = [{ phone: { in: variants } }];
       if (payload.whatsapp_lid) {
         orConditions.push({ whatsappLid: payload.whatsapp_lid });
       }
@@ -1149,7 +1152,7 @@ export async function POST(req: NextRequest) {
         const newClient = await prisma.client.create({
           data: {
             companyId,
-            phone: payload.phone,
+            phone: canonicalPhone(payload.phone),
             whatsappLid: payload.whatsapp_lid,
             firstName: clientName,
             source: payload.ad_tracking ? `meta_ad` : (payload.channel || 'whatsapp'),
