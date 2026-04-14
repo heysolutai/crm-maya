@@ -29,8 +29,11 @@ import {
   AlertCircle,
   ExternalLink,
   Download,
+  Copy,
+  Check,
 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { toast } from "sonner";
 
 export default function Catalog() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -51,6 +54,18 @@ export default function Catalog() {
   const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
   const [infoDialogOpen, setInfoDialogOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyLink = async (productId: string, url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(productId);
+      toast.success("Link copiado!");
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      toast.error("Não foi possível copiar");
+    }
+  };
 
   const filteredProducts = useMemo(() => {
     if (!searchTerm) return products;
@@ -248,6 +263,28 @@ export default function Catalog() {
                     </p>
                   )}
 
+                  {/* Link do produto — copiar */}
+                  {product.url && (
+                    <div className="flex items-center gap-1 bg-muted rounded px-2 py-1.5">
+                      <span className="text-[10px] font-mono text-muted-foreground truncate flex-1" title={product.url}>
+                        {product.url}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0"
+                        onClick={() => copyLink(product.id, product.url!)}
+                        title="Copiar link"
+                      >
+                        {copiedId === product.id ? (
+                          <Check className="h-3 w-3 text-green-600" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Actions */}
                   <div className="flex items-center gap-1 pt-2 border-t">
                     <Button
@@ -340,12 +377,32 @@ export default function Catalog() {
               )}
 
               {selectedProduct.url && (
-                <Button variant="outline" className="w-full" asChild>
-                  <a href={selectedProduct.url as string} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Abrir no WhatsApp
-                  </a>
-                </Button>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1 bg-muted rounded px-2 py-2">
+                    <span className="text-xs font-mono text-muted-foreground break-all flex-1">
+                      {selectedProduct.url as string}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => copyLink(selectedProduct.id, selectedProduct.url as string)}
+                      title="Copiar link"
+                    >
+                      {copiedId === selectedProduct.id ? (
+                        <Check className="h-3.5 w-3.5 text-green-600" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                  <Button variant="outline" className="w-full" asChild>
+                    <a href={selectedProduct.url as string} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Abrir no WhatsApp
+                    </a>
+                  </Button>
+                </div>
               )}
             </div>
           )}
