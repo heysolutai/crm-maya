@@ -50,14 +50,21 @@ export async function POST(req: NextRequest) {
 
     // 2. Paginar todos os produtos da listagem
     const allRawProducts: Record<string, unknown>[] = [];
+    const seenProductIds = new Set<string>();
     let cursor: string | undefined = undefined;
     let page = 0;
+    const PAGE_LIMIT = 100; // Tenta pedir mais produtos por página
 
     do {
       page++;
-      const body: Record<string, unknown> = {};
+      const body: Record<string, unknown> = { limit: PAGE_LIMIT };
       if (jid) body.jid = jid;
-      if (cursor) body.cursor = cursor;
+      if (cursor) {
+        body.cursor = cursor;
+        body.after = cursor; // Algumas APIs usam "after"
+      }
+
+      console.log("[Catalog Sync] Pedindo página", page, "body:", JSON.stringify(body));
 
       const listRes = await fetch(`${apiUrl}/business/catalog/list`, {
         method: "POST",
@@ -74,19 +81,55 @@ export async function POST(req: NextRequest) {
             { status: listRes.status }
           );
         }
-        break; // Para paginação mas salva o que já veio
+        break;
       }
 
       const listData = await listRes.json();
-      console.log("[Catalog Sync] Página", page, "raw:", JSON.stringify(listData).substring(0, 300));
+
+      // Log completo da PRIMEIRA página para diagnóstico
+      if (page === 1) {
+        console.log("[Catalog Sync] ===== PRIMEIRA PÁGINA COMPLETA =====");
+        console.log(JSON.stringify(listData, null, 2).substring(0, 3000));
+        console.log("[Catalog Sync] ===== FIM PRIMEIRA PÁGINA =====");
+      }
 
       const pageProducts = extractRawProducts(listData);
-      allRawProducts.push(...pageProducts);
 
-      // Extrair cursor para próxima página
-      cursor = extractNextCursor(listData);
-      console.log("[Catalog Sync] Página", page, "→", pageProducts.length, "produtos | next cursor:", cursor ?? "nenhum");
-    } while (cursor && page < 50); // Limite de 50 páginas como segurança
+      // Adiciona apenas produtos que ainda não vimos (protege contra loops)
+      let newProductsThisPage = 0;
+      for (const p of pageProducts) {
+        const pid = (p.ID as string) || (p.id as string) || "";
+        if (pid && !seenProductIds.has(pid)) {
+          seenProductIds.add(pid);
+          allRawProducts.push(p);
+          newProductsThisPage++;
+        }
+      }
+
+      const nextCursor = extractNextCursor(listData);
+      console.log(
+        "[Catalog Sync] Página", page,
+        "| produtos retornados:", pageProducts.length,
+        "| novos:", newProductsThisPage,
+        "| total acumulado:", allRawProducts.length,
+        "| próximo cursor:", nextCursor ?? "nenhum"
+      );
+
+      // Se a página não trouxe produtos novos, para (evita loop infinito)
+      if (newProductsThisPage === 0 && page > 1) {
+        console.log("[Catalog Sync] Página sem produtos novos — interrompendo paginação");
+        break;
+      }
+
+      // Se não há cursor E a página retornou menos que o limite, chegamos ao fim
+      if (!nextCursor && pageProducts.length < PAGE_LIMIT) {
+        console.log("[Catalog Sync] Sem próximo cursor e página < limite — fim da paginação");
+        cursor = undefined;
+        break;
+      }
+
+      cursor = nextCursor;
+    } while (cursor && page < 100);
 
     console.log("[Catalog Sync] Total de produtos encontrados:", allRawProducts.length);
 
