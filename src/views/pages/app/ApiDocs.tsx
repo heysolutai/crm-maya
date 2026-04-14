@@ -730,6 +730,49 @@ curl "/api/conversations?status=transferred" \\
               />
 
               <ApiEndpointCard
+                method="GET"
+                path="/api/departments/next-agent"
+                name="Consultar Próximo Agente (Peek Round-Robin)"
+                description="Consulta qual seria o próximo agente a receber um cliente no round-robin, SEM consumir o turno (não atualiza o estado). Útil para a IA verificar disponibilidade de agenda antes de efetivar a transferência. Espelha a mesma lógica de ordenação e papéis do endpoint de transferência."
+                authentication="bearer"
+                queryParameters={[
+                  { name: 'department_id', type: 'UUID', required: false, description: 'Se informado, faz peek do round-robin do departamento (apenas agentes online membros do depto). Se omitido, faz peek global da empresa (todos os agentes ativos, ignora online).' },
+                  { name: 'include_schedule', type: 'string', required: false, description: 'Use "1" para incluir a agenda (DoctorSchedule) do próximo agente na resposta — economiza uma chamada extra a /api/schedules.' },
+                ]}
+                exampleRequest={`// Peek do round-robin do departamento de vendas, já trazendo a agenda
+curl -X GET "/api/departments/next-agent?department_id=dept-vendas-uuid&include_schedule=1" \\
+  -H "Authorization: Bearer <token>"
+
+// Peek global (sem departamento)
+curl -X GET "/api/departments/next-agent" \\
+  -H "Authorization: Bearer <token>"`}
+                exampleResponse={`{
+  "next_agent": {
+    "user_id": "agent-uuid",
+    "full_name": "João Vendedor",
+    "email": "joao@empresa.com",
+    "is_online": true
+  },
+  "schedule": {
+    "id": "schedule-uuid",
+    "name": "Agenda João"
+  },
+  "total_candidates": 3,
+  "queue_order": [
+    { "user_id": "agent-uuid", "full_name": "João Vendedor", "position": 1 },
+    { "user_id": "agent-uuid-2", "full_name": "Maria Vendedora", "position": 2 },
+    { "user_id": "agent-uuid-3", "full_name": "Pedro Vendedor", "position": 3 }
+  ],
+  "mode": "department",
+  "message": "Proximo agente: João Vendedor (3 candidato(s))."
+}`}
+                errors={[
+                  { code: 'UNAUTHORIZED', status: 403, message: 'Empresa não encontrada' },
+                  { code: 'DEPARTMENT_NOT_FOUND', status: 404, message: 'Departamento não encontrado ou inativo' },
+                ]}
+              />
+
+              <ApiEndpointCard
                 method="POST"
                 path="/api/messaging/transcribe"
                 name="Transcrever Áudio"
