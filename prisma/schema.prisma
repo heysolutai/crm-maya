@@ -732,6 +732,12 @@ model CatalogProduct {
   url             String?
   images          Json?     @default("[]")               // Array de { id, originalUrl, thumbUrl }
   rawData         Json?     @map("raw_data")             // Objeto completo da UazAPI
+
+  // Campos extraídos automaticamente do nome (para filtros estruturados na IA)
+  brand           String?                                 // Marca (Honda, Yamaha, Bajaj...)
+  displacementCc  Int?      @map("displacement_cc")       // Cilindrada em cc (150, 250, 1000)
+  vehicleYear     String?   @map("vehicle_year")          // Ano/modelo ("2025", "2024/2025")
+
   syncedAt        DateTime  @default(now()) @map("synced_at")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
@@ -741,6 +747,8 @@ model CatalogProduct {
 
   @@unique([companyId, waProductId], map: "uq_catalog_company_product")
   @@index([companyId], map: "idx_catalog_company")
+  @@index([companyId, displacementCc], map: "idx_catalog_company_cc")
+  @@index([companyId, brand], map: "idx_catalog_company_brand")
   @@map("catalog_products")
 }
 

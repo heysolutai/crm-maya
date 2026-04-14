@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { authenticate } from "@/lib/api/auth";
+import { parseProductName } from "@/lib/services/catalog-parser";
 
 // POST /api/catalog/sync — importa todos os produtos da UazAPI e salva no banco
 export async function POST(req: NextRequest) {
@@ -96,6 +97,9 @@ export async function POST(req: NextRequest) {
       const name = (raw.Name as string) || (raw.name as string) || "Sem nome";
       const description = (raw.Description as string) || (raw.description as string) || null;
 
+      // Extrai atributos estruturados do nome (marca, cc, ano) para filtros precisos
+      const parsed = parseProductName(name);
+
       // Link do produto no catálogo: wa.me/p/{waProductId}/{numeroDoJid}
       const rawUrl = (raw.Url as string) || (raw.url as string) || "";
       const productUrl = catalogLinkId
@@ -121,6 +125,9 @@ export async function POST(req: NextRequest) {
           url: productUrl,
           images: imageList as any,
           rawData: Prisma.DbNull,
+          brand: parsed.brand,
+          displacementCc: parsed.displacementCc,
+          vehicleYear: parsed.vehicleYear,
           syncedAt: new Date(),
         },
         update: {
@@ -136,6 +143,9 @@ export async function POST(req: NextRequest) {
           url: productUrl,
           images: imageList as any,
           rawData: Prisma.DbNull,
+          brand: parsed.brand,
+          displacementCc: parsed.displacementCc,
+          vehicleYear: parsed.vehicleYear,
           syncedAt: new Date(),
         },
       });
