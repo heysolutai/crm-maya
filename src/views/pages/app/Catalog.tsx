@@ -42,7 +42,6 @@ export default function Catalog() {
     refetch,
     syncFromWhatsApp,
     isSyncing,
-    getProductInfo,
     showProduct,
     hideProduct,
     deleteProduct,
@@ -51,8 +50,6 @@ export default function Catalog() {
 
   const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
   const [infoDialogOpen, setInfoDialogOpen] = useState(false);
-  const [productInfo, setProductInfo] = useState<Record<string, unknown> | null>(null);
-  const [loadingInfo, setLoadingInfo] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const filteredProducts = useMemo(() => {
@@ -68,19 +65,9 @@ export default function Catalog() {
   const visibleCount = products.filter((p) => !p.isHidden).length;
   const hiddenCount = products.filter((p) => p.isHidden).length;
 
-  const handleViewInfo = async (product: CatalogProduct) => {
+  const handleViewInfo = (product: CatalogProduct) => {
     setSelectedProduct(product);
     setInfoDialogOpen(true);
-    setLoadingInfo(true);
-    setProductInfo(null);
-    try {
-      const info = await getProductInfo(product.waProductId);
-      setProductInfo(info as Record<string, unknown>);
-    } catch {
-      // toast já é mostrado pelo hook
-    } finally {
-      setLoadingInfo(false);
-    }
   };
 
   const handleDelete = () => {
@@ -318,18 +305,12 @@ export default function Catalog() {
         <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedProduct?.name || "Informações do Produto"}</DialogTitle>
-            <DialogDescription>
-              Detalhes completos do produto do catálogo
-            </DialogDescription>
+            <DialogDescription>Detalhes completos do produto</DialogDescription>
           </DialogHeader>
 
-          {loadingInfo ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : productInfo ? (
+          {selectedProduct && (
             <div className="space-y-4">
-              {selectedProduct?.images?.[0]?.originalUrl && (
+              {selectedProduct.images?.[0]?.originalUrl && (
                 <div className="aspect-video relative bg-muted rounded-lg overflow-hidden">
                   <Image
                     src={selectedProduct.images[0].originalUrl}
@@ -341,33 +322,32 @@ export default function Catalog() {
                 </div>
               )}
 
-              <div className="space-y-2">
-                {Object.entries(productInfo).map(([key, value]) => {
-                  if (value === null || value === undefined || value === "") return null;
-                  return (
-                    <div key={key} className="grid grid-cols-3 gap-2 text-sm border-b pb-2">
-                      <span className="font-medium text-muted-foreground capitalize">{key}</span>
-                      <span className="col-span-2 break-words">
-                        {typeof value === "object" ? JSON.stringify(value) : String(value)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+              {selectedProduct.price && (
+                <div className="text-2xl font-bold text-primary">{selectedProduct.price}</div>
+              )}
 
-              {selectedProduct?.url && (
+              {selectedProduct.description && (
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Descrição</h4>
+                  <p className="text-sm whitespace-pre-wrap">{selectedProduct.description}</p>
+                </div>
+              )}
+
+              {selectedProduct.availability && (
+                <div className="text-xs text-muted-foreground">
+                  Disponibilidade: <span className="font-medium capitalize">{selectedProduct.availability}</span>
+                </div>
+              )}
+
+              {selectedProduct.url && (
                 <Button variant="outline" className="w-full" asChild>
                   <a href={selectedProduct.url as string} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-4 w-4 mr-2" />
-                    Ver produto
+                    Abrir no WhatsApp
                   </a>
                 </Button>
               )}
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              Nenhuma informação disponível
-            </p>
           )}
 
           <DialogFooter>

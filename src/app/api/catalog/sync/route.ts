@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
           retailerId: (raw.RetailerID as string) || null,
           url: productUrl,
           images: imageList as any,
-          rawData: raw as any,
+          rawData: null,
           syncedAt: new Date(),
         },
         update: {
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
           retailerId: (raw.RetailerID as string) || null,
           url: productUrl,
           images: imageList as any,
-          rawData: raw as any,
+          rawData: null,
           syncedAt: new Date(),
         },
       });
