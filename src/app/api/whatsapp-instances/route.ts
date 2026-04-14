@@ -18,7 +18,25 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json(instances)
+    // Mapeia para snake_case (contrato esperado pelo frontend)
+    const mapped = instances.map((i) => ({
+      id: i.id,
+      company_id: i.companyId,
+      instance_name: i.instanceName,
+      api_url: i.apiUrl,
+      instance_api_key: i.instanceApiKey,
+      admin_token: i.adminToken,
+      status: i.status,
+      is_active: i.isActive,
+      qr_code: i.qrCode,
+      error_message: i.errorMessage,
+      last_connected_at: i.lastConnectedAt,
+      metadata: i.metadata,
+      created_at: i.createdAt,
+      updated_at: i.updatedAt,
+    }))
+
+    return NextResponse.json(mapped)
   } catch (error) {
     console.error('Error in whatsapp-instances:', error);
     return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
