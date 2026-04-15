@@ -44,12 +44,30 @@ export async function GET(req: NextRequest) {
       // Subscribe no canal Redis desta company
       try {
         await subscriber.subscribe(channel);
+        console.log(`[SSE] subscrito em ${channel}`);
       } catch (err) {
         console.error('[SSE] Falha ao subscribe:', err);
+        // Sem subscriber nao tem como receber eventos — fecha stream pra forcar reconnect
+        closed = true;
+        if (heartbeat) clearInterval(heartbeat);
+        subscriber.quit().catch(() => {});
+        try { controller.close(); } catch {}
+        return;
       }
 
       subscriber.on('message', (_chan, message) => {
         send(`event: message\ndata: ${message}\n\n`);
+      });
+
+      // Se o subscriber cair, fecha o stream pra EventSource do browser reconectar automaticamente
+      subscriber.on('error', (err) => {
+        console.error(`[SSE] subscriber error em ${channel}:`, err.message);
+      });
+      subscriber.on('end', () => {
+        console.warn(`[SSE] subscriber desconectou de ${channel} — fechando stream`);
+        closed = true;
+        if (heartbeat) clearInterval(heartbeat);
+        try { controller.close(); } catch {}
       });
 
       // Cleanup ao fechar
