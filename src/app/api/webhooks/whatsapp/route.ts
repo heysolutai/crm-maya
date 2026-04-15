@@ -731,7 +731,7 @@ export async function POST(req: NextRequest) {
         if (convData) {
           const aiConfig = await prisma.aiConfiguration.findFirst({
             where: { companyId: convData.companyId, isActive: true },
-            select: { n8nWebhookUrl: true, knowledge: true },
+            select: { n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
           });
 
           const n8nUrl = aiConfig?.n8nWebhookUrl || process.env.N8N_AI_WEBHOOK_URL;
@@ -771,6 +771,8 @@ export async function POST(req: NextRequest) {
               company_name: companyData?.name || null,
               ai_status: clientData?.aiPaused ? 'paused' : 'active',
               knowledge: aiConfig?.knowledge || null,
+              memory_key: aiConfig?.memoryKey || null,
+              products_knowledge: aiConfig?.productsKnowledge || null,
               api_key: apiKeyRecord?.key || null,
               message_id: originalMessage.id,
               is_transcription_update: true,
@@ -1464,7 +1466,7 @@ export async function POST(req: NextRequest) {
       const [aiConfigResult, clientDataResult, apiKeyResult, companyDataResult, convDataResult] = await Promise.all([
         prisma.aiConfiguration.findFirst({
           where: { companyId, isActive: true },
-          select: { n8nWebhookUrl: true, knowledge: true },
+          select: { n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
         }),
         prisma.client.findUnique({
           where: { id: clientId },
@@ -1492,6 +1494,8 @@ export async function POST(req: NextRequest) {
 
       const n8nWebhookUrl = companyAiConfig?.n8nWebhookUrl || process.env.N8N_AI_WEBHOOK_URL;
       const knowledgeName = companyAiConfig?.knowledge || null;
+      const memoryKeyName = companyAiConfig?.memoryKey || null;
+      const productsKnowledgeName = companyAiConfig?.productsKnowledge || null;
 
       const defaultBusinessHours = {
         monday: { enabled: true, start: '08:00', end: '18:00' },
@@ -1557,6 +1561,8 @@ export async function POST(req: NextRequest) {
         configuracoes_agendamento: configuracoesAgendamento,
         ai_status: aiStatus,
         knowledge: knowledgeName,
+        memory_key: memoryKeyName,
+        products_knowledge: productsKnowledgeName,
         api_key: companyApiKey?.key || null,
         message_id: message.id,
         timestamp: new Date().toISOString(),
