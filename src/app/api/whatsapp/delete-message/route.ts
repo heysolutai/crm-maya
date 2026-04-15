@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Publica para outras abas/dispositivos atualizarem em tempo real
-    publishEvent(auth.companyId, {
+    await publishEvent(auth.companyId, {
       type: 'message:delete',
       conversationId: message.conversationId,
       messageId,

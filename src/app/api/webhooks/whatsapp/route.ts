@@ -872,14 +872,14 @@ export async function POST(req: NextRequest) {
             conversation: { select: { companyId: true } },
           },
         });
-        for (const m of updated) {
+        await Promise.all(updated.map(m =>
           publishEvent(m.conversation.companyId, {
             type: 'message:update',
             conversationId: m.conversationId,
             messageId: m.id,
             patch: { readStatus, ...(state === 'Read' ? { readAt: new Date().toISOString() } : {}) },
-          });
-        }
+          })
+        ));
       }
 
       return jsonResponse({
@@ -951,16 +951,16 @@ export async function POST(req: NextRequest) {
       const deletedCount = deleted.count;
 
       // Cleanup das midias no B2 e publica evento realtime
-      for (const m of toDelete) {
+      await Promise.all(toDelete.map(async (m) => {
         if (m.mediaUrl) {
           deleteMediaFromUrl(m.mediaUrl).catch(() => {});
         }
-        publishEvent(m.conversation.companyId, {
+        await publishEvent(m.conversation.companyId, {
           type: 'message:delete',
           conversationId: m.conversationId,
           messageId: m.id,
         });
-      }
+      }));
 
       console.log(`[MessageDelete] Deletadas ${deletedCount} mensagens`);
 
@@ -1419,8 +1419,9 @@ export async function POST(req: NextRequest) {
 
     console.log('Created message:', message.id);
 
-    // Publica evento realtime para clientes SSE conectados
-    publishEvent(companyId, {
+    // Publica evento realtime para clientes SSE conectados (awaited — fire-and-forget
+    // pode ser cancelado pelo event loop antes do Redis confirmar o publish)
+    await publishEvent(companyId, {
       type: 'message:new',
       conversationId,
       message: {
@@ -1436,6 +1437,7 @@ export async function POST(req: NextRequest) {
         metadata: payload.metadata,
       },
     });
+    console.log(`[Realtime] publicado message:new para conversation ${conversationId} (company ${companyId})`);
 
     // Push notification: so para mensagens incoming (cliente enviou)
     if (payload.type === 'incoming') {
