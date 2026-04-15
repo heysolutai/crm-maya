@@ -555,6 +555,7 @@ curl -X POST "/api/whatsapp/connect" \\
                   { name: 'mode', type: 'enum', required: false, description: '"manual" (padrão), "round-robin" ou "department"' },
                   { name: 'target_user_id', type: 'UUID', required: false, description: 'ID do agente destino — obrigatório no modo "manual"' },
                   { name: 'department_id', type: 'UUID', required: false, description: 'ID do departamento — obrigatório no modo "department". Se nenhum agente estiver online, a conversa entra em fila (status="waiting", transferred_to=null) aguardando um agente ficar online.' },
+                  { name: 'note', type: 'string', required: false, description: 'Nota opcional (máx 3000 chars) registrada no histórico da conversa. Útil pra documentar o motivo da transferência. Funciona nos 3 modos.' },
                 ]}
                 exampleRequest={`// 1) Transferência manual para agente específico
 curl -X POST "/api/messaging/transfer" \\
@@ -582,7 +583,8 @@ curl -X POST "/api/messaging/transfer" \\
   -d '{
     "conversation_id": "uuid-da-conversa",
     "department_id": "uuid-do-departamento",
-    "mode": "department"
+    "mode": "department",
+    "note": "Cliente interessado em Ducati XDiavel — já tem orçamento aprovado"
   }'`}
                 exampleResponse={`// ─── Modo manual ou round-robin ───
 {

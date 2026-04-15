@@ -10,6 +10,7 @@ const transferSchema = z.object({
   target_user_id: z.string().uuid().optional(),
   department_id: z.string().uuid().optional(),
   mode: z.enum(['manual', 'round-robin', 'department']).optional().default('manual'),
+  note: z.string().max(3000).optional(),
 });
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
       return errorResponse('Dados inválidos', 400);
     }
 
-    const { conversation_id: conversationId, target_user_id: targetUserId, department_id: departmentId, mode } = validation.data;
+    const { conversation_id: conversationId, target_user_id: targetUserId, department_id: departmentId, mode, note } = validation.data;
 
     if (!conversationId) return badRequestResponse('conversation_id is required');
 
@@ -35,6 +36,25 @@ export async function POST(req: NextRequest) {
     });
 
     if (!conversation) return errorResponse('Conversation not found or access denied', 404);
+
+    // Helper: grava ConversationNote opcional com prefixo indicando a transferencia.
+    // Roda non-blocking — falha de auditoria nao quebra a transferencia.
+    const saveTransferNote = async (prefix: string) => {
+      const trimmed = (note || '').trim();
+      if (!trimmed) return;
+      try {
+        await prisma.conversationNote.create({
+          data: {
+            conversationId,
+            companyId: companyId || '',
+            createdBy: agentId,
+            note: `${prefix}: ${trimmed}`,
+          },
+        });
+      } catch (e) {
+        console.error('[Transfer] Falha ao registrar nota:', e);
+      }
+    };
 
     let assignedUserId: string | null = null;
 
@@ -65,6 +85,8 @@ export async function POST(req: NextRequest) {
           },
         });
 
+        await saveTransferNote(`Transferida para departamento ${dept.name} (em fila)`);
+
         console.log(`[Transfer] Conversation ${conversationId} queued in department ${dept.name} (no online agents)`);
 
         return jsonResponse({
@@ -93,6 +115,8 @@ export async function POST(req: NextRequest) {
         where: { id: assignedUserId },
         select: { fullName: true, email: true },
       });
+
+      await saveTransferNote(`Transferida para ${assignedUser?.fullName ?? 'agente'} no departamento ${dept.name}`);
 
       console.log(`[Transfer] Conversation ${conversationId} transferred to ${assignedUserId} in department ${dept.name}`);
 
@@ -130,6 +154,8 @@ export async function POST(req: NextRequest) {
       where: { id: assignedUserId! },
       select: { fullName: true, email: true },
     });
+
+    await saveTransferNote(`Transferida para ${assignedUser?.fullName ?? 'agente'} (${mode})`);
 
     console.log(`[Transfer] Conversation ${conversationId} transferred to ${assignedUserId} (mode: ${mode})`);
 
