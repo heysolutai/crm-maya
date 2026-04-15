@@ -23,7 +23,7 @@ export function useConversations(filters?: ConversationFilters) {
   const { permissions } = useUserPermissions();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [realtimeStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
+  const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
   const [usePolling] = useState(true); // Always use polling now
 
   const [conversationMessages, setConversationMessages] = useState<{
@@ -206,9 +206,20 @@ export function useConversations(filters?: ConversationFilters) {
   useEffect(() => {
     if (!companyId) return;
 
+    setRealtimeStatus('connecting');
     const es = new EventSource('/api/conversations/events');
 
+    es.addEventListener('open', () => {
+      console.log('[SSE] conectado');
+      setRealtimeStatus('connected');
+    });
+
+    es.addEventListener('connected', (evt: MessageEvent) => {
+      console.log('[SSE] handshake:', evt.data);
+    });
+
     es.addEventListener('message', (evt: MessageEvent) => {
+      console.log('[SSE] evento recebido:', evt.data);
       try {
         const data = JSON.parse(evt.data);
 
@@ -274,6 +285,7 @@ export function useConversations(filters?: ConversationFilters) {
     es.addEventListener('error', () => {
       // O browser reconecta sozinho; so logamos
       console.warn('[SSE] conexao caiu, reconectando...');
+      setRealtimeStatus('disconnected');
     });
 
     // Polling de fallback (intervalo maior, so pra cobrir buracos de SSE)
