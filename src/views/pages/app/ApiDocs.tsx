@@ -548,14 +548,15 @@ curl -X POST "/api/whatsapp/connect" \\
                 method="POST"
                 path="/api/messaging/transfer"
                 name="Transferir Conversa"
-                description="Transfere uma conversa para outro agente, manualmente ou via round-robin automático."
+                description="Transfere uma conversa em 3 modos: manual (para um agente específico), round-robin (global na empresa) ou department (round-robin apenas entre agentes ONLINE de um departamento — com fila automática se ninguém estiver online). Em todos os modos a IA é pausada automaticamente na conversa."
                 authentication="bearer"
                 bodyParameters={[
                   { name: 'conversation_id', type: 'UUID', required: true, description: 'ID da conversa a transferir' },
-                  { name: 'target_user_id', type: 'UUID', required: false, description: 'ID do agente destino (obrigatório no modo manual)' },
-                  { name: 'mode', type: 'enum', required: false, description: 'manual (padrão) ou round-robin' },
+                  { name: 'mode', type: 'enum', required: false, description: '"manual" (padrão), "round-robin" ou "department"' },
+                  { name: 'target_user_id', type: 'UUID', required: false, description: 'ID do agente destino — obrigatório no modo "manual"' },
+                  { name: 'department_id', type: 'UUID', required: false, description: 'ID do departamento — obrigatório no modo "department". Se nenhum agente estiver online, a conversa entra em fila (status="waiting", transferred_to=null) aguardando um agente ficar online.' },
                 ]}
-                exampleRequest={`// Transferência manual
+                exampleRequest={`// 1) Transferência manual para agente específico
 curl -X POST "/api/messaging/transfer" \\
   -H "Authorization: Bearer <token>" \\
   -H "Content-Type: application/json" \\
@@ -565,15 +566,26 @@ curl -X POST "/api/messaging/transfer" \\
     "mode": "manual"
   }'
 
-// Round-robin automático
+// 2) Round-robin global (qualquer agente ativo da empresa)
 curl -X POST "/api/messaging/transfer" \\
   -H "Authorization: Bearer <token>" \\
   -H "Content-Type: application/json" \\
   -d '{
     "conversation_id": "uuid-da-conversa",
     "mode": "round-robin"
+  }'
+
+// 3) Round-robin DENTRO de um departamento (apenas agentes ONLINE)
+curl -X POST "/api/messaging/transfer" \\
+  -H "Authorization: Bearer <token>" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "conversation_id": "uuid-da-conversa",
+    "department_id": "uuid-do-departamento",
+    "mode": "department"
   }'`}
-                exampleResponse={`{
+                exampleResponse={`// ─── Modo manual ou round-robin ───
+{
   "success": true,
   "conversation_id": "uuid-da-conversa",
   "transferred_to": {
@@ -582,12 +594,39 @@ curl -X POST "/api/messaging/transfer" \\
     "email": "joao@empresa.com"
   },
   "mode": "manual"
+}
+
+// ─── Modo department COM agente online ───
+{
+  "success": true,
+  "conversation_id": "uuid-da-conversa",
+  "queued": false,
+  "department": { "id": "dept-uuid", "name": "Comercial" },
+  "transferred_to": {
+    "user_id": "uuid-do-vendedor",
+    "full_name": "Maria Vendedora",
+    "email": "maria@empresa.com"
+  },
+  "mode": "department"
+}
+
+// ─── Modo department SEM agente online (fila) ───
+{
+  "success": true,
+  "conversation_id": "uuid-da-conversa",
+  "queued": true,
+  "department": { "id": "dept-uuid", "name": "Comercial" },
+  "transferred_to": null,
+  "mode": "department"
 }`}
                 errors={[
                   { code: 'UNAUTHORIZED', status: 401, message: 'Token inválido' },
-                  { code: 'MISSING_CONVERSATION', status: 400, message: 'conversation_id é obrigatório' },
-                  { code: 'MISSING_TARGET', status: 400, message: 'target_user_id obrigatório no modo manual' },
-                  { code: 'NO_AGENTS', status: 404, message: 'Nenhum agente disponível para round-robin' },
+                  { code: 'CONVERSATION_NOT_FOUND', status: 404, message: 'Conversa não encontrada ou não pertence à empresa' },
+                  { code: 'MISSING_TARGET', status: 400, message: 'target_user_id obrigatório no modo "manual"' },
+                  { code: 'MISSING_DEPARTMENT', status: 400, message: 'department_id obrigatório no modo "department"' },
+                  { code: 'DEPARTMENT_NOT_FOUND', status: 404, message: 'Departamento não encontrado ou inativo' },
+                  { code: 'TARGET_NOT_FOUND', status: 404, message: 'Agente destino não encontrado ou inativo' },
+                  { code: 'NO_AGENTS', status: 422, message: 'Nenhum agente ativo disponível para round-robin (modo round-robin)' },
                 ]}
               />
 
