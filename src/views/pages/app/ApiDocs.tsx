@@ -592,62 +592,6 @@ curl -X POST "/api/messaging/transfer" \\
               />
 
               <ApiEndpointCard
-                method="POST"
-                path="/api/conversations/:id/transfer"
-                name="Transferir Conversa para Departamento"
-                description="Transfere uma conversa para um departamento. Opcionalmente, atribui a um agente específico que seja membro desse departamento. Marca a conversa com status 'transferred', grava uma nota de transferência no histórico e registra auditoria."
-                authentication="bearer"
-                pathParameters={[
-                  { name: 'id', type: 'UUID', required: true, description: 'ID da conversa a transferir' },
-                ]}
-                bodyParameters={[
-                  { name: 'departmentId', type: 'UUID', required: true, description: 'ID do departamento destino — deve pertencer à mesma empresa e estar ativo' },
-                  { name: 'assignedTo', type: 'UUID', required: false, description: 'ID do agente destino — se informado, precisa ser membro do departamento' },
-                  { name: 'note', type: 'string', required: false, description: 'Nota opcional (máx 1000 chars) registrada no histórico da conversa' },
-                ]}
-                exampleRequest={`// Transferência apenas para o departamento (sem agente específico)
-curl -X POST "/api/conversations/8f1a9b72-3c04-4a88-9bde-1c2d3e4f5678/transfer" \\
-  -H "Authorization: Bearer <token>" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "departmentId": "dept-uuid-aqui"
-  }'
-
-// Transferência para departamento + agente específico + nota
-curl -X POST "/api/conversations/8f1a9b72-3c04-4a88-9bde-1c2d3e4f5678/transfer" \\
-  -H "Authorization: Bearer <token>" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "departmentId": "dept-uuid-aqui",
-    "assignedTo": "agent-uuid-aqui",
-    "note": "Cliente precisa de atendimento técnico especializado"
-  }'`}
-                exampleResponse={`{
-  "success": true,
-  "conversation": {
-    "id": "8f1a9b72-3c04-4a88-9bde-1c2d3e4f5678",
-    "departmentId": "dept-uuid-aqui",
-    "transferredTo": "agent-uuid-aqui",
-    "status": "transferred",
-    "department": {
-      "id": "dept-uuid-aqui",
-      "name": "Suporte Técnico",
-      "color": "#3b82f6"
-    }
-  }
-}`}
-                errors={[
-                  { code: 'UNAUTHORIZED', status: 403, message: 'Empresa não encontrada ou token inválido' },
-                  { code: 'INVALID_ID', status: 400, message: 'ID de conversa não é um UUID válido' },
-                  { code: 'VALIDATION_ERROR', status: 400, message: 'departmentId inválido ou ausente' },
-                  { code: 'CONVERSATION_NOT_FOUND', status: 404, message: 'Conversa não encontrada nesta empresa' },
-                  { code: 'INVALID_DEPARTMENT', status: 400, message: 'Departamento não pertence à empresa ou está inativo' },
-                  { code: 'AGENT_NOT_IN_DEPARTMENT', status: 400, message: 'Agente informado não é membro deste departamento' },
-                  { code: 'INVALID_AGENT', status: 400, message: 'Agente não pertence à empresa ou está inativo' },
-                ]}
-              />
-
-              <ApiEndpointCard
                 method="GET"
                 path="/api/conversations"
                 name="Listar Conversas por Departamento"
