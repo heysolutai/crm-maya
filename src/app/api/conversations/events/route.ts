@@ -5,8 +5,6 @@ import { createSubscriber, channelForCompany } from '@/lib/realtime';
 // Forca runtime Node.js (ioredis nao roda em Edge) e desabilita qualquer cache.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const fetchCache = 'force-no-store';
-export const revalidate = 0;
 
 // Server-Sent Events stream para push realtime de mensagens/conversas.
 // O cliente abre um EventSource('/api/conversations/events') e recebe:
@@ -14,11 +12,17 @@ export const revalidate = 0;
 //   - event: ping       (heartbeat a cada 25s, evita timeout de proxies)
 //   - event: message    (JSON do RealtimeEvent — uma mensagem nova/update/delete)
 export async function GET(req: NextRequest) {
-  const auth = await authenticate(req);
-  if (!auth.companyId) {
+  let companyId: string;
+  try {
+    const auth = await authenticate(req);
+    if (!auth.companyId) {
+      return new Response('Unauthorized: no company in session', { status: 401 });
+    }
+    companyId = auth.companyId;
+  } catch (err) {
+    console.warn('[SSE] auth falhou:', (err as Error).message);
     return new Response('Unauthorized', { status: 401 });
   }
-  const companyId = auth.companyId;
   const clientId = Math.random().toString(36).slice(2, 8);
   const channel = channelForCompany(companyId);
   const tag = `[SSE:${clientId}:${companyId.slice(0, 8)}]`;
