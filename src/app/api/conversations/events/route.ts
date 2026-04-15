@@ -2,25 +2,35 @@ import { NextRequest } from 'next/server';
 import { authenticate } from '@/lib/api/auth';
 import { createSubscriber, channelForCompany } from '@/lib/realtime';
 
+// Forca runtime Node.js (ioredis nao roda em Edge) e desabilita qualquer cache.
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
+
 // Server-Sent Events stream para push realtime de mensagens/conversas.
 // O cliente abre um EventSource('/api/conversations/events') e recebe:
-//   - event: ping       (heartbeat a cada 25s para evitar timeout de proxies)
-//   - event: message    (JSON do RealtimeEvent)
-export const dynamic = 'force-dynamic';
-
+//   - event: connected  (handshake inicial)
+//   - event: ping       (heartbeat a cada 25s, evita timeout de proxies)
+//   - event: message    (JSON do RealtimeEvent — uma mensagem nova/update/delete)
 export async function GET(req: NextRequest) {
   const auth = await authenticate(req);
   if (!auth.companyId) {
     return new Response('Unauthorized', { status: 401 });
   }
   const companyId = auth.companyId;
+  const clientId = Math.random().toString(36).slice(2, 8);
+  const channel = channelForCompany(companyId);
+  const tag = `[SSE:${clientId}:${companyId.slice(0, 8)}]`;
+
+  console.log(`${tag} conexao iniciada (canal=${channel})`);
 
   const encoder = new TextEncoder();
   const subscriber = createSubscriber();
-  const channel = channelForCompany(companyId);
 
   let heartbeat: ReturnType<typeof setInterval> | null = null;
   let closed = false;
+  let eventsRelayed = 0;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -28,75 +38,86 @@ export async function GET(req: NextRequest) {
         if (closed) return;
         try {
           controller.enqueue(encoder.encode(data));
-        } catch {
-          // controller closed
+        } catch (err) {
+          console.warn(`${tag} enqueue falhou:`, (err as Error).message);
+          closed = true;
         }
       };
 
-      // Evento inicial de conexao
-      send(`event: connected\ndata: ${JSON.stringify({ companyId, ts: Date.now() })}\n\n`);
+      const cleanup = async (reason: string) => {
+        if (closed) return;
+        closed = true;
+        console.log(`${tag} fechando (motivo=${reason}, eventos_relay=${eventsRelayed})`);
+        if (heartbeat) {
+          clearInterval(heartbeat);
+          heartbeat = null;
+        }
+        try { await subscriber.unsubscribe(channel); } catch { /* noop */ }
+        try { subscriber.disconnect(); } catch { /* noop */ }
+        try { controller.close(); } catch { /* noop */ }
+      };
 
-      // Heartbeat a cada 25s (proxies matam conexoes idle em ~30-60s)
+      // 1. Handshake imediato — sinaliza pro cliente que a conexao abriu
+      send(`event: connected\ndata: ${JSON.stringify({ companyId, clientId, ts: Date.now() })}\n\n`);
+
+      // 2. Registra handlers do subscriber ANTES do subscribe, pra nao perder evento
+      subscriber.on('message', (_chan, message) => {
+        eventsRelayed++;
+        console.log(`${tag} evento #${eventsRelayed} relay`);
+        send(`event: message\ndata: ${message}\n\n`);
+      });
+
+      subscriber.on('error', (err) => {
+        console.error(`${tag} subscriber error:`, err.message);
+      });
+
+      subscriber.on('end', () => {
+        console.warn(`${tag} subscriber desconectou — fechando stream`);
+        cleanup('subscriber_end');
+      });
+
+      subscriber.on('reconnecting', () => {
+        console.log(`${tag} subscriber reconectando...`);
+      });
+
+      // 3. Subscribe no canal do Redis
+      try {
+        await subscriber.subscribe(channel);
+        console.log(`${tag} subscrito em ${channel}`);
+      } catch (err) {
+        console.error(`${tag} falha ao subscribe:`, err);
+        await cleanup('subscribe_failed');
+        return;
+      }
+
+      // 4. Heartbeat — proxies cortam conexoes idle em 30-60s, ping a cada 25s
       heartbeat = setInterval(() => {
         send(`event: ping\ndata: ${Date.now()}\n\n`);
       }, 25_000);
 
-      // Subscribe no canal Redis desta company
-      try {
-        await subscriber.subscribe(channel);
-        console.log(`[SSE] subscrito em ${channel}`);
-      } catch (err) {
-        console.error('[SSE] Falha ao subscribe:', err);
-        // Sem subscriber nao tem como receber eventos — fecha stream pra forcar reconnect
-        closed = true;
-        if (heartbeat) clearInterval(heartbeat);
-        subscriber.quit().catch(() => {});
-        try { controller.close(); } catch {}
-        return;
-      }
-
-      subscriber.on('message', (_chan, message) => {
-        send(`event: message\ndata: ${message}\n\n`);
-      });
-
-      // Se o subscriber cair, fecha o stream pra EventSource do browser reconectar automaticamente
-      subscriber.on('error', (err) => {
-        console.error(`[SSE] subscriber error em ${channel}:`, err.message);
-      });
-      subscriber.on('end', () => {
-        console.warn(`[SSE] subscriber desconectou de ${channel} — fechando stream`);
-        closed = true;
-        if (heartbeat) clearInterval(heartbeat);
-        try { controller.close(); } catch {}
-      });
-
-      // Cleanup ao fechar
+      // 5. Cleanup quando o cliente fecha a aba/recarrega
       req.signal.addEventListener('abort', () => {
-        closed = true;
-        if (heartbeat) clearInterval(heartbeat);
-        subscriber.unsubscribe(channel).catch(() => {});
-        subscriber.quit().catch(() => {});
-        try {
-          controller.close();
-        } catch {
-          // already closed
-        }
+        cleanup('client_abort');
       });
     },
     cancel() {
       closed = true;
-      if (heartbeat) clearInterval(heartbeat);
+      if (heartbeat) {
+        clearInterval(heartbeat);
+        heartbeat = null;
+      }
       subscriber.unsubscribe(channel).catch(() => {});
-      subscriber.quit().catch(() => {});
+      subscriber.disconnect();
     },
   });
 
   return new Response(stream, {
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform, no-store',
       Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no', // Desabilita buffering no nginx
+      'X-Accel-Buffering': 'no', // desabilita buffering no nginx
+      'Content-Encoding': 'identity', // evita gzip quebrar o stream
     },
   });
 }
