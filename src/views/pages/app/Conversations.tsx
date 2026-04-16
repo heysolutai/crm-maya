@@ -199,21 +199,21 @@ export default function Conversations() {
 
   // Mark messages as read
   useEffect(() => {
+    if (!selectedConversation) return;
+
     const markMessagesAsRead = async () => {
-      if (!selectedConversation || messages.length === 0) return;
-
-      const unreadCount = getUnreadCount(selectedConversation);
-      if (unreadCount === 0) return;
-
-      await fetch('/api/messages/mark-read', {
+      const res = await fetch('/api/messages/mark-read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversationId: selectedConversation }),
       });
+      if (!res.ok) return;
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['total-unread-conversations'] });
     };
 
     markMessagesAsRead();
-  }, [selectedConversation, messages.length, getUnreadCount]);
+  }, [selectedConversation, queryClient]);
 
   // Poll for reaction updates (replaces realtime subscription)
   useEffect(() => {

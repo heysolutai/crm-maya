@@ -1419,6 +1419,15 @@ export async function POST(req: NextRequest) {
 
     console.log('Created message:', message.id);
 
+    try {
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: { updatedAt: new Date() },
+      });
+    } catch (bumpErr) {
+      console.error('[Conversation Update] failed to bump updatedAt', bumpErr);
+    }
+
     // Publica evento realtime para clientes SSE conectados (awaited — fire-and-forget
     // pode ser cancelado pelo event loop antes do Redis confirmar o publish)
     await publishEvent(companyId, {
