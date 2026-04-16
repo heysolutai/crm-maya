@@ -26,6 +26,7 @@ interface ConversationFiltersProps {
 type SectionKey = 'status' | 'department' | 'queue' | 'channel';
 
 const STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
+  { value: 'unread',      label: 'Não lidas',  color: '#ef4444' },
   { value: 'active',      label: 'Ativas',     color: '#10b981' },
   { value: 'waiting',     label: 'Pendentes',  color: '#f59e0b' },
   { value: 'closed',      label: 'Resolvidas', color: '#6b7280' },
@@ -65,6 +66,10 @@ export const ConversationFilters = memo(function ConversationFilters({
     for (const c of all) {
       const s = (c as any).status || 'active';
       byStatus[s] = (byStatus[s] || 0) + 1;
+
+      if (((c as any).unread_count || 0) > 0) {
+        byStatus['unread'] = (byStatus['unread'] || 0) + 1;
+      }
 
       const deptId = (c as any).department_id || (c as any).departmentId;
       if (deptId) byDept[deptId] = (byDept[deptId] || 0) + 1;
