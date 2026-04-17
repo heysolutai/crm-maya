@@ -39,9 +39,11 @@ export function useAppointments() {
 
       const res = await fetch(`/api/appointments?company_id=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch appointments');
-      const data = await res.json();
-      // Normalize if needed
-      return (Array.isArray(data) ? data : data.appointments || []).map((a: Record<string, any>) => ({
+      const payload = await res.json();
+      const raw = Array.isArray(payload)
+        ? payload
+        : payload.data?.appointments || payload.appointments || [];
+      return raw.map((a: Record<string, any>) => ({
         ...a,
         company_id: a.companyId || a.company_id,
         client_id: a.clientId || a.client_id,
