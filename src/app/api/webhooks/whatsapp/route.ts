@@ -1435,6 +1435,14 @@ export async function POST(req: NextRequest) {
       const companyData = companyDataResult;
       const conversationData = convDataResult;
 
+      // Se a mensagem e uma resposta a outra, buscar a original
+      const quotedMessage = payload.quoted_message_id
+        ? await prisma.message.findFirst({
+            where: { uazMessageId: payload.quoted_message_id, conversationId },
+            select: { id: true, messageText: true, messageType: true, senderType: true, mediaUrl: true, createdAt: true },
+          })
+        : null;
+
       const n8nWebhookUrl = companyAiConfig?.n8nWebhookUrl || process.env.N8N_AI_WEBHOOK_URL;
       const knowledgeName = companyAiConfig?.knowledge || null;
       const memoryKeyName = companyAiConfig?.memoryKey || null;
@@ -1502,6 +1510,17 @@ export async function POST(req: NextRequest) {
         is_transferred: !!conversationData?.transferredTo,
         department_id: conversationData?.department?.id || null,
         department_name: conversationData?.department?.name || null,
+        reply_to: quotedMessage
+          ? {
+              message_id: quotedMessage.id,
+              uaz_message_id: payload.quoted_message_id,
+              text: quotedMessage.messageText,
+              message_type: quotedMessage.messageType,
+              sender_type: quotedMessage.senderType,
+              media_url: quotedMessage.mediaUrl,
+              created_at: quotedMessage.createdAt,
+            }
+          : null,
         fromMe: payload.type === 'outgoing',
         stage: conversationData?.stage || null,
         media_url: fullMediaUrl,
