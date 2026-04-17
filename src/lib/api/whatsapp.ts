@@ -70,7 +70,10 @@ export async function sendToWhatsApp(
 
     const responseData = await response.json();
 
-    const uazMessageId = responseData.message_id || responseData.id || responseData.key?.id;
+    const rawUazMessageId = responseData.message_id || responseData.id || responseData.key?.id;
+    const uazMessageId = typeof rawUazMessageId === 'string' && rawUazMessageId.includes(':')
+      ? rawUazMessageId.split(':').pop()
+      : rawUazMessageId;
     console.log('[WhatsApp API] Success, UAZ ID:', uazMessageId);
 
     // IMPORTANTE: await síncrono para garantir que o uazMessageId esteja persistido
