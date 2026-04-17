@@ -1169,8 +1169,8 @@ export async function POST(req: NextRequest) {
           status: { in: ['active', 'waiting', 'transferred'] },
           channel: (payload.channel || 'whatsapp') as any,
         },
-        select: { id: true, startedAt: true },
-        orderBy: { startedAt: 'asc' },
+        select: { id: true, startedAt: true, updatedAt: true, status: true },
+        orderBy: { updatedAt: 'desc' },
       });
 
       if (activeConversations && activeConversations.length > 0) {
