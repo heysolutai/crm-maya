@@ -9,6 +9,9 @@ const createConversationSchema = z.object({
   companyId: z.string().uuid().optional(),
   company_id: z.string().uuid().optional(),
   phone: z.string().min(1),
+  name: z.string().min(1),
+  interest: z.string().optional().nullable(),
+  source: z.string().optional().nullable(),
   channel: z.string().optional(),
 })
 
@@ -100,6 +103,10 @@ export async function POST(req: NextRequest) {
     const variants = phoneVariants(rawPhone)
     const canonical = canonicalPhone(rawPhone)
 
+    const name = data.name.trim()
+    const interest = data.interest?.trim() || null
+    const source = data.source?.trim() || null
+
     // Check if client exists — matching em todas as variações (com/sem 9)
     let client = await prisma.client.findFirst({
       where: {
@@ -119,10 +126,29 @@ export async function POST(req: NextRequest) {
         data: {
           companyId,
           phone: canonical,
-          firstName: canonical,
-          source: 'manual',
+          firstName: name,
+          source: source || 'manual',
         },
         select: { id: true },
+      })
+    } else {
+      await prisma.client.update({
+        where: { id: client.id },
+        data: {
+          firstName: name,
+          ...(source ? { source } : {}),
+        },
+      })
+    }
+
+    if (interest) {
+      await prisma.clientNote.create({
+        data: {
+          clientId: client.id,
+          companyId,
+          createdBy: agentId || null,
+          note: `Interesse: ${interest}`,
+        },
       })
     }
 

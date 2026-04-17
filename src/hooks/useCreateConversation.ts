@@ -7,17 +7,24 @@ interface UseCreateConversationOptions {
   onSuccess: (conversationId: string) => void;
 }
 
+export interface CreateConversationInput {
+  name: string;
+  phone: string;
+  interest?: string;
+  source?: string;
+}
+
 export function useCreateConversation({ companyId, onSuccess }: UseCreateConversationOptions) {
   const [isCreating, setIsCreating] = useState(false);
   const queryClient = useQueryClient();
 
-  const createConversation = async (phoneNumber: string) => {
-    if (!phoneNumber.trim() || !companyId) return;
+  const createConversation = async (input: CreateConversationInput) => {
+    if (!input.phone.trim() || !input.name.trim() || !companyId) return null;
 
     setIsCreating(true);
 
     try {
-      const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+      const cleanPhone = input.phone.replace(/[^0-9]/g, '');
 
       if (cleanPhone.length < 10) {
         throw new Error('Número de telefone inválido');
@@ -29,6 +36,9 @@ export function useCreateConversation({ companyId, onSuccess }: UseCreateConvers
         body: JSON.stringify({
           companyId,
           phone: cleanPhone,
+          name: input.name.trim(),
+          interest: input.interest?.trim() || undefined,
+          source: input.source?.trim() || undefined,
           channel: 'whatsapp',
         }),
       });
@@ -41,8 +51,8 @@ export function useCreateConversation({ companyId, onSuccess }: UseCreateConvers
       const result = await res.json();
       const conversationId = result.id;
 
-      // Refresh conversations list
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
 
       onSuccess(conversationId);
 
