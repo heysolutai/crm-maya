@@ -1448,18 +1448,6 @@ export async function POST(req: NextRequest) {
       const memoryKeyName = companyAiConfig?.memoryKey || null;
       const productsKnowledgeName = companyAiConfig?.productsKnowledge || null;
 
-      const defaultBusinessHours = {
-        monday: { enabled: true, start: '08:00', end: '18:00' },
-        tuesday: { enabled: true, start: '08:00', end: '18:00' },
-        wednesday: { enabled: true, start: '08:00', end: '18:00' },
-        thursday: { enabled: true, start: '08:00', end: '18:00' },
-        friday: { enabled: true, start: '08:00', end: '18:00' },
-        saturday: { enabled: false, start: '08:00', end: '12:00' },
-        sunday: { enabled: false, start: '08:00', end: '12:00' }
-      };
-
-      const companyBusinessHours = (companyData?.settings as Record<string, unknown>)?.business_hours || defaultBusinessHours;
-
       const defaultAppointmentSettings = {
         duracao_padrao_minutos: 45,
         intervalo_slots_minutos: 5,
@@ -1510,22 +1498,21 @@ export async function POST(req: NextRequest) {
         is_transferred: !!conversationData?.transferredTo,
         department_id: conversationData?.department?.id || null,
         department_name: conversationData?.department?.name || null,
-        reply_to: quotedMessage
-          ? {
-              message_id: quotedMessage.id,
-              uaz_message_id: payload.quoted_message_id,
-              text: quotedMessage.messageText,
-              message_type: quotedMessage.messageType,
-              sender_type: quotedMessage.senderType,
-              media_url: quotedMessage.mediaUrl,
-              created_at: quotedMessage.createdAt,
-            }
-          : null,
+        ...(quotedMessage && {
+          reply_to: {
+            message_id: quotedMessage.id,
+            uaz_message_id: payload.quoted_message_id,
+            text: quotedMessage.messageText,
+            message_type: quotedMessage.messageType,
+            sender_type: quotedMessage.senderType,
+            media_url: quotedMessage.mediaUrl,
+            created_at: quotedMessage.createdAt,
+          },
+        }),
         fromMe: payload.type === 'outgoing',
         stage: conversationData?.stage || null,
         media_url: fullMediaUrl,
         company_name: companyData?.name || null,
-        horario_funcionamento: companyBusinessHours,
         configuracoes_agendamento: configuracoesAgendamento,
         ai_status: aiStatus,
         knowledge: knowledgeName,
