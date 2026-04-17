@@ -150,17 +150,22 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // If schedule_id provided, validate and auto-resolve assignedTo
+    // If schedule_id provided, validate (fail-loud) and auto-resolve assignedTo
     let resolvedScheduleId: string | null = null;
     let resolvedAssignedTo: string | null = assigned_to || null;
-    if (schedule_id) {
+    if (schedule_id !== undefined && schedule_id !== null && schedule_id !== '') {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(String(schedule_id))) {
+        return apiError(`schedule_id invalido: "${schedule_id}" nao e um UUID.`, 'INVALID_SCHEDULE_ID', 200);
+      }
       const schedule = await prisma.doctorSchedule.findFirst({
         where: { id: schedule_id, companyId },
       });
-      if (schedule) {
-        resolvedScheduleId = schedule.id;
-        if (!resolvedAssignedTo) resolvedAssignedTo = schedule.userId;
+      if (!schedule) {
+        return apiError(`Agenda ${schedule_id} nao encontrada nesta empresa.`, 'SCHEDULE_NOT_FOUND', 200);
       }
+      resolvedScheduleId = schedule.id;
+      if (!resolvedAssignedTo) resolvedAssignedTo = schedule.userId;
     }
 
     const appointment = await prisma.appointment.create({
