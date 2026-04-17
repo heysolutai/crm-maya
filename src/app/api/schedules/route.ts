@@ -21,6 +21,10 @@ const createSchema = z.object({
   }).optional(),
 });
 
+const listQuerySchema = z.object({
+  userId: z.string().uuid().optional(),
+});
+
 export async function GET(req: NextRequest) {
   const auth = await authenticate(req);
   if (!auth.companyId) {
@@ -28,8 +32,23 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const { searchParams } = new URL(req.url);
+    const validation = listQuerySchema.safeParse({
+      userId: searchParams.get("userId") ?? undefined,
+    });
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: "Dados inválidos", details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const { userId } = validation.data;
+
     const schedules = await prisma.doctorSchedule.findMany({
-      where: { companyId: auth.companyId },
+      where: {
+        companyId: auth.companyId,
+        ...(userId && { userId }),
+      },
       include: {
         user: { select: { id: true, fullName: true, email: true, avatarUrl: true } },
         _count: { select: { appointments: true } },

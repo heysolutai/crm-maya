@@ -725,7 +725,14 @@ export async function POST(req: NextRequest) {
       if (originalMessage.senderType === 'client') {
         const convData = await prisma.conversation.findUnique({
           where: { id: originalMessage.conversationId },
-          select: { companyId: true, clientId: true, stage: true, friendlyId: true },
+          select: {
+            companyId: true,
+            clientId: true,
+            stage: true,
+            friendlyId: true,
+            transferredTo: true,
+            transferAgent: { select: { id: true, fullName: true } },
+          },
         });
 
         if (convData) {
@@ -765,6 +772,8 @@ export async function POST(req: NextRequest) {
               conversation_id: originalMessage.conversationId,
               conversation_friendly_id: convData.friendlyId || null,
               client_id: convData.clientId,
+              agent_id: convData.transferAgent?.id || null,
+              nome_agente: convData.transferAgent?.fullName || null,
               fromMe: false,
               stage: convData.stage || null,
               media_url: null,
@@ -1493,7 +1502,12 @@ export async function POST(req: NextRequest) {
         }),
         prisma.conversation.findUnique({
           where: { id: conversationId },
-          select: { stage: true, friendlyId: true },
+          select: {
+            stage: true,
+            friendlyId: true,
+            transferredTo: true,
+            transferAgent: { select: { id: true, fullName: true } },
+          },
         }),
       ]);
 
@@ -1564,6 +1578,8 @@ export async function POST(req: NextRequest) {
         conversation_id: conversationId,
         conversation_friendly_id: conversationData?.friendlyId || null,
         client_id: clientId,
+        agent_id: conversationData?.transferAgent?.id || null,
+        nome_agente: conversationData?.transferAgent?.fullName || null,
         fromMe: payload.type === 'outgoing',
         stage: conversationData?.stage || null,
         media_url: fullMediaUrl,
