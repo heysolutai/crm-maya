@@ -15,6 +15,7 @@ export type ConversationFilters = {
   endDate?: string;
   tags?: string[];
   departmentId?: string;
+  assignedTo?: string;
 };
 
 export function useConversations(filters?: ConversationFilters) {
