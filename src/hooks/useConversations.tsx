@@ -150,6 +150,15 @@ export function useConversations(filters?: ConversationFilters) {
         };
       });
 
+      // Dedup defensivo: garante que nunca repete a mesma conversa na lista,
+      // mesmo se a API ou algum middleware duplicar por bug.
+      const seen = new Set<string>();
+      results = results.filter((conv: any) => {
+        if (!conv?.id || seen.has(conv.id)) return false;
+        seen.add(conv.id);
+        return true;
+      });
+
       return results;
     },
     enabled: !!companyId,
