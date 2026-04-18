@@ -329,11 +329,37 @@ function validateAndAdaptPayload(rawPayload: unknown): {
                 'sender_name:', clientName,
                 'fromMe:', uazPayload.message.fromMe);
 
-    const quotedMessageId = uazPayload.message.quoted ||
-                            uazPayload.message.quotedMsg?.messageid;
+    // Extrai o ID da mensagem citada/respondida. UAZapi entrega o quoted ID
+    // em vários formatos dependendo do tipo de mensagem e versao do provider;
+    // varremos todos os caminhos conhecidos ate achar.
+    const msgAny: any = uazPayload.message;
+    const contentAny: any = typeof msgAny.content === 'object' && msgAny.content !== null ? msgAny.content : {};
+    const rawQuotedId: string | undefined =
+      msgAny.quoted ||
+      msgAny.quotedMsg?.messageid ||
+      msgAny.quotedMessageId ||
+      msgAny.quoted_msg_id ||
+      msgAny.contextInfo?.stanzaId ||
+      msgAny.contextInfo?.quotedMessage?.id ||
+      contentAny.contextInfo?.stanzaId ||
+      contentAny.contextInfo?.quotedMessage?.id ||
+      contentAny.stanzaId ||
+      undefined;
+
+    // Normaliza: UAZapi pode devolver "owner:stanzaID"; no DB guardamos so stanzaID
+    // (fix 5f9b283 garante isso pra mensagens novas). Mantemos o comportamento
+    // simetrico aqui pra que o match em findFirst sempre funcione.
+    const quotedMessageId: string | undefined =
+      typeof rawQuotedId === 'string' && rawQuotedId.includes(':')
+        ? rawQuotedId.split(':').pop()
+        : rawQuotedId;
 
     if (quotedMessageId) {
-      console.log('[Reply Detection] quoted_message_id:', quotedMessageId);
+      console.log('[Reply Detection] quoted_message_id:', quotedMessageId, '(raw:', rawQuotedId, ')');
+    } else if (msgAny.contextInfo || contentAny.contextInfo || msgAny.quotedMsg) {
+      // Ajuda a diagnosticar quando há sinal de reply mas nao extraimos o ID
+      console.warn('[Reply Detection] contextInfo presente mas quoted_id nao extraido. Chaves:',
+        Object.keys(msgAny.contextInfo || contentAny.contextInfo || msgAny.quotedMsg || {}));
     }
 
     if (mediaUrl) {
@@ -1445,13 +1471,25 @@ export async function POST(req: NextRequest) {
       const companyData = companyDataResult;
       const conversationData = convDataResult;
 
-      // Se a mensagem e uma resposta a outra, buscar a original
+      // Se a mensagem e uma resposta a outra, buscar a original.
+      // Mensagens antigas podem estar salvas com prefixo "owner:stanzaID",
+      // por isso aceitamos match exato OU sufixo ":<stanzaID>".
       const quotedMessage = payload.quoted_message_id
         ? await prisma.message.findFirst({
-            where: { uazMessageId: payload.quoted_message_id, conversationId },
+            where: {
+              conversationId,
+              OR: [
+                { uazMessageId: payload.quoted_message_id },
+                { uazMessageId: { endsWith: `:${payload.quoted_message_id}` } },
+              ],
+            },
             select: { id: true, messageText: true, messageType: true, senderType: true, mediaUrl: true, createdAt: true },
           })
         : null;
+
+      if (payload.quoted_message_id && !quotedMessage) {
+        console.warn('[N8N Webhook] quoted_message_id presente mas nao achamos a mensagem original:', payload.quoted_message_id);
+      }
 
       const n8nWebhookUrl = companyAiConfig?.n8nWebhookUrl || process.env.N8N_AI_WEBHOOK_URL;
       const knowledgeName = companyAiConfig?.knowledge || null;
