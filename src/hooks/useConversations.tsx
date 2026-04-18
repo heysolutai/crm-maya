@@ -300,10 +300,10 @@ export function useConversations(filters?: ConversationFilters) {
       setRealtimeStatus('disconnected');
     });
 
-    // Polling de fallback (intervalo maior, so pra cobrir buracos de SSE)
+    // Polling de fallback — cobre buracos do SSE (ex: reconnect, browser sleep).
     pollingIntervalRef.current = setInterval(() => {
       queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
-    }, 15_000);
+    }, 10_000);
 
     return () => {
       es.close();

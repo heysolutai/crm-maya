@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { assignNextAgentInDepartment } from '@/lib/api/database';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
+import { publishEvent } from '@/lib/realtime';
 
 const pickupQueueSchema = z.object({});
 
@@ -70,7 +71,10 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        if (result.count > 0) pickedUp++;
+        if (result.count > 0) {
+          pickedUp++;
+          await publishEvent(companyId || '', { type: 'conversation:update', conversationId: conv.id });
+        }
       }
     }
 

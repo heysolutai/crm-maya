@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { logAction } from '@/lib/services/audit'
 import { phoneVariants, canonicalPhone } from '@/lib/api/utils'
+import { publishEvent } from '@/lib/realtime'
 import { z } from 'zod'
 
 const createConversationSchema = z.object({
@@ -186,6 +187,11 @@ export async function POST(req: NextRequest) {
       entityId: conversation.id,
     })
 
+    await publishEvent(companyId, {
+      type: 'conversation:update',
+      conversationId: conversation.id,
+    })
+
     return NextResponse.json({ id: conversation.id, existing: false }, { status: 201 })
   } catch (error) {
     console.error('Erro ao criar conversa:', error)
@@ -223,6 +229,11 @@ export async function PUT(req: NextRequest) {
       action: 'UPDATE',
       entity: 'conversation',
       entityId: conversation.id,
+    })
+
+    await publishEvent(companyId, {
+      type: 'conversation:update',
+      conversationId: conversation.id,
     })
 
     return NextResponse.json(conversation)

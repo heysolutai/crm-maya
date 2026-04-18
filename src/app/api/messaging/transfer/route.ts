@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { assignNextAgent, assignNextAgentInDepartment } from '@/lib/api/database';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
+import { publishEvent } from '@/lib/realtime';
 
 const transferSchema = z.object({
   conversation_id: z.string().uuid(),
@@ -87,6 +88,8 @@ export async function POST(req: NextRequest) {
 
         await saveTransferNote(`Transferida para departamento ${dept.name} (em fila)`);
 
+        await publishEvent(companyId || '', { type: 'conversation:update', conversationId });
+
         console.log(`[Transfer] Conversation ${conversationId} queued in department ${dept.name} (no online agents)`);
 
         return jsonResponse({
@@ -117,6 +120,8 @@ export async function POST(req: NextRequest) {
       });
 
       await saveTransferNote(`Transferida para ${assignedUser?.fullName ?? 'agente'} no departamento ${dept.name}`);
+
+      await publishEvent(companyId || '', { type: 'conversation:update', conversationId });
 
       console.log(`[Transfer] Conversation ${conversationId} transferred to ${assignedUserId} in department ${dept.name}`);
 
@@ -156,6 +161,8 @@ export async function POST(req: NextRequest) {
     });
 
     await saveTransferNote(`Transferida para ${assignedUser?.fullName ?? 'agente'} (${mode})`);
+
+    await publishEvent(companyId || '', { type: 'conversation:update', conversationId });
 
     console.log(`[Transfer] Conversation ${conversationId} transferred to ${assignedUserId} (mode: ${mode})`);
 

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { authenticate } from "@/lib/api/auth";
 import { handleCors, jsonResponse, errorResponse } from "@/lib/api/cors";
+import { publishEvent } from "@/lib/realtime";
 
 const pickupSchema = z.object({
   conversation_id: z.string().uuid(),
@@ -60,6 +61,8 @@ export async function POST(req: NextRequest) {
       where: { id: agentId },
       select: { fullName: true },
     });
+
+    await publishEvent(companyId || "", { type: "conversation:update", conversationId: conversation_id });
 
     console.log(`[Pickup] Agent ${agentId} (${agent?.fullName}) picked up conversation ${conversation_id}`);
 
