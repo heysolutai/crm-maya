@@ -15,7 +15,15 @@ export function useConversationNotes(conversationId?: string) {
 
       const res = await fetch(`/api/conversation-notes?conversationId=${conversationId}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch notes');
-      return await res.json() || [];
+      const data = (await res.json()) || [];
+      return (Array.isArray(data) ? data : []).map((n: any) => ({
+        id: n.id,
+        note: n.note,
+        created_at: n.createdAt ?? n.created_at ?? null,
+        user: n.creator
+          ? { full_name: n.creator.fullName ?? null, avatar_url: n.creator.avatarUrl ?? null }
+          : (n.user ?? null),
+      }));
     },
     enabled: !!conversationId && !!companyId,
   });

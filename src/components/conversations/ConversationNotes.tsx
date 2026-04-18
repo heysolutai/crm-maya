@@ -176,7 +176,11 @@ export function ConversationNotes({ conversationId, clientId, clientName, open, 
                               <div>
                                 <p className="text-xs font-medium">{note.user?.full_name || 'Agente'}</p>
                                 <p className="text-xs text-muted-foreground">
-                                  {format(new Date(note.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                                  {(() => {
+                                    if (!note.created_at) return '';
+                                    const d = new Date(note.created_at);
+                                    return isNaN(d.getTime()) ? '' : format(d, "dd/MM 'às' HH:mm", { locale: ptBR });
+                                  })()}
                                 </p>
                               </div>
                             </div>
@@ -331,7 +335,10 @@ function ReminderItem({
   onCancel: () => void;
 }) {
   const status = statusConfig[reminder.status] || statusConfig.pending;
-  const scheduledDate = new Date(reminder.scheduled_for);
+  const scheduledDate = reminder.scheduled_for ? new Date(reminder.scheduled_for) : null;
+  const scheduledLabel = scheduledDate && !isNaN(scheduledDate.getTime())
+    ? format(scheduledDate, "dd/MM 'às' HH:mm", { locale: ptBR })
+    : '—';
 
   return (
     <div className="p-3 rounded-lg border bg-card">
@@ -344,7 +351,7 @@ function ReminderItem({
             </Badge>
             <span className="text-xs text-muted-foreground flex items-center gap-1">
               <Calendar className="h-3 w-3" />
-              {format(scheduledDate, "dd/MM 'às' HH:mm", { locale: ptBR })}
+              {scheduledLabel}
             </span>
           </div>
           <p className="text-sm truncate">{reminder.message_text}</p>
