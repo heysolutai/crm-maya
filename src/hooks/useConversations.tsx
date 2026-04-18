@@ -153,7 +153,9 @@ export function useConversations(filters?: ConversationFilters) {
       return results;
     },
     enabled: !!companyId,
-    staleTime: 30000,
+    staleTime: 10_000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   // Fetch messages for a conversation
@@ -278,6 +280,13 @@ export function useConversations(filters?: ConversationFilters) {
               },
             };
           });
+          queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
+          return;
+        }
+
+        if (data.type === 'conversation:update') {
+          queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
+          queryClient.invalidateQueries({ queryKey: ['department-queue', companyId] });
           return;
         }
       } catch (err) {
