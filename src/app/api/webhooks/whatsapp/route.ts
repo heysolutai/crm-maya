@@ -1224,20 +1224,44 @@ export async function POST(req: NextRequest) {
     }
 
     if (!conversationId) {
-      const newConversation = await prisma.conversation.create({
-        data: {
-          companyId,
-          clientId,
-          channel: (payload.channel || 'whatsapp') as any,
-          status: 'active',
-          aiHandled: payload.type === 'outgoing',
-          stage: 'mensagem_fixa',
-        },
-        select: { id: true },
-      });
+      try {
+        const newConversation = await prisma.conversation.create({
+          data: {
+            companyId,
+            clientId,
+            channel: (payload.channel || 'whatsapp') as any,
+            status: 'active',
+            aiHandled: payload.type === 'outgoing',
+            stage: 'mensagem_fixa',
+          },
+          select: { id: true },
+        });
 
-      conversationId = newConversation.id;
-      console.log('Created new conversation:', conversationId);
+        conversationId = newConversation.id;
+        console.log('Created new conversation:', conversationId);
+      } catch (createErr: any) {
+        // P2002 = unique constraint violation. Com o partial unique index
+        // idx_conversations_one_open_per_client, significa que OUTRO processo
+        // concorrente ja criou a conversa entre o findMany e este create.
+        // Recuperamos buscando de novo em vez de explodir.
+        if (createErr?.code === 'P2002') {
+          console.warn('[Race] Outra instancia criou a conversa primeiro, buscando existente');
+          const existing = await prisma.conversation.findFirst({
+            where: {
+              companyId,
+              clientId,
+              channel: (payload.channel || 'whatsapp') as any,
+              status: { not: 'closed' },
+            },
+            orderBy: { updatedAt: 'desc' },
+            select: { id: true },
+          });
+          if (!existing) throw createErr; // caso raro: nao achamos mesmo depois do conflito
+          conversationId = existing.id;
+        } else {
+          throw createErr;
+        }
+      }
     }
 
     // 3.5. Buscar instância do WhatsApp completa (com API keys para mídia e transcrição)

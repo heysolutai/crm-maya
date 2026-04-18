@@ -43,7 +43,8 @@
       "Bash(rm \"c:/Users/yagom/OneDrive/Documentos/crm-wyarp/crm-maya/src/app/api/conversations/[id]/transfer/route.ts\")",
       "Bash(rmdir \"c:/Users/yagom/OneDrive/Documentos/crm-wyarp/crm-maya/src/app/api/conversations/[id]/transfer\")",
       "Bash(npx tsc *)",
-      "Bash(./node_modules/.bin/tsc --noEmit --incremental --skipLibCheck)"
+      "Bash(./node_modules/.bin/tsc --noEmit --incremental --skipLibCheck)",
+      "Bash(awk '/^model /{model=$2} /conversation_id|conversationId/ && model {print model; model=\"\"}' /home/yago/crm-maya/prisma/schema.prisma)"
     ],
     "additionalDirectories": [
       "/tmp"

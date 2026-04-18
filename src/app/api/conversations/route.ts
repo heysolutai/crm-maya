@@ -168,17 +168,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ id: existingConversation.id, existing: true })
     }
 
-    // Create new conversation
-    const conversation = await prisma.conversation.create({
-      data: {
-        clientId: client.id,
-        companyId,
-        status: 'active',
-        channel: (data.channel || 'whatsapp') as any,
-        startedAt: new Date(),
-      },
-      select: { id: true },
-    })
+    // Create new conversation — tratamos P2002 caso o partial unique index
+    // (idx_conversations_one_open_per_client) detecte conflito por race condition
+    let conversation: { id: string }
+    try {
+      conversation = await prisma.conversation.create({
+        data: {
+          clientId: client.id,
+          companyId,
+          status: 'active',
+          channel: (data.channel || 'whatsapp') as any,
+          startedAt: new Date(),
+        },
+        select: { id: true },
+      })
+    } catch (createErr: any) {
+      if (createErr?.code === 'P2002') {
+        const racer = await prisma.conversation.findFirst({
+          where: {
+            clientId: client.id,
+            companyId,
+            channel: (data.channel || 'whatsapp') as any,
+            status: { not: 'closed' },
+          },
+          orderBy: { updatedAt: 'desc' },
+          select: { id: true },
+        })
+        if (!racer) throw createErr
+        return NextResponse.json({ id: racer.id, existing: true })
+      }
+      throw createErr
+    }
 
     await logAction({
       companyId,
