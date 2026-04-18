@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const cutoffDate = new Date(Date.now() - 48 * 60 * 60 * 1000)
 
     const result = await prisma.$queryRawUnsafe<[{ count: bigint }]>(
-      `SELECT COUNT(*) as count FROM messages m
+      `SELECT COUNT(DISTINCT m.conversation_id) as count FROM messages m
        INNER JOIN conversations c ON c.id = m.conversation_id
        WHERE c.company_id = $1
        AND m.sender_type = 'client'

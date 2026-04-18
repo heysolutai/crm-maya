@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       where: {
         id: conversation_id,
         companyId: companyId || "",
-        status: "waiting",
+        status: "pending",
       },
       select: { id: true, departmentId: true },
     });
@@ -43,11 +43,11 @@ export async function POST(req: NextRequest) {
     const result = await prisma.conversation.updateMany({
       where: {
         id: conversation_id,
-        status: "waiting",
+        status: "pending",
       },
       data: {
         transferredTo: agentId,
-        status: "transferred",
+        status: "active",
         updatedAt: new Date(),
       },
     });

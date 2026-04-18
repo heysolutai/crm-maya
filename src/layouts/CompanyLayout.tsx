@@ -365,7 +365,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                       <p className="text-xl font-bold text-sidebar-foreground leading-none group-hover/stat:text-sidebar-primary transition-colors tabular-nums">
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </p>
-                      <p className="text-[9.5px] text-sidebar-foreground/50 mt-1 font-medium">mensagens</p>
+                      <p className="text-[9.5px] text-sidebar-foreground/50 mt-1 font-medium">conversas</p>
                     </Link>
                   )}
                   {appointmentsToday > 0 && (

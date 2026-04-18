@@ -35,9 +35,8 @@ enum CommunicationChannel {
 
 enum ConversationStatus {
   active
-  waiting
+  pending
   closed
-  transferred
 }
 
 enum SenderType {

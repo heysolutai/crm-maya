@@ -41,7 +41,9 @@
       "Bash(where node:*)",
       "Bash(where npm:*)",
       "Bash(rm \"c:/Users/yagom/OneDrive/Documentos/crm-wyarp/crm-maya/src/app/api/conversations/[id]/transfer/route.ts\")",
-      "Bash(rmdir \"c:/Users/yagom/OneDrive/Documentos/crm-wyarp/crm-maya/src/app/api/conversations/[id]/transfer\")"
+      "Bash(rmdir \"c:/Users/yagom/OneDrive/Documentos/crm-wyarp/crm-maya/src/app/api/conversations/[id]/transfer\")",
+      "Bash(npx tsc *)",
+      "Bash(./node_modules/.bin/tsc --noEmit --incremental --skipLibCheck)"
     ],
     "additionalDirectories": [
       "/tmp"

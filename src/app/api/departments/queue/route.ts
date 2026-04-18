@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
       by: ["departmentId"],
       where: {
         companyId,
-        status: "waiting",
+        status: "pending",
         departmentId: { not: null },
       },
       _count: { id: true },
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
     // Total waiting (including without department)
     const totalWaiting = await prisma.conversation.count({
-      where: { companyId, status: "waiting" },
+      where: { companyId, status: "pending" },
     });
 
     return NextResponse.json({ queues: result, totalWaiting });

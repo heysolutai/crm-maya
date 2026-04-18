@@ -26,10 +26,10 @@ interface ConversationFiltersProps {
 type SectionKey = 'status' | 'department' | 'queue' | 'channel';
 
 const STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
-  { value: 'unread',      label: 'Não lidas',  color: '#ef4444' },
-  { value: 'active',      label: 'Ativas',     color: '#10b981' },
-  { value: 'waiting',     label: 'Pendentes',  color: '#f59e0b' },
-  { value: 'closed',      label: 'Resolvidas', color: '#6b7280' },
+  { value: 'unread',      label: 'Não lidas',    color: '#ef4444' },
+  { value: 'active',      label: 'Ativas',       color: '#10b981' },
+  { value: 'pending',     label: 'Pendentes',    color: '#f59e0b' },
+  { value: 'closed',      label: 'Fechadas',     color: '#6b7280' },
   { value: 'transferred', label: 'Transferidas', color: '#8b5cf6' },
 ];
 
@@ -69,6 +69,10 @@ export const ConversationFilters = memo(function ConversationFilters({
 
       if (((c as any).unread_count || 0) > 0) {
         byStatus['unread'] = (byStatus['unread'] || 0) + 1;
+      }
+
+      if ((c as any).transferred_user) {
+        byStatus['transferred'] = (byStatus['transferred'] || 0) + 1;
       }
 
       const deptId = (c as any).department_id || (c as any).departmentId;

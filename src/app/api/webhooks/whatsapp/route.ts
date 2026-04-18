@@ -1166,7 +1166,7 @@ export async function POST(req: NextRequest) {
         where: {
           companyId,
           clientId,
-          status: { in: ['active', 'waiting', 'transferred'] },
+          status: { in: ['active', 'pending'] },
           channel: (payload.channel || 'whatsapp') as any,
         },
         select: { id: true, startedAt: true, updatedAt: true, status: true },

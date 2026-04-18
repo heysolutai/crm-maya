@@ -90,9 +90,12 @@ export const ConversationSidebar = memo(function ConversationSidebar({
 }: ConversationSidebarProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const filteredConversations = statusFilter === 'unread'
-    ? conversations?.filter((c) => (c.unread_count || 0) > 0)
-    : conversations;
+  const filteredConversations =
+    statusFilter === 'unread'
+      ? conversations?.filter((c) => (c.unread_count || 0) > 0)
+      : statusFilter === 'transferred'
+        ? conversations?.filter((c) => !!c.transferred_user)
+        : conversations;
 
   return (
     <div className="w-full md:w-[420px] border-r border-border flex flex-col h-full min-h-0">
@@ -271,10 +274,10 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                     <div className="flex items-center gap-1.5 mt-1">
                       <div className={cn(
                         "w-1.5 h-1.5 rounded-full shrink-0",
-                        conv.status === 'active' && "bg-green-500",
-                        conv.status === 'waiting' && "bg-yellow-500",
+                        conv.status === 'active' && !conv.transferred_user && "bg-green-500",
+                        conv.status === 'pending' && "bg-yellow-500",
                         conv.status === 'closed' && "bg-gray-400",
-                        conv.status === 'transferred' && "bg-blue-500"
+                        conv.status === 'active' && conv.transferred_user && "bg-blue-500"
                       )} />
                       <span className="text-[11px] text-muted-foreground truncate">
                         {conv.transferred_user
@@ -293,7 +296,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                           </span>
                         </>
                       )}
-                      {conv.status === 'waiting' && onPickupConversation && (
+                      {conv.status === 'pending' && onPickupConversation && (
                         <>
                           <span className="text-muted-foreground/40">·</span>
                           <button

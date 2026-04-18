@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
         select: { id: true, name: true, color: true },
       }),
       prisma.conversation.count({
-        where: { companyId, status: { in: ['active', 'waiting'] } },
+        where: { companyId, status: { in: ['active', 'pending'] } },
       }),
       prisma.appointment.count({
         where: {

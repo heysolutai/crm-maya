@@ -438,7 +438,7 @@ export function useConversations(filters?: ConversationFilters) {
         body: JSON.stringify({
           id: conversationId,
           transferredTo: userId,
-          status: 'transferred',
+          status: 'active',
           aiHandled: false,
         }),
       });

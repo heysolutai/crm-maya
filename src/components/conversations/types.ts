@@ -1,17 +1,15 @@
-export type ConversationStatus = 'active' | 'waiting' | 'closed' | 'transferred';
+export type ConversationStatus = 'active' | 'pending' | 'closed';
 
 export const statusColors: Record<ConversationStatus, string> = {
   active: 'bg-green-500',
-  waiting: 'bg-yellow-500',
+  pending: 'bg-yellow-500',
   closed: 'bg-gray-500',
-  transferred: 'bg-blue-500',
 };
 
 export const statusLabels: Record<ConversationStatus, string> = {
   active: 'Ativa',
-  waiting: 'Aguardando',
+  pending: 'Pendente',
   closed: 'Fechada',
-  transferred: 'Transferida',
 };
 
 export interface Message {

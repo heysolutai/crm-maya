@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
           data: {
             departmentId,
             transferredTo: null,
-            status: 'waiting',
+            status: 'pending',
             aiHandled: false,
             updatedAt: new Date(),
           },
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
         data: {
           transferredTo: assignedUserId,
           departmentId,
-          status: 'transferred',
+          status: 'active',
           aiHandled: false,
           updatedAt: new Date(),
         },

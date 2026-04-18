@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
         departmentId: { in: departmentIds },
         transferredTo: null,
         companyId: companyId || '',
-        status: 'waiting',
+        status: 'pending',
       },
       select: { id: true, departmentId: true },
       orderBy: { updatedAt: 'asc' },
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
           },
           data: {
             transferredTo: assignedId,
-            status: 'transferred',
+            status: 'active',
             updatedAt: new Date(),
           },
         });

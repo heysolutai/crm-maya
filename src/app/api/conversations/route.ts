@@ -15,7 +15,7 @@ const createConversationSchema = z.object({
   channel: z.string().optional(),
 })
 
-const conversationStatusEnum = z.enum(['active', 'waiting', 'closed', 'transferred'])
+const conversationStatusEnum = z.enum(['active', 'pending', 'closed'])
 
 const updateConversationSchema = z.object({
   id: z.string().uuid(),
@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
       where: {
         clientId: client.id,
         companyId,
-        status: { in: ['active', 'waiting'] },
+        status: { in: ['active', 'pending'] },
       },
       select: { id: true },
     })

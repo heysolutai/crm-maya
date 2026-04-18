@@ -65,7 +65,7 @@ export default function Conversations() {
 
   const filters = {
     search,
-    status: statusFilter !== 'all' && statusFilter !== 'unread' ? statusFilter : undefined,
+    status: statusFilter !== 'all' && statusFilter !== 'unread' && statusFilter !== 'transferred' ? statusFilter : undefined,
     tags: tagFilters.length > 0 ? tagFilters : undefined,
     departmentId: departmentFilter !== 'all' ? departmentFilter : undefined,
   };

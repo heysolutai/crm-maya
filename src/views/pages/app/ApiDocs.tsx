@@ -554,7 +554,7 @@ curl -X POST "/api/whatsapp/connect" \\
                   { name: 'conversation_id', type: 'UUID', required: true, description: 'ID da conversa a transferir' },
                   { name: 'mode', type: 'enum', required: false, description: '"manual" (padrão), "round-robin" ou "department"' },
                   { name: 'target_user_id', type: 'UUID', required: false, description: 'ID do agente destino — obrigatório no modo "manual"' },
-                  { name: 'department_id', type: 'UUID', required: false, description: 'ID do departamento — obrigatório no modo "department". Se nenhum agente estiver online, a conversa entra em fila (status="waiting", transferred_to=null) aguardando um agente ficar online.' },
+                  { name: 'department_id', type: 'UUID', required: false, description: 'ID do departamento — obrigatório no modo "department". Se nenhum agente estiver online, a conversa entra em fila (status="pending", transferred_to=null) aguardando um agente ficar online.' },
                   { name: 'note', type: 'string', required: false, description: 'Nota opcional (máx 3000 chars) registrada no histórico da conversa. Útil pra documentar o motivo da transferência. Funciona nos 3 modos.' },
                 ]}
                 exampleRequest={`// 1) Transferência manual para agente específico
@@ -648,15 +648,15 @@ curl -X POST "/api/messaging/transfer" \\
 curl "/api/conversations?departmentId=dept-uuid-aqui" \\
   -H "Authorization: Bearer <token>"
 
-// Listar conversas transferidas (todas as que passaram por algum departamento)
-curl "/api/conversations?status=transferred" \\
+// Listar conversas transferidas (filtro no frontend via transferredTo)
+curl "/api/conversations?assignedTo=<user-uuid>" \\
   -H "Authorization: Bearer <token>"`}
                 exampleResponse={`[
   {
     "id": "conv-uuid",
     "clientId": "client-uuid",
     "channel": "whatsapp",
-    "status": "transferred",
+    "status": "active",
     "departmentId": "dept-uuid",
     "transferredTo": "agent-uuid",
     "department": {
