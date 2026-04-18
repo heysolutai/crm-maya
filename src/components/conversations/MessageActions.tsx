@@ -50,7 +50,7 @@ export const MessageActions = ({
             <MoreVertical className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuContent align={isClient ? 'end' : 'start'} className="w-44">
           <DropdownMenuItem onClick={onReply}>
             <Reply className="h-4 w-4 mr-2" />
             Responder

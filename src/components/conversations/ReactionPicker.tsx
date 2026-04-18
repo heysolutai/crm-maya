@@ -8,11 +8,12 @@ import {
 
 interface ReactionPickerProps {
   onReactionSelect: (emoji: string) => void;
+  align?: 'start' | 'center' | 'end';
 }
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
-export const ReactionPicker = ({ onReactionSelect }: ReactionPickerProps) => {
+export const ReactionPicker = ({ onReactionSelect, align = 'start' }: ReactionPickerProps) => {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -24,7 +25,7 @@ export const ReactionPicker = ({ onReactionSelect }: ReactionPickerProps) => {
           <Smile className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-2" align="start">
+      <PopoverContent className="w-auto p-2" align={align}>
         <div className="flex gap-1">
           {QUICK_REACTIONS.map((emoji) => (
             <button
