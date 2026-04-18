@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import type { WhatsAppInstance } from './types';
 import { phoneVariants, canonicalPhone } from './utils';
+import { publishEvent } from '@/lib/realtime';
 
 export async function getWhatsAppInstance(companyId: string): Promise<WhatsAppInstance> {
   const instance = await prisma.whatsappInstance.findFirst({
@@ -122,6 +123,35 @@ export async function saveMessage(
   if (!message) {
     console.error('[Database] Error saving message');
     throw new Error('Failed to save message to database');
+  }
+
+  // Push realtime pra qualquer browser conectado ao SSE da empresa:
+  // agentes/IA vendo a conversa aberta recebem a mensagem imediatamente,
+  // em vez de esperar o echo do webhook (segundos depois) ou o polling de 10s.
+  // Falha de publish nao quebra a operacao principal.
+  try {
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { companyId: true },
+    });
+    if (conv?.companyId) {
+      await publishEvent(conv.companyId, {
+        type: 'message:new',
+        conversationId,
+        message: {
+          id: message.id,
+          conversationId,
+          senderType: message.senderType,
+          messageText: message.messageText,
+          messageType: message.messageType,
+          mediaUrl: message.mediaUrl,
+          createdAt: message.createdAt,
+          metadata: message.metadata,
+        },
+      });
+    }
+  } catch (err) {
+    console.warn('[saveMessage] publishEvent falhou (nao bloqueante):', (err as Error).message);
   }
 
   return message;
