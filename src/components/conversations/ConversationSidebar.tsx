@@ -10,7 +10,7 @@ import { RealtimeStatusIndicator } from '@/components/conversations/RealtimeStat
 import { ConversationFilters } from '@/components/conversations/ConversationFilters';
 import { ConversationListSkeleton } from '@/components/ui/skeleton-list';
 import { cn, formatRelativeTime } from '@/lib/utils';
-import { getInitials, type Conversation, type LastMessage } from './types';
+import { getInitials, type Conversation, type LastMessage, type TeamMember } from './types';
 
 function getMessagePreview(msg: LastMessage | null | undefined): { icon?: React.ReactNode; text: string } {
   if (!msg) return { text: '' };
@@ -53,6 +53,9 @@ interface ConversationSidebarProps {
   onStatusFilterChange: (value: string) => void;
   departmentFilter: string;
   onDepartmentFilterChange: (value: string) => void;
+  userFilter: string;
+  onUserFilterChange: (value: string) => void;
+  teamMembers: TeamMember[];
   departments: Department[];
   queueCounts: Record<string, number>;
   tagFilters: string[];
@@ -76,6 +79,9 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   onStatusFilterChange,
   departmentFilter,
   onDepartmentFilterChange,
+  userFilter,
+  onUserFilterChange,
+  teamMembers,
   departments,
   queueCounts,
   tagFilters,
@@ -133,11 +139,14 @@ export const ConversationSidebar = memo(function ConversationSidebar({
               onOpenChange={setFiltersOpen}
               conversations={conversations}
               departments={departments}
+              teamMembers={teamMembers}
               queueCounts={queueCounts}
               statusFilter={statusFilter}
               onStatusFilterChange={onStatusFilterChange}
               departmentFilter={departmentFilter}
               onDepartmentFilterChange={onDepartmentFilterChange}
+              userFilter={userFilter}
+              onUserFilterChange={onUserFilterChange}
             />
           </div>
 

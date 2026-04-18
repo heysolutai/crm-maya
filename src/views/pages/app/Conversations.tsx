@@ -46,6 +46,7 @@ export default function Conversations() {
   const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('conversation') ? 'all' : 'active');
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [userFilter, setUserFilter] = useState<string>('all');
   
   // Dialog states
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
@@ -68,6 +69,7 @@ export default function Conversations() {
     status: statusFilter !== 'all' && statusFilter !== 'unread' && statusFilter !== 'transferred' ? statusFilter : undefined,
     tags: tagFilters.length > 0 ? tagFilters : undefined,
     departmentId: departmentFilter !== 'all' ? departmentFilter : undefined,
+    assignedTo: userFilter !== 'all' ? userFilter : undefined,
   };
 
   // Hooks
@@ -351,6 +353,9 @@ export default function Conversations() {
           onStatusFilterChange={setStatusFilter}
           departmentFilter={departmentFilter}
           onDepartmentFilterChange={setDepartmentFilter}
+          userFilter={userFilter}
+          onUserFilterChange={setUserFilter}
+          teamMembers={(teamMembers as TeamMember[]) || []}
           departments={(departments || []).map((d: any) => ({ id: d.id, name: d.name, color: d.color || '#6b7280' }))}
           queueCounts={queueCounts}
           tagFilters={tagFilters}

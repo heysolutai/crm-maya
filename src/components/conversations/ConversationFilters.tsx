@@ -1,9 +1,9 @@
 import { memo, useState, useMemo } from 'react';
-import { ChevronDown, SlidersHorizontal, Building2, Users, MessageCircle, Activity } from 'lucide-react';
+import { ChevronDown, SlidersHorizontal, Building2, Users, MessageCircle, Activity, UserCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import type { Conversation } from './types';
+import type { Conversation, TeamMember } from './types';
 
 interface Department {
   id: string;
@@ -16,14 +16,17 @@ interface ConversationFiltersProps {
   onOpenChange: (open: boolean) => void;
   conversations: Conversation[] | undefined;
   departments: Department[];
+  teamMembers: TeamMember[];
   queueCounts: Record<string, number>;
   statusFilter: string;
   onStatusFilterChange: (value: string) => void;
   departmentFilter: string;
   onDepartmentFilterChange: (value: string) => void;
+  userFilter: string;
+  onUserFilterChange: (value: string) => void;
 }
 
-type SectionKey = 'status' | 'department' | 'queue' | 'channel';
+type SectionKey = 'status' | 'department' | 'user' | 'queue' | 'channel';
 
 const STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
   { value: 'unread',      label: 'Não lidas',    color: '#ef4444' },
@@ -42,15 +45,19 @@ export const ConversationFilters = memo(function ConversationFilters({
   onOpenChange,
   conversations,
   departments,
+  teamMembers,
   queueCounts,
   statusFilter,
   onStatusFilterChange,
   departmentFilter,
   onDepartmentFilterChange,
+  userFilter,
+  onUserFilterChange,
 }: ConversationFiltersProps) {
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({
     status: true,
     department: true,
+    user: true,
     queue: false,
     channel: false,
   });
@@ -60,6 +67,7 @@ export const ConversationFilters = memo(function ConversationFilters({
     const all = conversations || [];
     const byStatus: Record<string, number> = {};
     const byDept: Record<string, number> = {};
+    const byUser: Record<string, number> = {};
     let channelWhatsapp = 0;
     let queueTotal = 0;
 
@@ -78,6 +86,9 @@ export const ConversationFilters = memo(function ConversationFilters({
       const deptId = (c as any).department_id || (c as any).departmentId;
       if (deptId) byDept[deptId] = (byDept[deptId] || 0) + 1;
 
+      const userId = (c as any).transferredTo || (c as any).transferred_to;
+      if (userId) byUser[userId] = (byUser[userId] || 0) + 1;
+
       const ch = (c as any).channel || 'whatsapp';
       if (ch === 'whatsapp') channelWhatsapp++;
     }
@@ -86,13 +97,14 @@ export const ConversationFilters = memo(function ConversationFilters({
       queueTotal += queueCounts[dept.id] || 0;
     }
 
-    return { byStatus, byDept, channelWhatsapp, queueTotal };
+    return { byStatus, byDept, byUser, channelWhatsapp, queueTotal };
   }, [conversations, departments, queueCounts]);
 
   // Conta filtros ativos (considerando "all" como sem filtro)
   const activeCount =
     (statusFilter && statusFilter !== 'all' ? 1 : 0) +
-    (departmentFilter && departmentFilter !== 'all' ? 1 : 0);
+    (departmentFilter && departmentFilter !== 'all' ? 1 : 0) +
+    (userFilter && userFilter !== 'all' ? 1 : 0);
 
   const toggle = (key: SectionKey) =>
     setSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -105,9 +117,14 @@ export const ConversationFilters = memo(function ConversationFilters({
     onDepartmentFilterChange(departmentFilter === value ? 'all' : value);
   };
 
+  const handleSelectUser = (value: string) => {
+    onUserFilterChange(userFilter === value ? 'all' : value);
+  };
+
   const clearAll = () => {
     onStatusFilterChange('all');
     onDepartmentFilterChange('all');
+    onUserFilterChange('all');
   };
 
   return (
@@ -175,6 +192,30 @@ export const ConversationFilters = memo(function ConversationFilters({
                   onClick={() => handleSelectDept(dept.id)}
                 />
               ))
+            )}
+          </FilterSection>
+
+          <FilterSection
+            label="Responsável"
+            icon={<UserCircle2 className="h-3.5 w-3.5" />}
+            open={sections.user}
+            onToggle={() => toggle('user')}
+          >
+            {teamMembers.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-muted-foreground">Nenhum membro da equipe</p>
+            ) : (
+              teamMembers
+                .filter((u) => u.is_active !== false)
+                .map((u) => (
+                  <FilterItem
+                    key={u.id}
+                    checked={userFilter === u.id}
+                    color="#64748b"
+                    label={u.full_name || u.email}
+                    count={counts.byUser[u.id] || 0}
+                    onClick={() => handleSelectUser(u.id)}
+                  />
+                ))
             )}
           </FilterSection>
 

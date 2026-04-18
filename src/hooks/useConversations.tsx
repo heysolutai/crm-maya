@@ -74,6 +74,8 @@ export function useConversations(filters?: ConversationFilters) {
       if (role && !['super_admin', 'company_admin', 'manager'].includes(role) &&
           permissions.conversation_access !== 'all' && user?.id) {
         params.set('assignedTo', user.id);
+      } else if (filters?.assignedTo) {
+        params.set('assignedTo', filters.assignedTo);
       }
 
       if (filters?.status) params.set('status', filters.status);
