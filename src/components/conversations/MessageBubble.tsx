@@ -116,7 +116,7 @@ export const MessageBubble = memo(function MessageBubble({
 
         {/* Bolha da mensagem */}
         <div className={`flex items-center gap-1.5 ${
-          !isClient ? 'self-end' : 'self-start'
+          !isClient ? 'self-end flex-row-reverse' : 'self-start'
         }`}>
           <div
             className={`relative rounded-lg px-[9px] py-[6px] shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] ${

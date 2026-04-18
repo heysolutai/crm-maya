@@ -26,6 +26,7 @@ export const MessageActions = ({
   onDelete,
   onReact,
   onForward,
+  isClient = true,
 }: MessageActionsProps) => {
   const handleCopy = () => {
     if (!messageText) return;
