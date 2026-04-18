@@ -207,21 +207,40 @@ export const MessageBubble = memo(function MessageBubble({
                 )}
               </div>
             ) : msg.message_type === 'document' && msg.media_url ? (
-              <div className="space-y-2">
-                <SecureDocumentUrl src={msg.media_url}>
-                  {(signedUrl, isLoading) => (
-                    <DocumentPreview
-                      fileName={(msg.metadata as any)?.docName || msg.message_text || 'Documento'}
-                      fileUrl={signedUrl || msg.media_url!}
-                      fileSize={(msg.metadata as any)?.fileSize}
-                      isClient={isClient}
-                    />
-                  )}
-                </SecureDocumentUrl>
-                {(msg.metadata as any)?.text && (msg.metadata as any).text !== (msg.metadata as any)?.docName && (
-                  <p className="text-sm mt-2">{(msg.metadata as any).text}</p>
-                )}
-              </div>
+              (() => {
+                const meta = (msg.metadata as any) || {};
+                const urlFileName = (() => {
+                  if (!msg.media_url) return null;
+                  try {
+                    const u = new URL(msg.media_url);
+                    const last = u.pathname.split('/').pop();
+                    if (last && last.includes('.')) return decodeURIComponent(last);
+                  } catch {}
+                  return null;
+                })();
+                const legacyLabels = ['[Media]', '📄 Documento', 'Documento'];
+                const textFallback = msg.message_text && !legacyLabels.includes(msg.message_text.trim())
+                  ? msg.message_text
+                  : null;
+                const fileName = meta.docName || urlFileName || textFallback || 'Documento';
+                return (
+                  <div className="space-y-2">
+                    <SecureDocumentUrl src={msg.media_url}>
+                      {(signedUrl, isLoading) => (
+                        <DocumentPreview
+                          fileName={fileName}
+                          fileUrl={signedUrl || msg.media_url!}
+                          fileSize={meta.fileSize}
+                          isClient={isClient}
+                        />
+                      )}
+                    </SecureDocumentUrl>
+                    {meta.text && meta.text !== meta.docName && meta.text !== fileName && (
+                      <p className="text-sm mt-2">{meta.text}</p>
+                    )}
+                  </div>
+                );
+              })()
             ) : msg.message_type === 'sticker' && msg.media_url ? (
               <div className="space-y-1">
                 <SecureImage 

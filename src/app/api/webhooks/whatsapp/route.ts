@@ -400,6 +400,16 @@ function validateAndAdaptPayload(rawPayload: unknown): {
             address: (uazPayload.message.content as any).address || (uazPayload.message.content as any).name,
             name: (uazPayload.message.content as any).name,
           } : {}),
+          ...(messageType === 'document' && typeof uazPayload.message.content === 'object' && uazPayload.message.content !== null ? {
+            docName: (uazPayload.message.content as any).fileName
+              || (uazPayload.message.content as any).title
+              || (uazPayload.message.content as any).name
+              || null,
+            fileSize: (uazPayload.message.content as any).fileLength
+              || (uazPayload.message.content as any).fileSize
+              || null,
+            mimeType: (uazPayload.message.content as any).mimetype || null,
+          } : {}),
         },
       }
     };
