@@ -153,13 +153,14 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Check for existing active conversation
+    // Check for existing open conversation (qualquer status != closed)
     const existingConversation = await prisma.conversation.findFirst({
       where: {
         clientId: client.id,
         companyId,
-        status: { in: ['active', 'pending'] },
+        status: { not: 'closed' },
       },
+      orderBy: { updatedAt: 'desc' },
       select: { id: true },
     })
 

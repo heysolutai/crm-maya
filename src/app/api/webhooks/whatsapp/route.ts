@@ -1198,11 +1198,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (!conversationId) {
+      // Filtra "nao fechadas" em vez de lista explicita de status. Cobre qualquer
+      // valor residual (incluindo o antigo 'transferred' ou 'waiting') e protege
+      // contra futuras mudancas de enum criarem conversa duplicada.
       const activeConversations = await prisma.conversation.findMany({
         where: {
           companyId,
           clientId,
-          status: { in: ['active', 'pending'] },
+          status: { not: 'closed' },
           channel: (payload.channel || 'whatsapp') as any,
         },
         select: { id: true, startedAt: true, updatedAt: true, status: true },
@@ -1213,10 +1216,10 @@ export async function POST(req: NextRequest) {
         conversationId = activeConversations[0].id;
 
         if (activeConversations.length > 1) {
-          console.warn(`[Warning] Client ${clientId} has ${activeConversations.length} active conversations. Using oldest: ${conversationId}. Duplicates: ${activeConversations.slice(1).map(c => c.id).join(', ')}`);
+          console.warn(`[Warning] Client ${clientId} has ${activeConversations.length} open conversations. Using most recent: ${conversationId}. Duplicates: ${activeConversations.slice(1).map(c => c.id).join(', ')}`);
         }
 
-        console.log('Found existing active conversation:', conversationId);
+        console.log('Found existing open conversation:', conversationId, 'status:', activeConversations[0].status);
       }
     }
 
