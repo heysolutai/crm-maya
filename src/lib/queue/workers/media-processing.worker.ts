@@ -9,7 +9,7 @@ async function downloadViaUazAPI(
   messageKey: string,
   apiKey: string,
   apiUrl: string
-): Promise<{ buffer: Buffer; mimeType: string } | null> {
+): Promise<{ buffer: Buffer; mimeType: string; fileName?: string } | null> {
   try {
     const url = `${apiUrl}/message/download`
     console.log(`[Media Worker] UazAPI download, id: ${messageKey}`)
@@ -42,6 +42,7 @@ async function downloadViaUazAPI(
     // UazAPI pode retornar base64 em diferentes campos
     const rawBase64 = result.base64Data || result.base64 || result.data || result.file || result.content
     const mimeType = result.mimetype || result.mimeType || result.mime_type || 'application/octet-stream'
+    const fileName = result.fileName || result.filename || result.title || result.name || undefined
 
     if (rawBase64 && rawBase64.length > 10) {
       // Strip data URI prefix if present
@@ -50,8 +51,8 @@ async function downloadViaUazAPI(
       if (commaIdx !== -1 && commaIdx < 100) cleanBase64 = cleanBase64.substring(commaIdx + 1)
       cleanBase64 = cleanBase64.replace(/[\s\r\n]/g, '')
       const buffer = Buffer.from(cleanBase64, 'base64')
-      console.log(`[Media Worker] Base64 decoded: ${buffer.length} bytes, mime: ${mimeType}`)
-      return { buffer, mimeType }
+      console.log(`[Media Worker] Base64 decoded: ${buffer.length} bytes, mime: ${mimeType}, fileName: ${fileName ?? '(none)'}`)
+      return { buffer, mimeType, fileName }
     }
 
     // Fallback: se a UazAPI retornou um fileURL, baixar diretamente
@@ -67,7 +68,7 @@ async function downloadViaUazAPI(
       const buffer = Buffer.from(arrayBuf)
       const fileMime = fileRes.headers.get('content-type') || mimeType
       console.log(`[Media Worker] fileURL downloaded: ${buffer.length} bytes, mime: ${fileMime}`)
-      return { buffer, mimeType: fileMime.split(';')[0].trim() }
+      return { buffer, mimeType: fileMime.split(';')[0].trim(), fileName }
     }
 
     console.error('[Media Worker] UazAPI returned no base64 data:', Object.keys(result))
@@ -160,11 +161,28 @@ async function processMedia(job: Job<MediaProcessingJob>) {
     throw new Error(`Failed to upload media to storage for message ${messageId}`)
   }
 
-  // Update message with storage path
-  await prisma.message.update({
-    where: { id: messageId },
-    data: { mediaUrl: storagePath },
-  })
+  // Update message with storage path + enrich metadata for documents
+  if (mediaType === 'document') {
+    const existing = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: { metadata: true },
+    })
+    const prevMeta = (existing?.metadata as Record<string, unknown>) || {}
+    const enriched: Record<string, unknown> = { ...prevMeta }
+    if (!enriched.docName && mediaData.fileName) enriched.docName = mediaData.fileName
+    if (!enriched.fileSize) enriched.fileSize = mediaData.buffer.length
+    if (!enriched.mimeType) enriched.mimeType = mediaData.mimeType
+
+    await prisma.message.update({
+      where: { id: messageId },
+      data: { mediaUrl: storagePath, metadata: enriched as any },
+    })
+  } else {
+    await prisma.message.update({
+      where: { id: messageId },
+      data: { mediaUrl: storagePath },
+    })
+  }
 
   console.log(`[Media Worker] Uploaded to: ${storagePath}`)
 
