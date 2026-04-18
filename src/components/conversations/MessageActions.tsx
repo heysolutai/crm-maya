@@ -39,7 +39,7 @@ export const MessageActions = ({
 
   return (
     <div className="flex items-center gap-1">
-      <ReactionPicker onReactionSelect={onReact} />
+      <ReactionPicker onReactionSelect={onReact} align={isClient ? 'start' : 'end'} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
