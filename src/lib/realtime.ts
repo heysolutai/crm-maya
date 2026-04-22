@@ -54,12 +54,9 @@ export async function publishEvent(companyId: string, event: RealtimeEvent): Pro
   try {
     const channel = channelForCompany(companyId);
     const result = await getPublisher().publish(channel, JSON.stringify(event));
-    if (result === 0) {
-      // publish retorna numero de subscribers que receberam.
-      // 0 = nenhum cliente conectado naquele momento (comum se ninguem abriu a UI).
-      // Nao e erro, mas log debug pra facilitar diagnostico.
-      console.log(`[Realtime] publish ${event.type} em ${channel} — 0 subscribers (ninguem online)`);
-    }
+    // Publish retorna numero de subscribers que receberam o evento. Logamos
+    // sempre pra facilitar diagnostico quando o frontend nao atualiza em tempo real.
+    console.log(`[Realtime] publish ${event.type} em ${channel} — ${result} subscriber(s)`);
   } catch (err) {
     console.error('[Realtime] publish falhou:', event.type, err);
   }

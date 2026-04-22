@@ -4,7 +4,7 @@ import { useAuth } from './useAuth';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { useUserPermissions } from './useUserPermissions';
 import { useToast } from './use-toast';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { getErrorMessage } from '@/utils/getErrorMessage';
 
 export type ConversationFilters = {
@@ -38,6 +38,12 @@ export function useConversations(filters?: ConversationFilters) {
   }>({});
 
   const pollingIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Ref "mirror" do state — permite que callbacks memoizados (useCallback com deps [])
+  // leiam o estado mais recente sem recriar a funcao a cada render. Necessario
+  // pra loadInitialMessages/loadOlderMessages nao invalidarem o effect do
+  // useConversationScroll (que resetaria o scroll do usuario a cada render).
+  const conversationMessagesRef = useRef(conversationMessages);
 
   // Normalize message from camelCase (Prisma) to snake_case (frontend Message type)
   const normalizeMessage = (m: any) => ({
@@ -177,9 +183,14 @@ export function useConversations(filters?: ConversationFilters) {
     return await res.json();
   };
 
+  // Mantem o ref sincronizado com o state a cada render
+  useEffect(() => {
+    conversationMessagesRef.current = conversationMessages;
+  }, [conversationMessages]);
+
   // Load initial messages
-  const loadInitialMessages = async (conversationId: string) => {
-    const state = conversationMessages[conversationId];
+  const loadInitialMessages = useCallback(async (conversationId: string) => {
+    const state = conversationMessagesRef.current[conversationId];
     if (state?.initialLoaded || state?.isLoading) return;
 
     setConversationMessages(prev => ({
@@ -212,7 +223,7 @@ export function useConversations(filters?: ConversationFilters) {
         }
       }));
     }
-  };
+  }, []);
 
   // Realtime via Server-Sent Events (push do backend -> frontend).
   // O polling de fallback continua rodando em intervalo maior, pra casos de
@@ -368,8 +379,8 @@ export function useConversations(filters?: ConversationFilters) {
   };
 
   // Load older messages (infinite scroll)
-  const loadOlderMessages = async (conversationId: string): Promise<number> => {
-    const state = conversationMessages[conversationId];
+  const loadOlderMessages = useCallback(async (conversationId: string): Promise<number> => {
+    const state = conversationMessagesRef.current[conversationId];
     if (!state || !state.hasMore || state.isLoading) return 0;
 
     setConversationMessages(prev => ({
@@ -401,7 +412,7 @@ export function useConversations(filters?: ConversationFilters) {
       }));
       return 0;
     }
-  };
+  }, []);
 
   const addMessageToConversation = (conversationId: string, message: any) => {
     setConversationMessages(prev => {

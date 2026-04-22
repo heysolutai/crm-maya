@@ -67,6 +67,7 @@ import {
   Plus,
   Sparkles,
   TrendingUp,
+  type LucideIcon,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { WhatsAppStatusIndicator } from '@/components/WhatsAppStatusIndicator';
@@ -79,12 +80,11 @@ import { useBranding } from '@/hooks/useBranding';
 interface NavItem {
   name: string;
   href: string;
-  icon: any;
+  icon: LucideIcon;
   roles: string[];
   requirePermission?: string;
   impersonationOnly?: boolean;
   countKey?: 'unread' | 'appointmentsToday' | 'pendingFollowUps';
-  iconColor?: string;
 }
 
 interface NavGroup {
@@ -96,35 +96,33 @@ const navGroups: NavGroup[] = [
   {
     label: 'Principal',
     items: [
-      { name: 'Dashboard', href: '/app/dashboard', icon: LayoutDashboard, roles: ['viewer', 'agent', 'manager', 'company_admin'], iconColor: 'text-blue-500' },
-      { name: 'Conversas', href: '/app/conversations', icon: MessageSquare, roles: ['agent', 'manager', 'company_admin'], countKey: 'unread', iconColor: 'text-sky-500' },
-      { name: 'CRM', href: '/app/crm', icon: Kanban, roles: ['agent', 'manager', 'company_admin'], iconColor: 'text-indigo-500' },
+      { name: 'Dashboard', href: '/app/dashboard', icon: LayoutDashboard, roles: ['viewer', 'agent', 'manager', 'company_admin'] },
+      { name: 'Conversas', href: '/app/conversations', icon: MessageSquare, roles: ['agent', 'manager', 'company_admin'], countKey: 'unread' },
+      { name: 'CRM', href: '/app/crm', icon: Kanban, roles: ['agent', 'manager', 'company_admin'] },
     ],
   },
   {
     label: 'Vendas',
     items: [
-      { name: 'Clientes', href: '/app/clients', icon: Users, roles: ['viewer', 'agent', 'manager', 'company_admin'], requirePermission: 'can_access_crm', iconColor: 'text-orange-500' },
-      { name: 'Catálogo', href: '/app/catalog', icon: Package, roles: ['agent', 'manager', 'company_admin'], iconColor: 'text-amber-500' },
-      { name: 'Agenda', href: '/app/appointments', icon: Calendar, roles: ['agent', 'manager', 'company_admin'], countKey: 'appointmentsToday', iconColor: 'text-purple-500' },
-      { name: 'Follow-ups', href: '/app/follow-ups', icon: Clock, roles: ['manager', 'company_admin'], countKey: 'pendingFollowUps', iconColor: 'text-cyan-500' },
+      { name: 'Clientes', href: '/app/clients', icon: Users, roles: ['viewer', 'agent', 'manager', 'company_admin'], requirePermission: 'can_access_crm' },
+      { name: 'Catálogo', href: '/app/catalog', icon: Package, roles: ['agent', 'manager', 'company_admin'] },
+      { name: 'Agenda', href: '/app/appointments', icon: Calendar, roles: ['agent', 'manager', 'company_admin'], countKey: 'appointmentsToday' },
+      { name: 'Follow-ups', href: '/app/follow-ups', icon: Clock, roles: ['manager', 'company_admin'], countKey: 'pendingFollowUps' },
     ],
   },
   {
     label: 'Relatórios',
     items: [
-      { name: 'Relatório', href: '/app/daily-report', icon: FileText, roles: ['agent', 'manager', 'company_admin'], iconColor: 'text-emerald-500' },
+      { name: 'Relatório', href: '/app/daily-report', icon: FileText, roles: ['agent', 'manager', 'company_admin'] },
     ],
   },
   {
     label: 'Administração',
     items: [
-      { name: 'Equipe', href: '/app/team', icon: UserCog, roles: ['company_admin'], iconColor: 'text-rose-500' },
-      { name: 'Departamentos', href: '/app/departments', icon: Building2, roles: ['company_admin'], iconColor: 'text-pink-500' },
-      { name: 'IA', href: '/app/ai-settings', icon: Bot, roles: ['company_admin'], iconColor: 'text-violet-500' },
-      { name: 'API Docs', href: '/app/api-docs', icon: Code, roles: ['manager', 'company_admin'], iconColor: 'text-teal-500' },
-      { name: 'Configurações', href: '/app/settings', icon: Settings, roles: ['company_admin'], iconColor: 'text-slate-500' },
-      { name: 'Suporte', href: '/app/support', icon: LifeBuoy, roles: ['viewer', 'agent', 'manager', 'company_admin'], iconColor: 'text-fuchsia-500' },
+      { name: 'Equipe', href: '/app/team', icon: UserCog, roles: ['company_admin'] },
+      { name: 'Departamentos', href: '/app/departments', icon: Building2, roles: ['company_admin'] },
+      { name: 'IA', href: '/app/ai-settings', icon: Bot, roles: ['company_admin'] },
+      { name: 'API Docs', href: '/app/api-docs', icon: Code, roles: ['manager', 'company_admin'] },
     ],
   },
 ];
@@ -373,7 +371,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                       <p className="text-xl font-bold text-sidebar-foreground leading-none group-hover/stat:text-sidebar-primary transition-colors tabular-nums">
                         {appointmentsToday}
                       </p>
-                      <p className="text-[9.5px] text-sidebar-foreground/50 mt-1 font-medium">consultas</p>
+                      <p className="text-[9.5px] text-sidebar-foreground/50 mt-1 font-medium">agendamentos</p>
                     </Link>
                   )}
                   {pendingFollowUps > 0 && (
@@ -431,7 +429,9 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                                 )}>
                                   <item.icon className={cn(
                                     'h-[14px] w-[14px] transition-colors',
-                                    item.iconColor || 'text-sidebar-foreground/60'
+                                    isActive
+                                      ? 'text-sidebar-primary'
+                                      : 'text-sidebar-foreground/70 group-hover/nav:text-sidebar-foreground'
                                   )} />
                                 </div>
                                 <span className="flex-1 truncate tracking-tight">{item.name}</span>

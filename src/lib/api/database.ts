@@ -134,7 +134,10 @@ export async function saveMessage(
       where: { id: conversationId },
       select: { companyId: true },
     });
-    if (conv?.companyId) {
+    if (!conv?.companyId) {
+      console.warn('[saveMessage] conversation sem companyId — publish skipped:', conversationId);
+    } else {
+      console.log(`[saveMessage] publishing message:new id=${message.id} conv=${conversationId} company=${conv.companyId}`);
       await publishEvent(conv.companyId, {
         type: 'message:new',
         conversationId,
