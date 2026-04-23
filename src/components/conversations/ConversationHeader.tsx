@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Phone, Bot, Loader2, ArrowLeft, MoreVertical, StickyNote, UserCheck, RefreshCw, X, Tag } from 'lucide-react';
+import { Phone, Bot, Loader2, ArrowLeft, MoreVertical, StickyNote, UserCheck, RefreshCw, X, Tag, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -12,6 +12,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { createWhatsAppLink } from '@/lib/linkify';
 import { statusColors, statusLabels, type Conversation, type ConversationStatus } from './types';
 
 interface ConversationHeaderProps {
@@ -56,12 +62,47 @@ export const ConversationHeader = memo(function ConversationHeader({
           </Button>
         )}
 
-        {/* Avatar */}
-        <Avatar className="h-10 w-10 shrink-0">
-          <AvatarFallback className="bg-primary/20 text-primary text-sm font-semibold">
-            {initials}
-          </AvatarFallback>
-        </Avatar>
+        {/* Avatar com popover de contato */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              aria-label="Ver contato do cliente"
+            >
+              <Avatar className="h-10 w-10 cursor-pointer transition-opacity hover:opacity-80">
+                <AvatarFallback className="bg-primary/20 text-primary text-sm font-semibold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-64 p-3">
+            <div className="space-y-2">
+              <p className="text-sm font-semibold truncate">{clientName}</p>
+              {conversation.client?.phone ? (
+                <>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Phone className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{conversation.client.phone}</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() =>
+                      window.open(createWhatsAppLink(conversation.client!.phone!), '_blank', 'noopener,noreferrer')
+                    }
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Abrir no WhatsApp
+                  </Button>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">Sem telefone cadastrado</p>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
 
         {/* Name + status */}
         <div className="flex-1 min-w-0">

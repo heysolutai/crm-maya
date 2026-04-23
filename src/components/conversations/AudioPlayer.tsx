@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 interface AudioPlayerProps {
   src: string;
@@ -35,14 +36,21 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
       setCurrentTime(0);
     };
 
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
 
     return () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
     };
   }, []);
 
@@ -173,14 +181,19 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
   }, [waveformData, currentTime, duration]);
 
   const togglePlayPause = async () => {
-    if (!audioRef.current) return;
+    const audio = audioRef.current;
+    if (!audio) return;
 
-    if (isPlaying) {
-      audioRef.current.pause();
+    if (audio.paused) {
+      try {
+        await audio.play();
+      } catch (error) {
+        console.error('[AudioPlayer] play falhou:', error);
+        toast.error('Nao foi possivel reproduzir o audio');
+      }
     } else {
-      await audioRef.current.play();
+      audio.pause();
     }
-    setIsPlaying(!isPlaying);
   };
 
   const handleSeek = (e: React.MouseEvent<HTMLElement>) => {
