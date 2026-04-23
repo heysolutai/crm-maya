@@ -48,6 +48,11 @@ BEGIN
   -- Normaliza 'transferred' -> 'active' via text (funciona em qualquer enum)
   EXECUTE 'UPDATE conversations SET status = ''active'' WHERE status::text = ''transferred''';
 
+  -- Dropa indices/constraints que dependem da coluna status com o tipo antigo.
+  -- O ALTER COLUMN TYPE nao consegue reescrever predicados parciais que ligam
+  -- 'closed'::"ConversationStatus_old" quando a coluna passa a ser "ConversationStatus".
+  DROP INDEX IF EXISTS "idx_conversations_one_open_per_client";
+
   -- Se existe um "ConversationStatus" que nao e usado pela coluna, drop pra recriar limpo.
   -- (A coluna usa ConversationStatus_old nesse cenario, entao nada quebra.)
   IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ConversationStatus')
@@ -77,6 +82,11 @@ BEGIN
       END
     );
   ALTER TABLE conversations ALTER COLUMN status SET DEFAULT 'active';
+
+  -- Recria o indice parcial ja com o novo tipo amarrado
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_one_open_per_client
+    ON conversations (company_id, client_id, channel)
+    WHERE status != 'closed';
 
   -- Cleanup de qualquer enum antigo sobrando
   DROP TYPE IF EXISTS "ConversationStatus_old";
