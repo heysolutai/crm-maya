@@ -317,7 +317,11 @@ cmd_update() {
     for sql_file in prisma/migrations/*.sql; do
       [ -f "$sql_file" ] || continue
       log "Executando: $(basename "$sql_file")"
-      psql "$DB_URL" -f "$sql_file" 2>/dev/null || warn "Ja aplicada ou erro: $(basename "$sql_file")"
+      # ON_ERROR_STOP=1 + -v garantem que erros de SQL apareçam no log e parem o arquivo.
+      # Logs vao pra stdout/stderr (sem redirect pra /dev/null) pra facilitar debug.
+      if ! psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$sql_file"; then
+        err "Migration falhou: $(basename "$sql_file"). Veja erro acima e corrija antes de continuar."
+      fi
     done
   fi
 
