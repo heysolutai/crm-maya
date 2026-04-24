@@ -24,6 +24,7 @@ import { toast } from '@/hooks/use-toast';
 import { ConversationSidebar } from '@/components/conversations/ConversationSidebar';
 import { ConversationHeader } from '@/components/conversations/ConversationHeader';
 import { MessageBubble } from '@/components/conversations/MessageBubble';
+import { NoteBubble } from '@/components/conversations/NoteBubble';
 import { MessageInput } from '@/components/conversations/MessageInputArea';
 import { TypingIndicator } from '@/components/conversations/TypingIndicator';
 import { TagManager } from '@/components/conversations/TagManager';
@@ -123,7 +124,10 @@ export default function Conversations() {
   const initialLoaded = messagesState?.initialLoaded || false;
 
   // Batch reactions: ONE query for all visible messages
-  const messageIds = useMemo(() => messages.map((m: Message) => m.id), [messages]);
+  const messageIds = useMemo(
+    () => messages.filter((m: any) => !m._isNote).map((m: Message) => m.id),
+    [messages]
+  );
   const { reactionsMap, addReaction, removeReaction } = useConversationReactions(messageIds);
 
   // Typing indicators
@@ -423,10 +427,16 @@ export default function Conversations() {
                     </div>
                   )}
                   
-                  {messages.map((msg: Message, idx: number) => {
+                  {messages.map((msg: Message | any, idx: number) => {
+                    // Itens marcados como _isNote sao notas internas — renderizam
+                    // como sticky note centralizado, nao como bubble de mensagem.
+                    if (msg._isNote) {
+                      return <NoteBubble key={`note-${msg.id}`} note={msg} />;
+                    }
+
                     const isClient = msg.sender_type === 'client';
                     const isAI = msg.sender_type === 'ai';
-                    
+
                     return (
                       <MessageBubble
                         key={msg.id}

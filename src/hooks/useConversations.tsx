@@ -70,6 +70,22 @@ export function useConversations(filters?: ConversationFilters) {
     _optimistic: m._optimistic || false,
   });
 
+  // Converte uma nota em um item compativel com a lista de mensagens (ordenacao
+  // por created_at) mas marcado com _isNote pra renderizar como sticky note.
+  const normalizeNote = (n: any) => ({
+    id: n.id,
+    _isNote: true as const,
+    conversation_id: n.conversationId || n.conversation_id,
+    note: n.note,
+    created_at: n.createdAt || n.created_at || null,
+    creator: n.creator
+      ? {
+          full_name: n.creator.fullName ?? n.creator.full_name ?? null,
+          avatar_url: n.creator.avatarUrl ?? n.creator.avatar_url ?? null,
+        }
+      : null,
+  });
+
   const { data: conversations, isLoading } = useQuery({
     queryKey: ['conversations', companyId, filters],
     queryFn: async () => {
@@ -183,6 +199,17 @@ export function useConversations(filters?: ConversationFilters) {
     return await res.json();
   };
 
+  // Fetch internal notes anexadas a uma conversa (renderizadas inline como sticky notes)
+  const fetchNotesForConversation = async (conversationId: string) => {
+    const res = await fetch(`/api/conversation-notes?conversationId=${conversationId}`);
+    if (!res.ok) return [];
+    try {
+      return await res.json();
+    } catch {
+      return [];
+    }
+  };
+
   // Mantem o ref sincronizado com o state a cada render
   useEffect(() => {
     conversationMessagesRef.current = conversationMessages;
@@ -201,13 +228,24 @@ export function useConversations(filters?: ConversationFilters) {
     }));
 
     try {
-      const data = await fetchMessagesForConversation(conversationId);
+      const [data, notesData] = await Promise.all([
+        fetchMessagesForConversation(conversationId),
+        fetchNotesForConversation(conversationId),
+      ]);
       const reversedData = [...data].map(normalizeMessage).reverse();
+      const notes = (Array.isArray(notesData) ? notesData : []).map(normalizeNote);
+
+      // Mescla mensagens + notas por created_at crescente
+      const merged = [...reversedData, ...notes].sort((a: any, b: any) => {
+        const ta = new Date(a.createdAt || a.created_at || 0).getTime();
+        const tb = new Date(b.createdAt || b.created_at || 0).getTime();
+        return ta - tb;
+      });
 
       setConversationMessages(prev => ({
         ...prev,
         [conversationId]: {
-          messages: reversedData,
+          messages: merged,
           hasMore: data.length === 50,
           isLoading: false,
           oldestCursor: data.length > 0 ? (data[data.length - 1].createdAt || data[data.length - 1].created_at) : null,
@@ -307,6 +345,24 @@ export function useConversations(filters?: ConversationFilters) {
         if (data.type === 'conversation:update') {
           queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
           queryClient.invalidateQueries({ queryKey: ['department-queue', companyId] });
+          return;
+        }
+
+        if (data.type === 'note:new' && data.conversationId && data.note) {
+          const incoming = normalizeNote(data.note);
+          setConversationMessages(prev => {
+            const state = prev[data.conversationId];
+            if (!state?.initialLoaded) return prev;
+            if (state.messages.some((m: any) => m.id === incoming.id)) return prev;
+            const merged = [...state.messages, incoming].sort((a: any, b: any) => {
+              const ta = new Date(a.createdAt || a.created_at || 0).getTime();
+              const tb = new Date(b.createdAt || b.created_at || 0).getTime();
+              return ta - tb;
+            });
+            return { ...prev, [data.conversationId]: { ...state, messages: merged } };
+          });
+          // Atualiza tambem o drawer de "Notas & Lembretes"
+          queryClient.invalidateQueries({ queryKey: ['conversation-notes', data.conversationId] });
           return;
         }
       } catch (err) {

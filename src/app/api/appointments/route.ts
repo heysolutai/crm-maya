@@ -83,7 +83,15 @@ export async function POST(req: NextRequest) {
     const { company, settings } = auth;
     const companyId = company.id;
 
-    const body = await req.json();
+    // Lemos o body como texto primeiro pra poder logar o payload quando o JSON quebrar.
+    const rawBody = await req.text();
+    let body: any;
+    try {
+      body = JSON.parse(rawBody);
+    } catch (parseErr) {
+      console.error('[appointments POST] JSON invalido. Body recebido:\n', rawBody);
+      return apiError('Body da requisicao nao e um JSON valido.', 'INVALID_JSON', 200);
+    }
     const { client_id, phone, title, scheduled_for, duration_minutes = 60, assigned_to, schedule_id, location, description, notes, patient_name } = body;
 
     if (!title || !scheduled_for) return apiError('Campos obrigatórios: title, scheduled_for.', 'MISSING_FIELDS', 200);

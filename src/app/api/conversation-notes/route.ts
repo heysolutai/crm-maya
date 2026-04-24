@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+import { publishEvent } from '@/lib/realtime'
 
 export async function GET(req: NextRequest) {
   try {
@@ -42,14 +43,25 @@ export async function POST(req: NextRequest) {
     }
 
     const { conversation_id, note, company_id, created_by } = validation.data
+    const companyId = company_id || authCompanyId!
 
     const noteRecord = await prisma.conversationNote.create({
       data: {
         conversationId: conversation_id,
-        companyId: company_id || authCompanyId!,
+        companyId,
         createdBy: agentId || created_by,
         note,
       },
+      include: {
+        creator: { select: { fullName: true, avatarUrl: true } },
+      },
+    })
+
+    // Publica evento realtime pra nota aparecer no chat sem refresh
+    await publishEvent(companyId, {
+      type: 'note:new',
+      conversationId: conversation_id,
+      note: noteRecord,
     })
 
     return NextResponse.json(noteRecord)

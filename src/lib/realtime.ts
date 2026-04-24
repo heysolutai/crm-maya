@@ -44,7 +44,8 @@ export type RealtimeEvent =
   | { type: 'message:new'; conversationId: string; message: unknown }
   | { type: 'message:delete'; conversationId: string; messageId: string }
   | { type: 'message:update'; conversationId: string; messageId: string; patch: Record<string, unknown> }
-  | { type: 'conversation:update'; conversationId: string };
+  | { type: 'conversation:update'; conversationId: string }
+  | { type: 'note:new'; conversationId: string; note: unknown };
 
 export function channelForCompany(companyId: string): string {
   return `realtime:company:${companyId}`;
