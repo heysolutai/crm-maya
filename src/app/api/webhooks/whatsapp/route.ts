@@ -7,6 +7,7 @@ import { enqueueInboundMessage, enqueueN8NWebhook, enqueueTranscription, enqueue
 import { uploadToB2, buildB2Key, MIME_TO_EXT, deleteMediaFromUrl } from '@/lib/storage';
 import { publishEvent } from '@/lib/realtime';
 import { sendPushToCompany } from '@/lib/push';
+import { pauseClientAIByConversation } from '@/lib/api/database';
 
 // Schema de validação para o payload da UAZapi
 const UAZapiPayloadSchema = z.object({
@@ -1405,6 +1406,15 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('Created message:', message.id);
+
+    // Quando o atendente manda mensagem direto pelo WhatsApp Web/Mobile dele,
+    // a UAZapi ecoa pra ca como senderType='agent'. Pausa a IA pra nao haver
+    // atropelamento entre humano e IA respondendo o mesmo cliente.
+    if (senderType === 'agent') {
+      pauseClientAIByConversation(conversationId).catch(err => {
+        console.warn('[webhook] auto-pause falhou (nao bloqueante):', err?.message);
+      });
+    }
 
     try {
       await prisma.conversation.update({

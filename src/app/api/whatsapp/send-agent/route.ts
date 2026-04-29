@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { sendToWhatsApp } from '@/lib/api/whatsapp';
 import { handleCors, jsonResponse, errorResponse, unauthorizedResponse } from '@/lib/api/cors';
+import { pauseClientAIByConversation } from '@/lib/api/database';
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
@@ -65,6 +66,11 @@ export async function POST(req: NextRequest) {
       data: {
         conversationId, senderType: 'agent', senderId: agentId, messageText: finalMessageText, messageType: 'text',
       },
+    });
+
+    // Atendente mandou mensagem -> pausa IA pra evitar atropelamento
+    pauseClientAIByConversation(conversationId).catch(err => {
+      console.warn('[send-agent] auto-pause falhou (nao bloqueante):', err?.message);
     });
 
     const { success, error: whatsappError } = await sendToWhatsApp(instance as any, '/send/text', { phone: client.phone, text: messageText }, message.id);

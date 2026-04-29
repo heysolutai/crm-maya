@@ -125,6 +125,15 @@ export async function saveMessage(
     throw new Error('Failed to save message to database');
   }
 
+  // Quando o atendente manda mensagem (fromAI=false), pausa a IA do cliente
+  // automaticamente. Evita atropelamento entre agente humano e IA respondendo
+  // ao mesmo tempo. Mensagens da propria IA (fromAI=true) nao disparam pause.
+  if (!fromAI) {
+    pauseClientAIByConversation(conversationId).catch(err => {
+      console.warn('[saveMessage] auto-pause falhou (nao bloqueante):', (err as Error).message);
+    });
+  }
+
   // Push realtime pra qualquer browser conectado ao SSE da empresa:
   // agentes/IA vendo a conversa aberta recebem a mensagem imediatamente,
   // em vez de esperar o echo do webhook (segundos depois) ou o polling de 10s.
