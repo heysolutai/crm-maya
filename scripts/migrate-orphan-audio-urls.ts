@@ -17,12 +17,13 @@
  * aponta pra whatsapp.net.
  */
 
-// Carrega .env antes de importar prisma (se nao, DATABASE_URL fica undefined
-// e o pg adapter explode com "client password must be a string").
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-(function loadDotEnv() {
+// Carrega .env ANTES de importar prisma. Como import estatico e hoisted,
+// usamos import() dinamico la dentro do main() pra garantir que process.env
+// ja esta populado quando o prisma client inicializa.
+function loadDotEnv() {
   for (const file of ['.env.local', '.env']) {
     try {
       const content = readFileSync(resolve(process.cwd(), file), 'utf8');
@@ -36,16 +37,15 @@ import { resolve } from 'path';
         if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
           val = val.slice(1, -1);
         }
-        if (!process.env[key]) process.env[key] = val;
+        if (process.env[key] == null || process.env[key] === '') {
+          process.env[key] = val;
+        }
       }
     } catch {
       // arquivo nao existe — segue
     }
   }
-})();
-
-import { prisma } from '../src/lib/db';
-import { uploadToB2, buildB2Key, MIME_TO_EXT } from '../src/lib/storage';
+}
 
 const APPLY = process.argv.includes('--apply');
 
@@ -92,6 +92,19 @@ async function downloadFromUazAPI(
 }
 
 async function main() {
+  loadDotEnv();
+
+  if (!process.env.DATABASE_URL) {
+    console.error('DATABASE_URL nao encontrada. Verifique se ha .env (ou .env.local) no cwd.');
+    console.error('cwd:', process.cwd());
+    process.exit(1);
+  }
+
+  // Imports dinamicos: rodam DEPOIS do loadDotEnv, entao o prisma client
+  // inicializa com a env correta.
+  const { prisma } = await import('../src/lib/db');
+  const { uploadToB2, buildB2Key, MIME_TO_EXT } = await import('../src/lib/storage');
+
   console.log(APPLY ? '=== APPLY MODE ===' : '=== DRY-RUN ===  (use --apply pra executar)');
 
   const orphan = await prisma.message.findMany({
@@ -113,7 +126,6 @@ async function main() {
 
   if (orphan.length === 0) return;
 
-  // Pre-busca instancias por conversationId pra evitar N queries
   const conversationIds = [...new Set(orphan.map(m => m.conversationId))];
   const conversations = await prisma.conversation.findMany({
     where: { id: { in: conversationIds } },
