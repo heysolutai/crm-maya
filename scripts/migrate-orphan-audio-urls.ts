@@ -8,7 +8,7 @@
  *   3. Sobe o blob no B2
  *   4. Atualiza messages.media_url pro link estavel
  *
- * Uso (na VPS, com .env carregado):
+ * Uso (na VPS, com .env presente):
  *   cd /var/www/crm-maya
  *   npx tsx scripts/migrate-orphan-audio-urls.ts          # dry-run
  *   npx tsx scripts/migrate-orphan-audio-urls.ts --apply  # executa
@@ -16,6 +16,33 @@
  * Idempotente: rode quantas vezes quiser. So toca em mensagens cuja URL ainda
  * aponta pra whatsapp.net.
  */
+
+// Carrega .env antes de importar prisma (se nao, DATABASE_URL fica undefined
+// e o pg adapter explode com "client password must be a string").
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+
+(function loadDotEnv() {
+  for (const file of ['.env.local', '.env']) {
+    try {
+      const content = readFileSync(resolve(process.cwd(), file), 'utf8');
+      for (const rawLine of content.split('\n')) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith('#')) continue;
+        const eq = line.indexOf('=');
+        if (eq === -1) continue;
+        const key = line.substring(0, eq).trim();
+        let val = line.substring(eq + 1).trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (!process.env[key]) process.env[key] = val;
+      }
+    } catch {
+      // arquivo nao existe — segue
+    }
+  }
+})();
 
 import { prisma } from '../src/lib/db';
 import { uploadToB2, buildB2Key, MIME_TO_EXT } from '../src/lib/storage';
