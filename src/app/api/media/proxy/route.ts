@@ -16,15 +16,39 @@ import { NextRequest } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Hostnames de armazenamento conhecidos. Match por sufixo do hostname e
+// case-insensitive — mais robusto que comparar prefixo de URL completa,
+// que quebra em diferencas de caixa ou de path-style vs virtual-hosted.
+const TRUSTED_HOSTNAME_SUFFIXES = [
+  'backblazeb2.com',
+  'b2cdn.com',
+  'amazonaws.com', // S3 generico, caso troque dia o backend
+];
+
 function isAllowedUpstream(url: string): boolean {
   try {
     const u = new URL(url);
-    const allowedPrefixes: string[] = [];
-    if (process.env.B2_PUBLIC_URL) allowedPrefixes.push(process.env.B2_PUBLIC_URL.replace(/\/$/, ''));
-    if (process.env.B2_ENDPOINT) allowedPrefixes.push(process.env.B2_ENDPOINT.replace(/\/$/, ''));
-    if (allowedPrefixes.length === 0) return false;
-    const target = `${u.origin}${u.pathname}`;
-    return allowedPrefixes.some(prefix => target.startsWith(prefix) || `${u.origin}`.startsWith(prefix));
+    const host = u.hostname.toLowerCase();
+
+    // 1) Match por sufixo de hostname (cobre B2 + S3 + CDNs comuns)
+    if (TRUSTED_HOSTNAME_SUFFIXES.some(suffix => host.endsWith(suffix))) {
+      return true;
+    }
+
+    // 2) Hosts adicionais via env (B2_PUBLIC_URL pode ser CDN custom)
+    const extras: string[] = [];
+    if (process.env.B2_PUBLIC_URL) extras.push(process.env.B2_PUBLIC_URL);
+    if (process.env.B2_ENDPOINT) extras.push(process.env.B2_ENDPOINT);
+    for (const raw of extras) {
+      try {
+        const extraHost = new URL(raw).hostname.toLowerCase();
+        if (host === extraHost || host.endsWith(`.${extraHost}`)) return true;
+      } catch {
+        // env mal-formatada, ignora
+      }
+    }
+
+    return false;
   } catch {
     return false;
   }
