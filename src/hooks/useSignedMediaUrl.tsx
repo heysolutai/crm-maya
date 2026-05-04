@@ -2,36 +2,39 @@ import { useState, useEffect } from 'react';
 
 /**
  * Gets a public URL for a media file.
- * With the move away from Supabase storage, files are now served from /uploads/
  *
- * URLs externas conhecidas (B2/Backblaze) sao roteadas pelo /api/media/proxy
- * pra resolver problemas de CORS e Content-Type que quebram playback de audio.
+ * Estrategia: toda URL http(s) externa passa pelo /api/media/proxy. O proxy
+ * tem whitelist server-side baseada em B2_PUBLIC_URL/B2_ENDPOINT (que sao
+ * variaveis privadas, nao temos acesso no client) — entao ele aceita as URLs
+ * de armazenamento configuradas e rejeita o resto. Isso resolve dois problemas:
+ *   1) CORS — playback de audio + decode da waveform via mesma origem
+ *   2) Content-Type — proxy forca o MIME correto via extensao do arquivo
  */
-const PROXY_HOSTNAME_HINTS = ['backblazeb2.com', 'b2cdn.com'];
+
+function isSameOriginPath(u: string): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const parsed = new URL(u);
+    return parsed.origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
 
 export function getPublicMediaUrl(mediaUrl: string | null): string | null {
   if (!mediaUrl) return null;
 
-  // URLs absolutas: B2/Backblaze passam pelo proxy; outras voltam como vieram.
   if (mediaUrl.startsWith('http')) {
-    try {
-      const u = new URL(mediaUrl);
-      const isB2 = PROXY_HOSTNAME_HINTS.some(h => u.hostname.includes(h));
-      if (isB2) {
-        return `/api/media/proxy?url=${encodeURIComponent(mediaUrl)}`;
-      }
-    } catch {
-      // url invalida — devolve raw
-    }
-    return mediaUrl;
+    // URLs do proprio dominio (incluindo /api/media/proxy) ja podem ir direto
+    if (isSameOriginPath(mediaUrl)) return mediaUrl;
+    return `/api/media/proxy?url=${encodeURIComponent(mediaUrl)}`;
   }
 
   if (mediaUrl.startsWith('/uploads/')) return mediaUrl;
+  if (mediaUrl.startsWith('/api/')) return mediaUrl;
 
-  // If it looks like a relative path, prefix with /uploads/media/
-  if (!mediaUrl.startsWith('/')) {
-    return `/uploads/media/${mediaUrl}`;
-  }
+  // Caminho relativo solto -> /uploads/media/
+  if (!mediaUrl.startsWith('/')) return `/uploads/media/${mediaUrl}`;
 
   return mediaUrl;
 }

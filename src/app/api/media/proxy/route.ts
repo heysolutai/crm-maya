@@ -30,6 +30,50 @@ function isAllowedUpstream(url: string): boolean {
   }
 }
 
+// Resolve Content-Type baseado na extensao do arquivo. Mais confiavel que o
+// que vem do upstream — o B2 as vezes serve arquivos com application/octet-stream
+// quando o upload nao incluiu o ContentType correto, e o browser recusa
+// reproduzir audio/video sem MIME especifico.
+function resolveContentType(url: string, upstream: string | null): string {
+  const path = (() => {
+    try { return new URL(url).pathname.toLowerCase(); } catch { return url.toLowerCase(); }
+  })();
+
+  const extMatch = path.match(/\.([a-z0-9]{2,5})(?:$|\?)/);
+  const ext = extMatch?.[1];
+
+  const byExt: Record<string, string> = {
+    // audio
+    ogg: 'audio/ogg',
+    oga: 'audio/ogg',
+    opus: 'audio/ogg; codecs=opus',
+    mp3: 'audio/mpeg',
+    m4a: 'audio/mp4',
+    aac: 'audio/aac',
+    wav: 'audio/wav',
+    webm: 'audio/webm', // pode ser video tambem — diferenciamos abaixo
+    // video
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    // image
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+    webp: 'image/webp', gif: 'image/gif',
+    // doc
+    pdf: 'application/pdf',
+  };
+
+  // Heuristica: pasta "videos/" ou "/video/" no path indica video.webm,
+  // "audios/" indica audio.webm. Sem isso, webm vira audio por padrao.
+  if (ext === 'webm' && /\/videos?\//.test(path)) return 'video/webm';
+
+  if (ext && byExt[ext]) return byExt[ext];
+
+  // Upstream confiavel se nao for octet-stream genérico
+  if (upstream && !/octet-stream|application\/binary/i.test(upstream)) return upstream;
+
+  return upstream || 'application/octet-stream';
+}
+
 async function handleProxy(req: NextRequest) {
   const target = req.nextUrl.searchParams.get('url');
   if (!target) {
@@ -53,16 +97,24 @@ async function handleProxy(req: NextRequest) {
   }
 
   const headers = new Headers();
-  // Repassa cabecalhos relevantes pra streaming/seek
-  const passthrough = ['content-type', 'content-length', 'content-range', 'accept-ranges', 'last-modified', 'etag'];
+  // Repassa cabecalhos relevantes pra streaming/seek (exceto Content-Type — esse
+  // a gente resolve via extensao da URL, mais confiavel que o upstream)
+  const passthrough = ['content-length', 'content-range', 'accept-ranges', 'last-modified', 'etag'];
   for (const h of passthrough) {
     const v = upstream.headers.get(h);
     if (v) headers.set(h, v);
   }
+
+  const contentType = resolveContentType(target, upstream.headers.get('content-type'));
+  headers.set('content-type', contentType);
+  // Inline garante que browser nao force download de audio/video
+  headers.set('content-disposition', 'inline');
   // Cache no browser por 1h pra evitar re-buscar na proxima visualizacao
   headers.set('cache-control', 'private, max-age=3600');
   // Permite uso com crossOrigin="anonymous" + AudioContext.decodeAudioData
   headers.set('access-control-allow-origin', '*');
+
+  console.log(`[media/proxy] ${target} -> ${upstream.status} (${contentType})`);
 
   return new Response(upstream.body, {
     status: upstream.status,
