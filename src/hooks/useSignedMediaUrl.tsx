@@ -3,14 +3,30 @@ import { useState, useEffect } from 'react';
 /**
  * Gets a public URL for a media file.
  * With the move away from Supabase storage, files are now served from /uploads/
+ *
+ * URLs externas conhecidas (B2/Backblaze) sao roteadas pelo /api/media/proxy
+ * pra resolver problemas de CORS e Content-Type que quebram playback de audio.
  */
+const PROXY_HOSTNAME_HINTS = ['backblazeb2.com', 'b2cdn.com'];
+
 export function getPublicMediaUrl(mediaUrl: string | null): string | null {
   if (!mediaUrl) return null;
 
-  // If it's already a full URL or starts with /uploads/, return as-is
-  if (mediaUrl.startsWith('http') || mediaUrl.startsWith('/uploads/')) {
+  // URLs absolutas: B2/Backblaze passam pelo proxy; outras voltam como vieram.
+  if (mediaUrl.startsWith('http')) {
+    try {
+      const u = new URL(mediaUrl);
+      const isB2 = PROXY_HOSTNAME_HINTS.some(h => u.hostname.includes(h));
+      if (isB2) {
+        return `/api/media/proxy?url=${encodeURIComponent(mediaUrl)}`;
+      }
+    } catch {
+      // url invalida — devolve raw
+    }
     return mediaUrl;
   }
+
+  if (mediaUrl.startsWith('/uploads/')) return mediaUrl;
 
   // If it looks like a relative path, prefix with /uploads/media/
   if (!mediaUrl.startsWith('/')) {

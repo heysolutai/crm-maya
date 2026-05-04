@@ -31,6 +31,7 @@ import { TagManager } from '@/components/conversations/TagManager';
 import { ImageModal } from '@/components/conversations/ImageModal';
 import { ConversationNotes } from '@/components/conversations/ConversationNotes';
 import { TransferDialog } from '@/components/conversations/dialogs/TransferDialog';
+import { EditClientDialog } from '@/components/conversations/dialogs/EditClientDialog';
 import { CloseConversationDialog } from '@/components/conversations/dialogs/CloseConversationDialog';
 import { NewConversationDialog } from '@/components/conversations/dialogs/NewConversationDialog';
 import { DeleteMessageDialog } from '@/components/conversations/dialogs/DeleteMessageDialog';
@@ -52,6 +53,7 @@ export default function Conversations() {
   // Dialog states
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [editClientOpen, setEditClientOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [notesSheetOpen, setNotesSheetOpen] = useState(false);
   const [newConversationDialogOpen, setNewConversationDialogOpen] = useState(false);
@@ -152,6 +154,8 @@ export default function Conversations() {
     setShowEmojiPicker,
     showAudioRecorder,
     setShowAudioRecorder,
+    showVideoRecorder,
+    setShowVideoRecorder,
     replyToMessage,
     handleInputChange,
     handleEmojiSelect,
@@ -319,6 +323,16 @@ export default function Conversations() {
     }
   };
 
+  const handleSendVideo = (videoBlob: Blob, mimeType: string, _duration: number) => {
+    if (!selectedConv) return;
+    // Reaproveita o pipeline de upload de arquivo: converte blob em File e
+    // dispara o mesmo fluxo de paperclip (upload pra B2 + send-media com video).
+    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+    const file = new File([videoBlob], `video-${Date.now()}.${ext}`, { type: mimeType });
+    setSelectedFile(file);
+    setShowVideoRecorder(false);
+  };
+
   const handleDelete = (messageId: string) => {
     setMessageToDelete(messageId);
     setDeleteDialogOpen(true);
@@ -394,6 +408,7 @@ export default function Conversations() {
               onReopen={() => reopenConversation(selectedConv.id)}
               onOpenTagManager={() => setTagManagerOpen(true)}
               onRemoveTag={(tag) => removeTag({ conversationId: selectedConv.id, tag })}
+              onEditContact={() => setEditClientOpen(true)}
               onBack={() => setSelectedConversation(null)}
             />
 
@@ -475,6 +490,9 @@ export default function Conversations() {
               showAudioRecorder={showAudioRecorder}
               setShowAudioRecorder={setShowAudioRecorder}
               onSendAudio={handleSendAudio}
+              showVideoRecorder={showVideoRecorder}
+              setShowVideoRecorder={setShowVideoRecorder}
+              onSendVideo={handleSendVideo}
               replyToMessage={replyToMessage}
               onCancelReply={handleCancelReply}
               isUploading={isUploading}
@@ -512,6 +530,11 @@ export default function Conversations() {
             queueCounts={queueCounts}
             onTransfer={(userId) => transferConversation({ conversationId: selectedConv.id, userId })}
             onTransferToDepartment={(departmentId) => transferToDepartment({ conversationId: selectedConv.id, departmentId })}
+          />
+          <EditClientDialog
+            open={editClientOpen}
+            onOpenChange={setEditClientOpen}
+            client={selectedConv.client}
           />
           <CloseConversationDialog
             open={closeDialogOpen}

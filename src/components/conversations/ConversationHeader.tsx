@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Phone, Bot, Loader2, ArrowLeft, MoreVertical, StickyNote, UserCheck, RefreshCw, X, Tag, MessageCircle } from 'lucide-react';
+import { Phone, Bot, Loader2, ArrowLeft, MoreVertical, StickyNote, UserCheck, RefreshCw, X, Tag, MessageCircle, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -30,6 +30,7 @@ interface ConversationHeaderProps {
   onReopen: () => void;
   onOpenTagManager: () => void;
   onRemoveTag: (tag: string) => void;
+  onEditContact: () => void;
   onBack?: () => void;
 }
 
@@ -43,6 +44,7 @@ export const ConversationHeader = memo(function ConversationHeader({
   onReopen,
   onOpenTagManager,
   onRemoveTag,
+  onEditContact,
   onBack,
 }: ConversationHeaderProps) {
   const clientName = conversation.client 
@@ -99,6 +101,17 @@ export const ConversationHeader = memo(function ConversationHeader({
                 </>
               ) : (
                 <p className="text-xs text-muted-foreground">Sem telefone cadastrado</p>
+              )}
+              {conversation.client?.id && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={onEditContact}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Editar contato
+                </Button>
               )}
             </div>
           </PopoverContent>

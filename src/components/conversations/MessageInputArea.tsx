@@ -1,9 +1,10 @@
 import { memo, useRef, useEffect } from 'react';
-import { X, Send, Smile, Paperclip, Mic, Loader2 } from 'lucide-react';
+import { X, Send, Smile, Paperclip, Mic, Loader2, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AudioRecorder } from './AudioRecorder';
+import { VideoRecorder } from './VideoRecorder';
 import dynamic from 'next/dynamic';
 const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 import type { Message } from './types';
@@ -18,6 +19,9 @@ interface MessageInputProps {
   showAudioRecorder: boolean;
   setShowAudioRecorder: (show: boolean) => void;
   onSendAudio: (audioBlob: Blob, duration: number) => void;
+  showVideoRecorder: boolean;
+  setShowVideoRecorder: (show: boolean) => void;
+  onSendVideo: (videoBlob: Blob, mimeType: string, duration: number) => void;
   replyToMessage: Message | null;
   onCancelReply: () => void;
   isUploading: boolean;
@@ -35,6 +39,9 @@ export const MessageInput = memo(function MessageInput({
   showAudioRecorder,
   setShowAudioRecorder,
   onSendAudio,
+  showVideoRecorder,
+  setShowVideoRecorder,
+  onSendVideo,
   replyToMessage,
   onCancelReply,
   isUploading,
@@ -77,9 +84,14 @@ export const MessageInput = memo(function MessageInput({
 
       <div className="p-4">
         {showAudioRecorder ? (
-          <AudioRecorder 
+          <AudioRecorder
             onSendAudio={onSendAudio}
             onCancel={() => setShowAudioRecorder(false)}
+          />
+        ) : showVideoRecorder ? (
+          <VideoRecorder
+            onSendVideo={onSendVideo}
+            onCancel={() => setShowVideoRecorder(false)}
           />
         ) : (
           <div className="flex gap-2 items-end">
@@ -91,7 +103,7 @@ export const MessageInput = memo(function MessageInput({
               accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt,.csv"
               onChange={handleFileChange}
             />
-            
+
             {/* Botão de Anexo */}
             <Button
               type="button"
@@ -117,6 +129,18 @@ export const MessageInput = memo(function MessageInput({
               onClick={() => setShowAudioRecorder(true)}
             >
               <Mic className="h-5 w-5" />
+            </Button>
+
+            {/* Botão de Vídeo */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0 self-end mb-2"
+              onClick={() => setShowVideoRecorder(true)}
+              title="Gravar video"
+            >
+              <Video className="h-5 w-5" />
             </Button>
 
             {/* Container do Textarea */}

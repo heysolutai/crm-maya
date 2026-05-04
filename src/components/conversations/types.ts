@@ -37,6 +37,7 @@ export interface Client {
   first_name: string;
   last_name?: string | null;
   phone?: string | null;
+  email?: string | null;
   avatar_url?: string | null;
   ai_paused?: boolean | null;
 }

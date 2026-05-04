@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause } from 'lucide-react';
+import { Play, Pause, AlertCircle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -14,6 +14,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [waveformData, setWaveformData] = useState<number[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationIdRef = useRef<number>();
@@ -39,11 +40,31 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
 
+    // Detecta falha real de carregamento do audio (codec nao suportado, 404,
+    // CORS, etc). Sem isso, o player ficava parecendo que ia funcionar mas o
+    // play() chamava promise rejection silenciosa.
+    const handleError = () => {
+      const err = audio.error;
+      const codes: Record<number, string> = {
+        1: 'Carregamento abortado',
+        2: 'Erro de rede',
+        3: 'Erro de decodificacao',
+        4: 'Formato nao suportado pelo navegador',
+      };
+      const reason = err ? (codes[err.code] || `code ${err.code}`) : 'erro desconhecido';
+      console.error('[AudioPlayer] media error:', reason, { src, mediaError: err });
+      setLoadError(reason);
+    };
+
+    const handleLoadStart = () => setLoadError(null);
+
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
+    audio.addEventListener('error', handleError);
+    audio.addEventListener('loadstart', handleLoadStart);
 
     return () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
@@ -51,8 +72,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
+      audio.removeEventListener('error', handleError);
+      audio.removeEventListener('loadstart', handleLoadStart);
     };
-  }, []);
+  }, [src]);
 
   // Process audio and extract waveform data once
   useEffect(() => {
@@ -212,9 +235,30 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  if (loadError) {
+    return (
+      <div className="flex items-center gap-2 min-w-[240px] py-1">
+        <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+        <span className="text-xs flex-1 opacity-80">Audio indisponivel: {loadError}</span>
+        <a
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          download
+          className="inline-flex items-center gap-1 text-xs underline opacity-80 hover:opacity-100"
+        >
+          <Download className="h-3 w-3" />
+          Baixar
+        </a>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2 min-w-[240px]">
-      <audio ref={audioRef} src={src} preload="metadata" />
+      {/* preload="auto" + crossOrigin garantem que duracao apareca rapido e que
+          o decode pra waveform funcione mesmo quando a midia esta em outro origem */}
+      <audio ref={audioRef} src={src} preload="auto" crossOrigin="anonymous" />
 
       <Button
         onClick={togglePlayPause}

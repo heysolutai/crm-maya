@@ -15,6 +15,7 @@ export function useMessageInput({
   const [messageText, setMessageText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAudioRecorder, setShowAudioRecorder] = useState(false);
+  const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -73,6 +74,8 @@ export function useMessageInput({
     setShowEmojiPicker,
     showAudioRecorder,
     setShowAudioRecorder,
+    showVideoRecorder,
+    setShowVideoRecorder,
     replyToMessage,
     handleInputChange,
     handleEmojiSelect,
