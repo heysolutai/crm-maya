@@ -19,6 +19,18 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  images: {
+    // Permite carregar imagens hospedadas no Backblaze B2, S3 e CDNs genericos.
+    // Sem isso, qualquer <Image src="https://..."> com host externo retorna 400
+    // e renderiza vazio (afeta logo da empresa, avatar do cliente, midia inline).
+    remotePatterns: [
+      { protocol: "https", hostname: "**.backblazeb2.com" },
+      { protocol: "https", hostname: "**.b2cdn.com" },
+      { protocol: "https", hostname: "**.amazonaws.com" },
+      { protocol: "https", hostname: "**.cloudfront.net" },
+      { protocol: "https", hostname: "**.r2.cloudflarestorage.com" },
+    ],
+  },
 };
 
 export default withSerwist(nextConfig);
