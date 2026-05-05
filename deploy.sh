@@ -376,6 +376,20 @@ cmd_update() {
 
   step "4/7 — Aplicando schema no banco"
 
+  # Exporta TUDO do .env pro shell atual — sem isso, prisma db push nao
+  # enxerga DATABASE_URL e morre com "datasource.url property is required".
+  # `set -a` marca todas as atribuicoes como exports automaticos ate `set +a`.
+  if [ -f .env ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+  fi
+
+  if [ -z "${DATABASE_URL:-}" ]; then
+    err "DATABASE_URL nao esta definida no .env. Edite ${APP_DIR}/.env e rode novamente."
+  fi
+
   # ORDEM:
   #   1) prisma db push — cria/atualiza tabelas e enums conforme schema.prisma
   #      (necessario PRIMEIRO em VPS limpa: as migrations SQL referenciam tabelas
