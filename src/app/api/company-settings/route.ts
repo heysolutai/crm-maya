@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+import { handleApiError } from '@/lib/api/errors'
 
 /** GET company settings */
 export async function GET(req: NextRequest) {
@@ -17,9 +18,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(company.settings || {})
   } catch (error) {
-    console.error('Erro:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
-  }
+    return handleApiError(error, 'Erro')}
 }
 
 /**
@@ -57,7 +56,5 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ success: true, settings: newSettings })
   } catch (error) {
-    console.error('Erro:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
-  }
+    return handleApiError(error, 'Erro')}
 }

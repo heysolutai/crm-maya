@@ -5,14 +5,20 @@ import { auth } from '@/lib/auth'
 export const runtime = 'nodejs'
 
 // ─── Rate Limiting (in-memory, por IP) ──────────────────────
-// Generoso para WhatsApp CRM com múltiplos clientes conectados
+// Limites generosos: super-admin que carrega multiplas empresas + dashboard
+// com polling de 10s em varios endpoints + SSE consome facil >300 req/min.
+// Configuravel via env pra ajustar sem rebuild.
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
 
-const RATE_LIMIT_WINDOW_MS = 60_000 // 1 minuto
-const RATE_LIMIT_MAX_API = 300      // 300 req/min para API (webhooks, polling, WhatsApp)
-const RATE_LIMIT_MAX_PAGE = 120     // 120 req/min para páginas
+const RATE_LIMIT_WINDOW_MS = 60_000
+const RATE_LIMIT_MAX_API = parseInt(process.env.RATE_LIMIT_MAX_API || '1500', 10)
+const RATE_LIMIT_MAX_PAGE = parseInt(process.env.RATE_LIMIT_MAX_PAGE || '600', 10)
 
 function checkRateLimit(ip: string, isApi: boolean): boolean {
+  // IP "unknown" agrupa tudo num bucket so — desativa rate limit nesse caso
+  // pra evitar punir todo mundo quando o proxy nao forwards o header direito.
+  if (ip === 'unknown') return true
+
   const now = Date.now()
   const key = `${ip}:${isApi ? 'api' : 'page'}`
   const limit = isApi ? RATE_LIMIT_MAX_API : RATE_LIMIT_MAX_PAGE
@@ -49,7 +55,12 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
 }
 
 export async function middleware(request: NextRequest) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  // x-real-ip e setado pelo nginx como IP unico do cliente (proxy_set_header X-Real-IP $remote_addr)
+  // x-forwarded-for pode ter cadeia (proxy1, proxy2, cliente) — pegamos o primeiro
+  const ip =
+    request.headers.get('x-real-ip')?.trim() ||
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    'unknown'
 
   // ─── Rate Limiting ─────────────────────────────────────
   const isApiRoute = request.nextUrl.pathname.startsWith('/api/')

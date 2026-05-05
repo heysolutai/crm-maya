@@ -5,6 +5,7 @@ import { handleCors, jsonResponse } from '@/lib/api/cors';
 import { publishEvent } from '@/lib/realtime';
 import { deleteMediaFromUrl } from '@/lib/storage';
 import { z } from 'zod';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const schema = z.object({
   messageId: z.string().uuid(),
@@ -100,7 +101,6 @@ export async function POST(req: NextRequest) {
       conversation_id: message.conversationId,
     });
   } catch (error) {
-    console.error('[delete-message] Erro:', error);
-    return jsonResponse({ error: 'Erro interno do servidor' }, 500);
+    return handleApiErrorCors(error, '[delete-message] Erro')
   }
 }

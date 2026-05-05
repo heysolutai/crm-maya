@@ -5,6 +5,7 @@ import { authenticate } from '@/lib/api/auth';
 import { assignNextAgent, assignNextAgentInDepartment } from '@/lib/api/database';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
 import { publishEvent } from '@/lib/realtime';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const transferSchema = z.object({
   conversation_id: z.string().uuid(),
@@ -173,7 +174,6 @@ export async function POST(req: NextRequest) {
       mode,
     });
   } catch (error) {
-    console.error('[Transfer] Error:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, '[Transfer] Error')
   }
 }

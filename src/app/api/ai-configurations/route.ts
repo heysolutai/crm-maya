@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { normalizeCompanySlug } from '@/lib/api/utils'
 import { Prisma } from '@prisma/client'
+import { handleApiError } from '@/lib/api/errors'
 
 const createAiConfigurationSchema = z.object({
   company_id: z.string().uuid('Invalid company_id format').optional(),
@@ -49,8 +50,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(configurations)
   } catch (error) {
-    console.error('Erro:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro')
   }
 }
 
@@ -94,8 +94,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(config)
   } catch (error) {
-    console.error('Erro:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro')
   }
 }
 
@@ -141,8 +140,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json(config)
   } catch (error) {
-    console.error('Erro:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro')
   }
 }
 
@@ -160,7 +158,6 @@ export async function DELETE(req: NextRequest) {
     await prisma.aiConfiguration.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Erro:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro')
   }
 }

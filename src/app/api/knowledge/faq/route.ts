@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const apiError = (message: string, errorCode: string, status: number) =>
   jsonResponse({ success: false, error: errorCode, message }, status);
@@ -57,8 +58,7 @@ export async function GET(req: NextRequest) {
 
     return apiSuccess(data);
   } catch (error) {
-    console.error('Erro:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, 'Erro')
   }
 }
 
@@ -145,7 +145,6 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ success: true, data }, 201);
   } catch (error) {
-    console.error('Erro:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, 'Erro')
   }
 }

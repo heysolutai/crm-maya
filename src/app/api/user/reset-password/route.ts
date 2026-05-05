@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, notFoundResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const resetPasswordSchema = z.object({
   userId: z.string().uuid('Invalid userId format'),
@@ -56,7 +57,6 @@ export async function POST(req: NextRequest) {
       message: 'Password reset initiated successfully',
     });
   } catch (error) {
-    console.error('Error in reset-user-password:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, 'Error in reset-user-password')
   }
 }

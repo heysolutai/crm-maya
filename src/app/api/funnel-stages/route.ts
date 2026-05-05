@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { z } from 'zod'
+import { handleApiError } from '@/lib/api/errors'
 
 const createFunnelStageSchema = z.object({
   name: z.string().min(1).max(255),
@@ -41,8 +42,7 @@ export async function GET(req: NextRequest) {
     })
     return NextResponse.json(stages)
   } catch (error) {
-    console.error('Erro ao buscar etapas do funil:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao buscar etapas do funil')
   }
 }
 
@@ -76,8 +76,7 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json(stage, { status: 201 })
   } catch (error) {
-    console.error('Erro ao criar etapa do funil:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao criar etapa do funil')
   }
 }
 
@@ -103,8 +102,7 @@ export async function PUT(req: NextRequest) {
     const stage = await prisma.funnelStage.update({ where: { id }, data })
     return NextResponse.json(stage)
   } catch (error) {
-    console.error('Erro ao atualizar etapa do funil:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao atualizar etapa do funil')
   }
 }
 
@@ -121,7 +119,6 @@ export async function DELETE(req: NextRequest) {
     await prisma.funnelStage.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Erro ao deletar etapa do funil:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao deletar etapa do funil')
   }
 }

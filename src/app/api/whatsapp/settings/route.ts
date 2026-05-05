@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticate } from "@/lib/api/auth";
 import { z } from "zod";
+import { handleApiError } from '@/lib/api/errors'
 
 const schema = z.object({
   instanceId: z.string().uuid(),
@@ -42,7 +43,6 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[PATCH /api/whatsapp/settings] Erro:", error);
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+    return handleApiError(error, '[PATCH /api/whatsapp/settings] Erro')
   }
 }

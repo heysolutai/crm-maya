@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { authenticate } from "@/lib/api/auth";
+import { handleApiError } from '@/lib/api/errors'
 
 // GET /api/catalog — lista produtos do banco local
 //
@@ -71,7 +72,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data: products, total: Array.isArray(products) ? products.length : 0 });
   } catch (error) {
-    console.error("[GET /api/catalog] Erro:", error);
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+    return handleApiError(error, '[GET /api/catalog] Erro')
   }
 }

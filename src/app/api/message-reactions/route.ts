@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+import { handleApiError } from '@/lib/api/errors'
 
 export async function GET(req: NextRequest) {
   try {
@@ -30,7 +31,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(map)
   } catch (error) {
-    console.error('Erro:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro')
   }
 }

@@ -5,6 +5,7 @@ import { getWhatsAppInstance, findOrCreateConversation, saveMessage, getClientPh
 import { sendToWhatsApp } from '@/lib/api/whatsapp';
 import { handleCors, jsonResponse } from '@/lib/api/cors';
 import { uploadToB2, buildB2Key, MIME_TO_EXT } from '@/lib/storage';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const sendAudioSchema = z.object({
   audioBase64: z.string(),
@@ -85,7 +86,6 @@ export async function POST(req: NextRequest) {
       audio_url: publicUrl,
     });
   } catch (error) {
-    console.error('[send-audio-message] Error:', error);
-    return jsonResponse({ error: 'Erro interno do servidor' }, 500);
+    return handleApiErrorCors(error, '[send-audio-message] Error')
   }
 }

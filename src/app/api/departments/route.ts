@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { z } from 'zod'
+import { handleApiError } from '@/lib/api/errors'
 
 const createDepartmentSchema = z.object({
   name: z.string().min(1).max(255),
@@ -36,8 +37,7 @@ export async function GET(req: NextRequest) {
     })
     return NextResponse.json(departments)
   } catch (error) {
-    console.error('Erro ao buscar departamentos:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao buscar departamentos')
   }
 }
 
@@ -68,8 +68,7 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json(department, { status: 201 })
   } catch (error) {
-    console.error('Erro ao criar departamento:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao criar departamento')
   }
 }
 
@@ -98,8 +97,7 @@ export async function PUT(req: NextRequest) {
     })
     return NextResponse.json(department)
   } catch (error) {
-    console.error('Erro ao atualizar departamento:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao atualizar departamento')
   }
 }
 
@@ -120,7 +118,6 @@ export async function DELETE(req: NextRequest) {
     })
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Erro ao deletar departamento:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao deletar departamento')
   }
 }

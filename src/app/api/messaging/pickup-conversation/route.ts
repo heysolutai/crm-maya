@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { authenticate } from "@/lib/api/auth";
 import { handleCors, jsonResponse, errorResponse } from "@/lib/api/cors";
 import { publishEvent } from "@/lib/realtime";
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const pickupSchema = z.object({
   conversation_id: z.string().uuid(),
@@ -72,7 +73,6 @@ export async function POST(req: NextRequest) {
       assigned_to: { user_id: agentId, full_name: agent?.fullName },
     });
   } catch (error) {
-    console.error("[Pickup] Error:", error);
-    return errorResponse("Erro interno do servidor");
+    return handleApiErrorCors(error, '[Pickup] Error')
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+import { handleApiError } from '@/lib/api/errors'
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,9 +21,7 @@ export async function POST(req: NextRequest) {
     if (error?.code === 'P2002') {
       return NextResponse.json({ error: 'User is already a member of this department' }, { status: 409 })
     }
-    console.error('Erro:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
-  }
+    return handleApiError(error, 'Erro')}
 }
 
 export async function PUT(req: NextRequest) {
@@ -41,9 +40,7 @@ export async function PUT(req: NextRequest) {
     })
     return NextResponse.json(member)
   } catch (error) {
-    console.error('Erro:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
-  }
+    return handleApiError(error, 'Erro')}
 }
 
 export async function DELETE(req: NextRequest) {
@@ -61,7 +58,5 @@ export async function DELETE(req: NextRequest) {
     })
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Erro:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
-  }
+    return handleApiError(error, 'Erro')}
 }

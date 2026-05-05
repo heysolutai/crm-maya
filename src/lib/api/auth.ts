@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { AuthError } from './errors'
 import type { AuthResult } from './types'
 
 /**
@@ -51,7 +52,7 @@ export async function authenticate(req: Request): Promise<AuthResult> {
     })
 
     if (!keyData) {
-      throw new Error('Invalid or inactive API key')
+      throw new AuthError('API key invalida ou inativa', 401, 'INVALID_API_KEY')
     }
 
     await prisma.apiKey.update({
@@ -66,5 +67,9 @@ export async function authenticate(req: Request): Promise<AuthResult> {
     }
   }
 
-  throw new Error('Authentication required: provide session or x-api-key header')
+  throw new AuthError(
+    'Autenticacao obrigatoria: envie a sessao ou o header x-api-key',
+    401,
+    'AUTH_REQUIRED',
+  )
 }

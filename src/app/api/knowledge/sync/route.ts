@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, notFoundResponse, unauthorizedResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 function normalizeCompanyName(name: string): string {
   return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
@@ -102,7 +103,6 @@ export async function POST(req: NextRequest) {
     console.log('[Sync KB] ✅ Done! knowledge_name:', knowledgeName, 'faqs_count:', faqs?.length || 0);
     return jsonResponse({ success: true, knowledge_name: knowledgeName, faqs_count: faqs?.length || 0 });
   } catch (error) {
-    console.error('[Sync KB] ❌ Unexpected error:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, '[Sync KB] ❌ Unexpected error')
   }
 }

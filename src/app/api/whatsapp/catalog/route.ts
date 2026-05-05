@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticate } from "@/lib/api/auth";
+import { handleApiError } from '@/lib/api/errors'
 
 /**
  * Proxy para endpoints de catálogo WhatsApp Business da UazAPI.
@@ -200,7 +201,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `Ação inválida: ${action}` }, { status: 400 });
     }
   } catch (error) {
-    console.error("Erro no catálogo WhatsApp:", error);
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+    return handleApiError(error, 'Erro no catálogo WhatsApp')
   }
 }

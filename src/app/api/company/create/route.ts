@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const createCompanySchema = z.object({
   companyName: z.string().min(1, 'Company name is required'),
@@ -128,7 +129,6 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Unexpected error:', error);
-    return errorResponse('Erro interno do servidor', 500);
+    return handleApiErrorCors(error, 'Unexpected error')
   }
 }

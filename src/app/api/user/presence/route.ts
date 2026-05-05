@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticate, isInternalRequest } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
@@ -43,7 +44,6 @@ export async function POST(req: NextRequest) {
 
     return badRequestResponse('Invalid action. Use: online, offline, or heartbeat');
   } catch (error) {
-    console.error('[Presence] Error:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, '[Presence] Error')
   }
 }

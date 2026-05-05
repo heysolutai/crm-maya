@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+import { handleApiError } from '@/lib/api/errors'
 
 const updateTeamSchema = z.discriminatedUnion('action', [
   z.object({
@@ -64,8 +65,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(normalized)
   } catch (error) {
-    console.error('Erro:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro')
   }
 }
 
@@ -117,7 +117,6 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
   } catch (error) {
-    console.error('Erro:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro')
   }
 }

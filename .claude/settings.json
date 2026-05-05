@@ -3,7 +3,11 @@
     "allow": [
       "Bash(xargs basename *)",
       "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(python3 /tmp/fix-api-errors.py)",
+      "Bash(python3 /tmp/fix-api-errors-v2.py)",
+      "Bash(grep -rB 1 \"Erro interno do servidor\" /home/yago/crm-maya/src/app/api/)",
+      "Bash(python3 /tmp/fix-api-errors-v3.py)"
     ]
   }
 }

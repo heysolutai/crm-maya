@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticate } from "@/lib/api/auth";
 import { z } from "zod";
+import { handleApiError } from '@/lib/api/errors'
 
 const patchSchema = z.object({
   isHidden: z.boolean().optional(),
@@ -65,8 +66,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     return NextResponse.json({ data: updated });
   } catch (error) {
-    console.error("[PATCH /api/catalog/[id]] Erro:", error);
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+    return handleApiError(error, '[PATCH /api/catalog/[id]] Erro')
   }
 }
 
@@ -90,7 +90,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await prisma.catalogProduct.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[DELETE /api/catalog/[id]] Erro:", error);
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+    return handleApiError(error, '[DELETE /api/catalog/[id]] Erro')
   }
 }

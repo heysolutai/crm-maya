@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { useClients } from '@/hooks/useClients';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useAuth } from '@/hooks/useAuth';
@@ -38,6 +40,7 @@ import {
   UserX,
   DollarSign,
   ContactRound,
+  MessageCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -65,9 +68,11 @@ function getAvatarColor(name: string) {
 }
 
 export default function Clients() {
+  const router = useRouter();
   const { clients, loading, createClient, updateClient, deleteClient } = useClients();
   const { user, role } = useAuth();
   const { permissions } = useUserPermissions();
+  const [openingConversationId, setOpeningConversationId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -173,6 +178,24 @@ export default function Clients() {
 
   const handleDeleteClick = (id: string) => {
     setDeleteConfirm({ open: true, id });
+  };
+
+  const handleOpenConversation = async (clientId: string) => {
+    setOpeningConversationId(clientId);
+    try {
+      const res = await fetch(`/api/conversations/find-by-client?clientId=${clientId}`);
+      if (!res.ok) throw new Error('Falha ao buscar conversa');
+      const data = await res.json();
+      if (!data?.id) {
+        toast.error('Este cliente ainda não possui conversa');
+        return;
+      }
+      router.push(`/app/conversations?conversation=${data.id}`);
+    } catch {
+      toast.error('Erro ao abrir conversa');
+    } finally {
+      setOpeningConversationId(null);
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -319,6 +342,17 @@ export default function Clients() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-emerald-600 hover:text-emerald-700"
+                          onClick={() => handleOpenConversation(client.id)}
+                          disabled={openingConversationId === client.id}
+                          aria-label="Abrir conversa"
+                          title="Abrir conversa"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                        </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(client)} aria-label="Editar cliente">
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -373,6 +407,16 @@ export default function Clients() {
                       {format(new Date(client.created_at), 'dd/MM/yyyy')}
                     </span>
                     <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-emerald-600 hover:text-emerald-700"
+                        onClick={() => handleOpenConversation(client.id)}
+                        disabled={openingConversationId === client.id}
+                        aria-label="Abrir conversa"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(client)} aria-label="Editar">
                         <Pencil className="h-4 w-4" />
                       </Button>

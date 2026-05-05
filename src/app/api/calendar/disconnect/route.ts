@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, notFoundResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
@@ -25,7 +26,6 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ success: true });
   } catch (error) {
-    console.error('Erro:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, 'Erro')
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 export async function OPTIONS(req: NextRequest) {
   return handleCors(req) || jsonResponse(null);
@@ -135,7 +136,6 @@ ${salesLines}
 
     return jsonResponse({ success: true, sent, report, message });
   } catch (error) {
-    console.error('[generate-daily-report] Error:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, '[generate-daily-report] Error')
   }
 }

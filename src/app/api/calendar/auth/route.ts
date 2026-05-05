@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
@@ -28,7 +29,6 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ url: authUrl.toString() });
   } catch (error) {
-    console.error('Erro:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, 'Erro')
   }
 }

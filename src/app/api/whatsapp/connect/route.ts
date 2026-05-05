@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 interface WhatsAppRequest {
   action: 'connect' | 'reconnect' | 'disconnect' | 'delete' | 'update';
@@ -297,7 +298,6 @@ export async function POST(req: NextRequest) {
 
     throw new Error('Ação inválida');
   } catch (error) {
-    console.error('Error:', error);
-    return jsonResponse({ success: false, error: 'Erro interno do servidor' }, 500);
+    return handleApiErrorCors(error, 'Error')
   }
 }

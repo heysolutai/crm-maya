@@ -5,6 +5,7 @@ import { logAction } from '@/lib/services/audit'
 import { phoneVariants, canonicalPhone } from '@/lib/api/utils'
 import { publishEvent } from '@/lib/realtime'
 import { z } from 'zod'
+import { handleApiError } from '@/lib/api/errors'
 
 const createConversationSchema = z.object({
   companyId: z.string().uuid().optional(),
@@ -74,8 +75,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(conversations)
   } catch (error) {
-    console.error('Erro ao buscar conversas:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao buscar conversas')
   }
 }
 
@@ -215,8 +215,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ id: conversation.id, existing: false }, { status: 201 })
   } catch (error) {
-    console.error('Erro ao criar conversa:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao criar conversa')
   }
 }
 
@@ -259,7 +258,6 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json(conversation)
   } catch (error) {
-    console.error('Erro ao atualizar conversa:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao atualizar conversa')
   }
 }

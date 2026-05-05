@@ -5,6 +5,7 @@ import { getWhatsAppInstance, findOrCreateConversation, saveMessage, getUAZMessa
 import { sendToWhatsApp } from '@/lib/api/whatsapp';
 import { validateTextPayload } from '@/lib/api/utils';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const apiError = (message: string, errorCode: string, status: number, extra?: Record<string, unknown>) =>
   jsonResponse({ success: false, error: errorCode, message, ...extra }, status);
@@ -111,7 +112,6 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ success: true, message_id: message.id, conversation_id: conversationId, sender_type: payload.fromAI ? 'ai' : 'agent' });
   } catch (error) {
-    console.error('[send-message-text] Error:', error);
-    return apiError('Erro interno do servidor ao enviar mensagem.', 'INTERNAL_ERROR', 500);
+    return handleApiErrorCors(error, '[send-message-text] Error')
   }
 }

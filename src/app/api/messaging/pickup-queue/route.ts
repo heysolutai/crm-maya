@@ -5,6 +5,7 @@ import { authenticate } from '@/lib/api/auth';
 import { assignNextAgentInDepartment } from '@/lib/api/database';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 import { publishEvent } from '@/lib/realtime';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const pickupQueueSchema = z.object({});
 
@@ -82,7 +83,6 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ picked_up: pickedUp });
   } catch (error) {
-    console.error('[Pickup Queue] Error:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, '[Pickup Queue] Error')
   }
 }

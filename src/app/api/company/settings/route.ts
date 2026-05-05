@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const updateSettingsSchema = z.object({
   company_id: z.string().uuid('Invalid company_id format').optional(),
@@ -28,8 +29,7 @@ export async function GET(req: NextRequest) {
 
     return jsonResponse({ success: true, settings: company.settings });
   } catch (error) {
-    console.error('Erro:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, 'Erro')
   }
 }
 
@@ -80,7 +80,6 @@ export async function PUT(req: NextRequest) {
 
     return jsonResponse({ success: true, settings: updated.settings });
   } catch (error) {
-    console.error('[company/settings] Error:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, '[company/settings] Error')
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { authenticate } from '@/lib/api/auth';
 import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, unauthorizedResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
@@ -62,7 +63,6 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ success: true, message: 'Arquivo notificado com sucesso', n8nResponse: n8nData });
   } catch (error) {
-    console.error('Error in notify-faq-upload:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, 'Error in notify-faq-upload')
   }
 }

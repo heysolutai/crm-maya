@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const schema = z.object({
   endpoint: z.string().url(),
@@ -35,7 +36,6 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ success: true });
   } catch (error) {
-    console.error('[Push Unsubscribe] erro:', error);
-    return jsonResponse({ error: 'Erro interno do servidor' }, 500);
+    return handleApiErrorCors(error, '[Push Unsubscribe] erro')
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
@@ -48,7 +49,6 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ success: true });
   } catch (error) {
-    console.error('[whatsapp-presence] Error:', error);
-    return jsonResponse({ success: false, error: 'Erro interno do servidor' }, 500);
+    return handleApiErrorCors(error, '[whatsapp-presence] Error')
   }
 }

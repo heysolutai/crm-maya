@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticate, isInternalRequest } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, unauthorizedResponse, badRequestResponse, notFoundResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 async function refreshAccessToken(connection: any): Promise<string | null> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -116,7 +117,6 @@ export async function POST(req: NextRequest) {
       return jsonResponse({ success: true, action: 'updated', event_id: eventId });
     }
   } catch (error) {
-    console.error('[Calendar Sync]', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, '[Calendar Sync]')
   }
 }

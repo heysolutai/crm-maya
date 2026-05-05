@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+import { handleApiError } from '@/lib/api/errors'
 
 const SINGLETON_ID = 'singleton'
 
@@ -34,9 +35,7 @@ export async function GET() {
       loginDescription: settings.loginDescription,
     })
   } catch (error) {
-    console.error('Erro:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
-  }
+    return handleApiError(error, 'Erro')}
 }
 
 /** PUT - Super-admin only: update system branding */
@@ -82,7 +81,5 @@ export async function PUT(req: NextRequest) {
       loginDescription: settings.loginDescription,
     })
   } catch (error) {
-    console.error('Erro:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
-  }
+    return handleApiError(error, 'Erro')}
 }

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { publishEvent } from '@/lib/realtime'
+import { handleApiError } from '@/lib/api/errors'
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,8 +21,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(notes)
   } catch (error) {
-    console.error('Erro:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro')
   }
 }
 
@@ -66,8 +66,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(noteRecord)
   } catch (error) {
-    console.error('Erro:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro')
   }
 }
 
@@ -85,7 +84,6 @@ export async function DELETE(req: NextRequest) {
     await prisma.conversationNote.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Erro:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro')
   }
 }

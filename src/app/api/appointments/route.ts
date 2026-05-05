@@ -5,6 +5,7 @@ import {
   apiError, apiSuccess, formatWithBrazilOffset, defaultBusinessHours,
   getEffectiveAppointmentSettings, authenticateApiKey, syncWithGoogleCalendar,
 } from '@/lib/api/appointments-helpers';
+import { handleApiErrorCors } from '@/lib/api/errors';
 
 export async function OPTIONS(req: NextRequest) {
   return handleCors(req) || jsonResponse(null);
@@ -71,8 +72,7 @@ export async function GET(req: NextRequest) {
       message: `${appointments.length} agendamento(s) encontrado(s).`,
     });
   } catch (error) {
-    console.error('[appointments GET]', error);
-    return apiError('Erro interno do servidor.', 'INTERNAL_ERROR', 200);
+    return handleApiErrorCors(error, '[appointments GET]')
   }
 }
 
@@ -200,7 +200,6 @@ export async function POST(req: NextRequest) {
     syncWithGoogleCalendar(companyId, appointment.id, 'create');
     return apiSuccess(appointment, 201);
   } catch (error) {
-    console.error('[appointments POST]', error);
-    return apiError('Erro interno do servidor.', 'INTERNAL_ERROR', 200);
+    return handleApiErrorCors(error, '[appointments POST]')
   }
 }

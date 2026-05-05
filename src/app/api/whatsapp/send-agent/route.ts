@@ -4,6 +4,7 @@ import { authenticate } from '@/lib/api/auth';
 import { sendToWhatsApp } from '@/lib/api/whatsapp';
 import { handleCors, jsonResponse, errorResponse, unauthorizedResponse } from '@/lib/api/cors';
 import { pauseClientAIByConversation } from '@/lib/api/database';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
@@ -89,7 +90,6 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ success: true, message_id: message.id, webhook_sent: !!webhookUrl });
   } catch (error) {
-    console.error('Error in send-agent-message:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, 'Error in send-agent-message')
   }
 }

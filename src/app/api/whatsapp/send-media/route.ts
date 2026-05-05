@@ -8,6 +8,7 @@ import { validateMediaPayload } from '@/lib/api/utils';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 import fs from 'fs';
 import path from 'path';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 function normalizeBase64(input: string): string {
   const stripped = input.trim().replace(/^data:[^;]+;base64,/, '');
@@ -142,7 +143,6 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ success: true, message_id: message.id, conversation_id: conversationId, sender_type: payload.fromAI ? 'ai' : 'agent', media_type: payload.type });
   } catch (error) {
-    console.error('[send-message-media] Error:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, '[send-message-media] Error')
   }
 }

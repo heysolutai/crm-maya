@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { jsonResponse, errorResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,7 +31,6 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ success: true, cleaned });
   } catch (error) {
-    console.error('[Cleanup Presence] Error:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, '[Cleanup Presence] Error')
   }
 }

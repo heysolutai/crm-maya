@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticate } from "@/lib/api/auth";
 import { z } from "zod";
+import { handleApiError } from '@/lib/api/errors'
 
 const createSchema = z.object({
   userId: z.string().uuid(),
@@ -58,8 +59,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data: schedules });
   } catch (error) {
-    console.error("Erro ao buscar agendas:", error);
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+    return handleApiError(error, 'Erro ao buscar agendas')
   }
 }
 
@@ -114,7 +114,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data: schedule }, { status: 201 });
   } catch (error) {
-    console.error("Erro ao criar agenda:", error);
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+    return handleApiError(error, 'Erro ao criar agenda')
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const apiError = (message: string, errorCode: string, status: number) =>
   jsonResponse({ success: false, error: errorCode, message }, status);
@@ -40,8 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!data) return apiError('Pergunta frequente não encontrada.', 'FAQ_NOT_FOUND', 404);
     return apiSuccess(data);
   } catch (error) {
-    console.error('Erro:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, 'Erro')
   }
 }
 
@@ -76,8 +76,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
     return apiSuccess(data);
   } catch (error) {
-    console.error('Erro:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, 'Erro')
   }
 }
 
@@ -98,7 +97,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await prisma.companyFaq.delete({ where: { id } });
     return apiSuccess({ message: 'Pergunta frequente excluída com sucesso.' });
   } catch (error) {
-    console.error('Erro:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, 'Erro')
   }
 }

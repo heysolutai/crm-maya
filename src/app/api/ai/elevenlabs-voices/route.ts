@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 export async function OPTIONS(req: NextRequest) {
   return handleCors(req) || jsonResponse(null);
@@ -36,7 +37,6 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ voices });
   } catch (error) {
-    console.error('[get-elevenlabs-voices] Error:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, '[get-elevenlabs-voices] Error')
   }
 }

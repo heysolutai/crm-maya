@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+import { handleApiError } from '@/lib/api/errors'
 
 const updateCompanySchema = z.object({
   id: z.string().uuid('Invalid id format'),
@@ -46,9 +47,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(result)
   } catch (error) {
-    console.error('Erro:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
-  }
+    return handleApiError(error, 'Erro')}
 }
 
 export async function PUT(req: NextRequest) {
@@ -65,9 +64,7 @@ export async function PUT(req: NextRequest) {
     const company = await prisma.company.update({ where: { id }, data: updates })
     return NextResponse.json(company)
   } catch (error) {
-    console.error('Erro:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
-  }
+    return handleApiError(error, 'Erro')}
 }
 
 export async function DELETE(req: NextRequest) {
@@ -82,7 +79,5 @@ export async function DELETE(req: NextRequest) {
     await prisma.$executeRaw`SELECT delete_company_cascade(${id}::uuid)`
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Erro:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
-  }
+    return handleApiError(error, 'Erro')}
 }

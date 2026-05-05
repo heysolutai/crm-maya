@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { authenticate } from "@/lib/api/auth";
 import { z } from "zod";
+import { handleApiError } from '@/lib/api/errors'
 
 const updateSchema = z.object({
   name: z.string().min(1).max(255).optional(),
@@ -48,8 +49,7 @@ export async function GET(
 
     return NextResponse.json({ data: schedule });
   } catch (error) {
-    console.error("Erro ao buscar agenda:", error);
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+    return handleApiError(error, 'Erro ao buscar agenda')
   }
 }
 
@@ -91,8 +91,7 @@ export async function PUT(
 
     return NextResponse.json({ data: updated });
   } catch (error) {
-    console.error("Erro ao atualizar agenda:", error);
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+    return handleApiError(error, 'Erro ao atualizar agenda')
   }
 }
 
@@ -120,7 +119,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Erro ao excluir agenda:", error);
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+    return handleApiError(error, 'Erro ao excluir agenda')
   }
 }

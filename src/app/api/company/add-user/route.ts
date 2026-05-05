@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, notFoundResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const addUserSchema = z.object({
   company_id: z.string().uuid('Invalid company_id format'),
@@ -117,7 +118,6 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error in add-user-to-company:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, 'Error in add-user-to-company')
   }
 }

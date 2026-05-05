@@ -4,6 +4,7 @@ import { authenticate } from '@/lib/api/auth'
 import { logAction } from '@/lib/services/audit'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
+import { handleApiError } from '@/lib/api/errors'
 
 const createClientSchema = z.object({
   firstName: z.string().min(1).max(255).optional(),
@@ -64,8 +65,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(clients)
   } catch (error) {
-    console.error('Erro ao buscar clientes:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao buscar clientes')
   }
 }
 
@@ -117,8 +117,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(client, { status: 201 })
   } catch (error) {
-    console.error('Erro ao criar cliente:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao criar cliente')
   }
 }
 
@@ -156,8 +155,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json(client)
   } catch (error) {
-    console.error('Erro ao atualizar cliente:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao atualizar cliente')
   }
 }
 
@@ -183,7 +181,6 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Erro ao deletar cliente:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro ao deletar cliente')
   }
 }

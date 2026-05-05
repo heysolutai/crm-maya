@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const sendReactionSchema = z.object({
   messageId: z.string().uuid(),
@@ -90,7 +91,6 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ success: true, message: 'Reaction sent successfully' });
   } catch (error) {
-    console.error('[send-reaction] Error:', error);
-    return jsonResponse({ success: false, error: 'Erro interno do servidor' }, 500);
+    return handleApiErrorCors(error, '[send-reaction] Error')
   }
 }

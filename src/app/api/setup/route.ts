@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import bcrypt from 'bcryptjs'
+import { handleApiError } from '@/lib/api/errors'
 
 // GET — Check if system needs setup (no users exist)
 export async function GET() {
@@ -119,7 +120,6 @@ export async function POST(request: NextRequest) {
       company: company ? { id: company.id, name: company.name } : null,
     })
   } catch (error) {
-    console.error('[Setup] Error:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, '[Setup] Error')
   }
 }

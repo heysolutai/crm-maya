@@ -3,6 +3,7 @@ import { AppRole } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 export async function OPTIONS(req: NextRequest) {
   return handleCors(req) || jsonResponse(null);
@@ -199,7 +200,6 @@ export async function GET(req: NextRequest) {
       message: `Proximo agente: ${nextUser?.fullName ?? nextAgentId} (${agentIds.length} candidato(s)).`,
     });
   } catch (error) {
-    console.error('[next-agent] Error:', error);
-    return errorResponse('Erro interno do servidor', 500);
+    return handleApiErrorCors(error, '[next-agent] Error')
   }
 }

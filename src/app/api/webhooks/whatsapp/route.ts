@@ -8,6 +8,7 @@ import { uploadToB2, buildB2Key, MIME_TO_EXT, deleteMediaFromUrl } from '@/lib/s
 import { publishEvent } from '@/lib/realtime';
 import { sendPushToCompany } from '@/lib/push';
 import { pauseClientAIByConversation } from '@/lib/api/database';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 // Schema de validação para o payload da UAZapi
 const UAZapiPayloadSchema = z.object({
@@ -1788,7 +1789,6 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error in receive-message function:', error);
-    return errorResponse('Erro interno do servidor', 500);
+    return handleApiErrorCors(error, 'Error in receive-message function')
   }
 }

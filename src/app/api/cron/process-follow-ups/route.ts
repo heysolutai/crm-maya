@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { jsonResponse, errorResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,7 +25,6 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({ success: true, jobId: job.id, message: 'Follow-ups processing triggered' });
   } catch (error) {
-    console.error('[API Cron] process-follow-ups error:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, '[API Cron] process-follow-ups error')
   }
 }

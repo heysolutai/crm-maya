@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, unauthorizedResponse, badRequestResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const AI_MODEL_PRICING: Record<string, { inputPer1M: number; outputPer1M: number }> = {
   'gpt-5-2025-08-07': { inputPer1M: 10.0, outputPer1M: 30.0 },
@@ -110,7 +111,6 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error in track-ai-usage:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, 'Error in track-ai-usage')
   }
 }

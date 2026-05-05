@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
+import { handleApiError } from '@/lib/api/errors'
 
 const stageSchema = z.object({
   name: z.string().max(255),
@@ -44,8 +45,7 @@ export async function GET(req: NextRequest) {
     })
     return NextResponse.json(pipelines)
   } catch (error) {
-    console.error('Erro:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro')
   }
 }
 
@@ -96,8 +96,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(pipeline, { status: 201 })
   } catch (error) {
-    console.error('Erro:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro')
   }
 }
 
@@ -127,8 +126,7 @@ export async function PUT(req: NextRequest) {
     })
     return NextResponse.json(pipeline)
   } catch (error) {
-    console.error('Erro:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro')
   }
 }
 
@@ -150,7 +148,6 @@ export async function DELETE(req: NextRequest) {
     })
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Erro:', error)
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
+    return handleApiError(error, 'Erro')
   }
 }

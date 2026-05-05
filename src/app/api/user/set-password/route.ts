@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, notFoundResponse } from '@/lib/api/cors';
+import { handleApiErrorCors } from '@/lib/api/errors'
 
 const setPasswordSchema = z.object({
   userId: z.string().uuid('Invalid userId format'),
@@ -72,7 +73,6 @@ export async function POST(req: NextRequest) {
       userName: targetUser.fullName,
     });
   } catch (error) {
-    console.error('Error in set-user-password:', error);
-    return errorResponse('Erro interno do servidor');
+    return handleApiErrorCors(error, 'Error in set-user-password')
   }
 }
