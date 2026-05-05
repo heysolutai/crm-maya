@@ -118,6 +118,7 @@ async function main() {
       conversationId: true,
       mediaUrl: true,
       uazMessageId: true,
+      metadata: true,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -155,10 +156,23 @@ async function main() {
       continue;
     }
 
-    console.log(`[${m.id}] baixando key=${m.uazMessageId}`);
+    // UAZapi /message/download espera o ID completo (formato
+    // "false_5511...@s.whatsapp.net_BAE5..."). Esse fica em metadata.uaz_full_id.
+    // O uazMessageId puro e o "messageid" curto (BAE5...) que pode dar
+    // "malformed id" no endpoint. Tenta full_id primeiro, cai pro curto.
+    const meta = (m.metadata || {}) as Record<string, any>;
+    const fullId: string | undefined = meta.uaz_full_id || meta.uazFullId;
+    const messageKey = fullId || m.uazMessageId!;
+
+    console.log(`[${m.id}] baixando key=${messageKey}${fullId ? ' (full_id)' : ' (short)'}`);
     if (!APPLY) { skipped++; continue; }
 
-    const dl = await downloadFromUazAPI(m.uazMessageId!, inst.instanceApiKey, inst.apiUrl);
+    let dl = await downloadFromUazAPI(messageKey, inst.instanceApiKey, inst.apiUrl);
+    // Se o full_id falhar, tenta o curto como fallback
+    if (!dl && fullId && m.uazMessageId && fullId !== m.uazMessageId) {
+      console.log('  retry com id curto:', m.uazMessageId);
+      dl = await downloadFromUazAPI(m.uazMessageId, inst.instanceApiKey, inst.apiUrl);
+    }
     if (!dl) {
       console.error(`  falhou`);
       failed++;

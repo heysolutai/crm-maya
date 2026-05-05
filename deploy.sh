@@ -75,6 +75,64 @@ prompt_if_empty() {
   fi
 }
 
+# Cria/atualiza .env com defaults sensatos. Preserva linhas existentes que ja
+# foram editadas pelo operador — so adiciona as que estao faltando. Senhas e
+# secrets sao gerados se nao existirem ainda.
+#
+# Args (via variaveis globais ou env):
+#   APP_DIR PG_USER PG_DB PG_PASS DOMAIN APP_PORT
+bootstrap_env() {
+  local env_file="${APP_DIR}/.env"
+  local proto="http"
+  [ -f "${APP_DIR}/.ssl_enabled" ] && proto="https"
+
+  # Helper: adiciona KEY=value se KEY nao existe ainda no arquivo
+  upsert_env() {
+    local key="$1"
+    local value="$2"
+    if [ -f "$env_file" ] && grep -q "^${key}=" "$env_file"; then
+      return # ja existe — nao sobrescreve (operador pode ter editado)
+    fi
+    echo "${key}=\"${value}\"" >> "$env_file"
+  }
+
+  if [ ! -f "$env_file" ]; then
+    log "Criando ${env_file} do zero"
+    touch "$env_file"
+    chmod 600 "$env_file"
+  fi
+
+  local app_url="${proto}://${DOMAIN:-localhost}"
+
+  # Banco — sempre escreve com a senha atual (deploy.sh pode ter regerado)
+  if grep -q "^DATABASE_URL=" "$env_file"; then
+    sed -i "s|^DATABASE_URL=.*$|DATABASE_URL=\"postgresql://${PG_USER}:${PG_PASS}@localhost:5432/${PG_DB}\"|" "$env_file"
+  else
+    echo "DATABASE_URL=\"postgresql://${PG_USER}:${PG_PASS}@localhost:5432/${PG_DB}\"" >> "$env_file"
+  fi
+
+  upsert_env "REDIS_URL" "redis://localhost:6379"
+  upsert_env "NEXTAUTH_URL" "${app_url}"
+  upsert_env "NEXT_PUBLIC_APP_URL" "${app_url}"
+  upsert_env "NEXTAUTH_SECRET" "$(openssl rand -base64 32 | tr -d '\n')"
+  upsert_env "INTERNAL_API_SECRET" "$(openssl rand -hex 32)"
+  upsert_env "CRON_SECRET" "$(openssl rand -hex 32)"
+
+  # Backblaze B2 — placeholders pro operador preencher
+  upsert_env "B2_KEY_ID" ""
+  upsert_env "B2_APP_KEY" ""
+  upsert_env "B2_BUCKET_NAME" ""
+  upsert_env "B2_BUCKET_REGION" "us-west-004"
+  upsert_env "B2_ENDPOINT" "https://s3.us-west-004.backblazeb2.com"
+  upsert_env "B2_PUBLIC_URL" ""
+
+  # Opcionais
+  upsert_env "DEFAULT_OPENAI_API_KEY" ""
+
+  chmod 600 "$env_file"
+  log ".env atualizado em ${env_file}"
+}
+
 # Salva as variaveis em .deployrc pro proximo run
 save_deployrc() {
   local rc_file="${APP_DIR}/.deployrc"
@@ -149,18 +207,18 @@ cmd_setup() {
     systemctl start postgresql
   fi
 
-  sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='${PG_USER}'" | grep -q 1 || {
+  # PG_PASS fica em variavel pra ser usado no .env logo abaixo. Se o usuario ja
+  # existe, pulamos a criacao mas ainda assim resetamos a senha (gera nova) —
+  # garante que o operador nunca fica sem senha. Senha vai pro .env.
+  PG_PASS=$(openssl rand -hex 16)
+  if sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='${PG_USER}'" | grep -q 1; then
+    log "Postgres user ${PG_USER} ja existe — resetando senha"
+    sudo -u postgres psql -c "ALTER USER ${PG_USER} PASSWORD '${PG_PASS}';"
+  else
     log "Criando usuario PostgreSQL: ${PG_USER}"
     sudo -u postgres createuser --superuser "${PG_USER}"
-    PG_PASS=$(openssl rand -hex 16)
     sudo -u postgres psql -c "ALTER USER ${PG_USER} PASSWORD '${PG_PASS}';"
-    echo ""
-    warn "=========================================="
-    warn "  SENHA DO POSTGRES: ${PG_PASS}"
-    warn "  ANOTE AGORA! Vai precisar no .env"
-    warn "=========================================="
-    echo ""
-  }
+  fi
 
   sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='${PG_DB}'" | grep -q 1 || {
     log "Criando banco: ${PG_DB}"
@@ -262,21 +320,29 @@ NGINX
   # Salva config pra proximos runs
   save_deployrc
 
+  # Bootstrap do .env: gera/preenche valores que sao deterministicos (Postgres,
+  # Redis, NEXTAUTH_*) e secrets aleatorios. Operador so precisa adicionar
+  # B2_*, DEFAULT_OPENAI_API_KEY e o que mais for opcional.
+  bootstrap_env
+
   echo ""
   log "Setup concluido!"
   echo ""
-  echo "  Proximos passos:"
-  echo "  ─────────────────────────────────────────────"
-  echo "  1. Configure .env:   nano ${APP_DIR}/.env"
-  echo "     Use os secrets gerados abaixo:"
+  echo "  .env gerado automaticamente em ${APP_DIR}/.env"
+  echo "  Postgres: ${PG_USER}:${PG_PASS}@localhost:5432/${PG_DB}"
+  echo "  (senha tambem ja gravada no DATABASE_URL do .env)"
   echo ""
-  echo "     NEXTAUTH_SECRET=\"$(openssl rand -base64 32)\""
-  echo "     INTERNAL_API_SECRET=\"$(openssl rand -hex 32)\""
-  echo "     CRON_SECRET=\"$(openssl rand -hex 32)\""
-  echo ""
-  echo "  2. Primeiro deploy:  cd ${APP_DIR} && ./deploy.sh update"
-  echo "  3. SSL:              sudo ./deploy.sh ssl"
+  echo "  Falta preencher (edite manualmente):"
   echo "  ─────────────────────────────────────────────"
+  echo "  nano ${APP_DIR}/.env"
+  echo ""
+  echo "    B2_KEY_ID, B2_APP_KEY, B2_BUCKET_NAME, B2_PUBLIC_URL"
+  echo "    DEFAULT_OPENAI_API_KEY  (opcional — habilita transcricao)"
+  echo "  ─────────────────────────────────────────────"
+  echo ""
+  echo "  Depois disso:"
+  echo "    cd ${APP_DIR} && ./deploy.sh update    # primeiro build + start"
+  echo "    sudo ./deploy.sh ssl                    # HTTPS"
   echo ""
 }
 
@@ -465,9 +531,44 @@ cmd_ssl() {
   DOMAIN="$domain"
   save_deployrc
 
+  # Marca SSL como ativo + atualiza .env automatico (http -> https)
+  touch "${APP_DIR}/.ssl_enabled"
+  if [ -f "${APP_DIR}/.env" ]; then
+    sed -i "s|^NEXTAUTH_URL=\"http://${domain}\"|NEXTAUTH_URL=\"https://${domain}\"|" "${APP_DIR}/.env"
+    sed -i "s|^NEXT_PUBLIC_APP_URL=\"http://${domain}\"|NEXT_PUBLIC_APP_URL=\"https://${domain}\"|" "${APP_DIR}/.env"
+    sed -i "s|^NEXTAUTH_URL=\"http://localhost\"|NEXTAUTH_URL=\"https://${domain}\"|" "${APP_DIR}/.env"
+    sed -i "s|^NEXT_PUBLIC_APP_URL=\"http://localhost\"|NEXT_PUBLIC_APP_URL=\"https://${domain}\"|" "${APP_DIR}/.env"
+    log ".env atualizado: NEXTAUTH_URL e NEXT_PUBLIC_APP_URL agora usam https"
+  fi
+
   log "SSL configurado para ${domain}"
-  warn "Atualize NEXTAUTH_URL e NEXT_PUBLIC_APP_URL no .env para https://${domain}"
-  warn "Depois rode: ./deploy.sh update"
+  warn "Rode './deploy.sh update' pra rebuildar com as URLs https"
+}
+
+# ──────────────────────────────────────────────
+#  PG-RESET — Reseta a senha do Postgres e atualiza .env
+# ──────────────────────────────────────────────
+cmd_pg_reset() {
+  if [ "$EUID" -ne 0 ]; then
+    err "Rode com sudo: sudo ./deploy.sh pg-reset"
+  fi
+  if [ -f "package.json" ]; then APP_DIR="$(pwd)"; fi
+  cd "$APP_DIR" || err "Diretorio ${APP_DIR} nao encontrado"
+
+  local new_pass
+  new_pass=$(openssl rand -hex 16)
+  sudo -u postgres psql -c "ALTER USER ${PG_USER} PASSWORD '${new_pass}';" >/dev/null \
+    || err "Falha ao resetar senha — usuario ${PG_USER} existe?"
+
+  if [ -f .env ]; then
+    sed -i "s|^DATABASE_URL=.*$|DATABASE_URL=\"postgresql://${PG_USER}:${new_pass}@localhost:5432/${PG_DB}\"|" .env
+    log ".env atualizado com a nova senha"
+  else
+    warn ".env nao existe — nova senha: ${new_pass}"
+  fi
+
+  log "Senha do Postgres resetada com sucesso"
+  log "Rode: ./deploy.sh restart   (pra app pegar a nova DATABASE_URL)"
 }
 
 # ──────────────────────────────────────────────
@@ -481,11 +582,13 @@ cmd_help() {
   echo ""
   echo "  Comandos:"
   echo "    setup           Instala tudo + clona repo + configura nginx — requer sudo"
+  echo "                    (gera .env automatico com DATABASE_URL e secrets aleatorios)"
   echo "    update          Git pull + migrations + build + restart"
   echo "    restart         Apenas reiniciar a aplicacao"
   echo "    status          Ver status dos servicos, disco e memoria"
   echo "    logs [N]        Ver ultimas N linhas de log (padrao: 100)"
-  echo "    ssl [DOMINIO]   Configurar HTTPS com Let's Encrypt — requer sudo"
+  echo "    ssl [DOMINIO]   Configurar HTTPS com Let's Encrypt + atualiza .env — requer sudo"
+  echo "    pg-reset        Reseta senha do Postgres + atualiza DATABASE_URL no .env — requer sudo"
   echo "    config          Mostrar configuracao atual"
   echo ""
   echo "  Variaveis (env vars ou .deployrc em ${APP_DIR}):"
@@ -509,13 +612,14 @@ cmd_help() {
 #  Router
 # ──────────────────────────────────────────────
 case "${1:-help}" in
-  setup)   cmd_setup ;;
-  update)  cmd_update ;;
-  restart) cmd_restart ;;
-  status)  cmd_status ;;
-  logs)    cmd_logs "$@" ;;
-  ssl)     cmd_ssl "$@" ;;
-  config)  cmd_config ;;
+  setup)    cmd_setup ;;
+  update)   cmd_update ;;
+  restart)  cmd_restart ;;
+  status)   cmd_status ;;
+  logs)     cmd_logs "$@" ;;
+  ssl)      cmd_ssl "$@" ;;
+  config)   cmd_config ;;
+  pg-reset) cmd_pg_reset ;;
   help|-h|--help) cmd_help ;;
-  *)       warn "Comando desconhecido: $1"; cmd_help ;;
+  *)        warn "Comando desconhecido: $1"; cmd_help ;;
 esac
