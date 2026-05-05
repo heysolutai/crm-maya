@@ -87,7 +87,16 @@ export default function AuthPage() {
         {/* Content */}
         <div className="relative z-10 flex flex-col items-center justify-center w-full p-12">
           {branding.logoUrl ? (
-            <Image src={branding.logoUrl} alt={branding.systemName} className="w-40 h-40 mb-8 drop-shadow-2xl" width={160} height={160} />
+            // Logo grande mas com aspect-ratio preservado: max 320px de largura,
+            // altura auto pra nao distorcer logos retangulares (caso comum).
+            <Image
+              src={branding.logoUrl}
+              alt={branding.systemName}
+              className="w-auto h-auto max-w-xs max-h-48 mb-8 drop-shadow-2xl object-contain"
+              width={400}
+              height={400}
+              priority
+            />
           ) : (
             <div className="w-28 h-28 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center mb-8">
               <span className="text-white text-4xl font-bold">Wyarp</span>
