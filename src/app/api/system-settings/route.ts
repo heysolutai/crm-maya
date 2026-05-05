@@ -14,7 +14,7 @@ export async function GET() {
     if (!settings) {
       // Return defaults if no row exists yet
       return NextResponse.json({
-        systemName: 'Wyarp',
+        systemName: 'CRM',
         logoUrl: null,
         faviconUrl: null,
         primaryColor: '150 80% 36%',
@@ -53,7 +53,7 @@ export async function PUT(req: NextRequest) {
       where: { id: SINGLETON_ID },
       create: {
         id: SINGLETON_ID,
-        systemName: body.systemName ?? 'Wyarp',
+        systemName: body.systemName ?? 'CRM',
         logoUrl: body.logoUrl ?? null,
         faviconUrl: body.faviconUrl ?? null,
         primaryColor: body.primaryColor ?? '150 80% 36%',

@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
-const APP_NAME = "Wyarp CRM";
+// Placeholder generico — o titulo real e setado em runtime pelo BrandingProvider
+// (useBranding.tsx) usando systemName configurado no painel super-admin.
+const APP_NAME = "CRM";
 const APP_DESCRIPTION = "CRM inteligente com IA e automação WhatsApp";
 
 export const metadata: Metadata = {

@@ -554,7 +554,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                     <div className="flex items-center gap-1.5">
                       <span className={cn(
                         'h-1.5 w-1.5 rounded-full',
-                        whatsAppStatus === 'connected' ? 'bg-mileto-green' :
+                        whatsAppStatus === 'connected' ? 'bg-brand-primary' :
                         whatsAppStatus === 'connecting' ? 'bg-amber-500' :
                         'bg-red-500'
                       )} />

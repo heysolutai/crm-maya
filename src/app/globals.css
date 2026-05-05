@@ -49,10 +49,10 @@
     --sidebar-ring: 217 91% 50%;
 
     /* Brand Colors */
-    --wyarp-blue: 217 91% 50%;
-    --wyarp-light: 217 70% 58%;
-    --wyarp-dark: 217 80% 38%;
-    --wyarp-bg: 0 0% 4%;
+    --brand-primary: 217 91% 50%;
+    --brand-light: 217 70% 58%;
+    --brand-deep: 217 80% 38%;
+    --brand-surface: 0 0% 4%;
   }
 
   .dark {
@@ -94,10 +94,10 @@
     --sidebar-ring: 217 91% 56%;
 
     /* Brand Colors - brighter for dark mode */
-    --wyarp-blue: 217 91% 56%;
-    --wyarp-light: 217 70% 64%;
-    --wyarp-dark: 217 80% 44%;
-    --wyarp-bg: 0 0% 4%;
+    --brand-primary: 217 91% 56%;
+    --brand-light: 217 70% 64%;
+    --brand-deep: 217 80% 44%;
+    --brand-surface: 0 0% 4%;
   }
 }
 

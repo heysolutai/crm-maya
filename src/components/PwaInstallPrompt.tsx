@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Download, X, Share } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useBranding } from '@/hooks/useBranding';
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
@@ -57,6 +58,7 @@ function shouldSuppress(): boolean {
 }
 
 export function PwaInstallPrompt() {
+  const { branding } = useBranding();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
   const [platform, setPlatform] = useState<'chrome' | 'ios' | null>(null);
@@ -168,7 +170,7 @@ export function PwaInstallPrompt() {
             <Download className="h-5 w-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold">Instalar Wyarp</p>
+            <p className="text-sm font-semibold">Instalar {branding.systemName}</p>
             {platform === 'chrome' ? (
               <p className="text-xs text-muted-foreground mt-1">
                 Use o app direto na tela inicial, sem abrir o navegador.

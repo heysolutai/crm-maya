@@ -46,11 +46,11 @@ self.addEventListener("push", (event: PushEvent) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: "Wyarp", body: event.data.text() };
+    payload = { title: "Nova mensagem", body: event.data.text() };
   }
 
   const {
-    title = "Wyarp",
+    title = "Nova mensagem",
     body = "",
     icon = "/icon-192x192.png",
     badge = "/icon-192x192.png",

@@ -3,8 +3,8 @@ import Image from 'next/image'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Politica de Privacidade - Wyarp',
-  description: 'Politica de privacidade e protecao de dados da plataforma Wyarp CRM.',
+  title: 'Politica de Privacidade',
+  description: 'Politica de privacidade e protecao de dados da plataforma.',
 }
 
 export default function PrivacyPage() {

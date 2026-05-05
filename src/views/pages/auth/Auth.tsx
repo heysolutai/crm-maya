@@ -62,13 +62,13 @@ export default function Auth() {
       {/* Left Side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
         {/* Background with gradient */}
-        <div className="absolute inset-0 bg-mileto-dark" />
-        <div className="absolute inset-0 bg-gradient-to-br from-mileto-green/20 via-mileto-cyan/10 to-mileto-blue/20" />
+        <div className="absolute inset-0 bg-brand-surface" />
+        <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/20 via-brand-light/10 to-brand-deep/20" />
         
         {/* Decorative circles */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-mileto-green/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-mileto-cyan/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-mileto-blue/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-primary/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-brand-light/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-brand-deep/10 rounded-full blur-3xl" />
         
         {/* Content */}
         <div className="relative z-10 flex flex-col items-center justify-center w-full p-12">
@@ -77,7 +77,7 @@ export default function Auth() {
           </div>
           
           <h1 className="text-4xl font-bold text-white mb-4 text-center">
-            <span className="bg-gradient-to-r from-mileto-green via-mileto-cyan to-mileto-blue bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-brand-primary via-brand-light to-brand-deep bg-clip-text text-transparent">
               Wyarp Chat
             </span>
           </h1>
@@ -89,20 +89,20 @@ export default function Auth() {
           {/* Features list */}
           <div className="space-y-4 text-white/80">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-mileto-green/20 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-mileto-green" />
+              <div className="w-8 h-8 rounded-full bg-brand-primary/20 flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-brand-primary" />
               </div>
               <span>Atendimento automatizado 24/7</span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-mileto-cyan/20 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-mileto-cyan" />
+              <div className="w-8 h-8 rounded-full bg-brand-light/20 flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-brand-light" />
               </div>
               <span>Integração com WhatsApp</span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-mileto-blue/20 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-mileto-blue" />
+              <div className="w-8 h-8 rounded-full bg-brand-deep/20 flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-brand-deep" />
               </div>
               <span>Follow-ups inteligentes</span>
             </div>
@@ -118,7 +118,7 @@ export default function Auth() {
             <div className="w-20 h-20 rounded-xl bg-primary flex items-center justify-center mb-4">
               <span className="text-primary-foreground text-2xl font-bold">Wyarp</span>
             </div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-mileto-green via-mileto-cyan to-mileto-blue bg-clip-text text-transparent">
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-brand-primary via-brand-light to-brand-deep bg-clip-text text-transparent">
               Wyarp Chat
             </h1>
           </div>
@@ -151,7 +151,7 @@ export default function Auth() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     required
-                    className="pl-10 h-12 bg-muted/50 border-border/50 focus:border-mileto-green focus:ring-mileto-green/20"
+                    className="pl-10 h-12 bg-muted/50 border-border/50 focus:border-brand-primary focus:ring-brand-primary/20"
                   />
                 </div>
               </div>
@@ -170,7 +170,7 @@ export default function Auth() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="pl-10 h-12 bg-muted/50 border-border/50 focus:border-mileto-green focus:ring-mileto-green/20"
+                  className="pl-10 h-12 bg-muted/50 border-border/50 focus:border-brand-primary focus:ring-brand-primary/20"
                 />
               </div>
             </div>
@@ -189,7 +189,7 @@ export default function Auth() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={6}
-                  className="pl-10 pr-10 h-12 bg-muted/50 border-border/50 focus:border-mileto-green focus:ring-mileto-green/20"
+                  className="pl-10 pr-10 h-12 bg-muted/50 border-border/50 focus:border-brand-primary focus:ring-brand-primary/20"
                 />
                 <button
                   type="button"
@@ -205,7 +205,7 @@ export default function Auth() {
               <div className="flex justify-end">
                 <button
                   type="button"
-                  className="text-sm text-mileto-green hover:text-mileto-cyan transition-colors"
+                  className="text-sm text-brand-primary hover:text-brand-light transition-colors"
                 >
                   Esqueceu a senha?
                 </button>
@@ -248,7 +248,7 @@ export default function Auth() {
                 {isLogin
                   ? 'Não tem uma conta? '
                   : 'Já tem uma conta? '}
-                <span className="font-semibold text-mileto-green hover:text-mileto-cyan transition-colors">
+                <span className="font-semibold text-brand-primary hover:text-brand-light transition-colors">
                   {isLogin ? 'Cadastre-se' : 'Entre'}
                 </span>
               </button>
@@ -258,9 +258,9 @@ export default function Auth() {
           {/* Footer */}
           <p className="text-center text-xs text-muted-foreground">
             Ao continuar, você concorda com nossos{' '}
-            <a href="#" className="text-mileto-green hover:underline">Termos de Uso</a>
+            <a href="#" className="text-brand-primary hover:underline">Termos de Uso</a>
             {' '}e{' '}
-            <a href="#" className="text-mileto-green hover:underline">Política de Privacidade</a>
+            <a href="#" className="text-brand-primary hover:underline">Política de Privacidade</a>
           </p>
         </div>
       </div>

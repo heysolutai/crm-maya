@@ -12,12 +12,12 @@ export interface StatItem {
 }
 
 const colorMap = {
-  green: 'bg-mileto-green/10 text-mileto-green',
-  blue: 'bg-mileto-blue/10 text-mileto-blue',
+  green: 'bg-brand-primary/10 text-brand-primary',
+  blue: 'bg-brand-deep/10 text-brand-deep',
   yellow: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
   red: 'bg-red-500/10 text-red-600 dark:text-red-400',
   purple: 'bg-primary/10 text-primary',
-  cyan: 'bg-mileto-cyan/10 text-mileto-cyan',
+  cyan: 'bg-brand-light/10 text-brand-light',
 };
 
 interface StatCardsProps {

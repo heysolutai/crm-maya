@@ -67,58 +67,67 @@ export default function AuthPage() {
   }
 
   const features = [
-    { icon: Sparkles, label: 'Atendimento automatizado 24/7', bg: 'bg-mileto-green/20', text: 'text-mileto-green' },
-    { icon: MessageSquare, label: 'Integração com WhatsApp', bg: 'bg-mileto-cyan/20', text: 'text-mileto-cyan' },
-    { icon: Calendar, label: 'Agendamentos inteligentes', bg: 'bg-mileto-blue/20', text: 'text-mileto-blue' },
+    { icon: Sparkles, label: 'Atendimento automatizado 24/7' },
+    { icon: MessageSquare, label: 'Integração com WhatsApp' },
+    { icon: Calendar, label: 'Agendamentos inteligentes' },
   ]
+
+  // Inicial do nome do sistema pra usar como fallback quando nao ha logo
+  const initial = (branding.systemName || 'C').trim().charAt(0).toUpperCase()
 
   return (
     <div className="min-h-screen flex">
       {/* Left Side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
-        <div className="absolute inset-0 bg-mileto-dark" />
-        <div className="absolute inset-0 bg-gradient-to-br from-mileto-green/20 via-mileto-cyan/10 to-mileto-blue/20" />
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-brand-surface">
+        {/* Glow focal central — destaque atras da logo, sem wash de cor uniforme */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] bg-brand-primary/30 rounded-full blur-[120px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] h-[320px] bg-brand-light/20 rounded-full blur-[80px]" />
 
-        {/* Decorative blur circles */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-mileto-green/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-mileto-cyan/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-mileto-blue/10 rounded-full blur-3xl" />
+        {/* Vinheta sutil pras bordas escurecerem (profundidade) */}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40" />
 
         {/* Content */}
         <div className="relative z-10 flex flex-col items-center justify-center w-full p-12">
-          {branding.logoUrl ? (
-            // Logo grande mas com aspect-ratio preservado: max 320px de largura,
-            // altura auto pra nao distorcer logos retangulares (caso comum).
-            <Image
-              src={branding.logoUrl}
-              alt={branding.systemName}
-              className="w-auto h-auto max-w-xs max-h-48 mb-8 drop-shadow-2xl object-contain"
-              width={400}
-              height={400}
-              priority
-            />
-          ) : (
-            <div className="w-28 h-28 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center mb-8">
-              <span className="text-white text-4xl font-bold">Wyarp</span>
-            </div>
+          {/* Logo com halo radial pra destacar */}
+          <div className="relative mb-10">
+            <div className="absolute inset-0 -m-12 bg-brand-primary/25 rounded-full blur-3xl" />
+            <div className="absolute inset-0 -m-6 bg-brand-primary/15 rounded-full blur-2xl" />
+
+            {branding.logoUrl ? (
+              <Image
+                src={branding.logoUrl}
+                alt={branding.systemName}
+                className="relative w-auto h-auto max-w-sm max-h-56 object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
+                width={500}
+                height={500}
+                priority
+              />
+            ) : (
+              <div className="relative w-36 h-36 rounded-3xl bg-gradient-to-br from-brand-primary to-brand-deep flex items-center justify-center shadow-2xl">
+                <span className="text-white text-6xl font-bold">{initial}</span>
+              </div>
+            )}
+          </div>
+
+          {/* So mostra o nome se NAO tem logo (logo geralmente ja contem o nome) */}
+          {!branding.logoUrl && (
+            <h1 className="text-4xl font-bold text-white mb-4 text-center">
+              <span className="bg-gradient-to-r from-brand-primary via-brand-light to-brand-deep bg-clip-text text-transparent">
+                {branding.systemName}
+              </span>
+            </h1>
           )}
 
-          <h1 className="text-4xl font-bold text-white mb-4 text-center">
-            <span className="bg-gradient-to-r from-mileto-green via-mileto-cyan to-mileto-blue bg-clip-text text-transparent">
-              {branding.systemName}
-            </span>
-          </h1>
-
-          <p className="text-white/70 text-lg text-center max-w-md mb-10">
+          <p className="text-white/70 text-lg text-center max-w-md mb-10 leading-relaxed">
             {branding.loginDescription || 'O CRM mais inteligente para impulsionar suas vendas com Inteligência Artificial'}
           </p>
 
-          {/* Features */}
-          <div className="space-y-4 text-white/80">
+          {/* Features — bullets discretos, todos usam a cor primaria */}
+          <div className="space-y-3 text-white/80">
             {features.map((feature) => (
               <div key={feature.label} className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-full ${feature.bg} flex items-center justify-center`}>
-                  <feature.icon className={`w-4 h-4 ${feature.text}`} />
+                <div className="w-9 h-9 rounded-full bg-white/5 ring-1 ring-white/10 backdrop-blur-sm flex items-center justify-center">
+                  <feature.icon className="w-4 h-4 text-brand-primary" />
                 </div>
                 <span>{feature.label}</span>
               </div>
@@ -133,13 +142,19 @@ export default function AuthPage() {
           {/* Mobile Logo */}
           <div className="lg:hidden flex flex-col items-center mb-8">
             {branding.logoUrl ? (
-              <Image src={branding.logoUrl} alt={branding.systemName} className="w-24 h-24 mb-4" width={96} height={96} />
+              <Image
+                src={branding.logoUrl}
+                alt={branding.systemName}
+                className="max-w-[160px] max-h-24 w-auto h-auto object-contain mb-4"
+                width={200}
+                height={120}
+              />
             ) : (
-              <div className="w-20 h-20 rounded-xl bg-primary flex items-center justify-center mb-4">
-                <span className="text-primary-foreground text-2xl font-bold">Wyarp</span>
+              <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-brand-primary to-brand-deep flex items-center justify-center mb-4">
+                <span className="text-white text-3xl font-bold">{initial}</span>
               </div>
             )}
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-mileto-green via-mileto-cyan to-mileto-blue bg-clip-text text-transparent">
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-brand-primary via-brand-light to-brand-deep bg-clip-text text-transparent">
               {branding.systemName}
             </h1>
           </div>
@@ -172,7 +187,7 @@ export default function AuthPage() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     required
-                    className="pl-10 h-12 bg-muted/50 border-border/50 focus:border-mileto-green focus:ring-mileto-green/20"
+                    className="pl-10 h-12 bg-muted/50 border-border/50 focus:border-brand-primary focus:ring-brand-primary/20"
                   />
                 </div>
               </div>
@@ -191,7 +206,7 @@ export default function AuthPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="pl-10 h-12 bg-muted/50 border-border/50 focus:border-mileto-green focus:ring-mileto-green/20"
+                  className="pl-10 h-12 bg-muted/50 border-border/50 focus:border-brand-primary focus:ring-brand-primary/20"
                 />
               </div>
             </div>
@@ -210,7 +225,7 @@ export default function AuthPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={6}
-                  className="pl-10 pr-10 h-12 bg-muted/50 border-border/50 focus:border-mileto-green focus:ring-mileto-green/20"
+                  className="pl-10 pr-10 h-12 bg-muted/50 border-border/50 focus:border-brand-primary focus:ring-brand-primary/20"
                 />
                 <button
                   type="button"
@@ -226,7 +241,7 @@ export default function AuthPage() {
               <div className="flex justify-end">
                 <button
                   type="button"
-                  className="text-sm text-mileto-green hover:text-mileto-cyan transition-colors"
+                  className="text-sm text-brand-primary hover:text-brand-light transition-colors"
                 >
                   Esqueceu a senha?
                 </button>
@@ -235,7 +250,7 @@ export default function AuthPage() {
 
             <Button
               type="submit"
-              className="w-full h-12 bg-gradient-to-r from-primary to-mileto-cyan hover:opacity-90 text-white font-semibold shadow-lg shadow-primary/25 transition-all duration-300 group"
+              className="w-full h-12 bg-gradient-to-r from-primary to-brand-light hover:opacity-90 text-white font-semibold shadow-lg shadow-primary/25 transition-all duration-300 group"
               disabled={isSubmitting}
             >
               {isSubmitting ? (
@@ -267,7 +282,7 @@ export default function AuthPage() {
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 {isLogin ? 'Não tem uma conta? ' : 'Já tem uma conta? '}
-                <span className="font-semibold text-mileto-green hover:text-mileto-cyan transition-colors">
+                <span className="font-semibold text-brand-primary hover:text-brand-light transition-colors">
                   {isLogin ? 'Cadastre-se' : 'Entre'}
                 </span>
               </button>
@@ -277,9 +292,9 @@ export default function AuthPage() {
           {/* Footer */}
           <p className="text-center text-xs text-muted-foreground">
             Ao continuar, você concorda com nossos{' '}
-            <Link href="/terms" className="text-mileto-green hover:underline">Termos de Uso</Link>
+            <Link href="/terms" className="text-brand-primary hover:underline">Termos de Uso</Link>
             {' '}e{' '}
-            <Link href="/privacy" className="text-mileto-green hover:underline">Política de Privacidade</Link>
+            <Link href="/privacy" className="text-brand-primary hover:underline">Política de Privacidade</Link>
           </p>
         </div>
       </div>

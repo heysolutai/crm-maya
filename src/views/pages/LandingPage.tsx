@@ -82,19 +82,19 @@ const LandingPage = () => {
 
 
   return (
-    <div className="min-h-screen bg-[hsl(var(--mileto-dark))] text-white overflow-x-hidden">
+    <div className="min-h-screen bg-[hsl(var(--brand-surface))] text-white overflow-x-hidden">
       {/* Hero Section */}
       <section className="relative min-h-screen flex flex-col items-center justify-center px-4 py-20">
         {/* Background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[hsl(var(--mileto-green)/0.15)] via-[hsl(var(--mileto-cyan)/0.1)] to-[hsl(var(--mileto-blue)/0.15)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_hsl(var(--mileto-cyan)/0.2)_0%,_transparent_70%)]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[hsl(var(--brand-primary)/0.15)] via-[hsl(var(--brand-light)/0.1)] to-[hsl(var(--brand-deep)/0.15)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_hsl(var(--brand-light)/0.2)_0%,_transparent_70%)]" />
         
         <div className="relative z-10 max-w-5xl mx-auto text-center">
           {/* Logo */}
           <Image
             src={logoMileto}
             alt="Wyarp Chat"
-            className="h-36 md:h-48 mx-auto mb-8 drop-shadow-[0_0_30px_hsl(var(--mileto-cyan)/0.5)]"
+            className="h-36 md:h-48 mx-auto mb-8 drop-shadow-[0_0_30px_hsl(var(--brand-light)/0.5)]"
             width={192}
             height={192}
           />
@@ -102,7 +102,7 @@ const LandingPage = () => {
           {/* Headline */}
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
             Transforme sua{' '}
-            <span className="bg-gradient-to-r from-[hsl(var(--mileto-green))] via-[hsl(var(--mileto-cyan))] to-[hsl(var(--mileto-blue))] bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-[hsl(var(--brand-primary))] via-[hsl(var(--brand-light))] to-[hsl(var(--brand-deep))] bg-clip-text text-transparent">
               Ótica
             </span>
             <br />
@@ -119,7 +119,7 @@ const LandingPage = () => {
             <Button 
               size="lg"
               onClick={() => router.push('/auth')}
-              className="bg-gradient-to-r from-[hsl(var(--mileto-green))] to-[hsl(var(--mileto-cyan))] hover:opacity-90 text-black font-bold text-lg px-8 py-6 rounded-full shadow-[0_0_30px_hsl(var(--mileto-green)/0.5)] transition-all hover:shadow-[0_0_50px_hsl(var(--mileto-green)/0.7)]"
+              className="bg-gradient-to-r from-[hsl(var(--brand-primary))] to-[hsl(var(--brand-light))] hover:opacity-90 text-black font-bold text-lg px-8 py-6 rounded-full shadow-[0_0_30px_hsl(var(--brand-primary)/0.5)] transition-all hover:shadow-[0_0_50px_hsl(var(--brand-primary)/0.7)]"
             >
               Comece Gratuitamente
               <ArrowRight className="ml-2 h-5 w-5" />
@@ -127,7 +127,7 @@ const LandingPage = () => {
             <Button 
               size="lg"
               variant="outline"
-              className="border-[hsl(var(--mileto-cyan))] text-[hsl(var(--mileto-cyan))] hover:bg-[hsl(var(--mileto-cyan)/0.1)] font-semibold text-lg px-8 py-6 rounded-full"
+              className="border-[hsl(var(--brand-light))] text-[hsl(var(--brand-light))] hover:bg-[hsl(var(--brand-light)/0.1)] font-semibold text-lg px-8 py-6 rounded-full"
             >
               <Phone className="mr-2 h-5 w-5" />
               Falar com Consultor
@@ -137,15 +137,15 @@ const LandingPage = () => {
           {/* Trust badges */}
           <div className="mt-12 flex flex-wrap justify-center gap-6 text-gray-400 text-sm">
             <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-[hsl(var(--mileto-green))]" />
+              <Shield className="h-5 w-5 text-[hsl(var(--brand-primary))]" />
               <span>Dados protegidos</span>
             </div>
             <div className="flex items-center gap-2">
-              <Zap className="h-5 w-5 text-[hsl(var(--mileto-cyan))]" />
+              <Zap className="h-5 w-5 text-[hsl(var(--brand-light))]" />
               <span>Setup em 5 minutos</span>
             </div>
             <div className="flex items-center gap-2">
-              <Star className="h-5 w-5 text-[hsl(var(--mileto-green))]" />
+              <Star className="h-5 w-5 text-[hsl(var(--brand-primary))]" />
               <span>+500 óticas atendidas</span>
             </div>
           </div>
@@ -153,22 +153,22 @@ const LandingPage = () => {
         
         {/* Scroll indicator */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-          <div className="w-6 h-10 border-2 border-[hsl(var(--mileto-cyan)/0.5)] rounded-full flex justify-center pt-2">
-            <div className="w-1 h-2 bg-[hsl(var(--mileto-cyan))] rounded-full" />
+          <div className="w-6 h-10 border-2 border-[hsl(var(--brand-light)/0.5)] rounded-full flex justify-center pt-2">
+            <div className="w-1 h-2 bg-[hsl(var(--brand-light))] rounded-full" />
           </div>
         </div>
       </section>
 
       {/* Stats Section */}
-      <section className="py-20 px-4 bg-gradient-to-b from-transparent to-[hsl(var(--mileto-dark))]">
+      <section className="py-20 px-4 bg-gradient-to-b from-transparent to-[hsl(var(--brand-surface))]">
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, index) => (
               <div 
                 key={index}
-                className="text-center p-6 rounded-2xl bg-gradient-to-br from-[hsl(var(--mileto-green)/0.1)] to-[hsl(var(--mileto-blue)/0.1)] border border-[hsl(var(--mileto-cyan)/0.2)]"
+                className="text-center p-6 rounded-2xl bg-gradient-to-br from-[hsl(var(--brand-primary)/0.1)] to-[hsl(var(--brand-deep)/0.1)] border border-[hsl(var(--brand-light)/0.2)]"
               >
-                <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-[hsl(var(--mileto-green))] to-[hsl(var(--mileto-cyan))] bg-clip-text text-transparent">
+                <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-[hsl(var(--brand-primary))] to-[hsl(var(--brand-light))] bg-clip-text text-transparent">
                   {stat.value}
                 </div>
                 <div className="text-gray-400 mt-2">{stat.label}</div>
@@ -184,7 +184,7 @@ const LandingPage = () => {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-5xl font-bold mb-4">
               Tudo que sua ótica precisa para{' '}
-              <span className="bg-gradient-to-r from-[hsl(var(--mileto-green))] to-[hsl(var(--mileto-cyan))] bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-[hsl(var(--brand-primary))] to-[hsl(var(--brand-light))] bg-clip-text text-transparent">
                 vender mais
               </span>
             </h2>
@@ -197,10 +197,10 @@ const LandingPage = () => {
             {features.map((feature, index) => (
               <div
                 key={index}
-                className="group p-6 rounded-2xl bg-gradient-to-br from-[hsl(var(--mileto-dark))] to-[hsl(220_20%_8%)] border border-[hsl(var(--mileto-cyan)/0.2)] hover:border-[hsl(var(--mileto-cyan)/0.5)] transition-all hover:shadow-[0_0_30px_hsl(var(--mileto-cyan)/0.2)]"
+                className="group p-6 rounded-2xl bg-gradient-to-br from-[hsl(var(--brand-surface))] to-[hsl(220_20%_8%)] border border-[hsl(var(--brand-light)/0.2)] hover:border-[hsl(var(--brand-light)/0.5)] transition-all hover:shadow-[0_0_30px_hsl(var(--brand-light)/0.2)]"
               >
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-[hsl(var(--mileto-green)/0.2)] to-[hsl(var(--mileto-cyan)/0.2)] flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <feature.icon className="h-6 w-6 text-[hsl(var(--mileto-cyan))]" />
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-[hsl(var(--brand-primary)/0.2)] to-[hsl(var(--brand-light)/0.2)] flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <feature.icon className="h-6 w-6 text-[hsl(var(--brand-light))]" />
                 </div>
                 <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
                 <p className="text-gray-400">{feature.description}</p>
@@ -211,7 +211,7 @@ const LandingPage = () => {
       </section>
 
       {/* Testimonials Section */}
-      <section className="py-20 px-4 bg-gradient-to-b from-transparent via-[hsl(var(--mileto-green)/0.05)] to-transparent">
+      <section className="py-20 px-4 bg-gradient-to-b from-transparent via-[hsl(var(--brand-primary)/0.05)] to-transparent">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-5xl font-bold mb-4">
@@ -226,17 +226,17 @@ const LandingPage = () => {
             {testimonials.map((testimonial, index) => (
               <div
                 key={index}
-                className="p-6 rounded-2xl bg-gradient-to-br from-[hsl(var(--mileto-dark))] to-[hsl(220_20%_8%)] border border-[hsl(var(--mileto-cyan)/0.2)]"
+                className="p-6 rounded-2xl bg-gradient-to-br from-[hsl(var(--brand-surface))] to-[hsl(220_20%_8%)] border border-[hsl(var(--brand-light)/0.2)]"
               >
                 <div className="flex gap-1 mb-4">
                   {[...Array(testimonial.rating)].map((_, i) => (
-                    <Star key={i} className="h-5 w-5 fill-[hsl(var(--mileto-green))] text-[hsl(var(--mileto-green))]" />
+                    <Star key={i} className="h-5 w-5 fill-[hsl(var(--brand-primary))] text-[hsl(var(--brand-primary))]" />
                   ))}
                 </div>
                 <p className="text-gray-300 mb-4 italic">"{testimonial.quote}"</p>
                 <div>
                   <div className="font-semibold">{testimonial.name}</div>
-                  <div className="text-sm text-[hsl(var(--mileto-cyan))]">{testimonial.business}</div>
+                  <div className="text-sm text-[hsl(var(--brand-light))]">{testimonial.business}</div>
                 </div>
               </div>
             ))}
@@ -247,7 +247,7 @@ const LandingPage = () => {
       {/* CTA Consultor Section */}
       <section className="py-20 px-4">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="p-12 rounded-3xl bg-gradient-to-br from-[hsl(var(--mileto-green)/0.1)] to-[hsl(var(--mileto-cyan)/0.1)] border border-[hsl(var(--mileto-cyan)/0.2)]">
+          <div className="p-12 rounded-3xl bg-gradient-to-br from-[hsl(var(--brand-primary)/0.1)] to-[hsl(var(--brand-light)/0.1)] border border-[hsl(var(--brand-light)/0.2)]">
             <h2 className="text-3xl md:text-5xl font-bold mb-4">
               Quer saber quanto custa?
             </h2>
@@ -256,7 +256,7 @@ const LandingPage = () => {
             </p>
             <Button 
               size="lg"
-              className="bg-gradient-to-r from-[hsl(var(--mileto-green))] to-[hsl(var(--mileto-cyan))] hover:opacity-90 text-black font-bold text-lg px-12 py-6 rounded-full shadow-[0_0_30px_hsl(var(--mileto-green)/0.5)] transition-all hover:shadow-[0_0_50px_hsl(var(--mileto-green)/0.7)]"
+              className="bg-gradient-to-r from-[hsl(var(--brand-primary))] to-[hsl(var(--brand-light))] hover:opacity-90 text-black font-bold text-lg px-12 py-6 rounded-full shadow-[0_0_30px_hsl(var(--brand-primary)/0.5)] transition-all hover:shadow-[0_0_50px_hsl(var(--brand-primary)/0.7)]"
             >
               <Phone className="mr-2 h-5 w-5" />
               Falar com Consultor
@@ -268,7 +268,7 @@ const LandingPage = () => {
       {/* Final CTA Section */}
       <section className="py-20 px-4">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="p-12 rounded-3xl bg-gradient-to-br from-[hsl(var(--mileto-green)/0.2)] via-[hsl(var(--mileto-cyan)/0.15)] to-[hsl(var(--mileto-blue)/0.2)] border border-[hsl(var(--mileto-cyan)/0.3)]">
+          <div className="p-12 rounded-3xl bg-gradient-to-br from-[hsl(var(--brand-primary)/0.2)] via-[hsl(var(--brand-light)/0.15)] to-[hsl(var(--brand-deep)/0.2)] border border-[hsl(var(--brand-light)/0.3)]">
             <h2 className="text-3xl md:text-5xl font-bold mb-4">
               Pronto para vender mais?
             </h2>
@@ -278,7 +278,7 @@ const LandingPage = () => {
             <Button 
               size="lg"
               onClick={() => router.push('/auth')}
-              className="bg-gradient-to-r from-[hsl(var(--mileto-green))] to-[hsl(var(--mileto-cyan))] hover:opacity-90 text-black font-bold text-lg px-12 py-6 rounded-full shadow-[0_0_30px_hsl(var(--mileto-green)/0.5)] transition-all hover:shadow-[0_0_50px_hsl(var(--mileto-green)/0.7)]"
+              className="bg-gradient-to-r from-[hsl(var(--brand-primary))] to-[hsl(var(--brand-light))] hover:opacity-90 text-black font-bold text-lg px-12 py-6 rounded-full shadow-[0_0_30px_hsl(var(--brand-primary)/0.5)] transition-all hover:shadow-[0_0_50px_hsl(var(--brand-primary)/0.7)]"
             >
               Começar Teste Grátis
               <ArrowRight className="ml-2 h-5 w-5" />
@@ -288,7 +288,7 @@ const LandingPage = () => {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 px-4 border-t border-[hsl(var(--mileto-cyan)/0.1)]">
+      <footer className="py-12 px-4 border-t border-[hsl(var(--brand-light)/0.1)]">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <Image src={logoMileto} alt="Wyarp Chat" className="h-10" width={40} height={40} />

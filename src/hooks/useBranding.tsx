@@ -13,7 +13,7 @@ export interface BrandingData {
 }
 
 const defaultBranding: BrandingData = {
-  systemName: 'Wyarp',
+  systemName: 'CRM',
   logoUrl: null,
   faviconUrl: null,
   primaryColor: '217 91% 50%',
@@ -34,17 +34,37 @@ const BrandingContext = createContext<BrandingContextType>({
   refresh: async () => {},
 })
 
+/** Parse "H S% L%" into numbers; null if formato invalido */
+function parseHsl(s: string): { h: number; s: number; l: number } | null {
+  const m = s.match(/([\d.]+)\s+([\d.]+)%\s+([\d.]+)%/)
+  if (!m) return null
+  return { h: parseFloat(m[1]), s: parseFloat(m[2]), l: parseFloat(m[3]) }
+}
+
 /** Derive light/dark HSL variants from a base HSL string */
 function deriveColors(base: string): { light: string; dark: string } {
-  // base is like "150 80% 36%"
-  const parts = base.match(/([\d.]+)\s+([\d.]+)%\s+([\d.]+)%/)
-  if (!parts) return { light: base, dark: base }
-  const h = parseFloat(parts[1])
-  const s = parseFloat(parts[2])
-  const l = parseFloat(parts[3])
+  const hsl = parseHsl(base)
+  if (!hsl) return { light: base, dark: base }
   return {
-    light: `${h} ${s}% ${l}%`,
-    dark: `${h} ${s}% ${Math.min(l + 9, 60)}%`,
+    light: `${hsl.h} ${hsl.s}% ${hsl.l}%`,
+    dark: `${hsl.h} ${hsl.s}% ${Math.min(hsl.l + 9, 60)}%`,
+  }
+}
+
+/** Gera uma paleta harmoniosa (analogous palette) a partir de uma cor primaria.
+ * Retorna 2 cores companheiras: uma com matiz deslocado +30 graus (mais claro)
+ * e outra com -30 graus (mais escuro). Cobre o caso comum de usuario que so
+ * troca a primaryColor — assim os gradientes da landing/auth ficam coerentes
+ * com a logo automaticamente, sem precisar ajustar 3 cores na mao.
+ */
+function deriveAnalogousPalette(primary: string): { companion1: string; companion2: string } {
+  const hsl = parseHsl(primary)
+  if (!hsl) return { companion1: primary, companion2: primary }
+  const h1 = (hsl.h + 30) % 360
+  const h2 = (hsl.h + 360 - 30) % 360
+  return {
+    companion1: `${h1} ${Math.min(hsl.s + 5, 90)}% ${Math.min(hsl.l + 8, 70)}%`,
+    companion2: `${h2} ${Math.max(hsl.s - 5, 30)}% ${Math.max(hsl.l - 8, 30)}%`,
   }
 }
 
@@ -53,34 +73,50 @@ function applyBrandingCSS(branding: BrandingData) {
   const isDark = root.classList.contains('dark')
 
   const primary = deriveColors(branding.primaryColor)
-  const secondary = deriveColors(branding.secondaryColor)
-  const accent = deriveColors(branding.accentColor)
-
   const mode = isDark ? 'dark' : 'light'
 
-  // Primary color → --primary, --ring, --sidebar-primary, --mileto-green
+  // Hue base pro accent suave (mesma matiz, saturacao baixa)
+  const baseHue = branding.primaryColor.split(' ')[0]
+
+  // Paleta analoga derivada da primaryColor — usada pra gradientes/hovers.
+  // Se o admin tiver customizado secondary/accent explicitamente (valores
+  // diferentes do default), respeita esses valores. Senao, deriva da primary.
+  const isSecondaryDefault = branding.secondaryColor === defaultBranding.secondaryColor
+  const isAccentDefault = branding.accentColor === defaultBranding.accentColor
+  const palette = deriveAnalogousPalette(branding.primaryColor)
+  const companion1 = isSecondaryDefault ? palette.companion1 : branding.secondaryColor
+  const companion2 = isAccentDefault ? palette.companion2 : branding.accentColor
+  const secondary = deriveColors(companion1)
+  const accent = deriveColors(companion2)
+
+  // Primary color → --primary, --ring, --sidebar-primary, --brand-primary
+  // Tailwind mapeia brand-primary -> var(--brand-primary). Setar nessa key.
   root.style.setProperty('--primary', primary[mode])
   root.style.setProperty('--ring', primary[mode])
   root.style.setProperty('--sidebar-primary', primary[mode])
   root.style.setProperty('--sidebar-ring', primary[mode])
-  root.style.setProperty('--mileto-green', primary[mode])
+  root.style.setProperty('--brand-primary', primary[mode])
 
-  // Accent derived from primary
+  // Accent suave (background de tags, badges, hover) derivado da primary
   if (isDark) {
-    root.style.setProperty('--accent', `${branding.primaryColor.split(' ')[0]} 30% 12%`)
-    root.style.setProperty('--accent-foreground', `${branding.primaryColor.split(' ')[0]} 60% 75%`)
-    root.style.setProperty('--sidebar-accent', `${branding.primaryColor.split(' ')[0]} 20% 10%`)
+    root.style.setProperty('--accent', `${baseHue} 30% 12%`)
+    root.style.setProperty('--accent-foreground', `${baseHue} 60% 75%`)
+    root.style.setProperty('--sidebar-accent', `${baseHue} 20% 10%`)
   } else {
-    root.style.setProperty('--accent', `${branding.primaryColor.split(' ')[0]} 30% 94%`)
-    root.style.setProperty('--accent-foreground', `${branding.primaryColor.split(' ')[0]} 60% 28%`)
-    root.style.setProperty('--sidebar-accent', `${branding.primaryColor.split(' ')[0]} 20% 94%`)
+    root.style.setProperty('--accent', `${baseHue} 30% 94%`)
+    root.style.setProperty('--accent-foreground', `${baseHue} 60% 28%`)
+    root.style.setProperty('--sidebar-accent', `${baseHue} 20% 94%`)
   }
 
-  // Secondary → --mileto-cyan
-  root.style.setProperty('--mileto-cyan', secondary[mode])
+  // Companheiras analogas → brand-light / brand-deep (gradientes da auth)
+  // brand-light = var(--brand-light) — companheira mais clara
+  // brand-deep = var(--brand-deep)  — companheira mais escura
+  root.style.setProperty('--brand-light', secondary[mode])
+  root.style.setProperty('--brand-deep', accent[mode])
 
-  // Accent color → --mileto-blue
-  root.style.setProperty('--mileto-blue', accent[mode])
+  // Background escuro da landing/auth — brand-surface = var(--brand-surface)
+  // Hue base + tonalidade escura: mood combina com a logo em vez do preto fixo.
+  root.style.setProperty('--brand-surface', `${baseHue} 35% 6%`)
 
   // Update favicon if set
   if (branding.faviconUrl) {

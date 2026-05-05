@@ -3,8 +3,8 @@ import Image from 'next/image'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Termos de Uso - Wyarp',
-  description: 'Termos e condicoes de uso da plataforma Wyarp CRM.',
+  title: 'Termos de Uso',
+  description: 'Termos e condicoes de uso da plataforma.',
 }
 
 export default function TermsPage() {
@@ -29,7 +29,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold text-foreground mb-3">1. Aceitacao dos Termos</h2>
             <p>
-              Ao acessar e utilizar a plataforma Wyarp CRM (&quot;Plataforma&quot;), disponivel em
+              Ao acessar e utilizar a plataforma (&quot;Plataforma&quot;), disponivel em
               crm.miletoia.com.br, voce concorda com estes Termos de Uso. Se voce nao concordar com
               qualquer parte destes termos, nao utilize a Plataforma.
             </p>
