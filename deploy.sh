@@ -376,15 +376,24 @@ cmd_update() {
 
   step "4/7 — Aplicando schema no banco"
 
-  # Migrations SQL manuais PRIMEIRO (limpam duplicatas, normalizam dados, etc)
-  # antes do prisma db push, que pode falhar se os dados nao estiverem preparados.
+  # ORDEM:
+  #   1) prisma db push — cria/atualiza tabelas e enums conforme schema.prisma
+  #      (necessario PRIMEIRO em VPS limpa: as migrations SQL referenciam tabelas
+  #      como `appointments`, `conversations`, `messages` que ainda nao existem)
+  #   2) Migrations SQL manuais — normalizam dados, ajustam enums com estado
+  #      legado, criam indexes parciais que o prisma nao suporta nativamente
   #
-  # Tracking: cada migration ja executada fica registrada na tabela
+  # Tracking: cada migration SQL ja executada fica registrada na tabela
   # schema_migrations (nome + timestamp). Rodar o deploy.sh de novo pula
   # migrations ja aplicadas.
+
   DB_URL=$(grep -E "^DATABASE_URL=" .env | head -1 | cut -d'"' -f2 | tr -d "'")
+
+  # 1) Prisma db push primeiro — schema base
+  npx prisma db push 2>&1 || warn "db push falhou (pode ser normal se nao houve mudancas)"
+
+  # 2) Migrations SQL manuais — depois das tabelas existirem
   if [ -d "prisma/migrations" ] && [ -n "$DB_URL" ]; then
-    # Garante a tabela de tracking (bootstrap inline, nao existe chicken-and-egg)
     psql "$DB_URL" -v ON_ERROR_STOP=1 -q -c "
       CREATE TABLE IF NOT EXISTS schema_migrations (
         name TEXT PRIMARY KEY,
@@ -396,7 +405,6 @@ cmd_update() {
       [ -f "$sql_file" ] || continue
       name="$(basename "$sql_file")"
 
-      # Ja aplicada? Pula.
       applied=$(psql "$DB_URL" -tAc "SELECT 1 FROM schema_migrations WHERE name='$name' LIMIT 1" 2>/dev/null | tr -d '[:space:]')
       if [ "$applied" = "1" ]; then
         log "Pulando (ja aplicada): $name"
@@ -414,9 +422,6 @@ cmd_update() {
       fi
     done
   fi
-
-  # Prisma db push depois, aplicando o schema (unique constraints, colunas novas, etc)
-  npx prisma db push 2>&1 || warn "db push falhou (pode ser normal se nao houve mudancas)"
 
   # Indexes
   if [ -f "prisma/indexes.sql" ] && [ -n "$DB_URL" ]; then
