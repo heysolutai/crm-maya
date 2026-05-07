@@ -79,6 +79,43 @@ function jidToPhone(jid: string | undefined): string | null {
   return phone.length >= 10 ? phone : null
 }
 
+/**
+ * Converte o status do Baileys/Evolution pro nosso readStatus.
+ * Baileys usa enum: ERROR=0, PENDING=1, SERVER_ACK=2, DELIVERY_ACK=3, READ=4, PLAYED=5
+ * Evolution geralmente manda como string ('READ', 'DELIVERY_ACK', ...) ou number.
+ * Retorna null pra status irrelevante ou desconhecido (nao atualiza o banco).
+ */
+function mapMessageStatus(raw: unknown): 'sent' | 'delivered' | 'read' | null {
+  if (raw === null || raw === undefined) return null
+
+  const s =
+    typeof raw === 'number'
+      ? String(raw)
+      : typeof raw === 'string'
+        ? raw.toUpperCase()
+        : ''
+
+  switch (s) {
+    case 'READ':
+    case '4':
+    case 'PLAYED':
+    case '5':
+      return 'read'
+    case 'DELIVERY_ACK':
+    case '3':
+      return 'delivered'
+    case 'SERVER_ACK':
+    case '2':
+    case 'PENDING':
+    case '1':
+      return 'sent'
+    case 'ERROR':
+    case '0':
+    default:
+      return null
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const agentId = req.nextUrl.searchParams.get('agentId')
@@ -259,6 +296,121 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        break
+      }
+
+      case 'MESSAGES_UPDATE': {
+        // Atualizacao de status (entregue / lido / falha) ou edicao do conteudo.
+        // Baileys / Evolution mandam diferentes formas — aceitamos varios formatos:
+        //   - data.status: "DELIVERY_ACK" | "READ" | "PLAYED" | "PENDING" | ...
+        //   - data.update?: { status: ... }   (alguns providers aninham)
+        //   - data.key.id: id da mensagem no provider
+        const key = data?.key || {}
+        const providerMessageId: string | null = key.id || data?.messageId || null
+        const rawStatus =
+          data?.status ?? data?.update?.status ?? data?.message?.status ?? null
+
+        if (!providerMessageId) break
+
+        const readStatus = mapMessageStatus(rawStatus)
+        if (!readStatus) break
+
+        // Match exato OU sufixo (Baileys as vezes prefixa "owner:stanzaID")
+        const updateData: any = { readStatus }
+        if (readStatus === 'read') updateData.readAt = new Date()
+
+        let result = await prisma.message.updateMany({
+          where: { uazMessageId: providerMessageId },
+          data: updateData,
+        })
+
+        if (result.count === 0) {
+          result = await prisma.message.updateMany({
+            where: { uazMessageId: { endsWith: `:${providerMessageId}` } },
+            data: updateData,
+          })
+        }
+
+        if (result.count > 0) {
+          // Acha as mensagens afetadas pra publicar realtime
+          const updated = await prisma.message.findMany({
+            where: {
+              OR: [
+                { uazMessageId: providerMessageId },
+                { uazMessageId: { endsWith: `:${providerMessageId}` } },
+              ],
+            },
+            select: { id: true, conversationId: true },
+          })
+
+          await Promise.all(
+            updated.map((m) =>
+              publishEvent(agent.companyId, {
+                type: 'message:update',
+                conversationId: m.conversationId,
+                messageId: m.id,
+                patch: {
+                  readStatus,
+                  ...(readStatus === 'read' ? { readAt: new Date().toISOString() } : {}),
+                },
+              }).catch(() => {})
+            )
+          )
+        }
+        break
+      }
+
+      case 'MESSAGES_DELETE': {
+        // Mensagem revogada/apagada no WhatsApp. Aceitamos:
+        //   - data.key.id          (revoke individual)
+        //   - data.id              (alguns formatos)
+        //   - data.messages: [...] (delete em lote)
+        const ids: string[] = []
+        if (data?.key?.id) ids.push(data.key.id)
+        if (typeof data?.id === 'string') ids.push(data.id)
+        if (Array.isArray(data?.messages)) {
+          for (const m of data.messages) {
+            if (m?.key?.id) ids.push(m.key.id)
+          }
+        }
+        if (ids.length === 0) break
+
+        const found = await prisma.message.findMany({
+          where: {
+            OR: [
+              { uazMessageId: { in: ids } },
+              ...ids.map((id) => ({ uazMessageId: { endsWith: `:${id}` } as any })),
+            ],
+          },
+          select: { id: true, conversationId: true, metadata: true },
+        })
+
+        await Promise.all(
+          found.map((m) =>
+            prisma.message.update({
+              where: { id: m.id },
+              data: {
+                metadata: {
+                  ...((m.metadata as Record<string, unknown>) || {}),
+                  deleted: true,
+                  deleted_at: new Date().toISOString(),
+                  deleted_by: 'remote',
+                } as any,
+              },
+            })
+          )
+        )
+
+        await Promise.all(
+          found.map((m) =>
+            publishEvent(agent.companyId, {
+              type: 'message:update',
+              conversationId: m.conversationId,
+              messageId: m.id,
+              patch: { deleted: true, deleted_at: new Date().toISOString() },
+            }).catch(() => {})
+          )
+        )
         break
       }
 

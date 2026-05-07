@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
-import { handleApiError } from '@/lib/api/errors'
 import { getAdapter, hasAdapter } from '@/lib/channels/registry'
 import { isChannelType } from '@/lib/channels/types'
+import { respondToChannelError, clearAgentError } from '@/lib/channels/api-helpers'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   try {
     const { companyId } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
-    const { id } = await params
     const agent = await prisma.whatsappInstance.findFirst({ where: { id, companyId } })
     if (!agent) return NextResponse.json({ error: 'Agente nao encontrado' }, { status: 404 })
 
@@ -38,12 +38,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (result.phoneNumber) updates.phoneNumber = result.phoneNumber
 
     await prisma.whatsappInstance.update({ where: { id: agent.id }, data: updates })
+    if (newStatus === 'connected' || newStatus === 'connecting') {
+      await clearAgentError(agent.id)
+    }
 
     return NextResponse.json({
       status: newStatus,
       phone_number: result.phoneNumber || agent.phoneNumber,
     })
   } catch (error) {
-    return handleApiError(error, 'Erro ao consultar status')
+    return respondToChannelError(error, {
+      agentId: id,
+      contextLog: 'agents:status',
+      fallbackMessage: 'Erro ao consultar status',
+    })
   }
 }

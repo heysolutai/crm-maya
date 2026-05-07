@@ -4,6 +4,7 @@ import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
 import { CHANNEL_TYPES, isChannelType, CHANNEL_REGISTRY } from '@/lib/channels/types'
 import { getAdapter, hasAdapter } from '@/lib/channels/registry'
+import { ChannelError } from '@/lib/channels/errors'
 import { z } from 'zod'
 
 const createAgentSchema = z.object({
@@ -139,12 +140,26 @@ export async function POST(req: NextRequest) {
         })
 
         return NextResponse.json(mapAgent(agent), { status: 201 })
-      } catch (provisionError: any) {
+      } catch (provisionError: unknown) {
         // Rollback: remove placeholder se o provider rejeitou
         await prisma.whatsappInstance.delete({ where: { id: placeholder.id } }).catch(() => {})
+
+        if (provisionError instanceof ChannelError) {
+          console.error(`[agents:provision] ${provisionError.code}:`, provisionError.message, {
+            providerStatus: provisionError.providerStatus,
+          })
+          return NextResponse.json(
+            { error: provisionError.message, code: provisionError.code },
+            { status: provisionError.httpStatus }
+          )
+        }
+
         console.error('[agents:provision]', provisionError)
         return NextResponse.json(
-          { error: provisionError?.message || 'Falha ao provisionar agente' },
+          {
+            error: (provisionError as Error)?.message || 'Falha ao provisionar agente',
+            code: 'INTERNAL_ERROR',
+          },
           { status: 502 }
         )
       }

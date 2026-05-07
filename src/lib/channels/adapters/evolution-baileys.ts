@@ -26,6 +26,7 @@ import type {
   SendTextInput,
   SendTextResult,
 } from '../adapter';
+import { ChannelError, classifyHttpStatus, isNetworkError } from '../errors';
 
 interface EvolutionChannelConfig {
   serverApiKey?: string;
@@ -47,17 +48,42 @@ async function evolutionFetch(
   apiKey: string,
   method: string,
   path: string,
-  body?: unknown
+  body?: unknown,
+  opts?: { timeoutMs?: number }
 ): Promise<{ ok: boolean; status: number; data: any }> {
-  const res = await fetch(`${trimUrl(baseUrl)}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: apiKey,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    cache: 'no-store',
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), opts?.timeoutMs ?? 15000);
+
+  let res: Response;
+  try {
+    res = await fetch(`${trimUrl(baseUrl)}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: apiKey,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if ((err as any)?.name === 'AbortError') {
+      throw new ChannelError(
+        'Servidor Evolution nao respondeu a tempo (timeout)',
+        'PROVIDER_UNREACHABLE',
+        { httpStatus: 504 }
+      );
+    }
+    if (isNetworkError(err)) {
+      throw new ChannelError(
+        'Nao foi possivel conectar ao servidor Evolution. Verifique a URL e se ele esta online.',
+        'NETWORK_ERROR'
+      );
+    }
+    throw new ChannelError((err as Error).message || 'Erro de rede', 'UNKNOWN');
+  } finally {
+    clearTimeout(timeout);
+  }
 
   let data: any = null;
   const text = await res.text();
@@ -79,6 +105,30 @@ function extractError(data: any, fallback: string): string {
   if (typeof data?.response?.message === 'string') return data.response.message;
   if (typeof data.error === 'string') return data.error;
   return fallback;
+}
+
+/**
+ * Helper que converte resposta de erro do Evolution em ChannelError tipado.
+ * Garante que o code reflete a natureza do erro (credencial/instancia/etc).
+ */
+function throwForStatus(
+  status: number,
+  data: any,
+  fallback: string,
+  hint?: { conflictMatcher?: (msg: string) => boolean }
+): never {
+  const message = extractError(data, fallback);
+  let code = classifyHttpStatus(status);
+
+  // Refinamentos: Evolution retorna 400 quando instanceName ja existe — preferimos CONFLICT
+  if (code === 'BAD_REQUEST' && hint?.conflictMatcher && hint.conflictMatcher(message)) {
+    code = 'CONFLICT';
+  }
+
+  throw new ChannelError(message, code, {
+    providerStatus: status,
+    providerBody: data,
+  });
 }
 
 function mapState(state: unknown): StatusResult['status'] {
@@ -113,8 +163,12 @@ export const evolutionBaileysAdapter: ChannelAdapter = {
   type: 'evolution_baileys',
 
   async provision(input: ProvisionInput): Promise<ProvisionResult> {
-    if (!input.serverUrl) throw new Error('URL do servidor Evolution e obrigatoria');
-    if (!input.serverApiKey) throw new Error('API Key global do servidor Evolution e obrigatoria');
+    if (!input.serverUrl) {
+      throw new ChannelError('URL do servidor Evolution e obrigatoria', 'BAD_REQUEST');
+    }
+    if (!input.serverApiKey) {
+      throw new ChannelError('API Key global do servidor Evolution e obrigatoria', 'BAD_REQUEST');
+    }
 
     // Slug determinista: nome legivel + companyId truncado
     const slug = input.displayName
@@ -149,7 +203,11 @@ export const evolutionBaileysAdapter: ChannelAdapter = {
     const res = await evolutionFetch(input.serverUrl, input.serverApiKey, 'POST', '/instance/create', body);
 
     if (!res.ok) {
-      throw new Error(extractError(res.data, `Falha ao criar instancia (${res.status})`));
+      throwForStatus(res.status, res.data, `Falha ao criar instancia (${res.status})`, {
+        // Evolution responde 400 com mensagem "instance already in use" — isso e CONFLICT, nao BAD_REQUEST
+        conflictMatcher: (msg) =>
+          /already.*(use|exist)|already.*registered|instanceName.*exist/i.test(msg),
+      });
     }
 
     // Resposta tipica: { instance: {...}, hash: { apikey: "..." }, qrcode?: { base64, code, pairingCode }, ... }
@@ -173,9 +231,9 @@ export const evolutionBaileysAdapter: ChannelAdapter = {
   },
 
   async getQrCode(agent: ChannelAgent): Promise<QrResult> {
-    if (!agent.apiUrl) throw new Error('Servidor nao configurado');
+    if (!agent.apiUrl) throw new ChannelError('Servidor nao configurado', 'BAD_REQUEST');
     const key = getServerKey(agent);
-    if (!key) throw new Error('API Key nao configurada');
+    if (!key) throw new ChannelError('API Key nao configurada', 'BAD_REQUEST');
 
     const res = await evolutionFetch(
       agent.apiUrl,
@@ -185,8 +243,7 @@ export const evolutionBaileysAdapter: ChannelAdapter = {
     );
 
     if (!res.ok) {
-      // 404 = instancia nao existe mais no provider
-      throw new Error(extractError(res.data, `Falha ao gerar QR (${res.status})`));
+      throwForStatus(res.status, res.data, `Falha ao gerar QR (${res.status})`);
     }
 
     // Resposta: { pairingCode, code, count } — `code` pode ser base64 ou string
@@ -201,9 +258,9 @@ export const evolutionBaileysAdapter: ChannelAdapter = {
   },
 
   async getStatus(agent: ChannelAgent): Promise<StatusResult> {
-    if (!agent.apiUrl) throw new Error('Servidor nao configurado');
+    if (!agent.apiUrl) throw new ChannelError('Servidor nao configurado', 'BAD_REQUEST');
     const key = getServerKey(agent);
-    if (!key) throw new Error('API Key nao configurada');
+    if (!key) throw new ChannelError('API Key nao configurada', 'BAD_REQUEST');
 
     const res = await evolutionFetch(
       agent.apiUrl,
@@ -213,6 +270,11 @@ export const evolutionBaileysAdapter: ChannelAdapter = {
     );
 
     if (!res.ok) {
+      // Status e operacao "soft": credencial errada ou instancia removida
+      // sao casos fatais que precisam virar erro tipado pra UI tratar.
+      if (res.status === 401 || res.status === 403 || res.status === 404) {
+        throwForStatus(res.status, res.data, `Falha ao consultar status (${res.status})`);
+      }
       return { status: 'error', raw: res.data };
     }
 
@@ -228,14 +290,18 @@ export const evolutionBaileysAdapter: ChannelAdapter = {
     const key = getServerKey(agent);
     if (!key) return;
 
-    await evolutionFetch(
-      agent.apiUrl,
-      key,
-      'DELETE',
-      `/instance/logout/${encodeURIComponent(agent.instanceName)}`
-    );
-    // Erros aqui sao silenciados — se o provider ja nao tem a sessao,
-    // o estado local "desconectado" e o que importa.
+    // Erros aqui sao silenciados — se o provider ja nao tem a sessao
+    // (404) ou esta offline, o estado local "desconectado" e suficiente.
+    try {
+      await evolutionFetch(
+        agent.apiUrl,
+        key,
+        'DELETE',
+        `/instance/logout/${encodeURIComponent(agent.instanceName)}`
+      );
+    } catch (e) {
+      console.warn(`[evolution_baileys] disconnect error (ignored):`, (e as Error).message);
+    }
   },
 
   async remove(agent: ChannelAgent): Promise<void> {
@@ -246,18 +312,24 @@ export const evolutionBaileysAdapter: ChannelAdapter = {
     const key = config.serverApiKey || agent.instanceApiKey || '';
     if (!key) return;
 
-    await evolutionFetch(
-      agent.apiUrl,
-      key,
-      'DELETE',
-      `/instance/delete/${encodeURIComponent(agent.instanceName)}`
-    );
+    // Erros silenciados pelo mesmo motivo: se nao conseguimos remover do
+    // provider, o usuario ainda quer apagar o registro local.
+    try {
+      await evolutionFetch(
+        agent.apiUrl,
+        key,
+        'DELETE',
+        `/instance/delete/${encodeURIComponent(agent.instanceName)}`
+      );
+    } catch (e) {
+      console.warn(`[evolution_baileys] remove error (ignored):`, (e as Error).message);
+    }
   },
 
-  async sendText(lkjn mjjhgjjhhjmnnmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmbbbvdxvxvxmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxggggdgggfggfgggggdrrtgtcfgrftrgfrtttttttttttttttttttttttttttttttttttttffffffffffffffffffffffv fdfzv dsc zr2edsaagent: ChannelAgent, input: SendTextInput): Promise<SendTextResult> {
-    if (!agent.apiUrl) throw new Error('Servidor nao configurado');
+  async sendText(agent: ChannelAgent, input: SendTextInput): Promise<SendTextResult> {
+    if (!agent.apiUrl) throw new ChannelError('Servidor nao configurado', 'BAD_REQUEST');
     const key = getServerKey(agent);
-    if (!key) throw new Error('API Key nao configurada');
+    if (!key) throw new ChannelError('API Key nao configurada', 'BAD_REQUEST');
 
     const body: Record<string, unknown> = {
       number: input.to.replace(/\D/g, ''),
@@ -277,7 +349,7 @@ export const evolutionBaileysAdapter: ChannelAdapter = {
     );
 
     if (!res.ok) {
-      throw new Error(extractError(res.data, `Falha ao enviar mensagem (${res.status})`));
+      throwForStatus(res.status, res.data, `Falha ao enviar mensagem (${res.status})`);
     }
 
     const messageId = res.data?.key?.id || res.data?.messageid || res.data?.id || '';

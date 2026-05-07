@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
-import { handleApiError } from '@/lib/api/errors'
 import { getAdapter, hasAdapter } from '@/lib/channels/registry'
 import { isChannelType } from '@/lib/channels/types'
+import { respondToChannelError, clearAgentError } from '@/lib/channels/api-helpers'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   try {
     const { companyId } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
-    const { id } = await params
     const agent = await prisma.whatsappInstance.findFirst({ where: { id, companyId } })
     if (!agent) return NextResponse.json({ error: 'Agente nao encontrado' }, { status: 404 })
 
     if (!isChannelType(agent.channelType) || !hasAdapter(agent.channelType as any)) {
-      return NextResponse.json({ error: 'Canal sem adapter' }, { status: 400 })
+      return NextResponse.json({ error: 'Canal sem adapter', code: 'NO_ADAPTER' }, { status: 400 })
     }
 
     const adapter = getAdapter(agent.channelType as any)
@@ -39,6 +39,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         status: result.status,
       },
     })
+    await clearAgentError(agent.id)
 
     return NextResponse.json({
       qr_code: result.qrCode,
@@ -46,6 +47,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       status: result.status,
     })
   } catch (error) {
-    return handleApiError(error, 'Erro ao gerar QR')
+    return respondToChannelError(error, {
+      agentId: id,
+      contextLog: 'agents:qr',
+      fallbackMessage: 'Erro ao gerar QR',
+    })
   }
 }

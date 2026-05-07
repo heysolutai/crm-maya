@@ -3,6 +3,8 @@ import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { useToast } from './use-toast';
 import type { ChannelType } from '@/lib/channels/types';
 
+export type AgentStatus = 'connected' | 'connecting' | 'disconnected' | 'error' | string | null;
+
 export interface Agent {
   id: string;
   company_id: string;
@@ -12,7 +14,7 @@ export interface Agent {
   instance_name: string;
   api_url: string | null;
   instance_api_key: string | null;
-  status: string | null;
+  status: AgentStatus;
   is_active: boolean;
   qr_code: string | null;
   error_message: string | null;
@@ -53,15 +55,32 @@ export function useAgents() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Falha ao criar agente');
+      if (!res.ok) {
+        const err = new Error(json.error || 'Falha ao criar agente') as Error & { code?: string };
+        err.code = json.code;
+        throw err;
+      }
       return json as Agent;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agents'] });
       toast({ title: 'Agente criado' });
     },
-    onError: (e: Error) => {
-      toast({ title: 'Erro ao criar agente', description: e.message, variant: 'destructive' });
+    onError: (e: Error & { code?: string }) => {
+      // Mensagens amigaveis por codigo de erro do canal
+      const titleByCode: Record<string, string> = {
+        INVALID_CREDENTIALS: 'API Key inválida',
+        NETWORK_ERROR: 'Não foi possível conectar ao servidor',
+        PROVIDER_UNREACHABLE: 'Servidor offline',
+        CONFLICT: 'Instância já existe',
+        BAD_REQUEST: 'Dados inválidos',
+        RATE_LIMITED: 'Muitas tentativas, aguarde',
+      };
+      toast({
+        title: (e.code && titleByCode[e.code]) || 'Erro ao criar agente',
+        description: e.message,
+        variant: 'destructive',
+      });
     },
   });
 

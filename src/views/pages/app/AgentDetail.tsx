@@ -332,6 +332,13 @@ function ConnectionTab({ agent }: { agent: ReturnType<typeof useAgents>['agents'
           </div>
         )}
 
+        {agent.error_message && agent.status !== 'connected' && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <p className="font-medium">Último erro do provider:</p>
+            <p className="text-xs mt-1 break-words">{agent.error_message}</p>
+          </div>
+        )}
+
         {isConnected ? (
           <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900 p-6 text-center space-y-3">
             <div className="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center mx-auto">
