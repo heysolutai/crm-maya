@@ -36,18 +36,22 @@ BEGIN
   END IF;
 END $$;
 
--- 4) Backfill: empresas com apenas 1 instancia ativa
+-- 4) Backfill: empresas com apenas 1 instancia ativa.
+--    Postgres nao tem MIN(uuid) — fazemos JOIN com a tabela direto pra
+--    pegar o id da unica instancia de cada empresa.
 WITH single_instance_companies AS (
-  SELECT company_id, MIN(id) AS instance_id
+  SELECT company_id
     FROM whatsapp_instances
    WHERE is_active = true
    GROUP BY company_id
   HAVING COUNT(*) = 1
 )
 UPDATE conversations c
-   SET whatsapp_instance_id = s.instance_id
-  FROM single_instance_companies s
- WHERE c.company_id = s.company_id
+   SET whatsapp_instance_id = wi.id
+  FROM whatsapp_instances wi
+  JOIN single_instance_companies s ON s.company_id = wi.company_id
+ WHERE c.company_id = wi.company_id
+   AND wi.is_active = true
    AND c.whatsapp_instance_id IS NULL;
 
 COMMIT;
