@@ -23,6 +23,7 @@ interface Voice {
 
 interface APIKeysSubTabProps {
   companyId: string;
+  agentId?: string;
 }
 
 const DEFAULT_AUDIO_SETTINGS = {
@@ -33,9 +34,11 @@ const DEFAULT_AUDIO_SETTINGS = {
   elevenlabs_remove_background_noise: false,
 };
 
-export function APIKeysSubTab({ companyId }: APIKeysSubTabProps) {
+export function APIKeysSubTab({ companyId, agentId }: APIKeysSubTabProps) {
   const { toast } = useToast();
-  const { configurations, updateConfiguration, isUpdating } = useAIConfigurations(companyId);
+  const { configurations, updateConfiguration, isUpdating } = useAIConfigurations(
+    agentId ? { companyId, agentId } : companyId
+  );
   const { setDirty } = useUnsavedChanges();
   
   const existingConfig = configurations?.[0];

@@ -124,6 +124,7 @@ export default function AgentDetail({ agentId }: Props) {
         return (
           <AIPromptsEditor
             companyId={companyId}
+            agentId={agent.id}
             variant="full"
             showConfigInfo={true}
             showVariablesCard={true}
@@ -132,11 +133,11 @@ export default function AgentDetail({ agentId }: Props) {
       case 'faq':
         return <FAQManager companyId={companyId} />;
       case 'integrations':
-        return <APIKeysSubTab companyId={companyId} />;
+        return <APIKeysSubTab companyId={companyId} agentId={agent.id} />;
       case 'settings':
-        return <SettingsSubTab companyId={companyId} />;
+        return <SettingsSubTab companyId={companyId} agentId={agent.id} />;
       case 'playground':
-        return <PlaygroundChat companyId={companyId} />;
+        return <PlaygroundChat companyId={companyId} agentId={agent.id} />;
       default:
         return null;
     }

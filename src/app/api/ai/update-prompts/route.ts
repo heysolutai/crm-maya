@@ -32,7 +32,18 @@ export async function POST(req: NextRequest) {
     });
 
     const body = await req.json();
-    const { configuration_id, papel, objetivo, funcao, funil, regras, regras_horarios, boas_vindas } = body;
+    const {
+      configuration_id,
+      agent_id,
+      conversation_id,
+      papel,
+      objetivo,
+      funcao,
+      funil,
+      regras,
+      regras_horarios,
+      boas_vindas,
+    } = body;
 
     const prompts: Record<string, string> = {};
     if (papel !== undefined) prompts.papel = papel;
@@ -47,9 +58,21 @@ export async function POST(req: NextRequest) {
       return badRequestResponse('At least one prompt field is required');
     }
 
+    // Resolve qual agent_id usar: explicito > derivado da conversa > nenhum
+    let resolvedAgentId: string | null = agent_id || null;
+    if (!resolvedAgentId && conversation_id) {
+      const conv = await prisma.conversation.findFirst({
+        where: { id: conversation_id, companyId: keyData.companyId },
+        select: { whatsappInstanceId: true },
+      });
+      resolvedAgentId = conv?.whatsappInstanceId || null;
+    }
+
     const whereClause: any = { companyId: keyData.companyId };
     if (configuration_id) {
       whereClause.id = configuration_id;
+    } else if (resolvedAgentId) {
+      whereClause.whatsappInstanceId = resolvedAgentId;
     }
 
     const config = await prisma.aiConfiguration.findFirst({

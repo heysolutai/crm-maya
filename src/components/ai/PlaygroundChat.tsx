@@ -19,9 +19,10 @@ interface Message {
 
 interface PlaygroundChatProps {
   companyId: string;
+  agentId?: string;
 }
 
-export function PlaygroundChat({ companyId }: PlaygroundChatProps) {
+export function PlaygroundChat({ companyId, agentId }: PlaygroundChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -72,6 +73,7 @@ export function PlaygroundChat({ companyId }: PlaygroundChatProps) {
           sessionId,
           message: text,
           company_id: companyId,
+          agent_id: agentId || null,
           api_key: activeApiKey,
         }),
       });

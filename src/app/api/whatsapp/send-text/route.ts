@@ -1,11 +1,14 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
+import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { getWhatsAppInstance, findOrCreateConversation, saveMessage, getUAZMessageId, getClientPhoneByConversationId } from '@/lib/api/database';
 import { sendToWhatsApp } from '@/lib/api/whatsapp';
 import { validateTextPayload } from '@/lib/api/utils';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
+import { getAdapter, hasAdapter } from '@/lib/channels/registry';
+import { isChannelType } from '@/lib/channels/types';
 
 const apiError = (message: string, errorCode: string, status: number, extra?: Record<string, unknown>) =>
   jsonResponse({ success: false, error: errorCode, message, ...extra }, status);
@@ -72,11 +75,77 @@ export async function POST(req: NextRequest) {
 
     console.log('[send-message-text] Auth done:', Date.now() - t0, 'ms');
 
-    // Parallel: instance + conversation
-    const instancePromise = getWhatsAppInstance(companyId).catch(() => null);
-    const conversationPromise = payload.conversationId ? Promise.resolve(payload.conversationId) : findOrCreateConversation(payload.phone || '', companyId);
-    const [instance, conversationId] = await Promise.all([instancePromise, conversationPromise]);
+    // Resolve a conversa antes pra descobrir qual agente envia (multi-canal).
+    const conversationId = payload.conversationId
+      ? payload.conversationId
+      : await findOrCreateConversation(payload.phone || '', companyId);
 
+    // Busca a conversa pra saber qual agente esta vinculado
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: conversationId, companyId },
+      select: { id: true, whatsappInstanceId: true },
+    });
+    if (!conversation) return apiError('Conversa não encontrada.', 'CONVERSATION_NOT_FOUND', 404);
+
+    // Se a conversa tem agente vinculado e ele tem adapter, manda pelo adapter
+    if (conversation.whatsappInstanceId) {
+      const agent = await prisma.whatsappInstance.findFirst({
+        where: { id: conversation.whatsappInstanceId, companyId },
+      });
+
+      if (agent && isChannelType(agent.channelType) && hasAdapter(agent.channelType as any)) {
+        const message = await saveMessage(conversationId, payload.message, 'text', payload.fromAI || false, agentId, undefined, { adapter_payload: payload, channel: agent.channelType });
+
+        try {
+          const adapter = getAdapter(agent.channelType as any);
+          const result = await adapter.sendText(
+            {
+              id: agent.id,
+              companyId: agent.companyId,
+              channelType: agent.channelType as any,
+              instanceName: agent.instanceName,
+              displayName: agent.displayName,
+              phoneNumber: agent.phoneNumber,
+              apiUrl: agent.apiUrl,
+              instanceApiKey: agent.instanceApiKey,
+              channelConfig: agent.channelConfig as any,
+              metadata: agent.metadata as any,
+            },
+            {
+              to: payload.phone || '',
+              text: payload.message,
+              quotedMessageId: replyid || payload.replyid,
+            }
+          );
+
+          // Grava o ID do provider pra dedup do webhook de eco
+          if (result.providerMessageId) {
+            await prisma.message.update({
+              where: { id: message.id },
+              data: { uazMessageId: result.providerMessageId },
+            }).catch(() => {});
+          }
+
+          console.log('[send-message-text] adapter send done:', Date.now() - t0, 'ms');
+          return jsonResponse({
+            success: true,
+            message_id: message.id,
+            conversation_id: conversationId,
+            sender_type: payload.fromAI ? 'ai' : 'agent',
+            channel: agent.channelType,
+          });
+        } catch (sendErr: any) {
+          await prisma.message.update({
+            where: { id: message.id },
+            data: { metadata: { send_error: sendErr?.message || 'unknown', failed_at: new Date().toISOString() } as any },
+          }).catch(() => {});
+          return apiError(sendErr?.message || 'Falha ao enviar pelo agente.', 'ADAPTER_SEND_FAILED', 502, { message_id: message.id });
+        }
+      }
+    }
+
+    // Fallback: fluxo legado UazAPI (instancia unica por empresa, sem channel adapter)
+    const instance = await getWhatsAppInstance(companyId).catch(() => null);
     if (!instance) return apiError('WhatsApp não configurado ou desconectado.', 'WHATSAPP_NOT_CONNECTED', 503);
 
     console.log('[send-message-text] Instance + Conv done:', Date.now() - t0, 'ms');

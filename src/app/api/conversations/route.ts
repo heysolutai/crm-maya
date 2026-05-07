@@ -62,6 +62,9 @@ export async function GET(req: NextRequest) {
         },
         transferAgent: { select: { fullName: true } },
         department: { select: { id: true, name: true, color: true } },
+        whatsappInstance: {
+          select: { id: true, displayName: true, instanceName: true, channelType: true, phoneNumber: true },
+        },
         messages: {
           select: { messageText: true, messageType: true, senderType: true, createdAt: true },
           orderBy: { createdAt: 'desc' },

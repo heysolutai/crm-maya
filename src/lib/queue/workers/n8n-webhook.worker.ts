@@ -30,14 +30,27 @@ async function processN8NWebhook(job: Job<N8NWebhookJob>) {
       // Wait 5 seconds before sending typing indicator
       await new Promise(resolve => setTimeout(resolve, 5000))
 
-      const instance = await prisma.whatsappInstance.findFirst({
-        where: { companyId, isActive: true },
-        select: { apiUrl: true, instanceApiKey: true },
+      // Resolve o agente desta conversa pra usar a instancia certa
+      const conv = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { whatsappInstanceId: true },
       })
 
-      if (instance?.apiUrl && instance?.instanceApiKey) {
+      const instance = conv?.whatsappInstanceId
+        ? await prisma.whatsappInstance.findUnique({
+            where: { id: conv.whatsappInstanceId },
+            select: { id: true, apiUrl: true, instanceApiKey: true, channelType: true },
+          })
+        : await prisma.whatsappInstance.findFirst({
+            where: { companyId, isActive: true },
+            select: { id: true, apiUrl: true, instanceApiKey: true, channelType: true },
+          })
+
+      // Typing indicator hoje so funciona pra UazAPI (endpoint /message/presence
+      // proprio do UazAPI). Pula pra outros canais ate ter helper proprio.
+      if (instance?.apiUrl && instance?.instanceApiKey && instance.channelType === 'uazapi') {
         const aiConfig = await prisma.aiConfiguration.findFirst({
-          where: { companyId, isActive: true },
+          where: { whatsappInstanceId: instance.id, isActive: true },
           select: { behaviorSettings: true },
         })
 

@@ -12,11 +12,14 @@ import { DEFAULT_BEHAVIOR_SETTINGS, type BehaviorSettings } from '@/lib/aiConfig
 
 interface SettingsSubTabProps {
   companyId: string;
+  agentId?: string;
 }
 
-export function SettingsSubTab({ companyId }: SettingsSubTabProps) {
+export function SettingsSubTab({ companyId, agentId }: SettingsSubTabProps) {
   const { toast } = useToast();
-  const { configurations, updateConfiguration, isUpdating } = useAIConfigurations(companyId);
+  const { configurations, updateConfiguration, isUpdating } = useAIConfigurations(
+    agentId ? { companyId, agentId } : companyId
+  );
   const { setDirty } = useUnsavedChanges();
   
   const existingConfig = configurations?.[0];

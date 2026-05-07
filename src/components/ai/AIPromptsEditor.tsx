@@ -15,19 +15,25 @@ import { DEFAULT_PROMPTS } from '@/lib/aiConfig';
 
 interface AIPromptsEditorProps {
   companyId: string;
+  agentId?: string;
   variant?: 'full' | 'simple';
   showConfigInfo?: boolean;
   showVariablesCard?: boolean;
 }
 
-export function AIPromptsEditor({ 
-  companyId, 
+export function AIPromptsEditor({
+  companyId,
+  agentId,
   variant = 'simple',
   showConfigInfo = false,
   showVariablesCard = true,
 }: AIPromptsEditorProps) {
   const { toast } = useToast();
-  const { configurations, createConfiguration, updateConfiguration, isCreating, isUpdating } = useAIConfigurations(companyId);
+  // Quando agentId esta presente, escopa a config a esse agente (1:1).
+  // Sem agentId, cai no modo legado (por empresa, primeiro registro).
+  const { configurations, createConfiguration, updateConfiguration, isCreating, isUpdating } = useAIConfigurations(
+    agentId ? { companyId, agentId } : companyId
+  );
   const { data: whatsappInstances } = useWhatsAppInstances(companyId);
   const { setDirty } = useUnsavedChanges();
   

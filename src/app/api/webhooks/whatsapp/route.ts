@@ -1472,11 +1472,7 @@ export async function POST(req: NextRequest) {
 
     // 5. Enviar webhook para N8N via fila (non-blocking)
     if (payload.type === 'incoming' || payload.type === 'outgoing') {
-      const [aiConfigResult, clientDataResult, apiKeyResult, companyDataResult, convDataResult] = await Promise.all([
-        prisma.aiConfiguration.findFirst({
-          where: { companyId, isActive: true },
-          select: { n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
-        }),
+      const [clientDataResult, apiKeyResult, companyDataResult, convDataResult] = await Promise.all([
         prisma.client.findUnique({
           where: { id: clientId },
           select: { firstName: true, lastName: true, aiPaused: true },
@@ -1499,9 +1495,23 @@ export async function POST(req: NextRequest) {
             transferAgent: { select: { id: true, fullName: true } },
             departmentId: true,
             department: { select: { id: true, name: true } },
+            whatsappInstanceId: true,
           },
         }),
       ]);
+
+      // AI config agora e POR AGENTE (whatsappInstanceId da conversa).
+      // Fallback: se a conversa nao tiver agente vinculado (caso legado),
+      // pega a primeira config da empresa pra nao quebrar fluxo antigo.
+      const aiConfigResult = convDataResult?.whatsappInstanceId
+        ? await prisma.aiConfiguration.findFirst({
+            where: { companyId, whatsappInstanceId: convDataResult.whatsappInstanceId, isActive: true },
+            select: { n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
+          })
+        : await prisma.aiConfiguration.findFirst({
+            where: { companyId, isActive: true },
+            select: { n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
+          });
 
       const companyAiConfig = aiConfigResult;
       const clientData = clientDataResult;

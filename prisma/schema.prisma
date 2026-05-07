@@ -396,13 +396,15 @@ model Conversation {
   friendlyId        String?            @map("friendly_id")
   metadata          Json?              @default("{}")
   departmentId      String?            @map("department_id") @db.Uuid
+  whatsappInstanceId String?           @map("whatsapp_instance_id") @db.Uuid
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @default(now()) @updatedAt @map("updated_at")
 
-  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  client        Client?     @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  transferAgent User?       @relation("ConversationTransferredTo", fields: [transferredTo], references: [id], onDelete: SetNull)
-  department    Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client           Client?           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  transferAgent    User?             @relation("ConversationTransferredTo", fields: [transferredTo], references: [id], onDelete: SetNull)
+  department       Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  whatsappInstance WhatsappInstance? @relation(fields: [whatsappInstanceId], references: [id], onDelete: SetNull)
 
   messages          Message[]
   conversationNotes ConversationNote[]
@@ -418,6 +420,7 @@ model Conversation {
   @@index([channel], map: "idx_conversations_channel")
   @@index([createdAt], map: "idx_conversations_created")
   @@index([departmentId], map: "idx_conversations_department")
+  @@index([whatsappInstanceId], map: "idx_conversations_whatsapp_instance")
   @@map("conversations")
 }
 
@@ -714,6 +717,7 @@ model WhatsappInstance {
   reminders        Reminder[]
   followUpJobs     FollowUpJob[]
   catalogProducts  CatalogProduct[]
+  conversations    Conversation[]
 
   @@index([companyId], map: "idx_whatsapp_instances_company")
   @@index([channelType], map: "idx_whatsapp_instances_channel")
@@ -789,7 +793,7 @@ model AiConfiguration {
   knowledge          String?
   memoryKey          String?  @map("memory_key")
   productsKnowledge  String?  @map("products_knowledge")
-  whatsappInstanceId String?  @map("whatsapp_instance_id") @db.Uuid
+  whatsappInstanceId String   @unique @map("whatsapp_instance_id") @db.Uuid
   n8nWebhookUrl      String?  @map("n8n_webhook_url")
   followUpEnabled    Boolean  @default(false) @map("follow_up_enabled")
   followUpStages     Json?    @default("[]") @map("follow_up_stages")
@@ -797,9 +801,9 @@ model AiConfiguration {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
 
-  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  creator          User?             @relation(fields: [createdBy], references: [id], onDelete: Restrict)
-  whatsappInstance WhatsappInstance? @relation(fields: [whatsappInstanceId], references: [id], onDelete: SetNull)
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator          User?            @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  whatsappInstance WhatsappInstance @relation(fields: [whatsappInstanceId], references: [id], onDelete: Cascade)
 
   @@index([companyId], map: "idx_ai_config_company")
   @@index([isActive], map: "idx_ai_config_active")

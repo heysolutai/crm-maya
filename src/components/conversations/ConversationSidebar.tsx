@@ -305,6 +305,17 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                           </span>
                         </>
                       )}
+                      {(conv as any).agent && (
+                        <>
+                          <span className="text-muted-foreground/40">·</span>
+                          <span
+                            className="text-[10px] px-1.5 py-0 h-4 inline-flex items-center rounded font-medium bg-primary/10 text-primary"
+                            title={`Recebido por ${(conv as any).agent.display_name}`}
+                          >
+                            {(conv as any).agent.display_name}
+                          </span>
+                        </>
+                      )}
                       {conv.status === 'pending' && onPickupConversation && (
                         <>
                           <span className="text-muted-foreground/40">·</span>

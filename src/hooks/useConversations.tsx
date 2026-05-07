@@ -157,9 +157,19 @@ export function useConversations(filters?: ConversationFilters) {
         const transferred_user = conv.transferAgent
           ? { full_name: conv.transferAgent.fullName || conv.transferAgent.full_name || null }
           : (conv.transferred_user || null);
+        // Normalize whatsappInstance (agent) → agent (snake_case)
+        const agent = conv.whatsappInstance
+          ? {
+              id: conv.whatsappInstance.id,
+              display_name: conv.whatsappInstance.displayName || conv.whatsappInstance.instanceName,
+              channel_type: conv.whatsappInstance.channelType,
+              phone_number: conv.whatsappInstance.phoneNumber || null,
+            }
+          : null;
         return {
           ...conv,
           client,
+          agent,
           started_at: conv.startedAt || conv.started_at,
           transferred_user,
           unread_count: countMap[conv.id] || 0,

@@ -89,21 +89,39 @@ function mapConfig(item: any): AIConfiguration {
   };
 }
 
-export function useAIConfigurations(companyId: string | undefined) {
+/**
+ * Hook agora aceita 2 modos:
+ * - useAIConfigurations(companyId)            → modo legado, lista todas configs da empresa
+ * - useAIConfigurations({ agentId })          → modo agente, retorna a config 1:1 do agente
+ * - useAIConfigurations({ companyId, agentId })→ explicita ambos (idem ao agentId)
+ *
+ * Sempre retorna `configurations: AIConfiguration[]` pra preservar a API
+ * dos componentes que ja usam configurations[0].
+ */
+export function useAIConfigurations(
+  arg: string | undefined | { companyId?: string; agentId?: string }
+) {
+  const companyId = typeof arg === 'string' ? arg : arg?.companyId;
+  const agentId = typeof arg === 'string' ? undefined : arg?.agentId;
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: configurations, isLoading } = useQuery({
-    queryKey: ['ai-configurations', companyId],
+    queryKey: ['ai-configurations', companyId, agentId],
     queryFn: async () => {
-      if (!companyId) return [];
+      if (!companyId && !agentId) return [];
 
-      const res = await fetch(`/api/ai-configurations?companyId=${companyId}`);
+      const params = new URLSearchParams();
+      if (companyId) params.set('companyId', companyId);
+      if (agentId) params.set('agentId', agentId);
+
+      const res = await fetch(`/api/ai-configurations?${params}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch configurations');
       const data = await res.json();
       return (data || []).map(mapConfig) as AIConfiguration[];
     },
-    enabled: !!companyId,
+    enabled: !!(companyId || agentId),
   });
 
   const createConfiguration = useMutation({

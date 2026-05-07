@@ -31,8 +31,24 @@ export async function GET(req: NextRequest) {
       data: { lastUsedAt: new Date() },
     });
 
+    // Filtros opcionais: agentId direto ou conversationId (resolve agente)
+    const agentId = req.nextUrl.searchParams.get('agentId')
+    const conversationId = req.nextUrl.searchParams.get('conversationId')
+
+    let resolvedAgentId: string | null = agentId
+    if (!resolvedAgentId && conversationId) {
+      const conv = await prisma.conversation.findFirst({
+        where: { id: conversationId, companyId: keyData.companyId },
+        select: { whatsappInstanceId: true },
+      })
+      resolvedAgentId = conv?.whatsappInstanceId || null
+    }
+
+    const where: any = { companyId: keyData.companyId }
+    if (resolvedAgentId) where.whatsappInstanceId = resolvedAgentId
+
     const config = await prisma.aiConfiguration.findFirst({
-      where: { companyId: keyData.companyId },
+      where,
       select: { apiKeys: true },
       orderBy: { createdAt: 'desc' },
     });

@@ -120,13 +120,22 @@ export const ConversationHeader = memo(function ConversationHeader({
         {/* Name + status */}
         <div className="flex-1 min-w-0">
           <h2 className="text-base font-semibold truncate">{clientName}</h2>
-          <div className="flex items-center gap-1.5">
-            <Badge 
-              variant="outline" 
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Badge
+              variant="outline"
               className={`${statusColors[conversation.status as ConversationStatus]} text-white border-0 text-[10px] px-1.5 py-0 h-4`}
             >
               {statusLabels[conversation.status as ConversationStatus]}
             </Badge>
+            {(conversation as any).agent && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary border-primary/20"
+                title={`Recebido por ${(conversation as any).agent.display_name}`}
+              >
+                {(conversation as any).agent.display_name}
+              </Badge>
+            )}
             <span className="text-[11px] text-muted-foreground truncate">
               {conversation.started_at
                 ? (() => { try { const d = new Date(conversation.started_at); return isNaN(d.getTime()) ? '' : format(d, "dd/MM/yy HH:mm", { locale: ptBR }); } catch { return ''; } })()

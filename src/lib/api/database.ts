@@ -24,7 +24,8 @@ export async function getWhatsAppInstance(companyId: string): Promise<WhatsAppIn
 
 export async function findOrCreateConversation(
   phone: string,
-  companyId: string
+  companyId: string,
+  whatsappInstanceId?: string | null
 ): Promise<string> {
   // Gera todas as variações possíveis (com/sem 9) para match robusto de celulares br
   const variants = phoneVariants(phone);
@@ -68,7 +69,7 @@ export async function findOrCreateConversation(
         clientId: client.id,
         status: 'active',
       },
-      select: { id: true },
+      select: { id: true, whatsappInstanceId: true },
       orderBy: { startedAt: 'desc' },
     });
 
@@ -80,10 +81,18 @@ export async function findOrCreateConversation(
           status: 'active',
           channel: 'whatsapp',
           startedAt: new Date(),
+          whatsappInstanceId: whatsappInstanceId || null,
         },
-        select: { id: true },
-    });
-  }
+        select: { id: true, whatsappInstanceId: true },
+      });
+    } else if (whatsappInstanceId && !conversation.whatsappInstanceId) {
+      // Conversa pre-existia sem agente vinculado — vincula ao agente que
+      // recebeu a mensagem agora (situacao tipica do backfill).
+      await tx.conversation.update({
+        where: { id: conversation.id },
+        data: { whatsappInstanceId },
+      });
+    }
 
     if (!conversation) {
       throw new Error('Failed to find or create conversation');

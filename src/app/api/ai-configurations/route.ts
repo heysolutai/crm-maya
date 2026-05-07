@@ -43,8 +43,14 @@ export async function GET(req: NextRequest) {
     const companyId = req.nextUrl.searchParams.get('companyId') || authCompanyId
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
+    // Modo agente: filtra pelo whatsappInstanceId (cada agente tem 1 config)
+    const agentId = req.nextUrl.searchParams.get('agentId')
+
+    const where: any = { companyId }
+    if (agentId) where.whatsappInstanceId = agentId
+
     const configurations = await prisma.aiConfiguration.findMany({
-      where: { companyId },
+      where,
       orderBy: { createdAt: 'desc' },
     })
 
