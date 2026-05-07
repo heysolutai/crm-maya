@@ -18,12 +18,23 @@ ALTER TABLE conversations
 CREATE INDEX IF NOT EXISTS idx_conversations_whatsapp_instance
   ON conversations (whatsapp_instance_id);
 
--- 3) Foreign key — ON DELETE SET NULL pra nao perder a conversa se o agente for removido
-ALTER TABLE conversations
-  ADD CONSTRAINT conversations_whatsapp_instance_id_fkey
-  FOREIGN KEY (whatsapp_instance_id)
-  REFERENCES whatsapp_instances (id)
-  ON DELETE SET NULL;
+-- 3) Foreign key — ON DELETE SET NULL pra nao perder a conversa se o agente for removido.
+--    Postgres nao tem ADD CONSTRAINT IF NOT EXISTS — usamos DO block pra ficar idempotente
+--    (prisma db push tambem cria essa FK, entao se rodar prisma + sql, a 2a falharia sem isso).
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname = 'conversations_whatsapp_instance_id_fkey'
+       AND conrelid = 'conversations'::regclass
+  ) THEN
+    ALTER TABLE conversations
+      ADD CONSTRAINT conversations_whatsapp_instance_id_fkey
+      FOREIGN KEY (whatsapp_instance_id)
+      REFERENCES whatsapp_instances (id)
+      ON DELETE SET NULL;
+  END IF;
+END $$;
 
 -- 4) Backfill: empresas com apenas 1 instancia ativa
 WITH single_instance_companies AS (

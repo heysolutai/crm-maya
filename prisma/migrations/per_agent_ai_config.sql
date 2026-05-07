@@ -106,14 +106,24 @@ ALTER TABLE ai_configurations
 CREATE UNIQUE INDEX IF NOT EXISTS ai_configurations_whatsapp_instance_id_key
   ON ai_configurations (whatsapp_instance_id);
 
--- 6) Fortalece a FK pra ON DELETE CASCADE (deletar agente apaga a config dele)
+-- 6) Fortalece a FK pra ON DELETE CASCADE (deletar agente apaga a config dele).
+--    Idempotente: drop sempre roda IF EXISTS, add roda dentro de DO block.
 ALTER TABLE ai_configurations
   DROP CONSTRAINT IF EXISTS ai_configurations_whatsapp_instance_id_fkey;
 
-ALTER TABLE ai_configurations
-  ADD CONSTRAINT ai_configurations_whatsapp_instance_id_fkey
-  FOREIGN KEY (whatsapp_instance_id)
-  REFERENCES whatsapp_instances (id)
-  ON DELETE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname = 'ai_configurations_whatsapp_instance_id_fkey'
+       AND conrelid = 'ai_configurations'::regclass
+  ) THEN
+    ALTER TABLE ai_configurations
+      ADD CONSTRAINT ai_configurations_whatsapp_instance_id_fkey
+      FOREIGN KEY (whatsapp_instance_id)
+      REFERENCES whatsapp_instances (id)
+      ON DELETE CASCADE;
+  END IF;
+END $$;
 
 COMMIT;
