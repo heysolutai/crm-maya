@@ -56,7 +56,6 @@ const menuGroups: MenuGroup[] = [
   {
     label: 'Integrações',
     items: [
-      { id: 'connections', label: 'Conexões', icon: Plug, description: 'WhatsApp e integrações' },
       { id: 'api-keys', label: 'API Keys', icon: Key, description: 'Chaves de acesso à API' },
     ],
   },

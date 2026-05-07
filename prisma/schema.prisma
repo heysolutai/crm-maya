@@ -691,8 +691,12 @@ model FollowUpJob {
 
 model WhatsappInstance {
   id              String    @id @default(uuid()) @db.Uuid
-  companyId       String    @unique @map("company_id") @db.Uuid
+  companyId       String    @map("company_id") @db.Uuid
   instanceName    String    @map("instance_name")
+  displayName     String?   @map("display_name")
+  phoneNumber     String?   @map("phone_number")
+  channelType     String    @default("uazapi") @map("channel_type")
+  channelConfig   Json?     @default("{}") @map("channel_config")
   apiUrl          String?   @map("api_url")
   instanceApiKey  String?   @map("instance_api_key")
   adminToken      String?   @map("admin_token")
@@ -712,6 +716,7 @@ model WhatsappInstance {
   catalogProducts  CatalogProduct[]
 
   @@index([companyId], map: "idx_whatsapp_instances_company")
+  @@index([channelType], map: "idx_whatsapp_instances_channel")
   @@map("whatsapp_instances")
 }
 
