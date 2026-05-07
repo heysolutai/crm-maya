@@ -11,7 +11,8 @@ const createAiConfigurationSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   prompts: z.record(z.string(), z.any()).optional(),
   is_active: z.boolean().optional().default(true),
-  whatsapp_instance_id: z.string().uuid('Invalid whatsapp_instance_id format').optional().nullable(),
+  // Agora obrigatorio — toda config IA pertence a 1 agente.
+  whatsapp_instance_id: z.string().uuid('Invalid whatsapp_instance_id format'),
   follow_up_stages: z.array(z.any()).optional(),
   follow_up_enabled: z.boolean().optional().default(false),
   api_keys: z.record(z.string(), z.any()).optional(),
@@ -80,13 +81,22 @@ export async function POST(req: NextRequest) {
     })
     const slug = normalizeCompanySlug(company?.name || '')
 
+    // IDOR-safe: garante que o agente passado pertence a empresa autenticada
+    const agent = await prisma.whatsappInstance.findFirst({
+      where: { id: validatedData.whatsapp_instance_id, companyId },
+      select: { id: true },
+    })
+    if (!agent) {
+      return NextResponse.json({ error: 'Agente nao encontrado' }, { status: 404 })
+    }
+
     const config = await prisma.aiConfiguration.create({
       data: {
         companyId,
         name: validatedData.name,
         prompts: (validatedData.prompts || {}) as Prisma.InputJsonValue,
         isActive: validatedData.is_active,
-        whatsappInstanceId: validatedData.whatsapp_instance_id || null,
+        whatsappInstanceId: validatedData.whatsapp_instance_id,
         followUpStages: (validatedData.follow_up_stages || []) as Prisma.InputJsonValue,
         followUpEnabled: validatedData.follow_up_enabled,
         apiKeys: (validatedData.api_keys || {}) as Prisma.InputJsonValue,
@@ -127,7 +137,8 @@ export async function PUT(req: NextRequest) {
     if (updates.prompts !== undefined) data.prompts = updates.prompts
     if (updates.is_active !== undefined) data.isActive = updates.is_active
     if (updates.name !== undefined) data.name = updates.name
-    if (updates.whatsapp_instance_id !== undefined) data.whatsappInstanceId = updates.whatsapp_instance_id
+    // whatsapp_instance_id e set na criacao (1:1 com agente) e nao deve mudar.
+    // Ignoramos o campo se vier no body — UI legada ainda manda, mas e no-op.
     if (updates.follow_up_stages !== undefined) data.followUpStages = updates.follow_up_stages
     if (updates.follow_up_enabled !== undefined) data.followUpEnabled = updates.follow_up_enabled
     if (updates.api_keys !== undefined) data.apiKeys = updates.api_keys

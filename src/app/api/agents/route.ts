@@ -5,7 +5,53 @@ import { handleApiError } from '@/lib/api/errors'
 import { CHANNEL_TYPES, isChannelType, CHANNEL_REGISTRY } from '@/lib/channels/types'
 import { getAdapter, hasAdapter } from '@/lib/channels/registry'
 import { ChannelError } from '@/lib/channels/errors'
+import { normalizeCompanySlug } from '@/lib/api/utils'
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
+
+/**
+ * Garante que o agente recem-criado tem uma AiConfiguration vinculada.
+ * Como AI config e 1:1 com agente, todo agente novo precisa de uma.
+ *
+ * Estrategia: clona da PRIMEIRA config existente da empresa (template),
+ * se houver — assim o usuario nao perde os prompts ja configurados ao
+ * criar mais um numero. Se a empresa nao tem nenhuma config, cria em branco.
+ */
+async function ensureAgentConfig(agentId: string, companyId: string, displayName: string) {
+  const existing = await prisma.aiConfiguration.findUnique({
+    where: { whatsappInstanceId: agentId },
+    select: { id: true },
+  })
+  if (existing) return
+
+  const template = await prisma.aiConfiguration.findFirst({
+    where: { companyId },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } })
+  const slug = normalizeCompanySlug(company?.name || displayName)
+
+  await prisma.aiConfiguration.create({
+    data: {
+      companyId,
+      whatsappInstanceId: agentId,
+      name: template?.name || `${displayName} - IA`,
+      prompts: (template?.prompts || {}) as Prisma.InputJsonValue,
+      behaviorSettings: (template?.behaviorSettings || {}) as Prisma.InputJsonValue,
+      conditions: (template?.conditions || {}) as Prisma.InputJsonValue,
+      apiKeys: (template?.apiKeys || {}) as Prisma.InputJsonValue,
+      variables: (template?.variables || {}) as Prisma.InputJsonValue,
+      knowledge: template?.knowledge || (slug ? `know_${slug}` : null),
+      memoryKey: template?.memoryKey || (slug ? `memory_${slug}` : null),
+      productsKnowledge: template?.productsKnowledge || (slug ? `products_${slug}` : null),
+      n8nWebhookUrl: template?.n8nWebhookUrl || null,
+      followUpEnabled: template?.followUpEnabled ?? false,
+      followUpStages: (template?.followUpStages || []) as Prisma.InputJsonValue,
+      isActive: true,
+    },
+  })
+}
 
 const createAgentSchema = z.object({
   channelType: z.enum(CHANNEL_TYPES),
@@ -139,6 +185,12 @@ export async function POST(req: NextRequest) {
           },
         })
 
+        // Cria a AiConfiguration 1:1 do agente (clonando template da empresa
+        // se houver — assim o usuario reaproveita prompts ja configurados).
+        await ensureAgentConfig(agent.id, companyId, displayName).catch((e) =>
+          console.error('[agents:provision] ensureAgentConfig failed', e)
+        )
+
         return NextResponse.json(mapAgent(agent), { status: 201 })
       } catch (provisionError: unknown) {
         // Rollback: remove placeholder se o provider rejeitou
@@ -185,6 +237,11 @@ export async function POST(req: NextRequest) {
         isActive: true,
       },
     })
+
+    // AI config 1:1 obrigatoria — mesmo agente legado precisa
+    await ensureAgentConfig(agent.id, companyId, displayName).catch((e) =>
+      console.error('[agents:create] ensureAgentConfig failed', e)
+    )
 
     return NextResponse.json(mapAgent(agent), { status: 201 })
   } catch (error) {
