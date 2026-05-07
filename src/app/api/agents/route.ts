@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
-import { CHANNEL_TYPES, isChannelType } from '@/lib/channels/types'
+import { CHANNEL_TYPES, isChannelType, CHANNEL_REGISTRY } from '@/lib/channels/types'
+import { getAdapter, hasAdapter } from '@/lib/channels/registry'
 import { z } from 'zod'
 
 const createAgentSchema = z.object({
   channelType: z.enum(CHANNEL_TYPES),
   displayName: z.string().min(1).max(255),
+  serverUrl: z.string().url().optional(),
+  serverApiKey: z.string().min(1).optional(),
+  phoneNumber: z.string().optional(),
 })
 
 const updateAgentSchema = z.object({
@@ -37,6 +41,12 @@ function mapAgent(i: any) {
     created_at: i.createdAt,
     updated_at: i.updatedAt,
   }
+}
+
+function publicWebhookUrl(req: NextRequest, channelType: string, agentId: string): string {
+  const envBase = process.env.PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL
+  const base = envBase || `${req.nextUrl.protocol}//${req.nextUrl.host}`
+  return `${base.replace(/\/+$/, '')}/api/webhooks/${channelType}?agentId=${agentId}`
 }
 
 export async function GET(req: NextRequest) {
@@ -70,22 +80,78 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { channelType, displayName } = validation.data
+    const { channelType, displayName, serverUrl, serverApiKey, phoneNumber } = validation.data
 
     if (!isChannelType(channelType)) {
       return NextResponse.json({ error: 'Canal invalido' }, { status: 400 })
     }
 
-    // Hoje so UazAPI esta implementado — outros canais retornam erro
-    // claro pra UI ate os adapters serem entregues.
-    if (channelType !== 'uazapi') {
+    const channelMeta = CHANNEL_REGISTRY[channelType]
+    if (channelMeta.status !== 'available') {
       return NextResponse.json(
         { error: 'Canal ainda nao disponivel', code: 'CHANNEL_UNAVAILABLE' },
         { status: 400 }
       )
     }
 
-    // Gera instance_name slug a partir do displayName + companyId truncado
+    // Canais via adapter (ex: evolution_baileys): chama provision pra criar
+    // a instancia no provider externo, depois grava no banco com as credenciais retornadas.
+    if (hasAdapter(channelType)) {
+      const adapter = getAdapter(channelType)
+
+      // Cria placeholder no banco antes pra ter agent.id pra usar no webhook URL
+      const placeholder = await prisma.whatsappInstance.create({
+        data: {
+          companyId,
+          instanceName: `pending-${Date.now()}`,
+          displayName,
+          channelType,
+          apiUrl: serverUrl || null,
+          status: 'connecting',
+          isActive: true,
+        },
+      })
+
+      const webhookUrl = publicWebhookUrl(req, channelType, placeholder.id)
+
+      try {
+        const result = await adapter.provision({
+          companyId,
+          displayName,
+          serverUrl,
+          serverApiKey,
+          phoneNumber,
+          webhookUrl,
+        })
+
+        const agent = await prisma.whatsappInstance.update({
+          where: { id: placeholder.id },
+          data: {
+            instanceName: result.providerInstanceName,
+            apiUrl: result.apiUrl,
+            instanceApiKey: result.instanceApiKey,
+            channelConfig: result.channelConfig as any,
+            metadata: result.metadata as any,
+            qrCode: result.qrCode || null,
+            status: result.qrCode ? 'connecting' : 'disconnected',
+            phoneNumber: phoneNumber || null,
+          },
+        })
+
+        return NextResponse.json(mapAgent(agent), { status: 201 })
+      } catch (provisionError: any) {
+        // Rollback: remove placeholder se o provider rejeitou
+        await prisma.whatsappInstance.delete({ where: { id: placeholder.id } }).catch(() => {})
+        console.error('[agents:provision]', provisionError)
+        return NextResponse.json(
+          { error: provisionError?.message || 'Falha ao provisionar agente' },
+          { status: 502 }
+        )
+      }
+    }
+
+    // Canal sem adapter (uazapi legado): cria registro local; conexao
+    // segue o fluxo antigo de /api/whatsapp/connect.
     const slug = displayName
       .normalize('NFD')
       .replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
@@ -155,6 +221,28 @@ export async function DELETE(req: NextRequest) {
       where: { id, companyId },
     })
     if (!existing) return NextResponse.json({ error: 'Agente nao encontrado' }, { status: 404 })
+
+    // Tenta remover do provider antes de apagar local. Falha silenciosa pra
+    // nao travar delete se o provider estiver fora do ar.
+    if (isChannelType(existing.channelType) && hasAdapter(existing.channelType as any)) {
+      try {
+        const adapter = getAdapter(existing.channelType as any)
+        await adapter.remove({
+          id: existing.id,
+          companyId: existing.companyId,
+          channelType: existing.channelType as any,
+          instanceName: existing.instanceName,
+          displayName: existing.displayName,
+          phoneNumber: existing.phoneNumber,
+          apiUrl: existing.apiUrl,
+          instanceApiKey: existing.instanceApiKey,
+          channelConfig: existing.channelConfig as any,
+          metadata: existing.metadata as any,
+        })
+      } catch (e) {
+        console.error('[agents:remove provider]', e)
+      }
+    }
 
     await prisma.whatsappInstance.delete({ where: { id } })
     return NextResponse.json({ success: true })

@@ -53,6 +53,9 @@ export default function Agents() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<ChannelType | null>(null);
   const [displayName, setDisplayName] = useState('');
+  const [serverUrl, setServerUrl] = useState('');
+  const [serverApiKey, setServerApiKey] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string | null }>({
     open: false,
     id: null,
@@ -60,15 +63,35 @@ export default function Agents() {
 
   const channels = Object.values(CHANNEL_REGISTRY);
 
+  // Canais que precisam de URL + API key do servidor self-hosted (Evolution, Z-API, etc)
+  const needsServerConfig =
+    selectedChannel &&
+    ['evolution_baileys', 'evolution_go', 'zapi'].includes(selectedChannel);
+
+  const resetForm = () => {
+    setSelectedChannel(null);
+    setDisplayName('');
+    setServerUrl('');
+    setServerApiKey('');
+    setPhoneNumber('');
+  };
+
   const handleCreate = () => {
     if (!selectedChannel || !displayName.trim()) return;
+    if (needsServerConfig && (!serverUrl.trim() || !serverApiKey.trim())) return;
+
     createAgent(
-      { channelType: selectedChannel, displayName: displayName.trim() },
+      {
+        channelType: selectedChannel,
+        displayName: displayName.trim(),
+        serverUrl: needsServerConfig ? serverUrl.trim() : undefined,
+        serverApiKey: needsServerConfig ? serverApiKey.trim() : undefined,
+        phoneNumber: phoneNumber.trim() || undefined,
+      },
       {
         onSuccess: (agent: Agent) => {
           setDialogOpen(false);
-          setSelectedChannel(null);
-          setDisplayName('');
+          resetForm();
           router.push(`/app/agents/${agent.id}`);
         },
       }
@@ -170,10 +193,7 @@ export default function Agents() {
         open={dialogOpen}
         onOpenChange={(open) => {
           setDialogOpen(open);
-          if (!open) {
-            setSelectedChannel(null);
-            setDisplayName('');
-          }
+          if (!open) resetForm();
         }}
       >
         <DialogContent className="sm:max-w-[600px]">
@@ -236,6 +256,44 @@ export default function Agents() {
                 Use um nome interno para identificar o agente. O número aparece após a conexão.
               </p>
             </div>
+
+            {needsServerConfig && (
+              <div className="space-y-3 rounded-lg border border-dashed p-3 bg-muted/30">
+                <div className="space-y-2">
+                  <Label htmlFor="server-url">URL do servidor</Label>
+                  <Input
+                    id="server-url"
+                    placeholder="https://api.evolution.exemplo.com"
+                    value={serverUrl}
+                    onChange={(e) => setServerUrl(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="server-key">API Key (global)</Label>
+                  <Input
+                    id="server-key"
+                    type="password"
+                    placeholder="AUTHENTICATION_API_KEY do seu servidor Evolution"
+                    value={serverApiKey}
+                    onChange={(e) => setServerApiKey(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Token de admin do servidor. Após o provisionamento, o agente passa a usar uma chave própria.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone-hint" className="text-muted-foreground">
+                    Número (opcional, para pairing code)
+                  </Label>
+                  <Input
+                    id="phone-hint"
+                    placeholder="5511999999999"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -244,7 +302,12 @@ export default function Agents() {
             </Button>
             <Button
               onClick={handleCreate}
-              disabled={!selectedChannel || !displayName.trim() || isCreating}
+              disabled={
+                !selectedChannel ||
+                !displayName.trim() ||
+                (needsServerConfig && (!serverUrl.trim() || !serverApiKey.trim())) ||
+                isCreating
+              }
             >
               {isCreating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Criar agente

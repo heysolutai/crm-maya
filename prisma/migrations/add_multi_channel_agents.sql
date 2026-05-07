@@ -7,7 +7,10 @@
 
 BEGIN;
 
--- 1) Remover trava de unicidade que limitava a 1 instancia por empresa
+-- 1) Remover trava de unicidade que limitava a 1 instancia por empresa.
+-- Prisma cria @unique como UNIQUE INDEX (nao como CONSTRAINT), por isso
+-- precisamos tentar derrubar de ambas as formas.
+DROP INDEX IF EXISTS whatsapp_instances_company_id_key;
 ALTER TABLE whatsapp_instances DROP CONSTRAINT IF EXISTS whatsapp_instances_company_id_key;
 
 -- 2) Novas colunas

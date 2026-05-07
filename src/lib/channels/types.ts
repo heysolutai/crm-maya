@@ -40,7 +40,7 @@ export const CHANNEL_REGISTRY: Record<ChannelType, ChannelMeta> = {
     type: 'evolution_baileys',
     label: 'Evolution Baileys',
     description: 'WhatsApp via Evolution API (Baileys/Node) — QR Code',
-    status: 'coming_soon',
+    status: 'available',
     connectionMode: 'qr',
   },
   evolution_go: {

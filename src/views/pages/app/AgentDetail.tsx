@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAgents } from '@/hooks/useAgents';
 import { useEffectiveCompanyId } from '@/hooks/useEffectiveCompanyId';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -226,36 +228,171 @@ export default function AgentDetail({ agentId }: Props) {
 }
 
 function ConnectionTab({ agent }: { agent: ReturnType<typeof useAgents>['agents'][number] }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const channelMeta = CHANNEL_REGISTRY[agent.channel_type];
   const isAvailable = channelMeta?.status === 'available';
 
-  return (
-    <Card>
-      <CardContent className="p-6 space-y-4">
-        <div>
-          <h3 className="text-lg font-semibold">Conexão do canal</h3>
-          <p className="text-sm text-muted-foreground">{channelMeta?.description}</p>
-        </div>
+  const [qrLoading, setQrLoading] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
 
-        {!isAvailable ? (
+  const isConnected = agent.status === 'connected';
+  const isConnecting = agent.status === 'connecting' && !!agent.qr_code;
+
+  // Polling de status enquanto estiver "connecting" — checa a cada 4s
+  useEffect(() => {
+    if (agent.status !== 'connecting') return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/agents/${agent.id}/status`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === 'connected' || data.status === 'disconnected') {
+          queryClient.invalidateQueries({ queryKey: ['agents'] });
+        }
+      } catch {
+        /* silencioso — proximo tick tenta de novo */
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [agent.status, agent.id, queryClient]);
+
+  const handleGenerateQr = async () => {
+    setQrLoading(true);
+    try {
+      const res = await fetch(`/api/agents/${agent.id}/qr`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao gerar QR');
+      setPairingCode(data.pairing_code || null);
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+    } catch (e: any) {
+      toast({ title: 'Erro ao gerar QR', description: e.message, variant: 'destructive' });
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setDisconnecting(true);
+    try {
+      const res = await fetch(`/api/agents/${agent.id}/disconnect`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Falha ao desconectar');
+      }
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      toast({ title: 'Agente desconectado' });
+    } catch (e: any) {
+      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+  if (!isAvailable) {
+    return (
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold">Conexão do canal</h3>
+            <p className="text-sm text-muted-foreground">{channelMeta?.description}</p>
+          </div>
           <div className="rounded-lg border border-dashed p-8 text-center">
             <Plug className="h-8 w-8 mx-auto mb-3 text-muted-foreground/50" />
             <p className="font-medium">Canal em desenvolvimento</p>
             <p className="text-sm text-muted-foreground mt-1">
               O adapter para <strong>{channelMeta?.label}</strong> ainda não foi implementado.
-              Aguardando documentação da API.
             </p>
           </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-6 space-y-5">
+        <div>
+          <h3 className="text-lg font-semibold">Conexão do canal</h3>
+          <p className="text-sm text-muted-foreground">{channelMeta?.description}</p>
+        </div>
+
+        {agent.api_url && (
+          <div className="text-xs text-muted-foreground space-y-1">
+            <div>
+              <span className="font-medium">Servidor:</span>{' '}
+              <span className="font-mono">{agent.api_url}</span>
+            </div>
+            <div>
+              <span className="font-medium">Instância:</span>{' '}
+              <span className="font-mono">{agent.instance_name}</span>
+            </div>
+          </div>
+        )}
+
+        {isConnected ? (
+          <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900 p-6 text-center space-y-3">
+            <div className="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center mx-auto">
+              <Smartphone className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div>
+              <p className="font-semibold">Conectado</p>
+              {agent.phone_number && (
+                <p className="text-sm text-muted-foreground font-mono">{agent.phone_number}</p>
+              )}
+            </div>
+            <Button variant="outline" size="sm" onClick={handleDisconnect} disabled={disconnecting}>
+              {disconnecting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Desconectar
+            </Button>
+          </div>
+        ) : isConnecting && agent.qr_code ? (
+          <div className="rounded-lg border bg-muted/30 p-6 space-y-4 text-center">
+            <div className="border-4 border-foreground rounded-lg p-3 bg-background inline-block">
+              <img src={agent.qr_code} alt="QR Code" className="w-64 h-64" />
+            </div>
+            {pairingCode && (
+              <div className="text-sm">
+                <p className="text-muted-foreground">Ou use o pairing code:</p>
+                <p className="font-mono text-lg font-semibold tracking-wider">{pairingCode}</p>
+              </div>
+            )}
+            <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Aguardando conexão...</span>
+            </div>
+            <div className="text-xs text-muted-foreground space-y-1 text-left max-w-xs mx-auto">
+              <p className="font-medium text-center">Como conectar:</p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Abra o WhatsApp no celular</li>
+                <li>
+                  Toque em <strong>Mais opções → Aparelhos conectados</strong>
+                </li>
+                <li>
+                  Toque em <strong>Conectar um aparelho</strong>
+                </li>
+                <li>Aponte para esta tela</li>
+              </ol>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleGenerateQr} disabled={qrLoading}>
+              {qrLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Gerar novo QR
+            </Button>
+          </div>
         ) : (
-          <div className="rounded-lg border bg-muted/30 p-6 text-center">
-            <Smartphone className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-            <p className="font-medium mb-1">Conectar este agente</p>
-            <p className="text-sm text-muted-foreground mb-4">
-              O fluxo de conexão será habilitado em seguida (QR Code para UazAPI).
-            </p>
-            <p className="text-xs text-muted-foreground italic">
-              Em Fase 1: estrutura criada. Conexão entrega na Fase 2.
-            </p>
+          <div className="rounded-lg border bg-muted/30 p-6 text-center space-y-3">
+            <Smartphone className="h-10 w-10 mx-auto text-muted-foreground" />
+            <div>
+              <p className="font-medium">Pronto para conectar</p>
+              <p className="text-sm text-muted-foreground">
+                Gere o QR Code para vincular este agente ao WhatsApp.
+              </p>
+            </div>
+            <Button onClick={handleGenerateQr} disabled={qrLoading}>
+              {qrLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Gerar QR Code
+            </Button>
           </div>
         )}
       </CardContent>

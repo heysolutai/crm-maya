@@ -8,10 +8,12 @@
       "Bash(python3 /tmp/fix-api-errors-v2.py)",
       "Bash(grep -rB 1 \"Erro interno do servidor\" /home/yago/crm-maya/src/app/api/)",
       "Bash(python3 /tmp/fix-api-errors-v3.py)",
-      "Bash(grep -E \"[0-9]{3,}\")"
+      "Bash(grep -E \"[0-9]{3,}\")",
+      "WebFetch(domain:doc.evolution-api.com)"
     ],
     "additionalDirectories": [
-      "/home/yago/crm-maya/src/app/(dashboard)/app/agents"
+      "/home/yago/crm-maya/src/app/(dashboard)/app/agents",
+      "/home/yago/crm-maya/src/app/api/agents"
     ]
   }
 }

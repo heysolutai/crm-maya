@@ -40,7 +40,13 @@ export function useAgents() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { channelType: ChannelType; displayName: string }) => {
+    mutationFn: async (data: {
+      channelType: ChannelType;
+      displayName: string;
+      serverUrl?: string;
+      serverApiKey?: string;
+      phoneNumber?: string;
+    }) => {
       const res = await fetch('/api/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
