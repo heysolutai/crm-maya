@@ -127,7 +127,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { channelType, displayName, serverUrl, serverApiKey, phoneNumber } = validation.data
+    const { channelType, displayName, phoneNumber } = validation.data
+    let { serverUrl, serverApiKey } = validation.data
 
     if (!isChannelType(channelType)) {
       return NextResponse.json({ error: 'Canal invalido' }, { status: 400 })
@@ -139,6 +140,27 @@ export async function POST(req: NextRequest) {
         { error: 'Canal ainda nao disponivel', code: 'CHANNEL_UNAVAILABLE' },
         { status: 400 }
       )
+    }
+
+    // Resolucao de credenciais: se o form nao mandou, busca a credencial
+    // salva pra (empresa, canal). Se mandou, salva/atualiza pra reuso futuro.
+    if (hasAdapter(channelType)) {
+      if (!serverUrl || !serverApiKey) {
+        const saved = await prisma.channelCredential.findUnique({
+          where: { companyId_channelType: { companyId, channelType } },
+        })
+        if (saved) {
+          serverUrl = serverUrl || saved.serverUrl
+          serverApiKey = serverApiKey || saved.serverApiKey
+        }
+      } else {
+        // Persiste/atualiza pra proxima criacao nao precisar redigitar
+        await prisma.channelCredential.upsert({
+          where: { companyId_channelType: { companyId, channelType } },
+          create: { companyId, channelType, serverUrl, serverApiKey },
+          update: { serverUrl, serverApiKey },
+        }).catch((e) => console.error('[agents:create] upsert credential failed', e))
+      }
     }
 
     // Canais via adapter (ex: evolution_baileys): chama provision pra criar

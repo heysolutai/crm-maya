@@ -111,6 +111,7 @@ model Company {
   reminders              Reminder[]
   followUpJobs           FollowUpJob[]
   whatsappInstances      WhatsappInstance[]
+  channelCredentials     ChannelCredential[]
   doctorSchedules        DoctorSchedule[]
   googleCalendarConn     GoogleCalendarConnection?
   aiConfigurations       AiConfiguration[]
@@ -722,6 +723,25 @@ model WhatsappInstance {
   @@index([companyId], map: "idx_whatsapp_instances_company")
   @@index([channelType], map: "idx_whatsapp_instances_channel")
   @@map("whatsapp_instances")
+}
+
+/// Credenciais reutilizaveis pra cada canal por empresa.
+/// Salvas na 1a vez que o usuario cria um agente (UazAPI/Evolution/etc) e
+/// pre-preenchidas em criacoes seguintes — evita digitar admin token toda vez.
+model ChannelCredential {
+  id           String   @id @default(uuid()) @db.Uuid
+  companyId    String   @map("company_id") @db.Uuid
+  channelType  String   @map("channel_type")
+  serverUrl    String   @map("server_url")
+  serverApiKey String   @map("server_api_key")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, channelType], map: "uq_channel_credentials_company_type")
+  @@index([companyId], map: "idx_channel_credentials_company")
+  @@map("channel_credentials")
 }
 
 model CatalogProduct {

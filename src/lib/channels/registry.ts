@@ -6,8 +6,10 @@
 import type { ChannelType } from './types';
 import type { ChannelAdapter } from './adapter';
 import { evolutionBaileysAdapter } from './adapters/evolution-baileys';
+import { uazapiAdapter } from './adapters/uazapi';
 
 const adapters: Partial<Record<ChannelType, ChannelAdapter>> = {
+  uazapi: uazapiAdapter,
   evolution_baileys: evolutionBaileysAdapter,
 };
 

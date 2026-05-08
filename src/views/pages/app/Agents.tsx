@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAgents, type Agent } from '@/hooks/useAgents';
+import { useChannelCredentials } from '@/hooks/useChannelCredentials';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +27,8 @@ import {
   Cloud,
   Instagram,
   Zap,
+  CheckCircle2,
+  Pencil,
 } from 'lucide-react';
 import { CHANNEL_REGISTRY, type ChannelType } from '@/lib/channels/types';
 import { cn } from '@/lib/utils';
@@ -49,6 +52,7 @@ const statusStyles: Record<string, { dot: string; label: string }> = {
 export default function Agents() {
   const router = useRouter();
   const { agents, isLoading, createAgent, deleteAgent, isCreating, isDeleting } = useAgents();
+  const { credentialFor, hasCredentialFor } = useChannelCredentials();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<ChannelType | null>(null);
@@ -56,6 +60,9 @@ export default function Agents() {
   const [serverUrl, setServerUrl] = useState('');
   const [serverApiKey, setServerApiKey] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  // Quando ja existe credencial salva, escondemos os campos por padrao;
+  // user pode clicar em "Editar" pra trocar URL/token.
+  const [editingCredential, setEditingCredential] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string | null }>({
     open: false,
     id: null,
@@ -63,10 +70,21 @@ export default function Agents() {
 
   const channels = Object.values(CHANNEL_REGISTRY);
 
-  // Canais que precisam de URL + API key do servidor self-hosted (Evolution, Z-API, etc)
+  // Canais que precisam de URL + API key/admin token do servidor self-hosted.
+  // UazAPI tambem entra: novos agentes pegam admin token do form (nao mais do .env).
   const needsServerConfig =
     selectedChannel &&
-    ['evolution_baileys', 'evolution_go', 'zapi'].includes(selectedChannel);
+    ['uazapi', 'evolution_baileys', 'evolution_go', 'zapi'].includes(selectedChannel);
+
+  const savedCred = selectedChannel ? credentialFor(selectedChannel) : undefined;
+  const hasSavedCred = !!savedCred;
+
+  // Decide se os inputs de URL/token devem aparecer:
+  //  - Canal nao precisa de config → nunca
+  //  - Canal precisa + nao tem credencial salva → sim (1a vez)
+  //  - Canal precisa + tem credencial salva + user clicou em editar → sim
+  //  - Canal precisa + tem credencial salva + user nao editou → nao (usa salva)
+  const showCredentialInputs = !!needsServerConfig && (!hasSavedCred || editingCredential);
 
   const resetForm = () => {
     setSelectedChannel(null);
@@ -74,18 +92,31 @@ export default function Agents() {
     setServerUrl('');
     setServerApiKey('');
     setPhoneNumber('');
+    setEditingCredential(false);
+  };
+
+  const handleSelectChannel = (type: ChannelType) => {
+    setSelectedChannel(type);
+    // Limpa inputs quando troca de canal — pra nao mandar credencial errada
+    setServerUrl('');
+    setServerApiKey('');
+    setEditingCredential(false);
   };
 
   const handleCreate = () => {
     if (!selectedChannel || !displayName.trim()) return;
-    if (needsServerConfig && (!serverUrl.trim() || !serverApiKey.trim())) return;
+
+    // Se canal precisa de config e a UI esta exibindo inputs, ambos sao obrigatorios
+    if (showCredentialInputs && (!serverUrl.trim() || !serverApiKey.trim())) return;
 
     createAgent(
       {
         channelType: selectedChannel,
         displayName: displayName.trim(),
-        serverUrl: needsServerConfig ? serverUrl.trim() : undefined,
-        serverApiKey: needsServerConfig ? serverApiKey.trim() : undefined,
+        // Manda URL/token apenas se o user explicitamente preencheu
+        // (1a vez ou edicao). Se nao mandou, o backend usa a credencial salva.
+        serverUrl: showCredentialInputs ? serverUrl.trim() : undefined,
+        serverApiKey: showCredentialInputs ? serverApiKey.trim() : undefined,
         phoneNumber: phoneNumber.trim() || undefined,
       },
       {
@@ -218,7 +249,7 @@ export default function Agents() {
                       key={c.type}
                       type="button"
                       disabled={disabled}
-                      onClick={() => !disabled && setSelectedChannel(c.type)}
+                      onClick={() => !disabled && handleSelectChannel(c.type)}
                       className={cn(
                         'flex items-center gap-3 rounded-lg border p-3 text-left transition-all',
                         isSelected
@@ -257,41 +288,98 @@ export default function Agents() {
               </p>
             </div>
 
-            {needsServerConfig && (
+            {needsServerConfig && selectedChannel && (
               <div className="space-y-3 rounded-lg border border-dashed p-3 bg-muted/30">
-                <div className="space-y-2">
-                  <Label htmlFor="server-url">URL do servidor</Label>
-                  <Input
-                    id="server-url"
-                    placeholder="https://api.evolution.exemplo.com"
-                    value={serverUrl}
-                    onChange={(e) => setServerUrl(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="server-key">API Key (global)</Label>
-                  <Input
-                    id="server-key"
-                    type="password"
-                    placeholder="AUTHENTICATION_API_KEY do seu servidor Evolution"
-                    value={serverApiKey}
-                    onChange={(e) => setServerApiKey(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Token de admin do servidor. Após o provisionamento, o agente passa a usar uma chave própria.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone-hint" className="text-muted-foreground">
-                    Número (opcional, para pairing code)
-                  </Label>
-                  <Input
-                    id="phone-hint"
-                    placeholder="5511999999999"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                  />
-                </div>
+                {hasSavedCred && !editingCredential ? (
+                  // Banner mostrando credencial reaproveitada
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">Conexão já configurada</p>
+                        <p className="text-xs text-muted-foreground font-mono truncate">
+                          {savedCred?.server_url}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Token: <span className="font-mono">{savedCred?.server_api_key}</span>
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 shrink-0"
+                        onClick={() => setEditingCredential(true)}
+                      >
+                        <Pencil className="h-3 w-3 mr-1" />
+                        Editar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="server-url">URL do servidor</Label>
+                      <Input
+                        id="server-url"
+                        placeholder={
+                          selectedChannel === 'uazapi'
+                            ? 'https://heysolut.uazapi.com'
+                            : 'https://api.evolution.exemplo.com'
+                        }
+                        value={serverUrl}
+                        onChange={(e) => setServerUrl(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="server-key">
+                        {selectedChannel === 'uazapi' ? 'Admin Token' : 'API Key (global)'}
+                      </Label>
+                      <Input
+                        id="server-key"
+                        type="password"
+                        placeholder={
+                          selectedChannel === 'uazapi'
+                            ? 'Admin token do servidor UazAPI'
+                            : 'AUTHENTICATION_API_KEY do seu servidor Evolution'
+                        }
+                        value={serverApiKey}
+                        onChange={(e) => setServerApiKey(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Salvo na empresa após o primeiro agente — não precisa preencher de novo.
+                      </p>
+                    </div>
+                    {hasSavedCred && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2"
+                        onClick={() => {
+                          setEditingCredential(false);
+                          setServerUrl('');
+                          setServerApiKey('');
+                        }}
+                      >
+                        Cancelar e usar credencial salva
+                      </Button>
+                    )}
+                  </>
+                )}
+                {selectedChannel !== 'uazapi' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="phone-hint" className="text-muted-foreground">
+                      Número (opcional, para pairing code)
+                    </Label>
+                    <Input
+                      id="phone-hint"
+                      placeholder="5511999999999"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -305,7 +393,7 @@ export default function Agents() {
               disabled={
                 !selectedChannel ||
                 !displayName.trim() ||
-                (needsServerConfig && (!serverUrl.trim() || !serverApiKey.trim())) ||
+                (showCredentialInputs && (!serverUrl.trim() || !serverApiKey.trim())) ||
                 isCreating
               }
             >

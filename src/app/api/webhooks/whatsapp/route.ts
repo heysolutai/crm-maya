@@ -980,10 +980,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 1. Buscar company_id através da tabela whatsapp_instances
+    // 1. Buscar company_id e ID do agente através da tabela whatsapp_instances
     const instance = await prisma.whatsappInstance.findFirst({
       where: { instanceName: payload.instance_name },
-      select: { companyId: true, isActive: true },
+      select: { id: true, companyId: true, isActive: true },
     });
 
     if (!instance) {
@@ -1001,7 +1001,8 @@ export async function POST(req: NextRequest) {
     }
 
     const companyId = instance.companyId;
-    console.log('Found company via WhatsApp instance:', companyId);
+    const whatsappInstanceId = instance.id; // FK pra vincular conversa ao agente
+    console.log('Found company via WhatsApp instance:', companyId, 'agent:', whatsappInstanceId);
 
     // 2. Buscar ou criar cliente
     let clientId: string;
@@ -1222,6 +1223,13 @@ export async function POST(req: NextRequest) {
         }
 
         console.log('Found existing open conversation:', conversationId, 'status:', activeConversations[0].status);
+
+        // Backfill: se a conversa existia sem agente vinculado, vincula agora
+        // (caso tipico de conversas criadas antes da migracao multi-agent).
+        await prisma.conversation.updateMany({
+          where: { id: conversationId, whatsappInstanceId: null },
+          data: { whatsappInstanceId },
+        }).catch(() => {});
       }
     }
 
@@ -1235,6 +1243,7 @@ export async function POST(req: NextRequest) {
             status: 'active',
             aiHandled: payload.type === 'outgoing',
             stage: 'mensagem_fixa',
+            whatsappInstanceId,
           },
           select: { id: true },
         });
@@ -1260,6 +1269,10 @@ export async function POST(req: NextRequest) {
           });
           if (!existing) throw createErr; // caso raro: nao achamos mesmo depois do conflito
           conversationId = existing.id;
+          await prisma.conversation.updateMany({
+            where: { id: conversationId, whatsappInstanceId: null },
+            data: { whatsappInstanceId },
+          }).catch(() => {});
         } else {
           throw createErr;
         }
