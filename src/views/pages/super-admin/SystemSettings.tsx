@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Settings as SettingsIcon, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Save, Settings as SettingsIcon, Eye, EyeOff, CheckCircle2, XCircle, Zap } from 'lucide-react';
 
 interface SystemSetting {
   key: string;
@@ -78,6 +78,31 @@ export default function SystemSettings() {
     if (isSecret) setEditedSecrets((prev) => ({ ...prev, [key]: true }));
   };
 
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string; details?: string } | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  const handleTestOpenAI = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/admin/system-settings/test-openai');
+      const data = await res.json();
+      const details =
+        data.length !== undefined
+          ? `key ...${data.last_chars} (${data.length} chars${data.has_whitespace ? ', COM whitespace' : ''})`
+          : undefined;
+      setTestResult({
+        ok: !!data.ok,
+        message: data.message || (data.ok ? 'OK' : 'Falha'),
+        details,
+      });
+    } catch (e: any) {
+      setTestResult({ ok: false, message: e.message || 'Erro de rede' });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const toggleReveal = (key: string) => {
     setRevealed((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -145,7 +170,11 @@ export default function SystemSettings() {
             );
           })}
 
-          <div className="flex justify-end pt-2">
+          <div className="flex items-center justify-between pt-2 gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={handleTestOpenAI} disabled={testing}>
+              {testing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Zap className="h-4 w-4 mr-2" />}
+              Testar key OpenAI
+            </Button>
             <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
               {saveMutation.isPending ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -155,6 +184,22 @@ export default function SystemSettings() {
               Salvar
             </Button>
           </div>
+
+          {testResult && (
+            <div className={`mt-2 rounded-md border p-3 text-sm ${testResult.ok ? 'border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900' : 'border-rose-200 bg-rose-50 dark:bg-rose-950/20 dark:border-rose-900'}`}>
+              <div className="flex items-center gap-2">
+                {testResult.ok ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                )}
+                <span className="font-medium">{testResult.message}</span>
+              </div>
+              {testResult.details && (
+                <p className="text-xs text-muted-foreground mt-1 font-mono">{testResult.details}</p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

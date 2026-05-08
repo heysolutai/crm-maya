@@ -889,12 +889,33 @@ export function useConversations(filters?: ConversationFilters) {
     },
   });
 
+  // Track per-message: evita disparar a mesma transcricao duas vezes
+  // mesmo se o usuario clicar repetidamente antes do isPending refletir.
+  const [transcribingIds, setTranscribingIds] = useState<Set<string>>(new Set());
+
   const transcribeMessage = useMutation({
     mutationFn: async ({ messageId, conversationId }: { messageId: string; conversationId: string }) => {
-      const { data, error } = await invokeFn('transcribe-audio', { messageId });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Transcription failed');
-      return { messageId, conversationId, transcription: data.transcription, cached: data.cached };
+      // Guard: se ja tem request em voo pra essa mensagem, aborta silenciosamente
+      if (transcribingIds.has(messageId)) {
+        throw new Error('SKIP_DUPLICATE');
+      }
+      setTranscribingIds(prev => {
+        const next = new Set(prev);
+        next.add(messageId);
+        return next;
+      });
+      try {
+        const { data, error } = await invokeFn('transcribe-audio', { messageId });
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || 'Transcription failed');
+        return { messageId, conversationId, transcription: data.transcription, cached: data.cached };
+      } finally {
+        setTranscribingIds(prev => {
+          const next = new Set(prev);
+          next.delete(messageId);
+          return next;
+        });
+      }
     },
     onSuccess: (data) => {
       setConversationMessages(prev => {
@@ -925,6 +946,8 @@ export function useConversations(filters?: ConversationFilters) {
       });
     },
     onError: (error: any) => {
+      // SKIP_DUPLICATE = clique duplicado, nao mostra toast de erro
+      if (error?.message === 'SKIP_DUPLICATE') return;
       toast({ title: 'Erro ao transcrever áudio', description: getErrorMessage(error), variant: 'destructive' });
     },
   });
@@ -1131,6 +1154,8 @@ export function useConversations(filters?: ConversationFilters) {
     isForwarding: forwardMessage.isPending,
     transcribeMessage: transcribeMessage.mutate,
     isTranscribing: transcribeMessage.isPending,
+    /** Per-message: usar isso em vez do `isTranscribing` global pra UI granular */
+    isTranscribingMessage: (messageId: string) => transcribingIds.has(messageId),
     realtimeStatus,
     usePolling,
     manualRefresh,

@@ -103,6 +103,7 @@ export default function Conversations() {
     isForwarding,
     transcribeMessage,
     isTranscribing,
+    isTranscribingMessage,
     realtimeStatus,
     usePolling,
     manualRefresh,
@@ -477,7 +478,7 @@ export default function Conversations() {
                         onRemoveReaction={removeReaction}
                         onForward={(m) => { setMessageToForward(m); setForwardDialogOpen(true); }}
                         onTranscribe={(msgId) => transcribeMessage({ messageId: msgId, conversationId: selectedConversation! })}
-                        isTranscribing={isTranscribing}
+                        isTranscribing={isTranscribingMessage(msg.id)}
                       />
                     );
                   })}

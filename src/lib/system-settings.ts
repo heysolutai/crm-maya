@@ -54,11 +54,11 @@ export async function getSystemSetting(
 ): Promise<string | undefined> {
   await loadCache();
   const dbValue = cache[key];
-  if (dbValue && dbValue.trim() !== '') return dbValue;
+  if (dbValue && dbValue.trim() !== '') return dbValue.trim();
 
   const envKey = ENV_FALLBACK[key];
   if (envKey && process.env[envKey] && process.env[envKey]!.trim() !== '') {
-    return process.env[envKey];
+    return process.env[envKey]!.trim();
   }
 
   return defaultValue;
@@ -79,14 +79,14 @@ export async function getSystemSettingFresh(
       where: { key },
       select: { value: true },
     });
-    if (row?.value && row.value.trim() !== '') return row.value;
+    if (row?.value && row.value.trim() !== '') return row.value.trim();
   } catch (error) {
     console.warn('[system-settings] fresh read failed (using env fallback):', (error as Error).message);
   }
 
   const envKey = ENV_FALLBACK[key];
   if (envKey && process.env[envKey] && process.env[envKey]!.trim() !== '') {
-    return process.env[envKey];
+    return process.env[envKey]!.trim();
   }
 
   return defaultValue;
