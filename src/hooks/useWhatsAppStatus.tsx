@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { invokeFn } from '@/lib/api-functions';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from 'sonner';
 
@@ -24,97 +23,104 @@ interface UseWhatsAppStatusResult {
 
 const POLL_INTERVAL = 60000; // 60 seconds
 
+/**
+ * Hook que mostra o status do WhatsApp na barra superior.
+ *
+ * Refatorado pra usar o novo flow multi-canal (/api/agents) em vez do
+ * legado /api/whatsapp/connect — agora funciona pra UazAPI, Evolution, etc.
+ *
+ * Pega o PRIMEIRO agente ativo da empresa pra exibir um status agregado.
+ * Pra status detalhado por agente, usar AgentDetail.
+ */
 export function useWhatsAppStatus(): UseWhatsAppStatusResult {
   const { effectiveCompanyId } = useEffectiveCompanyId();
   const queryClient = useQueryClient();
   const previousStatusRef = useRef<WhatsAppStatus | null>(null);
   const lastSyncRef = useRef<Date | null>(null);
 
-  // Query to fetch WhatsApp instance from database
   const { data: instance, isLoading } = useQuery({
     queryKey: ['whatsapp-instance-status', effectiveCompanyId],
     queryFn: async () => {
       if (!effectiveCompanyId) return null;
 
-      const res = await fetch(`/api/whatsapp-instances?companyId=${effectiveCompanyId}&activeOnly=true`);
-      if (!res.ok) throw new Error('Failed to fetch WhatsApp instance');
-      const instances = await res.json();
+      const res = await fetch(`/api/agents?companyId=${effectiveCompanyId}`);
+      if (!res.ok) return null;
+      const agents = await res.json();
 
-      // Get first active instance
-      const inst = instances?.[0] || null;
+      // Pega o primeiro agente ativo (qualquer canal)
+      const inst = (agents || []).find((a: any) => a.is_active) || agents?.[0] || null;
       if (!inst) return null;
 
       return {
         id: inst.id,
-        instance_name: inst.instanceName || inst.instance_name,
-        status: inst.status,
-        is_active: inst.isActive ?? inst.is_active,
+        instance_name: inst.display_name || inst.instance_name,
+        status: inst.status || 'disconnected',
+        is_active: inst.is_active,
       } as WhatsAppInstance;
     },
     enabled: !!effectiveCompanyId,
     staleTime: 30000,
   });
 
-  // Mutation to sync status with UAZAPI
+  // Sync chama /api/agents/[id]/status (adapter usa endpoint do canal certo).
+  // Tolerante a 404 (agente removido) — apenas invalida e segue.
   const syncMutation = useMutation({
     mutationFn: async () => {
-      if (!effectiveCompanyId || !instance?.id) return null;
+      if (!instance?.id) return null;
 
-      const { data, error } = await invokeFn('whatsapp-connect', {
-        action: 'update',
-        company_id: effectiveCompanyId,
-        instance_id: instance.id,
-      });
-
-      if (error) throw new Error(error);
+      const res = await fetch(`/api/agents/${instance.id}/status`);
+      if (res.status === 404) {
+        // Agente sumiu — invalida o cache pra refetch da lista
+        queryClient.invalidateQueries({ queryKey: ['whatsapp-instance-status'] });
+        return null;
+      }
+      if (!res.ok) {
+        // Erros transientes (rede/provider offline) sao silenciosos —
+        // proximo poll tenta de novo. Sem barulho no console.
+        return null;
+      }
 
       lastSyncRef.current = new Date();
-      return data;
+      return await res.json();
     },
     onSuccess: (data) => {
       if (data?.status) {
         queryClient.invalidateQueries({ queryKey: ['whatsapp-instance-status', effectiveCompanyId] });
-        queryClient.invalidateQueries({ queryKey: ['whatsapp-instances', effectiveCompanyId] });
+        queryClient.invalidateQueries({ queryKey: ['agents', effectiveCompanyId] });
       }
     },
-    onError: (error) => {
-      console.error('[useWhatsAppStatus] Failed to sync:', error);
-    },
+    // Sem onError ruidoso — sync falhar e normal quando provider esta offline
   });
 
-  // Determine current status
   const getStatus = useCallback((): WhatsAppStatus => {
     if (!instance) return 'no_instance';
 
     const status = instance.status?.toLowerCase() || '';
 
     if (status === 'connected' || status === 'open') return 'connected';
-    if (status === 'connecting' || status === 'qr_code' || status === 'waiting_qr') return 'connecting';
+    if (status === 'connecting' || status === 'qr_code' || status === 'waiting_qr' || status === 'qrcode') return 'connecting';
     if (status === 'error' || status === 'failed') return 'error';
     return 'disconnected';
   }, [instance]);
 
   const currentStatus = getStatus();
 
-  // Notify when status changes to disconnected
   useEffect(() => {
     if (previousStatusRef.current === 'connected' && currentStatus === 'disconnected') {
       toast.error('WhatsApp desconectado!', {
-        description: 'A conexão com o WhatsApp foi perdida. Vá em Configurações para reconectar.',
+        description: 'A conexão foi perdida. Vá em Agentes para reconectar.',
         duration: 10000,
       });
     }
     previousStatusRef.current = currentStatus;
   }, [currentStatus]);
 
-  // Initial sync when instance is loaded
   useEffect(() => {
     if (instance?.id && !lastSyncRef.current) {
       syncMutation.mutate();
     }
   }, [instance?.id]);
 
-  // Polling for status updates
   useEffect(() => {
     if (!instance?.id) return;
 
