@@ -77,7 +77,8 @@ export async function PUT(req: NextRequest) {
       )
     }
 
-    const knownKeys = new Set(KNOWN_SETTINGS.map((s) => s.key))
+    // Set<string> ao inves de Set<"n8n_..." | ...> pra .has() aceitar item.key livre
+    const knownKeys = new Set<string>(KNOWN_SETTINGS.map((s) => s.key))
     const updatedBy = auth.agentId || null
 
     for (const item of validation.data.settings) {
