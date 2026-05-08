@@ -22,7 +22,7 @@ async function loadCache(): Promise<void> {
   if (now - cachedAt < CACHE_TTL_MS && Object.keys(cache).length > 0) return;
 
   try {
-    const rows = await prisma.systemSetting.findMany({
+    const rows = await prisma.systemConfig.findMany({
       select: { key: true, value: true },
     });
     cache = {};

@@ -728,7 +728,10 @@ model WhatsappInstance {
 /// Configuracoes globais do sistema editaveis em runtime via super-admin.
 /// Substitui variaveis de ambiente que precisam mudar sem restart
 /// (URLs de webhook do N8N, chaves API default, etc).
-model SystemSetting {
+///
+/// Nome da tabela e `system_config` pra nao colidir com `system_settings`
+/// que e a tabela singleton de branding/aparencia.
+model SystemConfig {
   key         String   @id
   value       String?
   description String?
@@ -736,7 +739,7 @@ model SystemSetting {
   updatedBy   String?  @map("updated_by") @db.Uuid
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
 
-  @@map("system_settings")
+  @@map("system_config")
 }
 
 /// Credenciais reutilizaveis pra cada canal por empresa.

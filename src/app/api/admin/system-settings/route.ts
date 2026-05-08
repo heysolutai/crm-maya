@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Acesso restrito' }, { status: 403 })
     }
 
-    const rows = await prisma.systemSetting.findMany()
+    const rows = await prisma.systemConfig.findMany()
     const byKey = new Map(rows.map((r) => [r.key, r]))
 
     const result = KNOWN_SETTINGS.map((meta) => {
@@ -89,7 +89,7 @@ export async function PUT(req: NextRequest) {
       // Trim — null/undefined/vazio salva null pra acionar fallback de env
       const newValue = item.value && item.value.trim() !== '' ? item.value.trim() : null
 
-      await prisma.systemSetting.upsert({
+      await prisma.systemConfig.upsert({
         where: { key: item.key },
         create: {
           key: item.key,
