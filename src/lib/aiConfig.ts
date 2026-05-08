@@ -37,7 +37,7 @@ export interface Prompts {
   attendance_funnel?: string;  // FUNIL DE ATENDIMENTO (legado)
   scheduling_funnel?: string;  // FUNIL DE AGENDAMENTO (legado)
   business_rules?: string;     // REGRAS DE NEGÓCIO (legado)
-  first_message: string;       // Mensagem de boas-vindas
+  first_message?: string;      // Mensagem de boas-vindas (campo removido da UI; mantido opcional pra compat com dados antigos)
 }
 
 // === Modelos de IA Disponíveis ===
