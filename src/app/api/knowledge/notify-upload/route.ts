@@ -3,6 +3,7 @@ import { authenticate } from '@/lib/api/auth';
 import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, unauthorizedResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
+import { getSystemSetting } from '@/lib/system-settings'
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
@@ -15,7 +16,9 @@ export async function POST(req: NextRequest) {
       return unauthorizedResponse('Authentication required');
     }
 
-    const webhookUrl = process.env.N8N_FAQ_UPLOAD_WEBHOOK_URL || process.env.NEXT_PUBLIC_N8N_FAQ_WEBHOOK_URL;
+    const webhookUrl =
+      (await getSystemSetting('n8n_faq_upload_webhook_url')) ||
+      process.env.NEXT_PUBLIC_N8N_FAQ_WEBHOOK_URL;
     if (!webhookUrl) return errorResponse('Webhook não configurado');
 
     const payload = await req.json();

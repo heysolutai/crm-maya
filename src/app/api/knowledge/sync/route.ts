@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, notFoundResponse, unauthorizedResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
+import { getSystemSetting } from '@/lib/system-settings'
 
 function normalizeCompanyName(name: string): string {
   return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
@@ -23,10 +24,12 @@ export async function POST(req: NextRequest) {
       return unauthorizedResponse('Authentication required');
     }
 
-    const knowledgeWebhookUrl = process.env.KNOWLEDGE_WEBHOOK_URL || process.env.NEXT_PUBLIC_N8N_FAQ_WEBHOOK_URL;
+    const knowledgeWebhookUrl =
+      (await getSystemSetting('knowledge_webhook_url')) ||
+      process.env.NEXT_PUBLIC_N8N_FAQ_WEBHOOK_URL;
     if (!knowledgeWebhookUrl) {
-      console.error('[Sync KB] ❌ No webhook URL configured (KNOWLEDGE_WEBHOOK_URL and NEXT_PUBLIC_N8N_FAQ_WEBHOOK_URL are both empty)');
-      return errorResponse('KNOWLEDGE_WEBHOOK_URL not configured');
+      console.error('[Sync KB] ❌ Knowledge webhook URL nao configurada (super-admin > Sistema)');
+      return errorResponse('Knowledge webhook URL nao configurada');
     }
     console.log('[Sync KB] Webhook URL:', knowledgeWebhookUrl.substring(0, 60) + '...');
 

@@ -9,6 +9,7 @@ import { publishEvent } from '@/lib/realtime';
 import { sendPushToCompany } from '@/lib/push';
 import { pauseClientAIByConversation } from '@/lib/api/database';
 import { handleApiErrorCors } from '@/lib/api/errors'
+import { getSystemSetting } from '@/lib/system-settings'
 
 // Schema de validação para o payload da UAZapi
 const UAZapiPayloadSchema = z.object({
@@ -1316,7 +1317,9 @@ export async function POST(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    const openAiKey = (aiConfig?.apiKeys as any)?.openai || process.env.DEFAULT_OPENAI_API_KEY;
+    const openAiKey =
+      (aiConfig?.apiKeys as any)?.openai ||
+      (await getSystemSetting('default_openai_api_key'));
     console.log('[AI Config] OpenAI key source:', (aiConfig?.apiKeys as any)?.openai ? 'company' : 'default_secret');
 
     // 3.6. Processar mídia do WhatsApp
@@ -1580,7 +1583,8 @@ export async function POST(req: NextRequest) {
         console.warn('[N8N Webhook] quoted_message_id presente mas nao achamos a mensagem original:', payload.quoted_message_id);
       }
 
-      const n8nWebhookUrl = companyAiConfig?.n8nWebhookUrl || process.env.N8N_AI_WEBHOOK_URL;
+      const n8nWebhookUrl =
+        companyAiConfig?.n8nWebhookUrl || (await getSystemSetting('n8n_ai_webhook_url'));
       const knowledgeName = companyAiConfig?.knowledge || null;
       const memoryKeyName = companyAiConfig?.memoryKey || null;
       const productsKnowledgeName = companyAiConfig?.productsKnowledge || null;

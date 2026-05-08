@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { findOrCreateConversation } from '@/lib/api/database'
 import { publishEvent } from '@/lib/realtime'
 import { enqueueN8NWebhook } from '@/lib/queue'
+import { getSystemSetting } from '@/lib/system-settings'
 
 /**
  * Webhook receiver para Evolution API.
@@ -263,7 +264,8 @@ export async function POST(req: NextRequest) {
             },
           })
 
-          const webhookUrl = aiConfig?.n8nWebhookUrl || process.env.N8N_AI_WEBHOOK_URL
+          const webhookUrl =
+            aiConfig?.n8nWebhookUrl || (await getSystemSetting('n8n_ai_webhook_url'))
           if (webhookUrl) {
             // Contrato unificado entre canais — N8N pode ler mesmos campos
             // independente do canal (uazapi/evolution_baileys/etc).

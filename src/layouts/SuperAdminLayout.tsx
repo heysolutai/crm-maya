@@ -28,6 +28,7 @@ import {
   Menu,
   X,
   Settings,
+  Server,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import Image from 'next/image';
@@ -40,6 +41,7 @@ const navigation = [
   { name: 'Super Admins', href: '/super-admin/admins', icon: Shield },
   { name: 'Custos de IA', href: '/super-admin/token-dashboard', icon: DollarSign },
   { name: 'API Docs', href: '/super-admin/api-docs', icon: Code },
+  { name: 'Sistema', href: '/super-admin/system-settings', icon: Server },
   { name: 'Configurações', href: '/super-admin/settings', icon: Settings },
 ];
 

@@ -725,6 +725,20 @@ model WhatsappInstance {
   @@map("whatsapp_instances")
 }
 
+/// Configuracoes globais do sistema editaveis em runtime via super-admin.
+/// Substitui variaveis de ambiente que precisam mudar sem restart
+/// (URLs de webhook do N8N, chaves API default, etc).
+model SystemSetting {
+  key         String   @id
+  value       String?
+  description String?
+  isSecret    Boolean  @default(false) @map("is_secret")
+  updatedBy   String?  @map("updated_by") @db.Uuid
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
+
 /// Credenciais reutilizaveis pra cada canal por empresa.
 /// Salvas na 1a vez que o usuario cria um agente (UazAPI/Evolution/etc) e
 /// pre-preenchidas em criacoes seguintes — evita digitar admin token toda vez.

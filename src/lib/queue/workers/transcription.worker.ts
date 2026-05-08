@@ -3,6 +3,7 @@ import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type TranscriptionJob, enqueueN8NWebhook } from '../queues'
 import { prisma } from '@/lib/db'
 import { uploadToB2, buildB2Key, MIME_TO_EXT } from '@/lib/storage'
+import { getSystemSetting } from '@/lib/system-settings'
 
 interface UazDownloadResult {
   transcription: string | null
@@ -87,9 +88,9 @@ async function processTranscription(job: Job<TranscriptionJob>) {
 
   console.log(`[Transcription Worker] Processing job ${job.id} for message ${messageId}`)
 
-  const openAiKey = process.env.DEFAULT_OPENAI_API_KEY
+  const openAiKey = await getSystemSetting('default_openai_api_key')
   if (!openAiKey) {
-    console.warn(`[Transcription Worker] No DEFAULT_OPENAI_API_KEY configured`)
+    console.warn(`[Transcription Worker] No default OpenAI API key configured (super-admin > Sistema)`)
     return { messageId, transcription: null, reason: 'no_api_key' }
   }
 
