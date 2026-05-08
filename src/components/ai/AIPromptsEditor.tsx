@@ -10,7 +10,7 @@ import { useAIConfigurations } from '@/hooks/useAIConfigurations';
 import { useWhatsAppInstances } from '@/hooks/useWhatsAppInstances';
 import { useToast } from '@/hooks/use-toast';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
-import { Sparkles, Save, Bot, MessageCircle } from 'lucide-react';
+import { Sparkles, Save, Bot } from 'lucide-react';
 import { DEFAULT_PROMPTS } from '@/lib/aiConfig';
 
 interface AIPromptsEditorProps {
@@ -42,7 +42,7 @@ export function AIPromptsEditor({
   
   const [formData, setFormData] = useState({
     name: '',
-    prompts: { prompt_completo: '', first_message: '' },
+    prompts: { prompt_completo: '' },
     is_active: true,
     whatsapp_instance_id: null as string | null,
   });
@@ -63,7 +63,6 @@ export function AIPromptsEditor({
         name: existingConfig.name || '',
         prompts: {
           prompt_completo: promptCompleto,
-          first_message: p?.first_message || '',
         },
         is_active: existingConfig.is_active ?? true,
         whatsapp_instance_id: existingConfig.whatsapp_instance_id || null,
@@ -93,15 +92,6 @@ export function AIPromptsEditor({
       toast({
         title: "Erro de validação",
         description: "O prompt deve ter pelo menos 50 caracteres",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!formData.prompts.first_message || formData.prompts.first_message.length < 30) {
-      toast({
-        title: "Erro de validação",
-        description: "A mensagem de boas-vindas deve ter pelo menos 30 caracteres",
         variant: "destructive",
       });
       return;
@@ -244,27 +234,6 @@ ETAPA 3 - Fechamento: Confirmar interesse e agendar
             className="font-mono text-sm"
           />
           <p className="text-sm text-muted-foreground">Mínimo de 50 caracteres</p>
-        </CardContent>
-      </Card>
-
-      {/* Mensagem de Boas-vindas */}
-      <Card>
-        <CardContent className="pt-6 space-y-4">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <MessageCircle className="h-5 w-5 text-primary" />
-            MENSAGEM DE BOAS-VINDAS
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            Primeira mensagem enviada automaticamente quando um novo cliente entra em contato.
-          </p>
-          <Textarea
-            value={formData.prompts.first_message}
-            onChange={(e) => { setFormData({ ...formData, prompts: { ...formData.prompts, first_message: e.target.value } }); setDirty(true); }}
-            placeholder="Ex: Olá [client_name]! 👋 Seja bem-vindo(a) à Ótica Premium! Sou a Ana, sua assistente virtual. Como posso ajudar você hoje?"
-            rows={variant === 'full' ? 6 : 4}
-            className="font-mono text-sm"
-          />
-          <p className="text-sm text-muted-foreground">Mínimo de 30 caracteres</p>
         </CardContent>
       </Card>
 
