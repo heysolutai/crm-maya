@@ -43,6 +43,12 @@ interface Department {
   color: string;
 }
 
+interface AgentSummary {
+  id: string;
+  display_name: string;
+  channel_type: string;
+}
+
 interface ConversationSidebarProps {
   conversations: Conversation[] | undefined;
   selectedConversation: string | null;
@@ -55,6 +61,9 @@ interface ConversationSidebarProps {
   onDepartmentFilterChange: (value: string) => void;
   userFilter: string;
   onUserFilterChange: (value: string) => void;
+  agentFilter: string;
+  onAgentFilterChange: (value: string) => void;
+  agents: AgentSummary[];
   teamMembers: TeamMember[];
   departments: Department[];
   queueCounts: Record<string, number>;
@@ -69,6 +78,15 @@ interface ConversationSidebarProps {
   onPickupConversation?: (conversationId: string) => void;
 }
 
+const channelLabel: Record<string, string> = {
+  uazapi: 'WhatsApp',
+  evolution_baileys: 'WhatsApp',
+  evolution_go: 'WhatsApp',
+  zapi: 'WhatsApp',
+  whatsapp_cloud: 'WhatsApp Cloud',
+  instagram: 'Instagram',
+};
+
 export const ConversationSidebar = memo(function ConversationSidebar({
   conversations,
   selectedConversation,
@@ -81,6 +99,9 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   onDepartmentFilterChange,
   userFilter,
   onUserFilterChange,
+  agentFilter,
+  onAgentFilterChange,
+  agents,
   teamMembers,
   departments,
   queueCounts,
@@ -202,6 +223,69 @@ export const ConversationSidebar = memo(function ConversationSidebar({
           </div>
         )}
       </div>
+
+      {/* Secção de Canais — filtra a lista por agente */}
+      {agents.length > 0 && (
+        <div className="px-4 py-3 border-b border-border">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Canais
+            </h2>
+            {agentFilter !== 'all' && (
+              <button
+                onClick={() => onAgentFilterChange('all')}
+                className="text-[10px] text-primary hover:underline"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+            <button
+              type="button"
+              onClick={() => onAgentFilterChange('all')}
+              className={cn(
+                'shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors border whitespace-nowrap',
+                agentFilter === 'all'
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background text-muted-foreground border-border hover:bg-muted'
+              )}
+            >
+              Todos
+              <span className="ml-1.5 opacity-70">({conversations?.length || 0})</span>
+            </button>
+            {agents.map((a) => {
+              const count = (conversations || []).filter(
+                (c: any) => c.whatsappInstanceId === a.id || c.agent?.id === a.id
+              ).length;
+              const isActive = agentFilter === a.id;
+              const label = channelLabel[a.channel_type] || a.channel_type;
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => onAgentFilterChange(a.id)}
+                  className={cn(
+                    'shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors border whitespace-nowrap inline-flex items-center gap-1.5',
+                    isActive
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background text-muted-foreground border-border hover:bg-muted'
+                  )}
+                  title={`${a.display_name} (${label})`}
+                >
+                  <span className="truncate max-w-[120px]">{a.display_name}</span>
+                  <span className="opacity-60 text-[10px]">({label})</span>
+                  {count > 0 && (
+                    <span className={cn('opacity-70 text-[10px]', isActive && 'opacity-90')}>
+                      · {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <ScrollArea className="flex-1" role="list" aria-label="Lista de conversas">
         {isLoading ? (

@@ -16,6 +16,7 @@ export type ConversationFilters = {
   tags?: string[];
   departmentId?: string;
   assignedTo?: string;
+  whatsappInstanceId?: string;
 };
 
 export function useConversations(filters?: ConversationFilters) {
@@ -106,6 +107,7 @@ export function useConversations(filters?: ConversationFilters) {
       if (filters?.startDate) params.set('startDate', filters.startDate);
       if (filters?.endDate) params.set('endDate', filters.endDate);
       if (filters?.departmentId) params.set('departmentId', filters.departmentId);
+      if (filters?.whatsappInstanceId) params.set('whatsappInstanceId', filters.whatsappInstanceId);
 
       const res = await fetch(`/api/conversations?${params}`);
       if (!res.ok) throw new Error('Failed to fetch conversations');

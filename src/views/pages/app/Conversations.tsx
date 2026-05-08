@@ -14,6 +14,7 @@ import { useConversationScroll } from '@/hooks/useConversationScroll';
 import { useCreateConversation } from '@/hooks/useCreateConversation';
 import { useMessageInput } from '@/hooks/useMessageInput';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useAgents } from '@/hooks/useAgents';
 import { useDepartmentQueue } from '@/hooks/useDepartmentQueue';
 import { usePresenceContext } from '@/hooks/usePresence';
 import { MessageCircle, Loader2 } from 'lucide-react';
@@ -49,6 +50,7 @@ export default function Conversations() {
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [userFilter, setUserFilter] = useState<string>('all');
+  const [agentFilter, setAgentFilter] = useState<string>('all');
   
   // Dialog states
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
@@ -73,6 +75,7 @@ export default function Conversations() {
     tags: tagFilters.length > 0 ? tagFilters : undefined,
     departmentId: departmentFilter !== 'all' ? departmentFilter : undefined,
     assignedTo: userFilter !== 'all' ? userFilter : undefined,
+    whatsappInstanceId: agentFilter !== 'all' ? agentFilter : undefined,
   };
 
   // Hooks
@@ -110,6 +113,7 @@ export default function Conversations() {
   const { uploadMedia, isUploading } = useMediaUpload();
   const { teamMembers } = useTeam();
   const { departments } = useDepartments();
+  const { agents } = useAgents();
   const { queues: queueCounts } = useDepartmentQueue();
   const { onlineUserIds } = usePresenceContext();
   const { user, companyId } = useAuth();
@@ -373,6 +377,9 @@ export default function Conversations() {
           onDepartmentFilterChange={setDepartmentFilter}
           userFilter={userFilter}
           onUserFilterChange={setUserFilter}
+          agentFilter={agentFilter}
+          onAgentFilterChange={setAgentFilter}
+          agents={agents || []}
           teamMembers={(teamMembers as TeamMember[]) || []}
           departments={(departments || []).map((d: any) => ({ id: d.id, name: d.name, color: d.color || '#6b7280' }))}
           queueCounts={queueCounts}
