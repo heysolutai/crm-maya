@@ -64,6 +64,34 @@ export async function getSystemSetting(
   return defaultValue;
 }
 
+/**
+ * Variante que IGNORA o cache — sempre faz query no banco.
+ * Use em workers de baixa frequencia (transcricao, n8n) onde a key precisa
+ * ser confiavel mesmo logo apos o admin atualizar pela UI (cluster mode
+ * pode ter caches separados por processo).
+ */
+export async function getSystemSettingFresh(
+  key: string,
+  defaultValue?: string
+): Promise<string | undefined> {
+  try {
+    const row = await prisma.systemConfig.findUnique({
+      where: { key },
+      select: { value: true },
+    });
+    if (row?.value && row.value.trim() !== '') return row.value;
+  } catch (error) {
+    console.warn('[system-settings] fresh read failed (using env fallback):', (error as Error).message);
+  }
+
+  const envKey = ENV_FALLBACK[key];
+  if (envKey && process.env[envKey] && process.env[envKey]!.trim() !== '') {
+    return process.env[envKey];
+  }
+
+  return defaultValue;
+}
+
 /** Limpa cache — chamado pelo PUT depois de salvar */
 export function invalidateSystemSettingsCache(): void {
   cache = {};

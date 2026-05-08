@@ -148,7 +148,11 @@ export async function POST(req: NextRequest) {
       const targetInstance = await prisma.whatsappInstance.findFirst({
         where: { id: instance_id, companyId: company_id },
       });
-      if (!targetInstance) throw new Error('Instância não encontrada');
+      if (!targetInstance) {
+        // Polling pode pegar IDs stale (instancia recriada/migrada).
+        // Retornamos 404 limpo em vez de throw — evita poluir log com stack trace.
+        return jsonResponse({ success: false, error: 'Instância não encontrada', code: 'INSTANCE_NOT_FOUND' }, 404);
+      }
       if (!targetInstance.instanceApiKey) throw new Error('API Key não encontrada');
 
       const response = await fetch(`${targetInstance.apiUrl}/instance/connect`, {
@@ -227,7 +231,11 @@ export async function POST(req: NextRequest) {
     if (action === 'disconnect') {
       if (!instance_id) throw new Error('instance_id é obrigatório para disconnect');
       const targetInstance = await prisma.whatsappInstance.findFirst({ where: { id: instance_id, companyId: company_id } });
-      if (!targetInstance) throw new Error('Instância não encontrada');
+      if (!targetInstance) {
+        // Polling pode pegar IDs stale (instancia recriada/migrada).
+        // Retornamos 404 limpo em vez de throw — evita poluir log com stack trace.
+        return jsonResponse({ success: false, error: 'Instância não encontrada', code: 'INSTANCE_NOT_FOUND' }, 404);
+      }
 
       if (targetInstance.instanceApiKey) {
         try { await fetch(`${targetInstance.apiUrl}/instance/logout`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'token': targetInstance.instanceApiKey } }); } catch (e) { console.error('Logout error:', e); }
@@ -240,7 +248,11 @@ export async function POST(req: NextRequest) {
     if (action === 'delete') {
       if (!instance_id) throw new Error('instance_id é obrigatório para delete');
       const targetInstance = await prisma.whatsappInstance.findFirst({ where: { id: instance_id, companyId: company_id } });
-      if (!targetInstance) throw new Error('Instância não encontrada');
+      if (!targetInstance) {
+        // Polling pode pegar IDs stale (instancia recriada/migrada).
+        // Retornamos 404 limpo em vez de throw — evita poluir log com stack trace.
+        return jsonResponse({ success: false, error: 'Instância não encontrada', code: 'INSTANCE_NOT_FOUND' }, 404);
+      }
 
       try { await fetch(`${targetInstance.apiUrl}/instance`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'token': targetInstance.instanceApiKey || '' } }); } catch (e) { console.error('Delete API error:', e); }
 
@@ -251,7 +263,11 @@ export async function POST(req: NextRequest) {
     if (action === 'update') {
       if (!instance_id) throw new Error('instance_id é obrigatório para update');
       const targetInstance = await prisma.whatsappInstance.findFirst({ where: { id: instance_id, companyId: company_id } });
-      if (!targetInstance) throw new Error('Instância não encontrada');
+      if (!targetInstance) {
+        // Polling pode pegar IDs stale (instancia recriada/migrada).
+        // Retornamos 404 limpo em vez de throw — evita poluir log com stack trace.
+        return jsonResponse({ success: false, error: 'Instância não encontrada', code: 'INSTANCE_NOT_FOUND' }, 404);
+      }
 
       let updatedStatus = targetInstance.status;
       let apiMetadata = targetInstance.metadata;

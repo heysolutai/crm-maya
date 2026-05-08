@@ -3,12 +3,57 @@ import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type TranscriptionJob, enqueueN8NWebhook } from '../queues'
 import { prisma } from '@/lib/db'
 import { uploadToB2, buildB2Key, MIME_TO_EXT } from '@/lib/storage'
-import { getSystemSetting } from '@/lib/system-settings'
+import { getSystemSettingFresh } from '@/lib/system-settings'
 
 interface UazDownloadResult {
   transcription: string | null
   buffer: Buffer | null
   mimeType: string
+  /** Mensagem do provider quando transcricao falhou (pra log/debug) */
+  transcriptionError?: string
+}
+
+/**
+ * Fallback: transcreve direto pelo Whisper da OpenAI quando o UazAPI
+ * nao retorna transcricao. Usa o buffer ja baixado.
+ */
+async function transcribeWithWhisper(
+  buffer: Buffer,
+  mimeType: string,
+  openAiKey: string
+): Promise<string | null> {
+  try {
+    const ext = (mimeType.split('/')[1] || 'ogg').split(';')[0].trim()
+    const filename = `audio.${ext}`
+
+    const form = new FormData()
+    const blob = new Blob([new Uint8Array(buffer)], { type: mimeType })
+    form.append('file', blob, filename)
+    form.append('model', 'whisper-1')
+    form.append('response_format', 'json')
+    form.append('language', 'pt')
+
+    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${openAiKey}`,
+      },
+      body: form,
+    })
+
+    if (!res.ok) {
+      const txt = await res.text()
+      console.error(`[Transcription Worker] Whisper falhou (${res.status}):`, txt.slice(0, 300))
+      return null
+    }
+
+    const data = await res.json()
+    const text: string = (data?.text || '').trim()
+    return text || null
+  } catch (err: any) {
+    console.error('[Transcription Worker] Whisper exception:', err.message)
+    return null
+  }
 }
 
 // Pede base64 + transcricao na mesma call do UAZapi /message/download.
@@ -51,6 +96,11 @@ async function fetchAudioFromUazAPI(
     console.log(`[Transcription Worker] UazAPI response keys:`, Object.keys(result))
 
     const transcription: string | null = result.transcription || result.text || null
+    const transcriptionError: string | undefined =
+      result.transcription_error || result.transcriptionError || result.error || undefined
+    if (!transcription && transcriptionError) {
+      console.warn('[Transcription Worker] UazAPI nao retornou transcricao:', transcriptionError)
+    }
     const rawBase64 = result.base64Data || result.base64 || result.data || result.file || result.content
     const mimeType: string = result.mimetype || result.mimeType || result.mime_type || 'audio/ogg'
 
@@ -72,6 +122,7 @@ async function fetchAudioFromUazAPI(
       transcription,
       buffer,
       mimeType: mimeType.split(';')[0].trim(),
+      transcriptionError,
     }
   } catch (err: any) {
     console.error('[Transcription Worker] UazAPI exception:', err.message)
@@ -88,20 +139,36 @@ async function processTranscription(job: Job<TranscriptionJob>) {
 
   console.log(`[Transcription Worker] Processing job ${job.id} for message ${messageId}`)
 
-  const openAiKey = await getSystemSetting('default_openai_api_key')
+  // Le sempre fresh (sem cache) — worker de baixa frequencia, importante
+  // pegar valor recem-salvo na UI ou em outros processos do cluster.
+  const openAiKey = await getSystemSettingFresh('default_openai_api_key')
   if (!openAiKey) {
     console.warn(`[Transcription Worker] No default OpenAI API key configured (super-admin > Sistema)`)
     return { messageId, transcription: null, reason: 'no_api_key' }
   }
+  console.log(`[Transcription Worker] Using OpenAI key: ...${openAiKey.slice(-4)}`)
 
   if (!instanceApiUrl || !instanceApiKey || !messageKey) {
     console.warn(`[Transcription Worker] Missing UazAPI credentials for message ${messageId}`)
     return { messageId, transcription: null, reason: 'missing_instance' }
   }
 
-  const { transcription, buffer, mimeType } = await fetchAudioFromUazAPI(
+  const downloadResult = await fetchAudioFromUazAPI(
     messageKey, instanceApiKey, instanceApiUrl, openAiKey
   )
+  let transcription = downloadResult.transcription
+  const { buffer, mimeType, transcriptionError } = downloadResult
+
+  // Fallback: se UazAPI nao deu transcricao mas baixou o audio, chamamos
+  // o Whisper da OpenAI direto. Cobre casos em que o UazAPI nao expoe a
+  // transcricao na response (bug ou versao antiga) ou a key dele falhou.
+  if (!transcription && buffer && buffer.length > 0) {
+    console.log('[Transcription Worker] UazAPI nao retornou transcricao; tentando Whisper direto')
+    transcription = await transcribeWithWhisper(buffer, mimeType, openAiKey)
+    if (transcription) {
+      console.log('[Transcription Worker] Whisper fallback OK')
+    }
+  }
 
   // Sobe os bytes pro B2 antes de qualquer outra coisa — assim o player do
   // frontend deixa de bater na URL criptografada do WhatsApp (que da 403).
@@ -129,6 +196,9 @@ async function processTranscription(job: Job<TranscriptionJob>) {
   if (transcription) {
     console.log(`[Transcription Worker] Transcription: "${transcription.substring(0, 100)}"`)
 
+    // Quem transcreveu? UazAPI quando veio na primeira chamada; senao foi Whisper direto.
+    const transcriptionSource = downloadResult.transcription ? 'uazapi' : 'openai_whisper'
+
     await prisma.message.update({
       where: { id: messageId },
       data: {
@@ -137,8 +207,9 @@ async function processTranscription(job: Job<TranscriptionJob>) {
         metadata: {
           ...prevMeta,
           transcribed: true,
-          transcription_source: 'uazapi',
+          transcription_source: transcriptionSource,
           transcribed_at: new Date().toISOString(),
+          ...(transcriptionError ? { uazapi_transcription_error: transcriptionError } : {}),
         } as any,
       },
     })
@@ -160,7 +231,10 @@ async function processTranscription(job: Job<TranscriptionJob>) {
       console.log(`[Transcription Worker] Sent N8N webhook with transcribed audio`)
     }
   } else {
-    console.error(`[Transcription Worker] Transcription failed for message ${messageId}`)
+    console.error(
+      `[Transcription Worker] Transcription failed for message ${messageId}`,
+      transcriptionError ? `(uazapi: ${transcriptionError})` : ''
+    )
 
     // Mesmo sem transcricao, salva a mediaUrl do B2 se conseguimos baixar.
     await prisma.message.update({
@@ -173,6 +247,7 @@ async function processTranscription(job: Job<TranscriptionJob>) {
           transcribed: false,
           transcription_error: true,
           transcription_attempted_at: new Date().toISOString(),
+          ...(transcriptionError ? { uazapi_transcription_error: transcriptionError } : {}),
         } as any,
       },
     })

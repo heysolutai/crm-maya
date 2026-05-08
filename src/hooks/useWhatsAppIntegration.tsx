@@ -84,7 +84,13 @@ export function useWhatsAppIntegration() {
       toast({ title: 'Status atualizado' });
     },
     onError: (error: any) => {
-      toast({ title: 'Erro ao atualizar status', description: error.message, variant: 'destructive' });
+      // Polling de status falhar e benigno (instancia recriada/migrada).
+      // Toast so para erros nao-id-stale; ID stale e silencioso.
+      const msg = error?.message || ''
+      if (msg.includes('Instância não encontrada') || msg.includes('INSTANCE_NOT_FOUND')) {
+        return
+      }
+      toast({ title: 'Erro ao atualizar status', description: msg, variant: 'destructive' });
     },
   });
 

@@ -113,7 +113,13 @@ export function useWhatsAppIntegrationForCompany(companyId: string | undefined) 
       queryClient.invalidateQueries({ queryKey: ['whatsapp-instances', companyId] });
     },
     onError: (error: any) => {
-      console.error('Erro ao atualizar status:', error.message);
+      // Polling falhar e benigno (instancia recriada, provider offline, etc).
+      // Logamos warn em vez de error pra nao poluir telemetria.
+      const msg = error?.message || ''
+      if (msg.includes('Instância não encontrada') || msg.includes('INSTANCE_NOT_FOUND')) {
+        return // silencioso — id stale, proximo refetch corrige
+      }
+      console.warn('[whatsapp:update]', msg);
     },
   });
 
