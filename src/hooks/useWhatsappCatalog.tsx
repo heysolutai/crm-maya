@@ -74,11 +74,15 @@ export function useWhatsappCatalog(search = "") {
       }
       return res.json();
     },
-    onSuccess: (data: { synced: number; total: number; message?: string }) => {
+    onSuccess: (data: { synced: number; deleted?: number; total: number; message?: string }) => {
       if (data.message) {
         toast.info(data.message);
       } else {
-        toast.success(`${data.synced} produto(s) importado(s) com sucesso`);
+        const parts = [`${data.synced} sincronizado(s)`];
+        if (typeof data.deleted === 'number' && data.deleted > 0) {
+          parts.push(`${data.deleted} removido(s)`);
+        }
+        toast.success(parts.join(' · '));
       }
       invalidate();
     },

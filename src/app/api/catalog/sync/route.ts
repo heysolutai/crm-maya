@@ -58,19 +58,26 @@ export async function POST(req: NextRequest) {
     console.log("[Catalog Sync] Total de produtos obtidos:", allRawProducts.length);
 
     if (allRawProducts.length === 0) {
+      // Safeguard: se o WhatsApp retornou 0 produtos, NAO apagamos nada do
+      // banco — provavelmente e erro transiente do provider e nao um catalogo
+      // realmente vazio. O usuario pode forcar a remocao deletando manualmente.
       return NextResponse.json({
         success: true,
         synced: 0,
-        message: "Nenhum produto encontrado no catálogo do WhatsApp.",
+        deleted: 0,
+        skipped_delete_reason: "empty_response",
+        message: "Nenhum produto retornado pela UazAPI — nada foi alterado.",
       });
     }
 
     // 3. Salvar no banco (o /list já retorna tudo que precisamos)
     let synced = 0;
+    const seenWaProductIds: string[] = [];
     for (const raw of allRawProducts) {
       const waProductId =
         (raw.ID as string) || (raw.id as string) || (raw.productId as string) || "";
       if (!waProductId) continue;
+      seenWaProductIds.push(waProductId);
 
       const price = raw.Price as Record<string, string> | undefined;
       const images = raw.Images as Array<Record<string, unknown>> | undefined;
@@ -145,9 +152,23 @@ export async function POST(req: NextRequest) {
       synced++;
     }
 
+    // 4. Remover do banco produtos que sumiram do WhatsApp.
+    //    "WhatsApp e a fonte da verdade": tudo que esta no DB mas nao veio
+    //    no list atual da UazAPI e considerado removido.
+    const deleteResult = await prisma.catalogProduct.deleteMany({
+      where: {
+        companyId: auth.companyId,
+        waProductId: { notIn: seenWaProductIds },
+      },
+    });
+    const deleted = deleteResult.count;
+
+    console.log(`[Catalog Sync] Synced=${synced}, Deleted=${deleted}, Total WA=${allRawProducts.length}`);
+
     return NextResponse.json({
       success: true,
       synced,
+      deleted,
       total: allRawProducts.length,
     });
   } catch (error) {
