@@ -657,38 +657,63 @@ export async function POST(req: NextRequest) {
     // Parse e validar payload RAW da UAZapi
     const rawPayload = await req.json();
 
-    // ========== LOGGING DETALHADO INICIAL (ANTES DE VALIDAÇÃO) ==========
-    const debugInfo = {
-      EventType: rawPayload?.EventType,
-      instanceName: rawPayload?.instanceName,
-      chatPhone: rawPayload?.chat?.phone,
-      chatName: rawPayload?.chat?.name,
-      isGroup: rawPayload?.chat?.wa_isGroup,
-      messageId: rawPayload?.message?.id,
-      messageFromMe: rawPayload?.message?.fromMe,
-      messageType: rawPayload?.message?.type,
-      messageText: rawPayload?.message?.text?.substring(0, 50) || (typeof rawPayload?.message?.content === 'string' ? rawPayload.message.content.substring(0, 50) : ''),
-      senderPn: rawPayload?.message?.sender_pn,
-      senderName: rawPayload?.message?.senderName,
-      senderLid: rawPayload?.message?.sender_lid,
-    };
+    const eventType: string | undefined = rawPayload?.EventType;
+    const eventTypeLower = (eventType || '').toLowerCase();
+    const instanceName: string | undefined = rawPayload?.instanceName;
 
-    console.log('========== [WEBHOOK RECEIVED] ==========');
-    console.log('[Event]', debugInfo.EventType);
-    console.log('[Instance]', debugInfo.instanceName);
-    console.log('[Chat] phone:', debugInfo.chatPhone, '| name:', debugInfo.chatName, '| isGroup:', debugInfo.isGroup);
-    console.log('[Message] id:', debugInfo.messageId, '| fromMe:', debugInfo.messageFromMe, '| type:', debugInfo.messageType);
-    console.log('[Message] text:', debugInfo.messageText);
-    console.log('[Sender] pn:', debugInfo.senderPn, '| name:', debugInfo.senderName, '| lid:', debugInfo.senderLid);
-    console.log('========================================');
-
-    console.log('[Receive] Full raw payload:', JSON.stringify(rawPayload, null, 2));
-
-    // ===== FILTRO DE EVENTOS DE SISTEMA (EARLY RETURN) =====
+    // Eventos de sistema/baixo-valor — ignorados ou logados de forma curta
+    // Sao numerosos e poluem o log se entrarem no fluxo verbose normal.
     const systemEvents = ['connection', 'status', 'qrcode', 'presence', 'typing', 'connected', 'disconnected', 'connecting'];
-    if (rawPayload.EventType && systemEvents.includes(rawPayload.EventType.toLowerCase())) {
-      console.log(`[Receive] Ignoring system event: ${rawPayload.EventType}`);
-      return jsonResponse({ status: 'ignored', reason: 'system_event', event_type: rawPayload.EventType });
+    if (eventType && systemEvents.includes(eventTypeLower)) {
+      // 1 linha so — eventos sistema sao alta-frequencia e nao mudam estado da app
+      return jsonResponse({ status: 'ignored', reason: 'system_event', event_type: eventType });
+    }
+
+    // Eventos que tem handler proprio mais abaixo mas nao precisam do log
+    // verboso de mensagem (todos os campos de message vem `undefined` neles).
+    // Continuam sendo processados normalmente — so nao sujam o log.
+    const lowVerbosityEvents = ['messages_update', 'message_update'];
+    const isLowVerbosity = lowVerbosityEvents.includes(eventTypeLower);
+
+    // Log detalhado: somente pra eventos relevantes (mensagens recebidas/enviadas).
+    // Pra status updates, transcricoes, etc — log resumido de 1 linha.
+    if (isLowVerbosity || rawPayload.type === 'ReadReceipt' || rawPayload.type === 'TranscribedMessage') {
+      const messageIds = rawPayload?.event?.MessageIDs || rawPayload?.message?.id || '';
+      console.log(
+        `[Webhook] ${eventType || rawPayload.type} instance=${instanceName} state=${rawPayload.state || ''} ids=${Array.isArray(messageIds) ? messageIds.length : (messageIds ? 1 : 0)}`
+      );
+    } else {
+      const debugInfo = {
+        EventType: eventType,
+        instanceName,
+        chatPhone: rawPayload?.chat?.phone,
+        chatName: rawPayload?.chat?.name,
+        isGroup: rawPayload?.chat?.wa_isGroup,
+        messageId: rawPayload?.message?.id,
+        messageFromMe: rawPayload?.message?.fromMe,
+        messageType: rawPayload?.message?.type,
+        messageText:
+          rawPayload?.message?.text?.substring(0, 50) ||
+          (typeof rawPayload?.message?.content === 'string' ? rawPayload.message.content.substring(0, 50) : ''),
+        senderPn: rawPayload?.message?.sender_pn,
+        senderName: rawPayload?.message?.senderName,
+        senderLid: rawPayload?.message?.sender_lid,
+      };
+
+      console.log('========== [WEBHOOK RECEIVED] ==========');
+      console.log('[Event]', debugInfo.EventType);
+      console.log('[Instance]', debugInfo.instanceName);
+      console.log('[Chat] phone:', debugInfo.chatPhone, '| name:', debugInfo.chatName, '| isGroup:', debugInfo.isGroup);
+      console.log('[Message] id:', debugInfo.messageId, '| fromMe:', debugInfo.messageFromMe, '| type:', debugInfo.messageType);
+      console.log('[Message] text:', debugInfo.messageText);
+      console.log('[Sender] pn:', debugInfo.senderPn, '| name:', debugInfo.senderName, '| lid:', debugInfo.senderLid);
+      console.log('========================================');
+    }
+
+    // Dump do payload cru: opt-in via env. Util pra debug pontual sem encher o log
+    // em producao (UazAPI manda payload BEM grande em mensagens de midia).
+    if (process.env.WHATSAPP_DEBUG_VERBOSE === '1') {
+      console.log('[Receive] Full raw payload:', JSON.stringify(rawPayload, null, 2));
     }
 
     // ===== PROCESSAMENTO DE TRANSCRIÇÃO AUTOMÁTICA DA UAZAPI =====
@@ -1509,6 +1534,9 @@ export async function POST(req: NextRequest) {
             departmentId: true,
             department: { select: { id: true, name: true } },
             whatsappInstanceId: true,
+            whatsappInstance: {
+              select: { id: true, displayName: true, instanceName: true, channelType: true, phoneNumber: true },
+            },
           },
         }),
       ]);
@@ -1602,8 +1630,16 @@ export async function POST(req: NextRequest) {
         conversation_friendly_id: conversationData?.friendlyId || null,
         conversation_status: conversationData?.status || null,
         client_id: clientId,
+        // Atendente humano (legado: 'agent' aqui = atendente, nao agente do canal)
         agent_id: conversationData?.transferAgent?.id || null,
         nome_agente: conversationData?.transferAgent?.fullName || null,
+        // Agente do canal WhatsApp (instancia que recebeu a mensagem).
+        // Use estes campos no N8N pra rotear por agente / aplicar prompt diferente.
+        whatsapp_agent_id: conversationData?.whatsappInstance?.id || null,
+        whatsapp_agent_name: conversationData?.whatsappInstance?.displayName || null,
+        whatsapp_instance_name: conversationData?.whatsappInstance?.instanceName || null,
+        whatsapp_channel_type: conversationData?.whatsappInstance?.channelType || null,
+        whatsapp_agent_phone: conversationData?.whatsappInstance?.phoneNumber || null,
         is_transferred: !!conversationData?.transferredTo,
         department_id: conversationData?.department?.id || null,
         department_name: conversationData?.department?.name || null,

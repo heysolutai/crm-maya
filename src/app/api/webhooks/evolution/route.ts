@@ -265,25 +265,37 @@ export async function POST(req: NextRequest) {
 
           const webhookUrl = aiConfig?.n8nWebhookUrl || process.env.N8N_AI_WEBHOOK_URL
           if (webhookUrl) {
+            // Contrato unificado entre canais — N8N pode ler mesmos campos
+            // independente do canal (uazapi/evolution_baileys/etc).
             const n8nPayload = {
               type: 'incoming',
               channel: 'evolution_baileys',
-              agent_id: agent.id,
-              agent_name: agent.displayName,
-              instance_name: agent.instanceName,
+              // Agente do canal WhatsApp (instancia que recebeu a mensagem)
+              whatsapp_agent_id: agent.id,
+              whatsapp_agent_name: agent.displayName,
+              whatsapp_instance_name: agent.instanceName,
+              whatsapp_channel_type: agent.channelType,
+              whatsapp_agent_phone: agent.phoneNumber,
+              // Atendente humano — null aqui (Evolution nao tem fluxo de transferencia
+              // resolvido aqui ainda). Usar conversa para fonte de verdade se precisar.
+              agent_id: null,
+              nome_agente: null,
               company_id: agent.companyId,
               conversation_id: conversationId,
               message_id: message.id,
+              client_id: null, // Evolution webhook ainda nao popula clientId aqui
               numero_cliente: phone,
               push_name: pushName || null,
               message_text: text || '',
               message_type: messageType,
               media_url: mediaUrl,
               provider_message_id: providerMessageId || null,
-              knowledge_name: aiConfig?.knowledge || null,
-              memory_key_name: aiConfig?.memoryKey || null,
-              products_knowledge_name: aiConfig?.productsKnowledge || null,
+              knowledge: aiConfig?.knowledge || null,
+              memory_key: aiConfig?.memoryKey || null,
+              products_knowledge: aiConfig?.productsKnowledge || null,
               ai_status: 'active',
+              fromMe,
+              timestamp: new Date().toISOString(),
             }
 
             await enqueueN8NWebhook({
