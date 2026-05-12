@@ -26,8 +26,10 @@ export async function GET(req: NextRequest) {
   const clientId = Math.random().toString(36).slice(2, 8);
   const channel = channelForCompany(companyId);
   const tag = `[SSE:${clientId}:${companyId.slice(0, 8)}]`;
+  const startedAt = Date.now();
+  const VERBOSE = process.env.SSE_DEBUG_VERBOSE === '1';
 
-  console.log(`${tag} conexao iniciada (canal=${channel})`);
+  if (VERBOSE) console.log(`${tag} conexao iniciada (canal=${channel})`);
 
   const encoder = new TextEncoder();
   const subscriber = createSubscriber();
@@ -51,7 +53,17 @@ export async function GET(req: NextRequest) {
       const cleanup = async (reason: string) => {
         if (closed) return;
         closed = true;
-        console.log(`${tag} fechando (motivo=${reason}, eventos_relay=${eventsRelayed})`);
+        const durationMs = Date.now() - startedAt;
+        // client_abort e normal (cliente fechou aba/navegou). So logamos
+        // se for problema: conexao morreu cedo (provavel falha) ou modo verbose.
+        const shouldLog =
+          VERBOSE ||
+          reason !== 'client_abort' ||
+          eventsRelayed === 0 ||
+          durationMs < 5000;
+        if (shouldLog) {
+          console.log(`${tag} fechando (motivo=${reason}, eventos_relay=${eventsRelayed}, duracao=${durationMs}ms)`);
+        }
         if (heartbeat) {
           clearInterval(heartbeat);
           heartbeat = null;
@@ -67,7 +79,7 @@ export async function GET(req: NextRequest) {
       // 2. Registra handlers do subscriber ANTES do subscribe, pra nao perder evento
       subscriber.on('message', (_chan, message) => {
         eventsRelayed++;
-        console.log(`${tag} evento #${eventsRelayed} relay`);
+        if (VERBOSE) console.log(`${tag} evento #${eventsRelayed} relay`);
         send(`event: message\ndata: ${message}\n\n`);
       });
 
@@ -87,7 +99,7 @@ export async function GET(req: NextRequest) {
       // 3. Subscribe no canal do Redis
       try {
         await subscriber.subscribe(channel);
-        console.log(`${tag} subscrito em ${channel}`);
+        if (VERBOSE) console.log(`${tag} subscrito em ${channel}`);
       } catch (err) {
         console.error(`${tag} falha ao subscribe:`, err);
         await cleanup('subscribe_failed');
