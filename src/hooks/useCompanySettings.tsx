@@ -21,18 +21,51 @@ export function useCompanySettings() {
 
   const updateCompany = useMutation({
     mutationFn: async (updates: any) => {
-      const res = await fetch('/api/company/settings', {
+      // Caso 1: update do JSON settings (lead_distribution, report_group, etc)
+      if (updates && updates.settings && typeof updates.settings === 'object') {
+        const res = await fetch('/api/company/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            company_id: companyId,
+            settings: updates.settings,
+          }),
+        });
+        const result = await res.json();
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || 'Erro ao salvar configurações');
+        }
+        return result;
+      }
+
+      // Caso 2: update de campos de perfil (name, email, phone, etc)
+      // Mapeia snake_case -> camelCase pro schema de /api/companies
+      const fieldMap: Record<string, string> = {
+        name: 'name',
+        trade_name: 'tradeName',
+        email: 'email',
+        phone: 'phone',
+        document_number: 'documentNumber',
+        address: 'address',
+      };
+      const payload: Record<string, unknown> = { id: companyId };
+      let hasField = false;
+      for (const [snake, camel] of Object.entries(fieldMap)) {
+        if (snake in updates && updates[snake] !== undefined) {
+          payload[camel] = updates[snake];
+          hasField = true;
+        }
+      }
+      if (!hasField) return { success: true };
+
+      const res = await fetch('/api/companies', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          company_id: companyId,
-          settings: updates.settings,
-        }),
+        body: JSON.stringify(payload),
       });
-
       const result = await res.json();
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || 'Erro ao salvar configurações');
+      if (!res.ok) {
+        throw new Error(result.error || 'Erro ao atualizar empresa');
       }
       return result;
     },

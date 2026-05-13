@@ -234,6 +234,7 @@ function ConnectionTab({ agent }: { agent: ReturnType<typeof useAgents>['agents'
   const { toast } = useToast();
   const channelMeta = CHANNEL_REGISTRY[agent.channel_type];
   const isAvailable = channelMeta?.status === 'available';
+  const isTokenMode = channelMeta?.connectionMode === 'token';
 
   const [qrLoading, setQrLoading] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -340,7 +341,27 @@ function ConnectionTab({ agent }: { agent: ReturnType<typeof useAgents>['agents'
           </div>
         )}
 
-        {isConnected ? (
+        {isTokenMode ? (
+          <div className="rounded-lg border bg-muted/30 p-6 space-y-3 text-center">
+            <Cloud className="h-10 w-10 mx-auto text-muted-foreground" />
+            <div>
+              <p className="font-medium">
+                {isConnected ? 'Canal ativo via API token' : 'Canal configurado via API token'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Sem QR Code — autenticação via token na API NotificaMe. Status sincroniza automaticamente.
+              </p>
+            </div>
+            {agent.channel_config &&
+              typeof agent.channel_config === 'object' &&
+              (agent.channel_config as any)?.channelId && (
+                <div className="text-xs text-muted-foreground">
+                  <span className="font-medium">Channel UUID: </span>
+                  <span className="font-mono">{(agent.channel_config as any).channelId}</span>
+                </div>
+              )}
+          </div>
+        ) : isConnected ? (
           <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900 p-6 text-center space-y-3">
             <div className="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center mx-auto">
               <Smartphone className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />

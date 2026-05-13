@@ -8,6 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -64,6 +71,11 @@ export default function Agents() {
   // NotificaMe extras (channelId + senderUserId vao em `extra` no POST)
   const [notificameChannelId, setNotificameChannelId] = useState('');
   const [notificameSenderId, setNotificameSenderId] = useState('');
+  const [notificameChannels, setNotificameChannels] = useState<
+    Array<{ id: string; name?: string; type?: string; status?: string }>
+  >([]);
+  const [notificameLoadingChannels, setNotificameLoadingChannels] = useState(false);
+  const [notificameChannelsError, setNotificameChannelsError] = useState<string | null>(null);
   // Quando ja existe credencial salva, escondemos os campos por padrao;
   // user pode clicar em "Editar" pra trocar URL/token.
   const [editingCredential, setEditingCredential] = useState(false);
@@ -100,6 +112,8 @@ export default function Agents() {
     setPhoneNumber('');
     setNotificameChannelId('');
     setNotificameSenderId('');
+    setNotificameChannels([]);
+    setNotificameChannelsError(null);
     setEditingCredential(false);
   };
 
@@ -110,7 +124,43 @@ export default function Agents() {
     setServerApiKey('');
     setNotificameChannelId('');
     setNotificameSenderId('');
+    setNotificameChannels([]);
+    setNotificameChannelsError(null);
     setEditingCredential(false);
+  };
+
+  const fetchNotificameChannels = async () => {
+    const token = serverApiKey.trim() || savedCred?.server_api_key || '';
+    if (!token) {
+      setNotificameChannelsError('Informe o API Token primeiro');
+      return;
+    }
+    setNotificameLoadingChannels(true);
+    setNotificameChannelsError(null);
+    try {
+      const res = await fetch('/api/channels/notificame/list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiToken: token }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Falha ao listar canais');
+      }
+      const list = Array.isArray(data.channels) ? data.channels : [];
+      setNotificameChannels(list);
+      if (list.length === 0) {
+        setNotificameChannelsError('Nenhum canal encontrado nessa conta');
+      } else if (!notificameChannelId && list.length === 1) {
+        // Auto-seleciona se so tem um
+        setNotificameChannelId(list[0].id);
+      }
+    } catch (e) {
+      setNotificameChannelsError((e as Error).message);
+      setNotificameChannels([]);
+    } finally {
+      setNotificameLoadingChannels(false);
+    }
   };
 
   const handleCreate = () => {
@@ -119,11 +169,11 @@ export default function Agents() {
     // Se canal precisa de config e a UI esta exibindo inputs, ambos sao obrigatorios
     if (showCredentialInputs && (!serverUrl.trim() || !serverApiKey.trim())) return;
 
-    // NotificaMe: token + channelId + senderUserId sao obrigatorios (1a vez).
-    // Se ja existe credencial salva e nao esta editando, token pode vir de la.
+    // NotificaMe: token + channelId obrigatorios. senderUserId e opcional
+    // (adapter auto-detecta via GET /v1/accounts se nao informado).
     const notificameNeedsInputs = isNotificame && (!hasSavedCred || editingCredential);
     if (notificameNeedsInputs && !serverApiKey.trim()) return;
-    if (isNotificame && (!notificameChannelId.trim() || !notificameSenderId.trim())) return;
+    if (isNotificame && !notificameChannelId.trim()) return;
 
     createAgent(
       {
@@ -140,7 +190,8 @@ export default function Agents() {
         extra: isNotificame
           ? {
               channelId: notificameChannelId.trim(),
-              senderUserId: notificameSenderId.trim(),
+              // senderUserId vazio => adapter auto-detecta via /v1/accounts
+              senderUserId: notificameSenderId.trim() || undefined,
               channel: 'whatsapp',
             }
           : undefined,
@@ -343,7 +394,13 @@ export default function Agents() {
                     <Label htmlFor="notificame-token">API Token NotificaMe</Label>
                     <Input
                       id="notificame-token"
-                      type="password"
+                      type="text"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      data-1p-ignore
+                      data-lpignore="true"
                       placeholder="Token gerado no painel hub.notificame.com.br"
                       value={serverApiKey}
                       onChange={(e) => setServerApiKey(e.target.value)}
@@ -354,25 +411,69 @@ export default function Agents() {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <Label htmlFor="notificame-channel-id">Channel ID (UUID)</Label>
-                  <Input
-                    id="notificame-channel-id"
-                    placeholder="ex: 8699a97a-6fb3-443d-ab96-9df3924aa90d"
-                    value={notificameChannelId}
-                    onChange={(e) => setNotificameChannelId(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    UUID do canal WhatsApp configurado no painel NotificaMe.
-                  </p>
+                  <div className="flex items-end justify-between gap-2">
+                    <Label htmlFor="notificame-channel-id">Canal</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7"
+                      onClick={fetchNotificameChannels}
+                      disabled={notificameLoadingChannels || (!serverApiKey.trim() && !savedCred?.server_api_key)}
+                    >
+                      {notificameLoadingChannels && (
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      )}
+                      {notificameChannels.length > 0 ? 'Recarregar' : 'Buscar canais'}
+                    </Button>
+                  </div>
+                  {notificameChannels.length > 0 ? (
+                    <Select
+                      value={notificameChannelId}
+                      onValueChange={setNotificameChannelId}
+                    >
+                      <SelectTrigger id="notificame-channel-id">
+                        <SelectValue placeholder="Selecione um canal" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {notificameChannels.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name || c.type || c.id}
+                            {c.type && c.name ? ` (${c.type})` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      id="notificame-channel-id"
+                      placeholder="Clique em Buscar canais ou cole o UUID manualmente"
+                      value={notificameChannelId}
+                      onChange={(e) => setNotificameChannelId(e.target.value)}
+                    />
+                  )}
+                  {notificameChannelsError && (
+                    <p className="text-xs text-rose-600">{notificameChannelsError}</p>
+                  )}
+                  {!notificameChannelsError && notificameChannels.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Preenche o token e clica em Buscar canais pra listar os disponíveis.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="notificame-sender">Sender User ID</Label>
+                  <Label htmlFor="notificame-sender">
+                    Sender User ID <span className="text-muted-foreground font-normal">(opcional)</span>
+                  </Label>
                   <Input
                     id="notificame-sender"
-                    placeholder="User ID da conta NotificaMe (campo 'from' do envio)"
+                    placeholder="Deixe vazio pra detectar automaticamente"
                     value={notificameSenderId}
                     onChange={(e) => setNotificameSenderId(e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Detectado automaticamente via /v1/accounts. Preencha só se quiser sobrescrever.
+                  </p>
                 </div>
               </div>
             )}
@@ -485,7 +586,6 @@ export default function Agents() {
                 (showCredentialInputs && (!serverUrl.trim() || !serverApiKey.trim())) ||
                 (isNotificame &&
                   (!notificameChannelId.trim() ||
-                    !notificameSenderId.trim() ||
                     ((!hasSavedCred || editingCredential) && !serverApiKey.trim()))) ||
                 isCreating
               }

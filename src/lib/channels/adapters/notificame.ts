@@ -166,6 +166,85 @@ async function deleteSubscription(apiToken: string, subscriptionId: string): Pro
   }
 }
 
+/**
+ * Detecta o User ID da conta. NotificaMe nao documenta publicamente o shape —
+ * tentamos varios endpoints e campos comuns. Loga no servidor pra debug.
+ */
+async function detectSenderUserId(apiToken: string): Promise<string | null> {
+  const endpoints = ['/v1/accounts', '/v1/users/me', '/v1/me', '/v1/users'];
+
+  for (const path of endpoints) {
+    let res;
+    try {
+      res = await notificameFetch(apiToken, 'GET', path);
+    } catch (e) {
+      console.warn(`[notificame] detectSenderUserId ${path} threw:`, (e as Error).message);
+      continue;
+    }
+    if (!res.ok) {
+      console.warn(`[notificame] ${path} -> ${res.status}`);
+      continue;
+    }
+
+    const data = res.data;
+    const candidates: any[] = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.accounts)
+        ? data.accounts
+        : Array.isArray(data?.users)
+          ? data.users
+          : Array.isArray(data?.data)
+            ? data.data
+            : [data];
+
+    for (const c of candidates) {
+      if (!c || typeof c !== 'object') continue;
+      const id =
+        c.userId ||
+        c.user_id ||
+        c.accountId ||
+        c.account_id ||
+        c.ownerId ||
+        c.owner_id ||
+        c.id;
+      if (typeof id === 'string' && id.length > 0) {
+        console.log(`[notificame] detected senderUserId via ${path}: ${id}`);
+        return id;
+      }
+      if (typeof id === 'number') return String(id);
+    }
+    console.warn(`[notificame] ${path} responded mas sem campo de id reconhecido. Keys:`,
+      candidates[0] ? Object.keys(candidates[0]).slice(0, 20) : 'empty');
+  }
+
+  // Ultimo recurso: tentar achar accountId/ownerId no GET /v1/channels
+  try {
+    const ch = await notificameFetch(apiToken, 'GET', '/v1/channels');
+    if (ch.ok) {
+      const list: any[] = Array.isArray(ch.data)
+        ? ch.data
+        : Array.isArray(ch.data?.channels)
+          ? ch.data.channels
+          : Array.isArray(ch.data?.data)
+            ? ch.data.data
+            : [];
+      for (const c of list) {
+        const id = c?.accountId || c?.account_id || c?.ownerId || c?.owner_id || c?.userId;
+        if (typeof id === 'string' && id.length > 0) {
+          console.log(`[notificame] detected senderUserId via /v1/channels: ${id}`);
+          return id;
+        }
+      }
+      console.warn('[notificame] /v1/channels nao tem accountId/ownerId. Keys do 1o canal:',
+        list[0] ? Object.keys(list[0]).slice(0, 20) : 'empty');
+    }
+  } catch (e) {
+    console.warn('[notificame] fallback /v1/channels falhou:', (e as Error).message);
+  }
+
+  return null;
+}
+
 export const notificameAdapter: ChannelAdapter = {
   type: 'notificame',
 
@@ -181,20 +260,30 @@ export const notificameAdapter: ChannelAdapter = {
       channel?: string;
     };
     const channelId = extra.channelId;
-    const senderUserId = extra.senderUserId;
+    let senderUserId = extra.senderUserId;
     const channel = extra.channel || 'whatsapp';
 
     if (!channelId) {
       throw new ChannelError('Channel ID (UUID) do NotificaMe e obrigatorio', 'BAD_REQUEST');
-    }
-    if (!senderUserId) {
-      throw new ChannelError('Sender User ID do NotificaMe e obrigatorio', 'BAD_REQUEST');
     }
 
     // 1) Valida token — GET /v1/channels deve retornar 200
     const validate = await notificameFetch(apiToken, 'GET', '/v1/channels');
     if (!validate.ok) {
       throwForStatus(validate.status, validate.data, 'Token NotificaMe invalido');
+    }
+
+    // 1.5) Auto-detecta o senderUserId se nao foi informado (best-effort)
+    if (!senderUserId) {
+      const detected = await detectSenderUserId(apiToken);
+      if (detected) {
+        senderUserId = detected;
+      } else {
+        throw new ChannelError(
+          'Informe o Sender User ID (User ID da sua conta NotificaMe — veja em hub.notificame.com.br > perfil)',
+          'BAD_REQUEST'
+        );
+      }
     }
 
     // 2) Cria subscriptions para MESSAGE e MESSAGE_STATUS apontando pro webhook
