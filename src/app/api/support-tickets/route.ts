@@ -6,10 +6,12 @@ import { handleApiError } from '@/lib/api/errors'
 export async function GET(req: NextRequest) {
   try {
     const { companyId: authCompanyId, isSuperAdmin } = await authenticate(req)
-    const companyId = req.nextUrl.searchParams.get('companyId') || authCompanyId
+    // Super admin pode passar ?companyId= para filtrar; usuario regular sempre usa o proprio companyId
+    const qsCompanyId = req.nextUrl.searchParams.get('companyId')
+    const companyId = isSuperAdmin ? (qsCompanyId || authCompanyId) : authCompanyId
 
     if (!companyId && !isSuperAdmin) {
-      return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
+      return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     }
 
     // Super admin: fetch ticket counts grouped by company (for CompaniesTable)

@@ -1,23 +1,27 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
-import { authenticate, isInternalRequest } from '@/lib/api/auth';
-import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
+import { authenticate } from '@/lib/api/auth';
+import { handleCors, jsonResponse, badRequestResponse, unauthorizedResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { action, user_id } = body;
+    // CRIT-8 fix: requer autenticacao e ignora user_id do body — sempre usa o user da sessao
+    const { agentId } = await authenticate(req);
+    if (!agentId) return unauthorizedResponse('Authentication required');
 
-    if (!action || !user_id) return badRequestResponse('action and user_id are required');
+    const body = await req.json();
+    const { action } = body;
+
+    if (!action) return badRequestResponse('action is required');
 
     const now = new Date();
 
     if (action === 'online') {
       await prisma.user.update({
-        where: { id: user_id },
+        where: { id: agentId },
         data: { isOnline: true, lastSeenAt: now },
       });
 
@@ -26,7 +30,7 @@ export async function POST(req: NextRequest) {
 
     if (action === 'offline') {
       await prisma.user.update({
-        where: { id: user_id },
+        where: { id: agentId },
         data: { isOnline: false, lastSeenAt: now },
       });
 
@@ -35,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     if (action === 'heartbeat') {
       await prisma.user.update({
-        where: { id: user_id },
+        where: { id: agentId },
         data: { lastSeenAt: now },
       });
 

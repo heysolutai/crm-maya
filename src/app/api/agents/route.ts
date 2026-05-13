@@ -59,6 +59,8 @@ const createAgentSchema = z.object({
   serverUrl: z.string().url().optional(),
   serverApiKey: z.string().min(1).optional(),
   phoneNumber: z.string().optional(),
+  // Campos extras especificos do canal (ex: NotificaMe usa channelId + senderUserId)
+  extra: z.record(z.string(), z.any()).optional(),
 })
 
 const updateAgentSchema = z.object({
@@ -98,8 +100,7 @@ function publicWebhookUrl(req: NextRequest, channelType: string, agentId: string
 
 export async function GET(req: NextRequest) {
   try {
-    const { companyId: authCompanyId } = await authenticate(req)
-    const companyId = req.nextUrl.searchParams.get('companyId') || authCompanyId
+    const { companyId } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
     const agents = await prisma.whatsappInstance.findMany({
@@ -127,7 +128,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { channelType, displayName, phoneNumber } = validation.data
+    const { channelType, displayName, phoneNumber, extra } = validation.data
     let { serverUrl, serverApiKey } = validation.data
 
     if (!isChannelType(channelType)) {
@@ -140,6 +141,12 @@ export async function POST(req: NextRequest) {
         { error: 'Canal ainda nao disponivel', code: 'CHANNEL_UNAVAILABLE' },
         { status: 400 }
       )
+    }
+
+    // NotificaMe usa URL fixa — preenche aqui pra a upsert de channelCredential
+    // funcionar e pra UI nao precisar coletar.
+    if (channelType === 'notificame' && !serverUrl) {
+      serverUrl = 'https://api.notificame.com.br'
     }
 
     // Resolucao de credenciais: se o form nao mandou, busca a credencial
@@ -191,6 +198,7 @@ export async function POST(req: NextRequest) {
           serverApiKey,
           phoneNumber,
           webhookUrl,
+          extra,
         })
 
         const agent = await prisma.whatsappInstance.update({

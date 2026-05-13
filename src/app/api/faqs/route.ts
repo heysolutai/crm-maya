@@ -5,7 +5,6 @@ import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
 
 const createFaqSchema = z.object({
-  companyId: z.string().uuid(),
   question: z.string().min(1),
   answer: z.string().min(1),
   keywords: z.array(z.string()).nullable().optional().transform(v => v ?? undefined),
@@ -36,9 +35,8 @@ const updateFaqSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    await authenticate(req)
-    const companyId = req.nextUrl.searchParams.get('companyId')
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
     const faqs = await prisma.companyFaq.findMany({
       where: { companyId },
@@ -52,7 +50,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const body = await req.json()
 
     if (body.action === 'deleteMany') {
@@ -63,7 +62,10 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         )
       }
-      await prisma.companyFaq.deleteMany({ where: { id: { in: deleteValidation.data.ids } } })
+      // IDOR: deleta apenas FAQs da empresa autenticada
+      await prisma.companyFaq.deleteMany({
+        where: { id: { in: deleteValidation.data.ids }, companyId },
+      })
       return NextResponse.json({ success: true })
     }
 
@@ -75,9 +77,10 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         )
       }
+      // IDOR: updateMany com filtro de companyId — nao mexe em FAQs de outras empresas
       for (let i = 0; i < reorderValidation.data.orderedIds.length; i++) {
-        await prisma.companyFaq.update({
-          where: { id: reorderValidation.data.orderedIds[i] },
+        await prisma.companyFaq.updateMany({
+          where: { id: reorderValidation.data.orderedIds[i], companyId },
           data: { orderPosition: i },
         })
       }
@@ -94,7 +97,7 @@ export async function POST(req: NextRequest) {
 
     const faq = await prisma.companyFaq.create({
       data: {
-        companyId: validation.data.companyId,
+        companyId,
         question: validation.data.question,
         answer: validation.data.answer,
         keywords: validation.data.keywords ?? undefined,

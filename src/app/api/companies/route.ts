@@ -6,15 +6,23 @@ import { handleApiError } from '@/lib/api/errors'
 
 const updateCompanySchema = z.object({
   id: z.string().uuid('Invalid id format'),
-}).passthrough();
+  name: z.string().min(1).optional(),
+  slug: z.string().min(1).optional(),
+  settings: z.any().optional(),
+  isActive: z.boolean().optional(),
+  subscriptionStatus: z.enum(['trial', 'active', 'suspended', 'cancelled']).optional(),
+});
 
 export async function GET(req: NextRequest) {
   try {
     const { isSuperAdmin, companyId: authCompanyId } = await authenticate(req)
 
-    // Single company lookup by ID
+    // Single company lookup by ID — usuario regular so pode ler a propria empresa
     const singleId = req.nextUrl.searchParams.get('id')
     if (singleId) {
+      if (!isSuperAdmin && singleId !== authCompanyId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
       const company = await prisma.company.findUnique({ where: { id: singleId } })
       return NextResponse.json(company)
     }
@@ -52,7 +60,7 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { isSuperAdmin, companyId: authCompanyId } = await authenticate(req)
     const body = await req.json()
     const validation = updateCompanySchema.safeParse(body)
 
@@ -61,6 +69,18 @@ export async function PUT(req: NextRequest) {
     }
 
     const { id, ...updates } = validation.data
+
+    // Usuario regular so pode atualizar a propria empresa
+    if (!isSuperAdmin && id !== authCompanyId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // Campos sensíveis (subscriptionStatus, isActive) só super-admin
+    if (!isSuperAdmin) {
+      delete (updates as any).subscriptionStatus
+      delete (updates as any).isActive
+    }
+
     const company = await prisma.company.update({ where: { id }, data: updates })
     return NextResponse.json(company)
   } catch (error) {

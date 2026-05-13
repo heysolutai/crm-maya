@@ -5,9 +5,19 @@ import { handleApiError } from '@/lib/api/errors'
 
 export async function GET(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const clientId = req.nextUrl.searchParams.get('clientId')
     if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
+
+    // IDOR: garante que o cliente pertence a empresa
+    const client = await prisma.client.findFirst({
+      where: { id: clientId, companyId },
+      select: { id: true },
+    })
+    if (!client) {
+      return NextResponse.json({ error: 'Cliente nao encontrado' }, { status: 404 })
+    }
 
     const history = await prisma.clientFunnelHistory.findMany({
       where: { clientId },

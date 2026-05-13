@@ -3,15 +3,23 @@ import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
 
-/** GET user settings by userId query param */
+/** GET user settings — usuario regular so le as proprias; super-admin pode ler qualquer */
 export async function GET(req: NextRequest) {
   try {
-    await authenticate(req)
-    const userId = req.nextUrl.searchParams.get('userId')
-    if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
+    const { companyId, agentId, isSuperAdmin } = await authenticate(req)
+    const requestedUserId = req.nextUrl.searchParams.get('userId')
+    if (!requestedUserId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
+    // IDOR: regular user so consulta o proprio settings
+    if (!isSuperAdmin && requestedUserId !== agentId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // Super-admin: garantir que o usuario pertence a empresa autenticada
+    const user = await prisma.user.findFirst({
+      where: isSuperAdmin
+        ? { id: requestedUserId }
+        : { id: requestedUserId, companyId: companyId! },
       select: { settings: true },
     })
     return NextResponse.json(user?.settings || {})
@@ -20,19 +28,26 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * PATCH - Merge-update user settings.
+ * PATCH - Merge-update user settings. Usuario so atualiza o proprio.
  * Body: { userId: string, settings: Record<string, any> }
  */
 export async function PATCH(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId, agentId, isSuperAdmin } = await authenticate(req)
     const body = await req.json()
-    const { userId, settings } = body
+    const { userId: requestedUserId, settings } = body
 
-    if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
+    if (!requestedUserId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
+    // IDOR: regular user so atualiza o proprio settings
+    if (!isSuperAdmin && requestedUserId !== agentId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const user = await prisma.user.findFirst({
+      where: isSuperAdmin
+        ? { id: requestedUserId }
+        : { id: requestedUserId, companyId: companyId! },
       select: { settings: true },
     })
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -41,7 +56,7 @@ export async function PATCH(req: NextRequest) {
     const newSettings = { ...currentSettings, ...settings }
 
     await prisma.user.update({
-      where: { id: userId },
+      where: { id: requestedUserId },
       data: { settings: newSettings },
     })
 

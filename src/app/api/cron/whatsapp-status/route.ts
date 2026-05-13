@@ -1,13 +1,23 @@
 import { NextRequest } from 'next/server';
+import crypto from 'crypto';
 import { jsonResponse, errorResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
 
+function verifyCronSecret(req: NextRequest): boolean {
+  // CLAUDE.md Rule 6: fail-closed
+  const expectedSecret = process.env.CRON_SECRET;
+  if (!expectedSecret) return false;
+  const cronSecret = req.headers.get('x-cron-secret');
+  if (!cronSecret) return false;
+  const a = Buffer.from(cronSecret);
+  const b = Buffer.from(expectedSecret);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const cronSecret = req.headers.get('x-cron-secret');
-    const expectedSecret = process.env.CRON_SECRET || process.env.INTERNAL_API_SECRET;
-
-    if (expectedSecret && cronSecret !== expectedSecret) {
+    if (!verifyCronSecret(req)) {
       return errorResponse('Unauthorized', 401);
     }
 

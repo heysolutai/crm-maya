@@ -56,3 +56,6 @@ supabase/supabase/.temp/storage-version
 /public/sw.js.map
 /public/swe-worker-*.js
 /public/swe-worker-*.js.map
+
+# Documentação local (não versionada)
+/docs

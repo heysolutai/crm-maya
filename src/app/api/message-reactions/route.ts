@@ -5,7 +5,8 @@ import { handleApiError } from '@/lib/api/errors'
 
 export async function GET(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const messageIds = req.nextUrl.searchParams.get('messageIds')
     if (!messageIds) return NextResponse.json({ error: 'Missing messageIds' }, { status: 400 })
 
@@ -16,8 +17,9 @@ export async function GET(req: NextRequest) {
 
     if (ids.length === 0) return NextResponse.json({})
 
+    // IDOR: filtra apenas reactions de mensagens em conversas da empresa
     const reactions = await prisma.messageReaction.findMany({
-      where: { messageId: { in: ids } },
+      where: { messageId: { in: ids }, message: { conversation: { companyId } } },
       include: { user: { select: { fullName: true } } },
     })
 

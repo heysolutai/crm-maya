@@ -28,9 +28,8 @@ const updatePipelineSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const { companyId: authCompanyId } = await authenticate(req)
-    const companyId = req.nextUrl.searchParams.get('companyId') || authCompanyId
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
     const pipelines = await prisma.pipeline.findMany({
       where: { companyId, isActive: true },
@@ -51,7 +50,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { companyId: authCompanyId } = await authenticate(req)
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const body = await req.json()
 
     const validation = createPipelineSchema.safeParse(body)
@@ -61,9 +61,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       )
     }
-
-    const companyId = validation.data.company_id || authCompanyId
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
     // Create pipeline
     const pipeline = await prisma.pipeline.create({

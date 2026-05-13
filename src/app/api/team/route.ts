@@ -26,9 +26,8 @@ const updateTeamSchema = z.discriminatedUnion('action', [
 
 export async function GET(req: NextRequest) {
   try {
-    const { companyId: authCompanyId } = await authenticate(req)
-    const companyId = req.nextUrl.searchParams.get('companyId') || authCompanyId
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
     const members = await prisma.user.findMany({
       where: {

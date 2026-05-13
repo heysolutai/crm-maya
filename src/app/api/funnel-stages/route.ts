@@ -32,9 +32,8 @@ const updateFunnelStageSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const { companyId: authCompanyId } = await authenticate(req)
-    const companyId = req.nextUrl.searchParams.get('companyId') || authCompanyId
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
     const stages = await prisma.funnelStage.findMany({
       where: { companyId },
@@ -48,7 +47,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { companyId: authCompanyId } = await authenticate(req)
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const body = await req.json()
 
     const validation = createFunnelStageSchema.safeParse(body)
@@ -60,8 +60,6 @@ export async function POST(req: NextRequest) {
     }
 
     const data = validation.data
-    const companyId = data.company_id || authCompanyId
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
     const stage = await prisma.funnelStage.create({
       data: {

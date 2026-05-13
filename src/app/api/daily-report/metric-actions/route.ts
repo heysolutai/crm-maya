@@ -5,30 +5,44 @@ import { handleApiError } from '@/lib/api/errors'
 
 export async function POST(req: NextRequest) {
   try {
-    const { agentId, companyId: authCompanyId } = await authenticate(req)
+    const { agentId, companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+
     const body = await req.json()
-    const companyId = body.companyId || authCompanyId
     const { action } = body
 
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
-
-    // Delete an appointment
+    // Delete an appointment — IDOR: scope by companyId
     if (action === 'deleteAppointment') {
-      await prisma.appointment.delete({ where: { id: body.appointmentId } })
+      const result = await prisma.appointment.deleteMany({
+        where: { id: body.appointmentId, companyId },
+      })
+      if (result.count === 0) {
+        return NextResponse.json({ error: 'Agendamento nao encontrado' }, { status: 404 })
+      }
       return NextResponse.json({ success: true })
     }
 
-    // Update client source (for entrantes)
+    // Update client source (for entrantes) — IDOR: scope by companyId
     if (action === 'updateClientSource') {
-      await prisma.client.update({
-        where: { id: body.clientId },
+      const result = await prisma.client.updateMany({
+        where: { id: body.clientId, companyId },
         data: { source: body.source },
       })
+      if (result.count === 0) {
+        return NextResponse.json({ error: 'Cliente nao encontrado' }, { status: 404 })
+      }
       return NextResponse.json({ success: true })
     }
 
-    // Create an appointment
+    // Create an appointment — IDOR: garante que clientId pertence a empresa
     if (action === 'createAppointment') {
+      const client = await prisma.client.findFirst({
+        where: { id: body.clientId, companyId },
+        select: { id: true },
+      })
+      if (!client) {
+        return NextResponse.json({ error: 'Cliente nao encontrado' }, { status: 404 })
+      }
       const appointment = await prisma.appointment.create({
         data: {
           clientId: body.clientId,
@@ -44,17 +58,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, id: appointment.id })
     }
 
-    // Update appointment status
+    // Update appointment status — IDOR: scope by companyId
     if (action === 'updateAppointmentStatus') {
-      await prisma.appointment.update({
-        where: { id: body.appointmentId },
+      const result = await prisma.appointment.updateMany({
+        where: { id: body.appointmentId, companyId },
         data: { status: body.status },
       })
+      if (result.count === 0) {
+        return NextResponse.json({ error: 'Agendamento nao encontrado' }, { status: 404 })
+      }
       return NextResponse.json({ success: true })
     }
 
-    // Create a sale
+    // Create a sale — IDOR: garante que clientId pertence a empresa
     if (action === 'createSale') {
+      const client = await prisma.client.findFirst({
+        where: { id: body.clientId, companyId },
+        select: { id: true },
+      })
+      if (!client) {
+        return NextResponse.json({ error: 'Cliente nao encontrado' }, { status: 404 })
+      }
       const sale = await prisma.sale.create({
         data: {
           companyId,

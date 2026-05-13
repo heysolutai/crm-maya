@@ -32,9 +32,8 @@ const updateConversationSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const { companyId: authCompanyId, agentId } = await authenticate(req)
-    const companyId = req.nextUrl.searchParams.get('companyId') || authCompanyId
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
+    const { companyId, agentId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
     const status = req.nextUrl.searchParams.get('status')
     const aiHandled = req.nextUrl.searchParams.get('aiHandled')
@@ -86,7 +85,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { companyId: authCompanyId, agentId } = await authenticate(req)
+    const { companyId, agentId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const body = await req.json()
 
     const validation = createConversationSchema.safeParse(body)
@@ -98,8 +98,6 @@ export async function POST(req: NextRequest) {
     }
 
     const data = validation.data
-    const companyId = data.companyId || data.company_id || authCompanyId
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
     const rawPhone = (data.phone || '').replace(/[^0-9]/g, '')
     if (rawPhone.length < 10) {

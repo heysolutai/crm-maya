@@ -49,9 +49,8 @@ const updateClientSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const { companyId: authCompanyId, isSuperAdmin } = await authenticate(req)
-    const companyId = req.nextUrl.searchParams.get('companyId') || authCompanyId
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
     const clients = await prisma.client.findMany({
       where: { companyId },
@@ -71,10 +70,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { companyId: authCompanyId, agentId } = await authenticate(req)
+    const { companyId, agentId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const body = await req.json()
-    const companyId = body.company_id || authCompanyId
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
     const validation = createClientSchema.safeParse(body)
     if (!validation.success) {

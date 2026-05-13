@@ -5,12 +5,21 @@ import { handleApiError } from '@/lib/api/errors'
 
 export async function GET(req: NextRequest) {
   try {
-    const { companyId: authCompanyId } = await authenticate(req)
-    const userId = req.nextUrl.searchParams.get('userId')
-    const companyId = req.nextUrl.searchParams.get('companyId') || authCompanyId
+    const { companyId, agentId: authUserId, isSuperAdmin } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    const requestedUserId = req.nextUrl.searchParams.get('userId')
 
-    if (!userId || !companyId) {
-      return NextResponse.json({ error: 'Missing userId or companyId' }, { status: 400 })
+    if (!requestedUserId) {
+      return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
+    }
+
+    // IDOR: usuario regular so consulta seu proprio userId, super-admin pode consultar qualquer um
+    const userId = isSuperAdmin ? requestedUserId : authUserId
+    if (!isSuperAdmin && requestedUserId !== authUserId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    if (!userId) {
+      return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
     }
 
     // Get user settings

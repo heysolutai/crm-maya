@@ -8,11 +8,13 @@ import { handleApiError } from '@/lib/api/errors'
 export async function GET(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const conversationId = req.nextUrl.searchParams.get('conversationId')
     if (!conversationId) return NextResponse.json({ error: 'Missing conversationId' }, { status: 400 })
 
+    // IDOR: garante que a conversa pertence a empresa autenticada
     const notes = await prisma.conversationNote.findMany({
-      where: { conversationId },
+      where: { conversationId, companyId },
       include: {
         creator: { select: { fullName: true, avatarUrl: true } },
       },
@@ -34,7 +36,8 @@ const createConversationNoteSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const { companyId: authCompanyId, agentId } = await authenticate(req)
+    const { companyId, agentId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const body = await req.json()
     const validation = createConversationNoteSchema.safeParse(body)
 
@@ -42,14 +45,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Dados inválidos', details: validation.error.flatten().fieldErrors }, { status: 400 })
     }
 
-    const { conversation_id, note, company_id, created_by } = validation.data
-    const companyId = company_id || authCompanyId!
+    const { conversation_id, note } = validation.data
+
+    // IDOR: garante que a conversa pertence a empresa autenticada antes de criar nota
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: conversation_id, companyId },
+      select: { id: true },
+    })
+    if (!conversation) {
+      return NextResponse.json({ error: 'Conversa nao encontrada' }, { status: 404 })
+    }
 
     const noteRecord = await prisma.conversationNote.create({
       data: {
         conversationId: conversation_id,
         companyId,
-        createdBy: agentId || created_by,
+        createdBy: agentId,
         note,
       },
       include: {

@@ -5,7 +5,6 @@ import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
 
 const createApiKeySchema = z.object({
-  companyId: z.string().uuid('Invalid companyId format'),
   name: z.string().min(1, 'Name is required'),
   key: z.string().min(1, 'Key is required'),
 });
@@ -17,9 +16,8 @@ const updateApiKeySchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    await authenticate(req)
-    const companyId = req.nextUrl.searchParams.get('companyId')
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
     const keys = await prisma.apiKey.findMany({
       where: { companyId },
@@ -33,7 +31,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { agentId } = await authenticate(req)
+    const { companyId, agentId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+
     const body = await req.json()
     const validation = createApiKeySchema.safeParse(body)
 
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid request data', details: validation.error.flatten().fieldErrors }, { status: 400 })
     }
 
-    const { companyId, name, key } = validation.data
+    const { name, key } = validation.data
 
     const apiKey = await prisma.apiKey.create({
       data: {

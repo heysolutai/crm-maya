@@ -5,9 +5,11 @@ import { handleApiError } from '@/lib/api/errors'
 
 export async function GET(req: NextRequest) {
   try {
-    await authenticate(req)
-    const companyId = req.nextUrl.searchParams.get('companyId')
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
+    const { companyId: authCompanyId, isSuperAdmin } = await authenticate(req)
+    const qsCompanyId = req.nextUrl.searchParams.get('companyId')
+    // Super-admin pode consultar qualquer empresa; usuario regular so a propria
+    const companyId = isSuperAdmin ? (qsCompanyId || authCompanyId) : authCompanyId
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
     const [company, users] = await Promise.all([
       prisma.company.findUnique({ where: { id: companyId } }),

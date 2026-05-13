@@ -6,13 +6,12 @@ import { handleApiError } from '@/lib/api/errors'
 
 export async function GET(req: NextRequest) {
   try {
-    const { companyId: authCompanyId } = await authenticate(req)
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const clientId = req.nextUrl.searchParams.get('clientId')
-    const companyId = req.nextUrl.searchParams.get('companyId') || authCompanyId
     if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
 
-    const where: any = { clientId }
-    if (companyId) where.companyId = companyId
+    const where = { clientId, companyId }
 
     const notes = await prisma.clientNote.findMany({
       where,
@@ -37,7 +36,8 @@ const createClientNoteSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const { companyId: authCompanyId, agentId } = await authenticate(req)
+    const { companyId, agentId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const body = await req.json()
     const validation = createClientNoteSchema.safeParse(body)
 
@@ -45,15 +45,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Dados inválidos', details: validation.error.flatten().fieldErrors }, { status: 400 })
     }
 
-    const { client_id, note, company_id, created_by } = validation.data
-    const companyId = company_id || authCompanyId
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
+    const { client_id, note } = validation.data
+
+    // IDOR: garantir que o cliente pertence a esta empresa
+    const client = await prisma.client.findFirst({
+      where: { id: client_id, companyId },
+      select: { id: true },
+    })
+    if (!client) {
+      return NextResponse.json({ error: 'Cliente nao encontrado' }, { status: 404 })
+    }
 
     const noteRecord = await prisma.clientNote.create({
       data: {
         clientId: client_id,
         companyId,
-        createdBy: agentId || created_by,
+        createdBy: agentId,
         note,
       },
     })

@@ -5,14 +5,17 @@ import { handleApiError } from '@/lib/api/errors'
 
 export async function GET(req: NextRequest) {
   try {
-    await authenticate(req)
+    const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const conversationId = req.nextUrl.searchParams.get('conversationId')
     const cursor = req.nextUrl.searchParams.get('cursor')
-    const limit = parseInt(req.nextUrl.searchParams.get('limit') || '50')
+    const rawLimit = parseInt(req.nextUrl.searchParams.get('limit') || '50')
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 500) : 50
 
     if (!conversationId) return NextResponse.json({ error: 'Missing conversationId' }, { status: 400 })
 
-    const where: any = { conversationId }
+    // IDOR: filtra pelo companyId via conversation
+    const where: any = { conversationId, conversation: { companyId } }
     if (cursor) where.createdAt = { lt: new Date(cursor) }
 
     const messages = await prisma.message.findMany({
