@@ -13,7 +13,7 @@ import { getSystemSetting } from '@/lib/system-settings'
  * Eventos tratados:
  *  - CONNECTION_UPDATE   → atualiza status do agente
  *  - QRCODE_UPDATED      → atualiza qr_code do agente
- *  - MESSAGES_UPSERT     → cria conversa + mensagem (com whatsappInstanceId)
+ *  - MESSAGES_UPSERT     → cria conversa + mensagem (com inboxId)
  *  - SEND_MESSAGE        → confirma envio (so loga; o id ja foi gravado pela rota /api/whatsapp/send-text)
  */
 
@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
     const event: string = payload.event || payload.type || ''
     const data = payload.data || {}
 
-    const agent = await prisma.whatsappInstance.findUnique({ where: { id: agentId } })
+    const agent = await prisma.inbox.findUnique({ where: { id: agentId } })
     if (!agent) {
       console.warn(`[webhook:evolution] agente ${agentId} nao encontrado`)
       return NextResponse.json({ ok: true })
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
         if (phone) updates.phoneNumber = phone
 
         if (Object.keys(updates).length > 0) {
-          await prisma.whatsappInstance.update({ where: { id: agentId }, data: updates })
+          await prisma.inbox.update({ where: { id: agentId }, data: updates })
         }
         break
       }
@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
         const code: string | undefined = data?.qrcode?.base64 || data?.qrcode?.code
         if (code) {
           const qrCode = code.startsWith('data:image') ? code : `data:image/png;base64,${code}`
-          await prisma.whatsappInstance.update({
+          await prisma.inbox.update({
             where: { id: agentId },
             data: { qrCode, status: 'connecting' },
           })
@@ -254,15 +254,24 @@ export async function POST(req: NextRequest) {
         // mensagem veio do cliente (nao eco do proprio agente), enfileira
         // pro N8N processar.
         if (!fromMe) {
-          const aiConfig = await prisma.aiConfiguration.findFirst({
-            where: { whatsappInstanceId: agent.id, isActive: true },
-            select: {
-              n8nWebhookUrl: true,
-              knowledge: true,
-              memoryKey: true,
-              productsKnowledge: true,
+          // Resolve AiAgent vinculado a inbox (M:1 — Inbox.aiAgentId aponta pra ca)
+          const inboxWithAi = await prisma.inbox.findUnique({
+            where: { id: agent.id },
+            include: {
+              aiAgent: {
+                select: {
+                  id: true,
+                  name: true,
+                  n8nWebhookUrl: true,
+                  knowledge: true,
+                  memoryKey: true,
+                  productsKnowledge: true,
+                  isActive: true,
+                },
+              },
             },
           })
+          const aiConfig = inboxWithAi?.aiAgent && inboxWithAi.aiAgent.isActive ? inboxWithAi.aiAgent : null
 
           const webhookUrl =
             aiConfig?.n8nWebhookUrl || (await getSystemSetting('n8n_ai_webhook_url'))
@@ -272,12 +281,15 @@ export async function POST(req: NextRequest) {
             const n8nPayload = {
               type: 'incoming',
               channel: 'evolution_baileys',
-              // Agente do canal WhatsApp (instancia que recebeu a mensagem)
-              whatsapp_agent_id: agent.id,
-              whatsapp_agent_name: agent.displayName,
-              whatsapp_instance_name: agent.instanceName,
-              whatsapp_channel_type: agent.channelType,
-              whatsapp_agent_phone: agent.phoneNumber,
+              // Inbox (canal) que recebeu a mensagem
+              inbox_id: agent.id,
+              inbox_name: agent.displayName,
+              inbox_instance_name: agent.instanceName,
+              inbox_channel_type: agent.channelType,
+              inbox_phone: agent.phoneNumber,
+              // AiAgent vinculado a inbox (quando aplicavel)
+              ai_agent_id: aiConfig?.id || null,
+              ai_agent_name: aiConfig?.name || null,
               // Atendente humano — null aqui (Evolution nao tem fluxo de transferencia
               // resolvido aqui ainda). Usar conversa para fonte de verdade se precisar.
               agent_id: null,

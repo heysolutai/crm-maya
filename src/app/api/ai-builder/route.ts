@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
     const { companyId } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
-    const config = await prisma.aiConfiguration.findFirst({
+    const config = await prisma.aiAgent.findFirst({
       where: {
         companyId,
         n8nWebhookUrl: { not: null },

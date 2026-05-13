@@ -1,8 +1,8 @@
 'use client'
 import { useParams } from 'next/navigation'
-import AgentDetail from '@/views/pages/app/AgentDetail'
+import InboxDetail from '@/views/pages/app/InboxDetail'
 
 export default function Page() {
   const params = useParams<{ id: string }>()
-  return <AgentDetail agentId={params.id} />
+  return <InboxDetail inboxId={params.id} />
 }

@@ -1006,8 +1006,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 1. Buscar company_id e ID do agente através da tabela whatsapp_instances
-    const instance = await prisma.whatsappInstance.findFirst({
+    // 1. Buscar company_id e ID da inbox através da tabela inboxes
+    const instance = await prisma.inbox.findFirst({
       where: { instanceName: payload.instance_name },
       select: { id: true, companyId: true, isActive: true },
     });
@@ -1027,8 +1027,8 @@ export async function POST(req: NextRequest) {
     }
 
     const companyId = instance.companyId;
-    const whatsappInstanceId = instance.id; // FK pra vincular conversa ao agente
-    console.log('Found company via WhatsApp instance:', companyId, 'agent:', whatsappInstanceId);
+    const inboxId = instance.id; // FK pra vincular conversa a inbox
+    console.log('Found company via inbox:', companyId, 'inbox:', inboxId);
 
     // 2. Buscar ou criar cliente
     let clientId: string;
@@ -1250,11 +1250,11 @@ export async function POST(req: NextRequest) {
 
         console.log('Found existing open conversation:', conversationId, 'status:', activeConversations[0].status);
 
-        // Backfill: se a conversa existia sem agente vinculado, vincula agora
-        // (caso tipico de conversas criadas antes da migracao multi-agent).
+        // Backfill: se a conversa existia sem inbox vinculada, vincula agora
+        // (caso tipico de conversas criadas antes da migracao multi-channel).
         await prisma.conversation.updateMany({
-          where: { id: conversationId, whatsappInstanceId: null },
-          data: { whatsappInstanceId },
+          where: { id: conversationId, inboxId: null },
+          data: { inboxId },
         }).catch(() => {});
       }
     }
@@ -1269,7 +1269,7 @@ export async function POST(req: NextRequest) {
             status: 'active',
             aiHandled: payload.type === 'outgoing',
             stage: 'mensagem_fixa',
-            whatsappInstanceId,
+            inboxId,
           },
           select: { id: true },
         });
@@ -1296,8 +1296,8 @@ export async function POST(req: NextRequest) {
           if (!existing) throw createErr; // caso raro: nao achamos mesmo depois do conflito
           conversationId = existing.id;
           await prisma.conversation.updateMany({
-            where: { id: conversationId, whatsappInstanceId: null },
-            data: { whatsappInstanceId },
+            where: { id: conversationId, inboxId: null },
+            data: { inboxId },
           }).catch(() => {});
         } else {
           throw createErr;
@@ -1305,13 +1305,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3.5. Buscar instância do WhatsApp completa (com API keys para mídia e transcrição)
-    const whatsappInstance = await prisma.whatsappInstance.findFirst({
+    // 3.5. Buscar a inbox completa (com API keys para mídia e transcrição)
+    const whatsappInstance = await prisma.inbox.findFirst({
       where: { companyId, isActive: true },
       select: { instanceApiKey: true, apiUrl: true },
     });
 
-    const aiConfig = await prisma.aiConfiguration.findFirst({
+    const aiConfig = await prisma.aiAgent.findFirst({
       where: { companyId },
       select: { apiKeys: true },
       orderBy: { createdAt: 'desc' },
@@ -1536,23 +1536,23 @@ export async function POST(req: NextRequest) {
             transferAgent: { select: { id: true, fullName: true } },
             departmentId: true,
             department: { select: { id: true, name: true } },
-            whatsappInstanceId: true,
-            whatsappInstance: {
-              select: { id: true, displayName: true, instanceName: true, channelType: true, phoneNumber: true },
+            inboxId: true,
+            inbox: {
+              select: { id: true, displayName: true, instanceName: true, channelType: true, phoneNumber: true, aiAgentId: true, aiAgent: { select: { id: true, name: true } } },
             },
           },
         }),
       ]);
 
-      // AI config agora e POR AGENTE (whatsappInstanceId da conversa).
-      // Fallback: se a conversa nao tiver agente vinculado (caso legado),
-      // pega a primeira config da empresa pra nao quebrar fluxo antigo.
-      const aiConfigResult = convDataResult?.whatsappInstanceId
-        ? await prisma.aiConfiguration.findFirst({
-            where: { companyId, whatsappInstanceId: convDataResult.whatsappInstanceId, isActive: true },
+      // AI config agora e POR INBOX (Inbox.aiAgentId — M:1).
+      // Fallback: se a inbox nao tiver AiAgent vinculado, pega o primeiro
+      // da empresa pra nao quebrar fluxo antigo.
+      const aiConfigResult = convDataResult?.inbox?.aiAgentId
+        ? await prisma.aiAgent.findFirst({
+            where: { id: convDataResult.inbox.aiAgentId, companyId, isActive: true },
             select: { n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
           })
-        : await prisma.aiConfiguration.findFirst({
+        : await prisma.aiAgent.findFirst({
             where: { companyId, isActive: true },
             select: { n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
           });
@@ -1637,13 +1637,16 @@ export async function POST(req: NextRequest) {
         // Atendente humano (legado: 'agent' aqui = atendente, nao agente do canal)
         agent_id: conversationData?.transferAgent?.id || null,
         nome_agente: conversationData?.transferAgent?.fullName || null,
-        // Agente do canal WhatsApp (instancia que recebeu a mensagem).
-        // Use estes campos no N8N pra rotear por agente / aplicar prompt diferente.
-        whatsapp_agent_id: conversationData?.whatsappInstance?.id || null,
-        whatsapp_agent_name: conversationData?.whatsappInstance?.displayName || null,
-        whatsapp_instance_name: conversationData?.whatsappInstance?.instanceName || null,
-        whatsapp_channel_type: conversationData?.whatsappInstance?.channelType || null,
-        whatsapp_agent_phone: conversationData?.whatsappInstance?.phoneNumber || null,
+        // Inbox (canal) que recebeu a mensagem.
+        // Use estes campos no N8N pra rotear por inbox / aplicar prompt diferente.
+        inbox_id: conversationData?.inbox?.id || null,
+        inbox_name: conversationData?.inbox?.displayName || null,
+        inbox_instance_name: conversationData?.inbox?.instanceName || null,
+        inbox_channel_type: conversationData?.inbox?.channelType || null,
+        inbox_phone: conversationData?.inbox?.phoneNumber || null,
+        // AiAgent vinculado a inbox (quando aplicavel)
+        ai_agent_id: conversationData?.inbox?.aiAgent?.id || null,
+        ai_agent_name: conversationData?.inbox?.aiAgent?.name || null,
         is_transferred: !!conversationData?.transferredTo,
         department_id: conversationData?.department?.id || null,
         department_name: conversationData?.department?.name || null,
@@ -1768,10 +1771,22 @@ export async function POST(req: NextRequest) {
       if (!shouldCreateFollowUps) {
         console.log(`[Follow-up] Skipping follow-up creation: ai_paused=${followUpClient?.aiPaused}, conv_status=${followUpConv?.status}`);
       } else {
-        const followUpAiConfig = await prisma.aiConfiguration.findFirst({
-          where: { companyId, isActive: true },
-          select: { followUpStages: true, whatsappInstanceId: true, followUpEnabled: true },
+        // Resolve AiAgent vinculado a inbox da conversa atual (se houver),
+        // senao usa o primeiro AiAgent ativo da empresa (back-compat).
+        const followUpConvData = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { inbox: { select: { aiAgentId: true, id: true } } },
         });
+        const followUpAiConfig = followUpConvData?.inbox?.aiAgentId
+          ? await prisma.aiAgent.findFirst({
+              where: { id: followUpConvData.inbox.aiAgentId, companyId, isActive: true },
+              select: { followUpStages: true, followUpEnabled: true },
+            })
+          : await prisma.aiAgent.findFirst({
+              where: { companyId, isActive: true },
+              select: { followUpStages: true, followUpEnabled: true },
+            });
+        const followUpInboxId = followUpConvData?.inbox?.id || null;
 
         if (followUpAiConfig?.followUpEnabled && (followUpAiConfig.followUpStages as any)?.length > 0) {
           const followUpStages = (followUpAiConfig.followUpStages as any[]).filter((s: any) => s.enabled !== false);
@@ -1805,7 +1820,7 @@ export async function POST(req: NextRequest) {
                 stageOrder: stage.order,
                 scheduledFor,
                 messageText,
-                whatsappInstanceId: followUpAiConfig.whatsappInstanceId,
+                inboxId: followUpInboxId,
                 status: 'pending' as const,
               };
             });

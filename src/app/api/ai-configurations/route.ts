@@ -11,8 +11,8 @@ const createAiConfigurationSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   prompts: z.record(z.string(), z.any()).optional(),
   is_active: z.boolean().optional().default(true),
-  // Agora obrigatorio — toda config IA pertence a 1 agente.
-  whatsapp_instance_id: z.string().uuid('Invalid whatsapp_instance_id format'),
+  // Inbox a vincular ao agente IA recem-criado (opcional; agora M:1).
+  whatsapp_instance_id: z.string().uuid('Invalid whatsapp_instance_id format').optional(),
   follow_up_stages: z.array(z.any()).optional(),
   follow_up_enabled: z.boolean().optional().default(false),
   api_keys: z.record(z.string(), z.any()).optional(),
@@ -43,14 +43,27 @@ export async function GET(req: NextRequest) {
     const { companyId } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
-    // Modo agente: filtra pelo whatsappInstanceId (cada agente tem 1 config)
+    // Modo agente: filtra pelo aiAgentId vinculado a uma inbox especifica
     const agentId = req.nextUrl.searchParams.get('agentId')
 
-    const where: any = { companyId }
-    if (agentId) where.whatsappInstanceId = agentId
+    if (agentId) {
+      // IDOR-safe: valida que a inbox pertence a empresa
+      const inbox = await prisma.inbox.findFirst({
+        where: { id: agentId, companyId },
+        select: { aiAgentId: true },
+      })
+      if (!inbox) return NextResponse.json([])
 
-    const configurations = await prisma.aiConfiguration.findMany({
-      where,
+      if (!inbox.aiAgentId) return NextResponse.json([])
+
+      const config = await prisma.aiAgent.findFirst({
+        where: { id: inbox.aiAgentId, companyId },
+      })
+      return NextResponse.json(config ? [config] : [])
+    }
+
+    const configurations = await prisma.aiAgent.findMany({
+      where: { companyId },
       orderBy: { createdAt: 'desc' },
     })
 
@@ -79,22 +92,25 @@ export async function POST(req: NextRequest) {
     })
     const slug = normalizeCompanySlug(company?.name || '')
 
-    // IDOR-safe: garante que o agente passado pertence a empresa autenticada
-    const agent = await prisma.whatsappInstance.findFirst({
-      where: { id: validatedData.whatsapp_instance_id, companyId },
-      select: { id: true },
-    })
-    if (!agent) {
-      return NextResponse.json({ error: 'Agente nao encontrado' }, { status: 404 })
+    // Se o body informa qual inbox vincular ao novo agente IA, valida ownership
+    let inboxToLink: { id: string } | null = null
+    if (validatedData.whatsapp_instance_id) {
+      const inbox = await prisma.inbox.findFirst({
+        where: { id: validatedData.whatsapp_instance_id, companyId },
+        select: { id: true },
+      })
+      if (!inbox) {
+        return NextResponse.json({ error: 'Inbox nao encontrado' }, { status: 404 })
+      }
+      inboxToLink = inbox
     }
 
-    const config = await prisma.aiConfiguration.create({
+    const config = await prisma.aiAgent.create({
       data: {
         companyId,
         name: validatedData.name,
         prompts: (validatedData.prompts || {}) as Prisma.InputJsonValue,
         isActive: validatedData.is_active,
-        whatsappInstanceId: validatedData.whatsapp_instance_id,
         followUpStages: (validatedData.follow_up_stages || []) as Prisma.InputJsonValue,
         followUpEnabled: validatedData.follow_up_enabled,
         apiKeys: (validatedData.api_keys || {}) as Prisma.InputJsonValue,
@@ -106,6 +122,14 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // Vincula o agente IA recem-criado ao inbox (M:1 — sobrescreve se ja tinha)
+    if (inboxToLink) {
+      await prisma.inbox.update({
+        where: { id: inboxToLink.id },
+        data: { aiAgentId: config.id },
+      })
+    }
+
     return NextResponse.json(config)
   } catch (error) {
     return handleApiError(error, 'Erro')
@@ -115,6 +139,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const body = await req.json()
     const validation = updateAiConfigurationSchema.safeParse(body)
 
@@ -125,8 +150,8 @@ export async function PUT(req: NextRequest) {
     const validatedData = validation.data
     const { id, ...updates } = validatedData
 
-    const existing = await prisma.aiConfiguration.findFirst({
-      where: { id, companyId: companyId! },
+    const existing = await prisma.aiAgent.findFirst({
+      where: { id, companyId },
     })
     if (!existing) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
 
@@ -135,8 +160,7 @@ export async function PUT(req: NextRequest) {
     if (updates.prompts !== undefined) data.prompts = updates.prompts
     if (updates.is_active !== undefined) data.isActive = updates.is_active
     if (updates.name !== undefined) data.name = updates.name
-    // whatsapp_instance_id e set na criacao (1:1 com agente) e nao deve mudar.
-    // Ignoramos o campo se vier no body — UI legada ainda manda, mas e no-op.
+    // whatsapp_instance_id agora e gerenciado no Inbox.aiAgentId — body legado e no-op aqui.
     if (updates.follow_up_stages !== undefined) data.followUpStages = updates.follow_up_stages
     if (updates.follow_up_enabled !== undefined) data.followUpEnabled = updates.follow_up_enabled
     if (updates.api_keys !== undefined) data.apiKeys = updates.api_keys
@@ -148,7 +172,7 @@ export async function PUT(req: NextRequest) {
     if (updates.conditions !== undefined) data.conditions = updates.conditions
     if (updates.variables !== undefined) data.variables = updates.variables
 
-    const config = await prisma.aiConfiguration.update({
+    const config = await prisma.aiAgent.update({
       where: { id },
       data,
     })
@@ -162,15 +186,16 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-    const existing = await prisma.aiConfiguration.findFirst({
-      where: { id, companyId: companyId! },
+    const existing = await prisma.aiAgent.findFirst({
+      where: { id, companyId },
     })
     if (!existing) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
 
-    await prisma.aiConfiguration.delete({ where: { id } })
+    await prisma.aiAgent.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
     return handleApiError(error, 'Erro')

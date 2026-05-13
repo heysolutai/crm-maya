@@ -41,6 +41,7 @@ export interface AIConfiguration {
   variables: any;
   created_at: string;
   updated_at: string;
+  /** @deprecated kept for backwards-compat — AiAgent no longer holds a single inbox FK (M:1 inverted). */
   whatsapp_instance_id: string | null;
   follow_up_stages: FollowUpStage[];
   follow_up_enabled: boolean;

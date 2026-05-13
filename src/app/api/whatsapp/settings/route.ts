@@ -25,7 +25,7 @@ export async function PATCH(req: NextRequest) {
 
     const { instanceId, catalogBusinessId } = validation.data;
 
-    const instance = await prisma.whatsappInstance.findFirst({
+    const instance = await prisma.inbox.findFirst({
       where: { id: instanceId, companyId: auth.companyId },
     });
     if (!instance) {
@@ -36,7 +36,7 @@ export async function PATCH(req: NextRequest) {
     const currentMetadata = (instance.metadata as Record<string, unknown>) || {};
     const updatedMetadata = { ...currentMetadata, catalogBusinessId };
 
-    await prisma.whatsappInstance.update({
+    await prisma.inbox.update({
       where: { id: instanceId },
       data: { metadata: updatedMetadata },
     });

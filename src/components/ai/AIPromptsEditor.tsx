@@ -4,10 +4,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useAIConfigurations } from '@/hooks/useAIConfigurations';
-import { useWhatsAppInstances } from '@/hooks/useWhatsAppInstances';
 import { useToast } from '@/hooks/use-toast';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { Sparkles, Save, Bot } from 'lucide-react';
@@ -34,7 +32,6 @@ export function AIPromptsEditor({
   const { configurations, createConfiguration, updateConfiguration, isCreating, isUpdating } = useAIConfigurations(
     agentId ? { companyId, agentId } : companyId
   );
-  const { data: whatsappInstances } = useWhatsAppInstances(companyId);
   const { setDirty } = useUnsavedChanges();
   
   const existingConfig = configurations?.[0];
@@ -44,7 +41,6 @@ export function AIPromptsEditor({
     name: '',
     prompts: { prompt_completo: '' },
     is_active: true,
-    whatsapp_instance_id: null as string | null,
   });
 
   useEffect(() => {
@@ -65,7 +61,6 @@ export function AIPromptsEditor({
           prompt_completo: promptCompleto,
         },
         is_active: existingConfig.is_active ?? true,
-        whatsapp_instance_id: existingConfig.whatsapp_instance_id || null,
       });
       initializedRef.current = true;
     }
@@ -164,27 +159,6 @@ export function AIPromptsEditor({
                 onChange={(e) => { setFormData({ ...formData, name: e.target.value }); setDirty(true); }}
                 placeholder="Ex: Atendimento Automático Ótica Brasil"
               />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp-instance">Instância WhatsApp</Label>
-              <Select 
-                key={`select-${existingConfig?.id || 'new'}`}
-                value={formData.whatsapp_instance_id || "none"} 
-                onValueChange={(value) => { setFormData({ ...formData, whatsapp_instance_id: value === "none" ? null : value }); setDirty(true); }}
-              >
-                <SelectTrigger id="whatsapp-instance">
-                  <SelectValue placeholder="Selecione uma instância" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhuma</SelectItem>
-                  {Array.isArray(whatsappInstances) && whatsappInstances.map((instance) => (
-                    <SelectItem key={instance.id} value={instance.id}>
-                      {instance.instance_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
 
             <div className="flex items-center justify-between">

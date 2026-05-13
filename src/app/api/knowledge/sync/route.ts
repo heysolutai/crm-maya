@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     console.log('[Sync KB] ✅ Webhook sent successfully');
 
     try {
-      await prisma.aiConfiguration.updateMany({
+      await prisma.aiAgent.updateMany({
         where: { companyId: company_id, isActive: true },
         data: { knowledge: knowledgeName },
       });

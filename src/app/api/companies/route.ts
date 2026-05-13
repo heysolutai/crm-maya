@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    const waInstances = await prisma.whatsappInstance.findMany({
+    const waInstances = await prisma.inbox.findMany({
       select: { companyId: true, metadata: true },
     })
 

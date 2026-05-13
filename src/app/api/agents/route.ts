@@ -10,46 +10,56 @@ import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 
 /**
- * Garante que o agente recem-criado tem uma AiConfiguration vinculada.
- * Como AI config e 1:1 com agente, todo agente novo precisa de uma.
+ * Garante que a inbox recem-criada tem um AiAgent vinculado.
+ * Agora a relacao e M:1 (varios inboxes podem compartilhar o mesmo agente),
+ * entao se ja existir um AiAgent na empresa reutiliza o primeiro como template/default.
  *
- * Estrategia: clona da PRIMEIRA config existente da empresa (template),
- * se houver — assim o usuario nao perde os prompts ja configurados ao
- * criar mais um numero. Se a empresa nao tem nenhuma config, cria em branco.
+ * Estrategia: pega o primeiro AiAgent da empresa, se houver — assim o usuario
+ * nao precisa configurar prompts toda vez que adiciona um numero. Se a empresa
+ * nao tem nenhum agente IA, cria em branco.
  */
-async function ensureAgentConfig(agentId: string, companyId: string, displayName: string) {
-  const existing = await prisma.aiConfiguration.findUnique({
-    where: { whatsappInstanceId: agentId },
-    select: { id: true },
+async function ensureInboxAiAgent(inboxId: string, companyId: string, displayName: string) {
+  const inbox = await prisma.inbox.findUnique({
+    where: { id: inboxId },
+    select: { aiAgentId: true },
   })
-  if (existing) return
+  if (inbox?.aiAgentId) return
 
-  const template = await prisma.aiConfiguration.findFirst({
+  const template = await prisma.aiAgent.findFirst({
     where: { companyId },
     orderBy: { createdAt: 'asc' },
   })
 
-  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } })
-  const slug = normalizeCompanySlug(company?.name || displayName)
+  let aiAgentId = template?.id
 
-  await prisma.aiConfiguration.create({
-    data: {
-      companyId,
-      whatsappInstanceId: agentId,
-      name: template?.name || `${displayName} - IA`,
-      prompts: (template?.prompts || {}) as Prisma.InputJsonValue,
-      behaviorSettings: (template?.behaviorSettings || {}) as Prisma.InputJsonValue,
-      conditions: (template?.conditions || {}) as Prisma.InputJsonValue,
-      apiKeys: (template?.apiKeys || {}) as Prisma.InputJsonValue,
-      variables: (template?.variables || {}) as Prisma.InputJsonValue,
-      knowledge: template?.knowledge || (slug ? `know_${slug}` : null),
-      memoryKey: template?.memoryKey || (slug ? `memory_${slug}` : null),
-      productsKnowledge: template?.productsKnowledge || (slug ? `products_${slug}` : null),
-      n8nWebhookUrl: template?.n8nWebhookUrl || null,
-      followUpEnabled: template?.followUpEnabled ?? false,
-      followUpStages: (template?.followUpStages || []) as Prisma.InputJsonValue,
-      isActive: true,
-    },
+  if (!aiAgentId) {
+    const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } })
+    const slug = normalizeCompanySlug(company?.name || displayName)
+
+    const created = await prisma.aiAgent.create({
+      data: {
+        companyId,
+        name: `${displayName} - IA`,
+        prompts: {} as Prisma.InputJsonValue,
+        behaviorSettings: {} as Prisma.InputJsonValue,
+        conditions: {} as Prisma.InputJsonValue,
+        apiKeys: {} as Prisma.InputJsonValue,
+        variables: {} as Prisma.InputJsonValue,
+        knowledge: slug ? `know_${slug}` : null,
+        memoryKey: slug ? `memory_${slug}` : null,
+        productsKnowledge: slug ? `products_${slug}` : null,
+        n8nWebhookUrl: null,
+        followUpEnabled: false,
+        followUpStages: [] as Prisma.InputJsonValue,
+        isActive: true,
+      },
+    })
+    aiAgentId = created.id
+  }
+
+  await prisma.inbox.update({
+    where: { id: inboxId },
+    data: { aiAgentId },
   })
 }
 
@@ -61,12 +71,17 @@ const createAgentSchema = z.object({
   phoneNumber: z.string().optional(),
   // Campos extras especificos do canal (ex: NotificaMe usa channelId + senderUserId)
   extra: z.record(z.string(), z.any()).optional(),
+  // Vinculacao de AiAgent (M:1) — escolha do usuario no dialog de criacao
+  aiAgentId: z.string().uuid().optional(),         // reutilizar agente existente
+  createAiAgentNamed: z.string().min(1).optional(), // criar novo agente com esse nome
 })
 
 const updateAgentSchema = z.object({
   id: z.string().uuid(),
   displayName: z.string().min(1).max(255).optional(),
   isActive: z.boolean().optional(),
+  // Permite trocar/remover o vinculo com AiAgent. Mande string vazia/null pra remover.
+  aiAgentId: z.union([z.string().uuid(), z.null()]).optional(),
 })
 
 function mapAgent(i: any) {
@@ -87,6 +102,7 @@ function mapAgent(i: any) {
     last_connected_at: i.lastConnectedAt,
     metadata: i.metadata,
     channel_config: i.channelConfig,
+    ai_agent_id: i.aiAgentId,
     created_at: i.createdAt,
     updated_at: i.updatedAt,
   }
@@ -103,7 +119,7 @@ export async function GET(req: NextRequest) {
     const { companyId } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
-    const agents = await prisma.whatsappInstance.findMany({
+    const agents = await prisma.inbox.findMany({
       where: { companyId },
       orderBy: { createdAt: 'desc' },
     })
@@ -128,8 +144,38 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { channelType, displayName, phoneNumber, extra } = validation.data
+    const { channelType, displayName, phoneNumber, extra, aiAgentId, createAiAgentNamed } = validation.data
     let { serverUrl, serverApiKey } = validation.data
+
+    // Resolve qual AiAgent vinculado: prioridade explicita do user > fallback (primeiro existente / criar novo).
+    // Valida ownership do aiAgentId pra evitar IDOR.
+    let resolvedAiAgentId: string | null = null
+    if (aiAgentId) {
+      const agent = await prisma.aiAgent.findFirst({
+        where: { id: aiAgentId, companyId },
+        select: { id: true },
+      })
+      if (!agent) {
+        return NextResponse.json({ error: 'Agente IA invalido' }, { status: 400 })
+      }
+      resolvedAiAgentId = agent.id
+    } else if (createAiAgentNamed) {
+      const newAgent = await prisma.aiAgent.create({
+        data: {
+          companyId,
+          name: createAiAgentNamed,
+          prompts: {} as Prisma.InputJsonValue,
+          behaviorSettings: {} as Prisma.InputJsonValue,
+          conditions: {} as Prisma.InputJsonValue,
+          apiKeys: {} as Prisma.InputJsonValue,
+          variables: {} as Prisma.InputJsonValue,
+          followUpStages: [] as Prisma.InputJsonValue,
+          isActive: true,
+        },
+        select: { id: true },
+      })
+      resolvedAiAgentId = newAgent.id
+    }
 
     if (!isChannelType(channelType)) {
       return NextResponse.json({ error: 'Canal invalido' }, { status: 400 })
@@ -176,7 +222,7 @@ export async function POST(req: NextRequest) {
       const adapter = getAdapter(channelType)
 
       // Cria placeholder no banco antes pra ter agent.id pra usar no webhook URL
-      const placeholder = await prisma.whatsappInstance.create({
+      const placeholder = await prisma.inbox.create({
         data: {
           companyId,
           instanceName: `pending-${Date.now()}`,
@@ -201,7 +247,7 @@ export async function POST(req: NextRequest) {
           extra,
         })
 
-        const agent = await prisma.whatsappInstance.update({
+        const agent = await prisma.inbox.update({
           where: { id: placeholder.id },
           data: {
             instanceName: result.providerInstanceName,
@@ -215,16 +261,23 @@ export async function POST(req: NextRequest) {
           },
         })
 
-        // Cria a AiConfiguration 1:1 do agente (clonando template da empresa
-        // se houver — assim o usuario reaproveita prompts ja configurados).
-        await ensureAgentConfig(agent.id, companyId, displayName).catch((e) =>
-          console.error('[agents:provision] ensureAgentConfig failed', e)
-        )
+        // Vincula AiAgent: se user escolheu explicito usa esse, senao fallback (cria/reusa o primeiro)
+        if (resolvedAiAgentId) {
+          await prisma.inbox.update({
+            where: { id: agent.id },
+            data: { aiAgentId: resolvedAiAgentId },
+          }).catch((e) => console.error('[agents:provision] bind aiAgent failed', e))
+        } else {
+          await ensureInboxAiAgent(agent.id, companyId, displayName).catch((e) =>
+            console.error('[agents:provision] ensureInboxAiAgent failed', e)
+          )
+        }
 
-        return NextResponse.json(mapAgent(agent), { status: 201 })
+        const finalAgent = await prisma.inbox.findUnique({ where: { id: agent.id } })
+        return NextResponse.json(mapAgent(finalAgent || agent), { status: 201 })
       } catch (provisionError: unknown) {
         // Rollback: remove placeholder se o provider rejeitou
-        await prisma.whatsappInstance.delete({ where: { id: placeholder.id } }).catch(() => {})
+        await prisma.inbox.delete({ where: { id: placeholder.id } }).catch(() => {})
 
         if (provisionError instanceof ChannelError) {
           console.error(`[agents:provision] ${provisionError.code}:`, provisionError.message, {
@@ -247,8 +300,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Canal sem adapter (uazapi legado): cria registro local; conexao
-    // segue o fluxo antigo de /api/whatsapp/connect.
+    // Canal sem adapter (uazapi legado): cria registro local.
     const slug = displayName
       .normalize('NFD')
       .replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
@@ -257,7 +309,7 @@ export async function POST(req: NextRequest) {
       .slice(0, 30)
     const instanceName = `${slug}-${companyId.slice(0, 8)}`
 
-    const agent = await prisma.whatsappInstance.create({
+    const agent = await prisma.inbox.create({
       data: {
         companyId,
         instanceName,
@@ -268,12 +320,19 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // AI config 1:1 obrigatoria — mesmo agente legado precisa
-    await ensureAgentConfig(agent.id, companyId, displayName).catch((e) =>
-      console.error('[agents:create] ensureAgentConfig failed', e)
-    )
+    if (resolvedAiAgentId) {
+      await prisma.inbox.update({
+        where: { id: agent.id },
+        data: { aiAgentId: resolvedAiAgentId },
+      }).catch((e) => console.error('[agents:create] bind aiAgent failed', e))
+    } else {
+      await ensureInboxAiAgent(agent.id, companyId, displayName).catch((e) =>
+        console.error('[agents:create] ensureInboxAiAgent failed', e)
+      )
+    }
 
-    return NextResponse.json(mapAgent(agent), { status: 201 })
+    const finalAgent = await prisma.inbox.findUnique({ where: { id: agent.id } })
+    return NextResponse.json(mapAgent(finalAgent || agent), { status: 201 })
   } catch (error) {
     return handleApiError(error, 'Erro ao criar agente')
   }
@@ -293,16 +352,33 @@ export async function PUT(req: NextRequest) {
       )
     }
 
-    const { id, ...updates } = validation.data
+    const { id, aiAgentId, ...updates } = validation.data
 
-    const existing = await prisma.whatsappInstance.findFirst({
+    const existing = await prisma.inbox.findFirst({
       where: { id, companyId },
     })
     if (!existing) return NextResponse.json({ error: 'Agente nao encontrado' }, { status: 404 })
 
-    const updated = await prisma.whatsappInstance.update({
+    // Se aiAgentId foi enviado (mesmo null pra remover), valida ownership antes de aplicar
+    const dataToUpdate: any = { ...updates }
+    if (aiAgentId !== undefined) {
+      if (aiAgentId === null) {
+        dataToUpdate.aiAgentId = null
+      } else {
+        const agent = await prisma.aiAgent.findFirst({
+          where: { id: aiAgentId, companyId },
+          select: { id: true },
+        })
+        if (!agent) {
+          return NextResponse.json({ error: 'Agente IA invalido' }, { status: 400 })
+        }
+        dataToUpdate.aiAgentId = aiAgentId
+      }
+    }
+
+    const updated = await prisma.inbox.update({
       where: { id },
-      data: updates,
+      data: dataToUpdate,
     })
 
     return NextResponse.json(mapAgent(updated))
@@ -319,7 +395,7 @@ export async function DELETE(req: NextRequest) {
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'ID obrigatorio' }, { status: 400 })
 
-    const existing = await prisma.whatsappInstance.findFirst({
+    const existing = await prisma.inbox.findFirst({
       where: { id, companyId },
     })
     if (!existing) return NextResponse.json({ error: 'Agente nao encontrado' }, { status: 404 })
@@ -346,7 +422,7 @@ export async function DELETE(req: NextRequest) {
       }
     }
 
-    await prisma.whatsappInstance.delete({ where: { id } })
+    await prisma.inbox.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
     return handleApiError(error, 'Erro ao deletar agente')

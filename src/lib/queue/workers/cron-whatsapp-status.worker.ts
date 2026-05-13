@@ -4,7 +4,7 @@ import { QUEUE_NAMES, type CronTickJob } from '../queues'
 import { prisma } from '@/lib/db'
 
 async function checkWhatsAppStatus() {
-  const instances = await prisma.whatsappInstance.findMany({
+  const instances = await prisma.inbox.findMany({
     where: { isActive: true },
     select: {
       id: true,
@@ -77,7 +77,7 @@ async function checkWhatsAppStatus() {
 
       // Update only if status changed
       if (newStatus !== instance.status) {
-        await prisma.whatsappInstance.update({
+        await prisma.inbox.update({
           where: { id: instance.id },
           data: {
             status: newStatus,

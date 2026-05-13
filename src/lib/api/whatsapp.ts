@@ -46,7 +46,7 @@ export async function sendToWhatsApp(
       console.error('[WhatsApp API] Error:', response.status, errorText);
 
       if (response.status === 401 || response.status === 403) {
-        prisma.whatsappInstance.update({
+        prisma.inbox.update({
           where: { id: instance.id },
           data: { status: 'disconnected', errorMessage: 'Authentication failed' },
         }).catch(() => {});

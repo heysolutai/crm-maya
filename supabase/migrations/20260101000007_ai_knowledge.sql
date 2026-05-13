@@ -1,32 +1,39 @@
 -- ============================================
 -- Migration 007: AI & Knowledge Base
--- ai_configurations, ai_token_usage, company_faqs
+-- ai_agents (antes ai_configurations), ai_token_usage, company_faqs
 -- ============================================
 
--- 1. AI Configurations
-CREATE TABLE IF NOT EXISTS ai_configurations (
+-- 1. AI Agents (configuracao reusavel — pode ser linkada a varios inboxes via inboxes.ai_agent_id)
+CREATE TABLE IF NOT EXISTS ai_agents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-  created_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  name TEXT NOT NULL,
-  prompts JSONB,
-  behavior_settings JSONB,
-  conditions JSONB,
-  api_keys JSONB,
-  variables JSONB,
+  created_by UUID REFERENCES users(id) ON DELETE RESTRICT,
+  name TEXT,
+  prompts JSONB DEFAULT '{}'::jsonb,
+  behavior_settings JSONB DEFAULT '{}'::jsonb,
+  conditions JSONB DEFAULT '{}'::jsonb,
+  api_keys JSONB DEFAULT '{}'::jsonb,
+  variables JSONB DEFAULT '{}'::jsonb,
   knowledge TEXT,
   memory_key TEXT,
-  whatsapp_instance_id UUID REFERENCES whatsapp_instances(id) ON DELETE SET NULL,
+  products_knowledge TEXT,
   n8n_webhook_url TEXT,
   follow_up_enabled BOOLEAN DEFAULT false,
-  follow_up_stages JSONB,
+  follow_up_stages JSONB DEFAULT '[]'::jsonb,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_ai_config_company ON ai_configurations(company_id);
-CREATE INDEX IF NOT EXISTS idx_ai_config_active ON ai_configurations(company_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_ai_agents_company ON ai_agents(company_id);
+CREATE INDEX IF NOT EXISTS idx_ai_agents_active ON ai_agents(is_active);
+
+-- Adiciona FK inboxes.ai_agent_id -> ai_agents(id) agora que ai_agents existe
+ALTER TABLE inboxes
+  ADD CONSTRAINT inboxes_ai_agent_id_fkey
+  FOREIGN KEY (ai_agent_id) REFERENCES ai_agents(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_inboxes_ai_agent ON inboxes(ai_agent_id);
 
 -- 2. AI Token Usage
 CREATE TABLE IF NOT EXISTS ai_token_usage (

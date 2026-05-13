@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     if (!client) throw new Error('Client not found for this conversation');
 
-    const instance = await prisma.whatsappInstance.findFirst({
+    const instance = await prisma.inbox.findFirst({
       where: { companyId: conversation.companyId, isActive: true },
       select: { id: true, companyId: true, instanceName: true, apiUrl: true, instanceApiKey: true, isActive: true },
     });

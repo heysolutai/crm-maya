@@ -178,7 +178,7 @@ AS $$
 BEGIN
   -- Delete in reverse dependency order
   DELETE FROM ai_token_usage WHERE company_id = p_company_id;
-  DELETE FROM ai_configurations WHERE company_id = p_company_id;
+  DELETE FROM ai_agents WHERE company_id = p_company_id;
   DELETE FROM follow_up_jobs WHERE company_id = p_company_id;
   DELETE FROM reminders WHERE company_id = p_company_id;
   DELETE FROM conversation_notes WHERE company_id = p_company_id;
@@ -204,7 +204,7 @@ BEGIN
   DELETE FROM daily_reports WHERE company_id = p_company_id;
   DELETE FROM support_tickets WHERE company_id = p_company_id;
   DELETE FROM lead_distribution_state WHERE company_id = p_company_id;
-  DELETE FROM whatsapp_instances WHERE company_id = p_company_id;
+  DELETE FROM inboxes WHERE company_id = p_company_id;
   DELETE FROM google_calendar_connections WHERE company_id = p_company_id;
   DELETE FROM api_keys WHERE company_id = p_company_id;
   DELETE FROM funnel_stages WHERE company_id = p_company_id;

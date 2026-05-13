@@ -35,23 +35,29 @@ export async function GET(req: NextRequest) {
     const agentId = req.nextUrl.searchParams.get('agentId')
     const conversationId = req.nextUrl.searchParams.get('conversationId')
 
-    let resolvedAgentId: string | null = agentId
-    if (!resolvedAgentId && conversationId) {
+    let resolvedInboxId: string | null = agentId
+    if (!resolvedInboxId && conversationId) {
       const conv = await prisma.conversation.findFirst({
         where: { id: conversationId, companyId: keyData.companyId },
-        select: { whatsappInstanceId: true },
+        select: { inboxId: true },
       })
-      resolvedAgentId = conv?.whatsappInstanceId || null
+      resolvedInboxId = conv?.inboxId || null
     }
 
-    const where: any = { companyId: keyData.companyId }
-    if (resolvedAgentId) where.whatsappInstanceId = resolvedAgentId
-
-    const config = await prisma.aiConfiguration.findFirst({
-      where,
-      select: { apiKeys: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    let config: { apiKeys: any } | null = null
+    if (resolvedInboxId) {
+      const inbox = await prisma.inbox.findFirst({
+        where: { id: resolvedInboxId, companyId: keyData.companyId },
+        include: { aiAgent: { select: { apiKeys: true } } },
+      })
+      config = inbox?.aiAgent ?? null
+    } else {
+      config = await prisma.aiAgent.findFirst({
+        where: { companyId: keyData.companyId },
+        select: { apiKeys: true },
+        orderBy: { createdAt: 'desc' },
+      })
+    }
 
     if (!config) {
       return jsonResponse({

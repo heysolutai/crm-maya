@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     const cleanPhone = (client.phone ?? '').replace(/[^0-9]/g, '');
 
-    const instance = await prisma.whatsappInstance.findFirst({
+    const instance = await prisma.inbox.findFirst({
       where: { companyId: conversation.companyId || '', isActive: true },
       select: { apiUrl: true, instanceApiKey: true },
     });

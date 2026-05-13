@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAgents, type Agent } from '@/hooks/useAgents';
+import { useInboxes, type Inbox } from '@/hooks/useInboxes';
+import { useAiAgents } from '@/hooks/useAiAgents';
 import { useChannelCredentials } from '@/hooks/useChannelCredentials';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -26,7 +27,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { CardListSkeleton } from '@/components/ui/table-skeleton';
 import {
-  Bot,
+  Inbox as InboxIcon,
   Plus,
   Trash2,
   Loader2,
@@ -36,6 +37,7 @@ import {
   Zap,
   CheckCircle2,
   Pencil,
+  Bot,
 } from 'lucide-react';
 import { CHANNEL_REGISTRY, type ChannelType } from '@/lib/channels/types';
 import { cn } from '@/lib/utils';
@@ -57,9 +59,12 @@ const statusStyles: Record<string, { dot: string; label: string }> = {
   error: { dot: 'bg-rose-500', label: 'Erro' },
 };
 
-export default function Agents() {
+type AiAgentMode = 'reuse' | 'create' | 'none';
+
+export default function Inboxes() {
   const router = useRouter();
-  const { agents, isLoading, createAgent, deleteAgent, isCreating, isDeleting } = useAgents();
+  const { inboxes, isLoading, createInbox, deleteInbox, isCreating, isDeleting } = useInboxes();
+  const { aiAgents } = useAiAgents();
   const { credentialFor, hasCredentialFor } = useChannelCredentials();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -84,10 +89,15 @@ export default function Agents() {
     id: null,
   });
 
+  // Estado do bloco "Agente IA" no dialog
+  const [aiAgentMode, setAiAgentMode] = useState<AiAgentMode>('reuse');
+  const [selectedAiAgentId, setSelectedAiAgentId] = useState<string>('');
+  const [newAiAgentName, setNewAiAgentName] = useState('');
+
   const channels = Object.values(CHANNEL_REGISTRY);
 
   // Canais que precisam de URL + API key/admin token do servidor self-hosted.
-  // UazAPI tambem entra: novos agentes pegam admin token do form (nao mais do .env).
+  // UazAPI tambem entra: novas inboxes pegam admin token do form (nao mais do .env).
   const needsServerConfig =
     selectedChannel &&
     ['uazapi', 'evolution_baileys', 'evolution_go', 'zapi'].includes(selectedChannel);
@@ -115,6 +125,9 @@ export default function Agents() {
     setNotificameChannels([]);
     setNotificameChannelsError(null);
     setEditingCredential(false);
+    setAiAgentMode('reuse');
+    setSelectedAiAgentId('');
+    setNewAiAgentName('');
   };
 
   const handleSelectChannel = (type: ChannelType) => {
@@ -175,7 +188,13 @@ export default function Agents() {
     if (notificameNeedsInputs && !serverApiKey.trim()) return;
     if (isNotificame && !notificameChannelId.trim()) return;
 
-    createAgent(
+    // Validacao do bloco "Agente IA"
+    if (aiAgentMode === 'reuse' && !selectedAiAgentId && aiAgents.length > 0) {
+      // Se ha agentes mas nao selecionou nenhum, considera "none"
+    }
+    if (aiAgentMode === 'create' && !newAiAgentName.trim()) return;
+
+    createInbox(
       {
         channelType: selectedChannel,
         displayName: displayName.trim(),
@@ -195,19 +214,26 @@ export default function Agents() {
               channel: 'whatsapp',
             }
           : undefined,
+        // Bloco Agente IA
+        aiAgentId:
+          aiAgentMode === 'reuse' && selectedAiAgentId ? selectedAiAgentId : undefined,
+        createAiAgentNamed:
+          aiAgentMode === 'create' && newAiAgentName.trim()
+            ? newAiAgentName.trim()
+            : undefined,
       },
       {
-        onSuccess: (agent: Agent) => {
+        onSuccess: (inbox: Inbox) => {
           setDialogOpen(false);
           resetForm();
-          router.push(`/app/agents/${agent.id}`);
+          router.push(`/app/inboxes/${inbox.id}`);
         },
       }
     );
   };
 
-  const handleCardClick = (agentId: string) => {
-    router.push(`/app/agents/${agentId}`);
+  const handleCardClick = (inboxId: string) => {
+    router.push(`/app/inboxes/${inboxId}`);
   };
 
   return (
@@ -215,40 +241,40 @@ export default function Agents() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Bot className="h-7 w-7" />
-            Agentes
+            <InboxIcon className="h-7 w-7" />
+            Caixas de entrada
           </h1>
           <p className="text-muted-foreground mt-1">
-            Gerencie agentes, canais de atendimento e configurações de IA
+            Gerencie canais de atendimento e seus agentes IA vinculados
           </p>
         </div>
         <Button onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          Novo Agente
+          Nova caixa de entrada
         </Button>
       </div>
 
       {isLoading ? (
         <CardListSkeleton count={3} />
-      ) : agents.length === 0 ? (
+      ) : inboxes.length === 0 ? (
         <EmptyState
-          icon={Bot}
-          title="Nenhum agente cadastrado"
-          description="Crie seu primeiro agente conectando um canal de atendimento."
-          actionLabel="Criar Agente"
+          icon={InboxIcon}
+          title="Nenhuma caixa de entrada cadastrada"
+          description="Crie sua primeira caixa de entrada conectando um canal de atendimento."
+          actionLabel="Criar caixa de entrada"
           onAction={() => setDialogOpen(true)}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {agents.map((agent) => {
-            const Icon = channelIcon[agent.channel_type] || Smartphone;
-            const channelMeta = CHANNEL_REGISTRY[agent.channel_type];
-            const status = statusStyles[agent.status || 'disconnected'] || statusStyles.disconnected;
+          {inboxes.map((inbox) => {
+            const Icon = channelIcon[inbox.channel_type] || Smartphone;
+            const channelMeta = CHANNEL_REGISTRY[inbox.channel_type];
+            const status = statusStyles[inbox.status || 'disconnected'] || statusStyles.disconnected;
             return (
               <Card
-                key={agent.id}
+                key={inbox.id}
                 className="cursor-pointer hover:shadow-md hover:border-primary/30 transition-all group relative"
-                onClick={() => handleCardClick(agent.id)}
+                onClick={() => handleCardClick(inbox.id)}
               >
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-start justify-between gap-2">
@@ -257,9 +283,9 @@ export default function Agents() {
                         <Icon className="h-5 w-5 text-primary" />
                       </div>
                       <div className="min-w-0">
-                        <p className="font-semibold truncate">{agent.display_name}</p>
+                        <p className="font-semibold truncate">{inbox.display_name}</p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {channelMeta?.label || agent.channel_type}
+                          {channelMeta?.label || inbox.channel_type}
                         </p>
                       </div>
                     </div>
@@ -269,9 +295,9 @@ export default function Agents() {
                       className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setDeleteConfirm({ open: true, id: agent.id });
+                        setDeleteConfirm({ open: true, id: inbox.id });
                       }}
-                      aria-label="Remover agente"
+                      aria-label="Remover caixa de entrada"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -282,9 +308,9 @@ export default function Agents() {
                       <span className={cn('h-2 w-2 rounded-full shrink-0', status.dot)} />
                       <span className="text-xs">{status.label}</span>
                     </div>
-                    {agent.phone_number ? (
+                    {inbox.phone_number ? (
                       <p className="font-mono text-xs text-muted-foreground">
-                        {formatPhone(agent.phone_number)}
+                        {formatPhone(inbox.phone_number)}
                       </p>
                     ) : (
                       <p className="text-xs text-muted-foreground italic">Sem número conectado</p>
@@ -306,10 +332,10 @@ export default function Agents() {
       >
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Novo Agente</DialogTitle>
+            <DialogTitle>Nova caixa de entrada</DialogTitle>
             <DialogDescription>
-              Escolha o canal e dê um nome para o seu agente. Cada agente terá seu próprio número
-              e configuração de IA.
+              Escolha o canal e dê um nome para a caixa de entrada. Cada caixa pode usar um agente IA próprio
+              ou compartilhar um agente existente.
             </DialogDescription>
           </DialogHeader>
 
@@ -353,15 +379,15 @@ export default function Agents() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="agent-name">Nome do agente</Label>
+              <Label htmlFor="inbox-name">Nome da caixa de entrada</Label>
               <Input
-                id="agent-name"
+                id="inbox-name"
                 placeholder="Ex: Atendimento, Comercial, Pós-venda"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Use um nome interno para identificar o agente. O número aparece após a conexão.
+                Use um nome interno para identificar a caixa. O número aparece após a conexão.
               </p>
             </div>
 
@@ -406,7 +432,7 @@ export default function Agents() {
                       onChange={(e) => setServerApiKey(e.target.value)}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Header X-API-Token. Salvo na empresa após o primeiro agente.
+                      Header X-API-Token. Salvo na empresa após a primeira caixa.
                     </p>
                   </div>
                 )}
@@ -537,7 +563,7 @@ export default function Agents() {
                         onChange={(e) => setServerApiKey(e.target.value)}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Salvo na empresa após o primeiro agente — não precisa preencher de novo.
+                        Salvo na empresa após a primeira caixa — não precisa preencher de novo.
                       </p>
                     </div>
                     {hasSavedCred && (
@@ -572,6 +598,89 @@ export default function Agents() {
                 )}
               </div>
             )}
+
+            {/* ── Bloco Agente IA ── */}
+            <div className="space-y-3 rounded-lg border border-dashed p-3 bg-muted/30">
+              <div className="flex items-center gap-2">
+                <Bot className="h-4 w-4 text-primary shrink-0" />
+                <Label className="text-sm font-semibold">Agente IA</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Reutilize um agente IA existente ou crie um novo para esta caixa.
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAiAgentMode('reuse')}
+                  className={cn(
+                    'rounded-md border px-2 py-1.5 text-xs font-medium transition-colors',
+                    aiAgentMode === 'reuse'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:bg-muted'
+                  )}
+                >
+                  Reutilizar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAiAgentMode('create')}
+                  className={cn(
+                    'rounded-md border px-2 py-1.5 text-xs font-medium transition-colors',
+                    aiAgentMode === 'create'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:bg-muted'
+                  )}
+                >
+                  Criar novo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAiAgentMode('none')}
+                  className={cn(
+                    'rounded-md border px-2 py-1.5 text-xs font-medium transition-colors',
+                    aiAgentMode === 'none'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:bg-muted'
+                  )}
+                >
+                  Sem agente
+                </button>
+              </div>
+              {aiAgentMode === 'reuse' && (
+                <div className="space-y-2">
+                  <Label htmlFor="ai-agent-select">Selecionar agente existente</Label>
+                  {aiAgents.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">
+                      Nenhum agente IA cadastrado ainda. Use a opção &quot;Criar novo&quot; ou crie em /app/ai-agents.
+                    </p>
+                  ) : (
+                    <Select value={selectedAiAgentId} onValueChange={setSelectedAiAgentId}>
+                      <SelectTrigger id="ai-agent-select">
+                        <SelectValue placeholder="Selecione um agente IA" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {aiAgents.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {a.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
+              {aiAgentMode === 'create' && (
+                <div className="space-y-2">
+                  <Label htmlFor="new-ai-agent-name">Nome do novo agente IA</Label>
+                  <Input
+                    id="new-ai-agent-name"
+                    placeholder="Ex: Atendimento Padrão"
+                    value={newAiAgentName}
+                    onChange={(e) => setNewAiAgentName(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
@@ -587,11 +696,12 @@ export default function Agents() {
                 (isNotificame &&
                   (!notificameChannelId.trim() ||
                     ((!hasSavedCred || editingCredential) && !serverApiKey.trim()))) ||
+                (aiAgentMode === 'create' && !newAiAgentName.trim()) ||
                 isCreating
               }
             >
               {isCreating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Criar agente
+              Criar caixa de entrada
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -602,13 +712,13 @@ export default function Agents() {
         onOpenChange={(open) =>
           setDeleteConfirm({ open, id: open ? deleteConfirm.id : null })
         }
-        title="Remover agente"
-        description="O agente será desconectado e excluído. Conversas existentes não são apagadas."
+        title="Remover caixa de entrada"
+        description="A caixa será desconectada e excluída. Conversas existentes não são apagadas."
         confirmLabel="Remover"
         variant="destructive"
         onConfirm={() => {
           if (deleteConfirm.id) {
-            deleteAgent(deleteConfirm.id);
+            deleteInbox(deleteConfirm.id);
             setDeleteConfirm({ open: false, id: null });
           }
         }}

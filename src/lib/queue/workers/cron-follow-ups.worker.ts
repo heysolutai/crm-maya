@@ -18,7 +18,7 @@ async function processFollowUps() {
       clientId: true,
       stageOrder: true,
       messageText: true,
-      whatsappInstanceId: true,
+      inboxId: true,
       attempts: true,
     },
     orderBy: { scheduledFor: 'asc' },
@@ -45,9 +45,9 @@ async function processFollowUps() {
       // Get WhatsApp instance
       let instance: { id: string; apiUrl: string; instanceApiKey: string } | null = null
 
-      if (job.whatsappInstanceId) {
-        const foundInstance = await prisma.whatsappInstance.findFirst({
-          where: { id: job.whatsappInstanceId, isActive: true },
+      if (job.inboxId) {
+        const foundInstance = await prisma.inbox.findFirst({
+          where: { id: job.inboxId, isActive: true },
           select: { id: true, apiUrl: true, instanceApiKey: true },
         })
         if (foundInstance?.apiUrl && foundInstance?.instanceApiKey) {
@@ -55,9 +55,9 @@ async function processFollowUps() {
         }
       }
 
-      // Fallback: find any active instance for this company
+      // Fallback: find any active inbox for this company
       if (!instance) {
-        const foundInstance = await prisma.whatsappInstance.findFirst({
+        const foundInstance = await prisma.inbox.findFirst({
           where: { companyId: job.companyId, isActive: true },
           select: { id: true, apiUrl: true, instanceApiKey: true },
         })

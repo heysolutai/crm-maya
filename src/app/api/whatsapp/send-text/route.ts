@@ -83,14 +83,14 @@ export async function POST(req: NextRequest) {
     // Busca a conversa pra saber qual agente esta vinculado
     const conversation = await prisma.conversation.findFirst({
       where: { id: conversationId, companyId },
-      select: { id: true, whatsappInstanceId: true },
+      select: { id: true, inboxId: true },
     });
     if (!conversation) return apiError('Conversa não encontrada.', 'CONVERSATION_NOT_FOUND', 404);
 
-    // Se a conversa tem agente vinculado e ele tem adapter, manda pelo adapter
-    if (conversation.whatsappInstanceId) {
-      const agent = await prisma.whatsappInstance.findFirst({
-        where: { id: conversation.whatsappInstanceId, companyId },
+    // Se a conversa tem inbox vinculada e ela tem adapter, manda pelo adapter
+    if (conversation.inboxId) {
+      const agent = await prisma.inbox.findFirst({
+        where: { id: conversation.inboxId, companyId },
       });
 
       if (agent && isChannelType(agent.channelType) && hasAdapter(agent.channelType as any)) {

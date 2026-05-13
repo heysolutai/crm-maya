@@ -25,9 +25,9 @@ ALTER TABLE sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE follow_up_jobs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE whatsapp_instances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE inboxes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE google_calendar_connections ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ai_configurations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_agents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai_token_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE company_faqs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE analytics_daily ENABLE ROW LEVEL SECURITY;
@@ -172,8 +172,8 @@ CREATE POLICY "follow_up_jobs_company_isolation" ON follow_up_jobs
     company_id IN (SELECT company_id FROM users WHERE id = auth.uid())
   );
 
--- whatsapp_instances
-CREATE POLICY "whatsapp_instances_company_isolation" ON whatsapp_instances
+-- inboxes
+CREATE POLICY "inboxes_company_isolation" ON inboxes
   FOR ALL USING (
     company_id IN (SELECT company_id FROM users WHERE id = auth.uid())
   );
@@ -184,8 +184,8 @@ CREATE POLICY "google_calendar_company_isolation" ON google_calendar_connections
     company_id IN (SELECT company_id FROM users WHERE id = auth.uid())
   );
 
--- ai_configurations
-CREATE POLICY "ai_configurations_company_isolation" ON ai_configurations
+-- ai_agents
+CREATE POLICY "ai_agents_company_isolation" ON ai_agents
   FOR ALL USING (
     company_id IN (SELECT company_id FROM users WHERE id = auth.uid())
   );

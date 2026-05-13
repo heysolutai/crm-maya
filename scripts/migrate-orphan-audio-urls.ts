@@ -135,11 +135,11 @@ async function main() {
   const convMap = new Map(conversations.map(c => [c.id, c]));
 
   const companyIds = [...new Set(conversations.map(c => c.companyId))];
-  const instances = await prisma.whatsappInstance.findMany({
+  const instances = await prisma.inbox.findMany({
     where: { companyId: { in: companyIds }, isActive: true },
     select: { companyId: true, apiUrl: true, instanceApiKey: true },
   });
-  const instanceMap = new Map(instances.map(i => [i.companyId, i]));
+  const instanceMap = new Map(instances.map((i: { companyId: string; apiUrl: string | null; instanceApiKey: string | null }) => [i.companyId, i]));
 
   let ok = 0, failed = 0, skipped = 0;
   for (const m of orphan) {

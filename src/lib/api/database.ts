@@ -4,7 +4,7 @@ import { phoneVariants, canonicalPhone } from './utils';
 import { publishEvent } from '@/lib/realtime';
 
 export async function getWhatsAppInstance(companyId: string): Promise<WhatsAppInstance> {
-  const instance = await prisma.whatsappInstance.findFirst({
+  const instance = await prisma.inbox.findFirst({
     where: { companyId, isActive: true },
   });
 
@@ -25,7 +25,7 @@ export async function getWhatsAppInstance(companyId: string): Promise<WhatsAppIn
 export async function findOrCreateConversation(
   phone: string,
   companyId: string,
-  whatsappInstanceId?: string | null
+  inboxId?: string | null
 ): Promise<string> {
   // Gera todas as variações possíveis (com/sem 9) para match robusto de celulares br
   const variants = phoneVariants(phone);
@@ -69,7 +69,7 @@ export async function findOrCreateConversation(
         clientId: client.id,
         status: 'active',
       },
-      select: { id: true, whatsappInstanceId: true },
+      select: { id: true, inboxId: true },
       orderBy: { startedAt: 'desc' },
     });
 
@@ -81,16 +81,16 @@ export async function findOrCreateConversation(
           status: 'active',
           channel: 'whatsapp',
           startedAt: new Date(),
-          whatsappInstanceId: whatsappInstanceId || null,
+          inboxId: inboxId || null,
         },
-        select: { id: true, whatsappInstanceId: true },
+        select: { id: true, inboxId: true },
       });
-    } else if (whatsappInstanceId && !conversation.whatsappInstanceId) {
-      // Conversa pre-existia sem agente vinculado — vincula ao agente que
+    } else if (inboxId && !conversation.inboxId) {
+      // Conversa pre-existia sem inbox vinculada — vincula a inbox que
       // recebeu a mensagem agora (situacao tipica do backfill).
       await tx.conversation.update({
         where: { id: conversation.id },
-        data: { whatsappInstanceId },
+        data: { inboxId },
       });
     }
 

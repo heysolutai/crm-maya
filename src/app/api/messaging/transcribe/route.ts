@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
         conversation: {
           select: {
             companyId: true,
-            whatsappInstanceId: true,
+            inboxId: true,
           },
         },
       },
@@ -106,14 +106,14 @@ export async function POST(req: NextRequest) {
       return jsonResponse({ success: true, transcription: message.messageText, cached: true });
     }
 
-    // Resolve a instancia: prioriza a vinculada a conversa (multi-agent),
+    // Resolve a inbox: prioriza a vinculada a conversa (multi-channel),
     // cai pra primeira ativa (legado single-instance).
-    const instance = message.conversation.whatsappInstanceId
-      ? await prisma.whatsappInstance.findFirst({
-          where: { id: message.conversation.whatsappInstanceId, companyId },
+    const instance = message.conversation.inboxId
+      ? await prisma.inbox.findFirst({
+          where: { id: message.conversation.inboxId, companyId },
           select: { instanceApiKey: true, apiUrl: true },
         })
-      : await prisma.whatsappInstance.findFirst({
+      : await prisma.inbox.findFirst({
           where: { companyId, isActive: true },
           select: { instanceApiKey: true, apiUrl: true },
         });
@@ -123,15 +123,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Resolve OpenAI key: per-agent -> system_config -> env (via getSystemSettingFresh)
-    const aiConfig = message.conversation.whatsappInstanceId
-      ? await prisma.aiConfiguration.findFirst({
-          where: { whatsappInstanceId: message.conversation.whatsappInstanceId, isActive: true },
-          select: { apiKeys: true },
-        })
-      : await prisma.aiConfiguration.findFirst({
-          where: { companyId, isActive: true },
-          select: { apiKeys: true },
-        });
+    let aiConfig: { apiKeys: any } | null = null
+    if (message.conversation.inboxId) {
+      const inbox = await prisma.inbox.findFirst({
+        where: { id: message.conversation.inboxId, companyId },
+        include: { aiAgent: { select: { apiKeys: true, isActive: true } } },
+      })
+      aiConfig = inbox?.aiAgent && inbox.aiAgent.isActive ? { apiKeys: inbox.aiAgent.apiKeys } : null
+    } else {
+      aiConfig = await prisma.aiAgent.findFirst({
+        where: { companyId, isActive: true },
+        select: { apiKeys: true },
+      })
+    }
 
     const perAgentKey = (aiConfig?.apiKeys as any)?.openai;
     const openAiKey = (perAgentKey && String(perAgentKey).trim()) || (await getSystemSettingFresh('default_openai_api_key'));

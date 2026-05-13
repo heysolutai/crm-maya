@@ -27,10 +27,10 @@ const POLL_INTERVAL = 60000; // 60 seconds
  * Hook que mostra o status do WhatsApp na barra superior.
  *
  * Refatorado pra usar o novo flow multi-canal (/api/agents) em vez do
- * legado /api/whatsapp/connect — agora funciona pra UazAPI, Evolution, etc.
+ * legado /api/whatsapp/connect (removido) — agora funciona pra UazAPI, Evolution, etc.
  *
- * Pega o PRIMEIRO agente ativo da empresa pra exibir um status agregado.
- * Pra status detalhado por agente, usar AgentDetail.
+ * Pega o PRIMEIRO inbox ativo da empresa pra exibir um status agregado.
+ * Pra status detalhado por inbox, usar InboxDetail.
  */
 export function useWhatsAppStatus(): UseWhatsAppStatusResult {
   const { effectiveCompanyId } = useEffectiveCompanyId();
@@ -108,7 +108,7 @@ export function useWhatsAppStatus(): UseWhatsAppStatusResult {
   useEffect(() => {
     if (previousStatusRef.current === 'connected' && currentStatus === 'disconnected') {
       toast.error('WhatsApp desconectado!', {
-        description: 'A conexão foi perdida. Vá em Agentes para reconectar.',
+        description: 'A conexão foi perdida. Vá em Caixas de entrada para reconectar.',
         duration: 10000,
       });
     }

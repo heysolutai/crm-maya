@@ -5,7 +5,6 @@ import { useConversations } from '@/hooks/useConversations';
 import { useTeam } from '@/hooks/useTeam';
 import { useAuth } from '@/hooks/useAuth';
 import { useAgentTypingIndicator } from '@/hooks/useAgentTypingIndicator';
-import { useWhatsAppInstances } from '@/hooks/useWhatsAppInstances';
 import { useWhatsAppTypingIndicator } from '@/hooks/useWhatsAppTypingIndicator';
 import { useMediaUpload } from '@/hooks/useMediaUpload';
 import { useConversationReactions } from '@/hooks/useMessageReactions';
@@ -14,7 +13,7 @@ import { useConversationScroll } from '@/hooks/useConversationScroll';
 import { useCreateConversation } from '@/hooks/useCreateConversation';
 import { useMessageInput } from '@/hooks/useMessageInput';
 import { useDepartments } from '@/hooks/useDepartments';
-import { useAgents } from '@/hooks/useAgents';
+import { useInboxes } from '@/hooks/useInboxes';
 import { useDepartmentQueue } from '@/hooks/useDepartmentQueue';
 import { usePresenceContext } from '@/hooks/usePresence';
 import { MessageCircle, Loader2 } from 'lucide-react';
@@ -75,7 +74,7 @@ export default function Conversations() {
     tags: tagFilters.length > 0 ? tagFilters : undefined,
     departmentId: departmentFilter !== 'all' ? departmentFilter : undefined,
     assignedTo: userFilter !== 'all' ? userFilter : undefined,
-    whatsappInstanceId: agentFilter !== 'all' ? agentFilter : undefined,
+    inboxId: agentFilter !== 'all' ? agentFilter : undefined,
   };
 
   // Hooks
@@ -114,14 +113,11 @@ export default function Conversations() {
   const { uploadMedia, isUploading } = useMediaUpload();
   const { teamMembers } = useTeam();
   const { departments } = useDepartments();
-  const { agents } = useAgents();
+  const { inboxes } = useInboxes();
   const { queues: queueCounts } = useDepartmentQueue();
   const { onlineUserIds } = usePresenceContext();
   const { user, companyId } = useAuth();
   const queryClient = useQueryClient();
-
-  const { data: whatsappInstances } = useWhatsAppInstances(companyId || undefined);
-  const activeInstance = whatsappInstances?.[0];
 
   const selectedConv = conversations?.find((c: Conversation) => c.id === (selectedConversation ?? '')) as Conversation | undefined;
   const messages = selectedConversation ? getConversationMessages(selectedConversation) : [];
@@ -380,7 +376,7 @@ export default function Conversations() {
           onUserFilterChange={setUserFilter}
           agentFilter={agentFilter}
           onAgentFilterChange={setAgentFilter}
-          agents={agents || []}
+          agents={inboxes || []}
           teamMembers={(teamMembers as TeamMember[]) || []}
           departments={(departments || []).map((d: any) => ({ id: d.id, name: d.name, color: d.color || '#6b7280' }))}
           queueCounts={queueCounts}

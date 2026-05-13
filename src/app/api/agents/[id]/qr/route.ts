@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const { companyId } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
-    const agent = await prisma.whatsappInstance.findFirst({ where: { id, companyId } })
+    const agent = await prisma.inbox.findFirst({ where: { id, companyId } })
     if (!agent) return NextResponse.json({ error: 'Agente nao encontrado' }, { status: 404 })
 
     if (!isChannelType(agent.channelType) || !hasAdapter(agent.channelType as any)) {
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       metadata: agent.metadata as any,
     })
 
-    await prisma.whatsappInstance.update({
+    await prisma.inbox.update({
       where: { id: agent.id },
       data: {
         qrCode: result.qrCode,

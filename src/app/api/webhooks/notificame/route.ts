@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
     const payload = await req.json().catch(() => null)
     if (!payload) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
-    const agent = await prisma.whatsappInstance.findUnique({ where: { id: agentId } })
+    const agent = await prisma.inbox.findUnique({ where: { id: agentId } })
     if (!agent) {
       console.warn(`[webhook:notificame] agente ${agentId} nao encontrado`)
       return NextResponse.json({ ok: true })
@@ -223,15 +223,24 @@ export async function POST(req: NextRequest) {
 
         // Roteamento pra IA
         if (!fromMe) {
-          const aiConfig = await prisma.aiConfiguration.findFirst({
-            where: { whatsappInstanceId: agent.id, isActive: true },
-            select: {
-              n8nWebhookUrl: true,
-              knowledge: true,
-              memoryKey: true,
-              productsKnowledge: true,
+          // Resolve AiAgent vinculado a inbox (M:1 — Inbox.aiAgentId)
+          const inboxWithAi = await prisma.inbox.findUnique({
+            where: { id: agent.id },
+            include: {
+              aiAgent: {
+                select: {
+                  id: true,
+                  name: true,
+                  n8nWebhookUrl: true,
+                  knowledge: true,
+                  memoryKey: true,
+                  productsKnowledge: true,
+                  isActive: true,
+                },
+              },
             },
           })
+          const aiConfig = inboxWithAi?.aiAgent && inboxWithAi.aiAgent.isActive ? inboxWithAi.aiAgent : null
 
           const webhookUrl =
             aiConfig?.n8nWebhookUrl || (await getSystemSetting('n8n_ai_webhook_url'))
@@ -239,11 +248,15 @@ export async function POST(req: NextRequest) {
             const n8nPayload = {
               type: 'incoming',
               channel: 'notificame',
-              whatsapp_agent_id: agent.id,
-              whatsapp_agent_name: agent.displayName,
-              whatsapp_instance_name: agent.instanceName,
-              whatsapp_channel_type: agent.channelType,
-              whatsapp_agent_phone: agent.phoneNumber,
+              // Inbox (canal) que recebeu a mensagem
+              inbox_id: agent.id,
+              inbox_name: agent.displayName,
+              inbox_instance_name: agent.instanceName,
+              inbox_channel_type: agent.channelType,
+              inbox_phone: agent.phoneNumber,
+              // AiAgent vinculado a inbox (quando aplicavel)
+              ai_agent_id: aiConfig?.id || null,
+              ai_agent_name: aiConfig?.name || null,
               agent_id: null,
               nome_agente: null,
               company_id: agent.companyId,

@@ -12,7 +12,7 @@ async function processOutboundMessage(job: Job<OutboundMessageJob>) {
   console.log(`[Outbound Worker] Sending text to ${phone} (company: ${companyId})`)
 
   // Get WhatsApp instance
-  const instance = await prisma.whatsappInstance.findFirst({
+  const instance = await prisma.inbox.findFirst({
     where: { id: instanceId },
     select: { apiUrl: true, instanceApiKey: true },
   })
@@ -77,7 +77,7 @@ async function processOutboundMedia(job: Job<OutboundMediaJob>) {
 
   console.log(`[Outbound Worker] Sending ${mediaType} to ${phone}`)
 
-  const instance = await prisma.whatsappInstance.findFirst({
+  const instance = await prisma.inbox.findFirst({
     where: { id: instanceId },
     select: { apiUrl: true, instanceApiKey: true },
   })

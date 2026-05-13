@@ -16,7 +16,7 @@ export type ConversationFilters = {
   tags?: string[];
   departmentId?: string;
   assignedTo?: string;
-  whatsappInstanceId?: string;
+  inboxId?: string;
 };
 
 export function useConversations(filters?: ConversationFilters) {
@@ -107,7 +107,7 @@ export function useConversations(filters?: ConversationFilters) {
       if (filters?.startDate) params.set('startDate', filters.startDate);
       if (filters?.endDate) params.set('endDate', filters.endDate);
       if (filters?.departmentId) params.set('departmentId', filters.departmentId);
-      if (filters?.whatsappInstanceId) params.set('whatsappInstanceId', filters.whatsappInstanceId);
+      if (filters?.inboxId) params.set('inboxId', filters.inboxId);
 
       const res = await fetch(`/api/conversations?${params}`);
       if (!res.ok) throw new Error('Failed to fetch conversations');
@@ -159,13 +159,15 @@ export function useConversations(filters?: ConversationFilters) {
         const transferred_user = conv.transferAgent
           ? { full_name: conv.transferAgent.fullName || conv.transferAgent.full_name || null }
           : (conv.transferred_user || null);
-        // Normalize whatsappInstance (agent) → agent (snake_case)
-        const agent = conv.whatsappInstance
+        // Normalize inbox → agent (snake_case) — backend agora retorna `inbox`,
+        // mas mantemos `agent` no shape pra nao quebrar componentes existentes.
+        const inboxRel = conv.inbox || conv.whatsappInstance;
+        const agent = inboxRel
           ? {
-              id: conv.whatsappInstance.id,
-              display_name: conv.whatsappInstance.displayName || conv.whatsappInstance.instanceName,
-              channel_type: conv.whatsappInstance.channelType,
-              phone_number: conv.whatsappInstance.phoneNumber || null,
+              id: inboxRel.id,
+              display_name: inboxRel.displayName || inboxRel.instanceName,
+              channel_type: inboxRel.channelType,
+              phone_number: inboxRel.phoneNumber || null,
             }
           : null;
         return {

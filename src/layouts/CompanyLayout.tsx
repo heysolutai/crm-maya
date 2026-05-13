@@ -56,6 +56,7 @@ import {
   Menu,
   X,
   Bot,
+  Inbox,
   LifeBuoy,
   BookOpen,
   ChevronsUpDown,
@@ -121,7 +122,8 @@ const navGroups: NavGroup[] = [
     items: [
       { name: 'Equipe', href: '/app/team', icon: UserCog, roles: ['company_admin'] },
       { name: 'Departamentos', href: '/app/departments', icon: Building2, roles: ['company_admin'] },
-      { name: 'Agentes', href: '/app/agents', icon: Bot, roles: ['company_admin'] },
+      { name: 'Caixas de entrada', href: '/app/inboxes', icon: Inbox, roles: ['company_admin'] },
+      { name: 'Agentes IA', href: '/app/ai-agents', icon: Bot, roles: ['company_admin'] },
       { name: 'API Docs', href: '/app/api-docs', icon: Code, roles: ['manager', 'company_admin'] },
     ],
   },

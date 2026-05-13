@@ -44,7 +44,7 @@ async function processReminders() {
       })
 
       // Get WhatsApp instance for this company
-      const instance = await prisma.whatsappInstance.findFirst({
+      const instance = await prisma.inbox.findFirst({
         where: { companyId: reminder.companyId, isActive: true },
         select: { id: true, apiUrl: true, instanceApiKey: true },
       })

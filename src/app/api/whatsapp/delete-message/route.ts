@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     // Se tem uazMessageId, manda o revoke pro WhatsApp antes de deletar
     if (message.uazMessageId) {
-      const instance = await prisma.whatsappInstance.findFirst({
+      const instance = await prisma.inbox.findFirst({
         where: { companyId: auth.companyId, isActive: true },
         select: { apiUrl: true, instanceApiKey: true },
       });

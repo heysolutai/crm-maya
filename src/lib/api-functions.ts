@@ -14,7 +14,6 @@ const routeMap: Record<string, string> = {
   'send-audio-message': '/api/whatsapp/send-audio',
   'send-agent-message': '/api/whatsapp/send-agent',
   'send-reaction': '/api/whatsapp/send-reaction',
-  'whatsapp-connect': '/api/whatsapp/connect',
   'whatsapp-presence': '/api/whatsapp/presence',
 
   // Appointments

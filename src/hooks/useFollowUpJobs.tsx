@@ -12,7 +12,7 @@ export interface FollowUpJob {
   scheduled_for: string;
   status: 'pending' | 'sent' | 'cancelled' | 'failed';
   message_text: string;
-  whatsapp_instance_id: string | null;
+  inbox_id: string | null;
   attempts: number;
   last_attempt_at: string | null;
   error_message: string | null;
@@ -41,7 +41,7 @@ function mapJob(raw: any): FollowUpJob {
     scheduled_for: raw.scheduledFor ?? raw.scheduled_for,
     status: raw.status,
     message_text: raw.messageText ?? raw.message_text,
-    whatsapp_instance_id: raw.whatsappInstanceId ?? raw.whatsapp_instance_id,
+    inbox_id: raw.inboxId ?? raw.inbox_id ?? raw.whatsappInstanceId ?? raw.whatsapp_instance_id ?? null,
     attempts: raw.attempts,
     last_attempt_at: raw.lastAttemptAt ?? raw.last_attempt_at,
     error_message: raw.errorMessage ?? raw.error_message,

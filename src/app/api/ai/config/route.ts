@@ -31,29 +31,36 @@ export async function GET(req: NextRequest) {
       data: { lastUsedAt: new Date() },
     });
 
-    // Filtros opcionais: agentId (whatsappInstanceId) e conversationId
-    // (resolve o agente automaticamente). Quando nenhum e passado, retorna
+    // Filtros opcionais: agentId (inboxId) e conversationId
+    // (resolve a inbox automaticamente). Quando nenhum e passado, retorna
     // todas as configs da empresa (back-compat com clientes externos antigos).
     const agentId = req.nextUrl.searchParams.get('agentId')
     const conversationId = req.nextUrl.searchParams.get('conversationId')
 
-    let resolvedAgentId: string | null = agentId
+    let resolvedInboxId: string | null = agentId
 
-    if (!resolvedAgentId && conversationId) {
+    if (!resolvedInboxId && conversationId) {
       const conv = await prisma.conversation.findFirst({
         where: { id: conversationId, companyId: keyData.companyId },
-        select: { whatsappInstanceId: true },
+        select: { inboxId: true },
       })
-      resolvedAgentId = conv?.whatsappInstanceId || null
+      resolvedInboxId = conv?.inboxId || null
     }
 
-    const where: any = { companyId: keyData.companyId }
-    if (resolvedAgentId) where.whatsappInstanceId = resolvedAgentId
-
-    const configs = await prisma.aiConfiguration.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    });
+    let configs: any[] = []
+    if (resolvedInboxId) {
+      // Busca o AiAgent vinculado a inbox (M:1 via Inbox.aiAgentId)
+      const inbox = await prisma.inbox.findFirst({
+        where: { id: resolvedInboxId, companyId: keyData.companyId },
+        include: { aiAgent: true },
+      })
+      configs = inbox?.aiAgent ? [inbox.aiAgent] : []
+    } else {
+      configs = await prisma.aiAgent.findMany({
+        where: { companyId: keyData.companyId },
+        orderBy: { createdAt: 'desc' },
+      })
+    }
 
     return jsonResponse({ configurations: configs || [] });
   } catch (error) {

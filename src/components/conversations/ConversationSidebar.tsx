@@ -256,7 +256,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
             </button>
             {agents.map((a) => {
               const count = (conversations || []).filter(
-                (c: any) => c.whatsappInstanceId === a.id || c.agent?.id === a.id
+                (c: any) => c.inboxId === a.id || c.whatsappInstanceId === a.id || c.agent?.id === a.id
               ).length;
               const isActive = agentFilter === a.id;
               const label = channelLabel[a.channel_type] || a.channel_type;

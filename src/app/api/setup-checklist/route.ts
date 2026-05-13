@@ -9,14 +9,14 @@ export async function GET(req: NextRequest) {
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
     const [aiConfig, company, whatsappInstances, apiKeys, faqs, googleCalendar] = await Promise.all([
-      prisma.aiConfiguration.findFirst({
+      prisma.aiAgent.findFirst({
         where: { companyId, isActive: true },
       }),
       prisma.company.findUnique({
         where: { id: companyId },
         select: { settings: true },
       }),
-      prisma.whatsappInstance.findMany({
+      prisma.inbox.findMany({
         where: { companyId },
         select: { id: true, status: true, isActive: true },
       }),

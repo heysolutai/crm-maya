@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     const { companyId, isSuperAdmin } = await authenticate(req);
     
-    const instances = await prisma.whatsappInstance.findMany({
+    const instances = await prisma.inbox.findMany({
       where: companyId ? { companyId } : {},
       select: {
         id: true,
@@ -31,7 +31,8 @@ export async function GET(req: NextRequest) {
         metadata: i.metadata ? Object.keys(i.metadata as object) : null,
       })),
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    console.error('[debug/whatsapp-status]', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
   }
 }

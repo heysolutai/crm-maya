@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const instance = await prisma.whatsappInstance.findFirst({
+    const instance = await prisma.inbox.findFirst({
       where: { companyId: auth.companyId, isActive: true },
       select: { id: true, apiUrl: true, instanceApiKey: true, instanceName: true, metadata: true },
     });

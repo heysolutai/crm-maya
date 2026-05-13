@@ -30,29 +30,34 @@ async function processN8NWebhook(job: Job<N8NWebhookJob>) {
       // Wait 5 seconds before sending typing indicator
       await new Promise(resolve => setTimeout(resolve, 5000))
 
-      // Resolve o agente desta conversa pra usar a instancia certa
+      // Resolve a inbox desta conversa pra usar as credenciais certas
       const conv = await prisma.conversation.findUnique({
         where: { id: conversationId },
-        select: { whatsappInstanceId: true },
+        select: { inboxId: true },
       })
 
-      const instance = conv?.whatsappInstanceId
-        ? await prisma.whatsappInstance.findUnique({
-            where: { id: conv.whatsappInstanceId },
-            select: { id: true, apiUrl: true, instanceApiKey: true, channelType: true },
+      const instance = conv?.inboxId
+        ? await prisma.inbox.findUnique({
+            where: { id: conv.inboxId },
+            select: { id: true, apiUrl: true, instanceApiKey: true, channelType: true, aiAgentId: true },
           })
-        : await prisma.whatsappInstance.findFirst({
+        : await prisma.inbox.findFirst({
             where: { companyId, isActive: true },
-            select: { id: true, apiUrl: true, instanceApiKey: true, channelType: true },
+            select: { id: true, apiUrl: true, instanceApiKey: true, channelType: true, aiAgentId: true },
           })
 
       // Typing indicator hoje so funciona pra UazAPI (endpoint /message/presence
       // proprio do UazAPI). Pula pra outros canais ate ter helper proprio.
       if (instance?.apiUrl && instance?.instanceApiKey && instance.channelType === 'uazapi') {
-        const aiConfig = await prisma.aiConfiguration.findFirst({
-          where: { whatsappInstanceId: instance.id, isActive: true },
-          select: { behaviorSettings: true },
-        })
+        const aiConfig = instance.aiAgentId
+          ? await prisma.aiAgent.findFirst({
+              where: { id: instance.aiAgentId, isActive: true },
+              select: { behaviorSettings: true },
+            })
+          : await prisma.aiAgent.findFirst({
+              where: { companyId, isActive: true },
+              select: { behaviorSettings: true },
+            })
 
         const behaviorSettings = aiConfig?.behaviorSettings as Record<string, unknown> | null
         const typingDelayMs = (behaviorSettings?.typing_indicator_delay_ms as number) || 30000

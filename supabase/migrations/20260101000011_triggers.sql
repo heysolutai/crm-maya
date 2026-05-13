@@ -22,8 +22,8 @@ DECLARE
   tables TEXT[] := ARRAY[
     'companies', 'users', 'funnel_stages', 'clients', 'client_notes',
     'conversations', 'conversation_notes', 'products', 'sales',
-    'appointments', 'reminders', 'follow_up_jobs', 'whatsapp_instances',
-    'google_calendar_connections', 'ai_configurations', 'company_faqs',
+    'appointments', 'reminders', 'follow_up_jobs', 'inboxes',
+    'google_calendar_connections', 'ai_agents', 'company_faqs',
     'role_permissions', 'api_keys', 'support_tickets'
   ];
 BEGIN

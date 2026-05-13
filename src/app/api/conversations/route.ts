@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     const endDate = req.nextUrl.searchParams.get('endDate')
     const assignedTo = req.nextUrl.searchParams.get('assignedTo')
     const departmentId = req.nextUrl.searchParams.get('departmentId')
-    const whatsappInstanceId = req.nextUrl.searchParams.get('whatsappInstanceId')
+    const inboxId = req.nextUrl.searchParams.get('inboxId') || req.nextUrl.searchParams.get('whatsappInstanceId')
 
     const where: any = { companyId }
     if (status) where.status = status
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     if (endDate) where.startedAt = { ...where.startedAt, lte: new Date(endDate) }
     if (assignedTo) where.transferredTo = assignedTo
     if (departmentId) where.departmentId = departmentId
-    if (whatsappInstanceId) where.whatsappInstanceId = whatsappInstanceId
+    if (inboxId) where.inboxId = inboxId
 
     const limit = parseInt(req.nextUrl.searchParams.get('limit') || '100')
     const offset = parseInt(req.nextUrl.searchParams.get('offset') || '0')
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
         },
         transferAgent: { select: { fullName: true } },
         department: { select: { id: true, name: true, color: true } },
-        whatsappInstance: {
+        inbox: {
           select: { id: true, displayName: true, instanceName: true, channelType: true, phoneNumber: true },
         },
         messages: {

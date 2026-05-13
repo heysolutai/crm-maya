@@ -58,27 +58,36 @@ export async function POST(req: NextRequest) {
       return badRequestResponse('At least one prompt field is required');
     }
 
-    // Resolve qual agent_id usar: explicito > derivado da conversa > nenhum
-    let resolvedAgentId: string | null = agent_id || null;
-    if (!resolvedAgentId && conversation_id) {
+    // Resolve qual inbox usar: explicito > derivado da conversa > nenhum
+    let resolvedInboxId: string | null = agent_id || null;
+    if (!resolvedInboxId && conversation_id) {
       const conv = await prisma.conversation.findFirst({
         where: { id: conversation_id, companyId: keyData.companyId },
-        select: { whatsappInstanceId: true },
+        select: { inboxId: true },
       });
-      resolvedAgentId = conv?.whatsappInstanceId || null;
+      resolvedInboxId = conv?.inboxId || null;
     }
 
-    const whereClause: any = { companyId: keyData.companyId };
+    let config: { id: string; prompts: any } | null = null
     if (configuration_id) {
-      whereClause.id = configuration_id;
-    } else if (resolvedAgentId) {
-      whereClause.whatsappInstanceId = resolvedAgentId;
+      config = await prisma.aiAgent.findFirst({
+        where: { id: configuration_id, companyId: keyData.companyId },
+        select: { id: true, prompts: true },
+      })
+    } else if (resolvedInboxId) {
+      // Resolve o AiAgent vinculado a inbox
+      const inbox = await prisma.inbox.findFirst({
+        where: { id: resolvedInboxId, companyId: keyData.companyId },
+        include: { aiAgent: { select: { id: true, prompts: true } } },
+      })
+      config = inbox?.aiAgent ?? null
+    } else {
+      // Sem filtro: pega o primeiro agente IA da empresa (back-compat)
+      config = await prisma.aiAgent.findFirst({
+        where: { companyId: keyData.companyId },
+        select: { id: true, prompts: true },
+      })
     }
-
-    const config = await prisma.aiConfiguration.findFirst({
-      where: whereClause,
-      select: { id: true, prompts: true },
-    });
 
     if (!config) {
       return notFoundResponse('AI configuration not found for this company');
@@ -87,7 +96,7 @@ export async function POST(req: NextRequest) {
     const existingPrompts = (config.prompts as Record<string, any>) || {};
     const mergedPrompts = { ...existingPrompts, ...prompts };
 
-    const updated = await prisma.aiConfiguration.update({
+    const updated = await prisma.aiAgent.update({
       where: { id: config.id },
       data: { prompts: mergedPrompts, updatedAt: new Date() },
       select: { id: true, prompts: true, updatedAt: true },

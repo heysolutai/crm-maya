@@ -110,11 +110,11 @@ model Company {
   appointments           Appointment[]
   reminders              Reminder[]
   followUpJobs           FollowUpJob[]
-  whatsappInstances      WhatsappInstance[]
+  inboxes                Inbox[]
   channelCredentials     ChannelCredential[]
   doctorSchedules        DoctorSchedule[]
   googleCalendarConn     GoogleCalendarConnection?
-  aiConfigurations       AiConfiguration[]
+  aiAgents               AiAgent[]
   aiTokenUsage           AiTokenUsage[]
   companyFaqs            CompanyFaq[]
   analyticsDaily         AnalyticsDaily[]
@@ -178,7 +178,7 @@ model User {
   appointmentsCancelled  Appointment[]       @relation("AppointmentCancelledBy")
   appointmentsCreated    Appointment[]       @relation("AppointmentCreatedBy")
   remindersCreated       Reminder[]
-  aiConfigsCreated       AiConfiguration[]
+  aiAgentsCreated        AiAgent[]
   dailyReportsCreated    DailyReport[]
   supportTicketsCreated  SupportTicket[]     @relation("TicketCreator")
   supportTicketsResolved SupportTicket[]     @relation("TicketResolver")
@@ -397,7 +397,7 @@ model Conversation {
   friendlyId        String?            @map("friendly_id")
   metadata          Json?              @default("{}")
   departmentId      String?            @map("department_id") @db.Uuid
-  whatsappInstanceId String?           @map("whatsapp_instance_id") @db.Uuid
+  inboxId           String?            @map("inbox_id") @db.Uuid
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @default(now()) @updatedAt @map("updated_at")
 
@@ -405,7 +405,7 @@ model Conversation {
   client           Client?           @relation(fields: [clientId], references: [id], onDelete: Cascade)
   transferAgent    User?             @relation("ConversationTransferredTo", fields: [transferredTo], references: [id], onDelete: SetNull)
   department       Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  whatsappInstance WhatsappInstance? @relation(fields: [whatsappInstanceId], references: [id], onDelete: SetNull)
+  inbox            Inbox?            @relation(fields: [inboxId], references: [id], onDelete: SetNull)
 
   messages          Message[]
   conversationNotes ConversationNote[]
@@ -421,7 +421,7 @@ model Conversation {
   @@index([channel], map: "idx_conversations_channel")
   @@index([createdAt], map: "idx_conversations_created")
   @@index([departmentId], map: "idx_conversations_department")
-  @@index([whatsappInstanceId], map: "idx_conversations_whatsapp_instance")
+  @@index([inboxId], map: "idx_conversations_inbox")
   @@map("conversations")
 }
 
@@ -645,17 +645,17 @@ model Reminder {
   attempts              Int       @default(0)
   lastAttemptAt         DateTime? @map("last_attempt_at")
   errorMessage          String?   @map("error_message")
-  whatsappInstanceId    String?   @map("whatsapp_instance_id") @db.Uuid
+  inboxId               String?   @map("inbox_id") @db.Uuid
   createdAt             DateTime  @default(now()) @map("created_at")
   createdBy             String?   @map("created_by") @db.Uuid
   updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  client           Client?           @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  conversation     Conversation?     @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  appointment      Appointment?      @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-  whatsappInstance WhatsappInstance?  @relation(fields: [whatsappInstanceId], references: [id], onDelete: SetNull)
-  creator          User?             @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client       Client?       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  appointment  Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  inbox        Inbox?        @relation(fields: [inboxId], references: [id], onDelete: SetNull)
+  creator      User?         @relation(fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@index([companyId], map: "idx_reminders_company")
   @@index([clientId], map: "idx_reminders_client")
@@ -676,14 +676,14 @@ model FollowUpJob {
   attempts           Int       @default(0)
   lastAttemptAt      DateTime? @map("last_attempt_at")
   errorMessage       String?   @map("error_message")
-  whatsappInstanceId String?   @map("whatsapp_instance_id") @db.Uuid
+  inboxId            String?   @map("inbox_id") @db.Uuid
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  conversation     Conversation?     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  client           Client?           @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  whatsappInstance WhatsappInstance?  @relation(fields: [whatsappInstanceId], references: [id], onDelete: SetNull)
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  client       Client?       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  inbox        Inbox?        @relation(fields: [inboxId], references: [id], onDelete: SetNull)
 
   @@index([companyId], map: "idx_follow_up_company")
   @@index([scheduledFor], map: "idx_follow_up_scheduled")
@@ -693,7 +693,10 @@ model FollowUpJob {
 
 // ─── Integrations ───────────────────────────────────
 
-model WhatsappInstance {
+/// Inbox = canal de comunicacao conectado (WhatsApp/Instagram/etc).
+/// Antes chamado de WhatsappInstance. Cada inbox pode ter um AiAgent
+/// vinculado (M:1 — varios inboxes podem compartilhar o mesmo agente).
+model Inbox {
   id              String    @id @default(uuid()) @db.Uuid
   companyId       String    @map("company_id") @db.Uuid
   instanceName    String    @map("instance_name")
@@ -710,19 +713,21 @@ model WhatsappInstance {
   errorMessage    String?   @map("error_message")
   lastConnectedAt DateTime? @map("last_connected_at")
   metadata        Json?     @default("{}")
+  aiAgentId       String?   @map("ai_agent_id") @db.Uuid
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  aiConfigurations AiConfiguration[]
-  reminders        Reminder[]
-  followUpJobs     FollowUpJob[]
-  catalogProducts  CatalogProduct[]
-  conversations    Conversation[]
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  aiAgent         AiAgent?         @relation(fields: [aiAgentId], references: [id], onDelete: SetNull)
+  reminders       Reminder[]
+  followUpJobs    FollowUpJob[]
+  catalogProducts CatalogProduct[]
+  conversations   Conversation[]
 
-  @@index([companyId], map: "idx_whatsapp_instances_company")
-  @@index([channelType], map: "idx_whatsapp_instances_channel")
-  @@map("whatsapp_instances")
+  @@index([companyId], map: "idx_inboxes_company")
+  @@index([channelType], map: "idx_inboxes_channel")
+  @@index([aiAgentId], map: "idx_inboxes_ai_agent")
+  @@map("inboxes")
 }
 
 /// Configuracoes globais do sistema editaveis em runtime via super-admin.
@@ -786,8 +791,8 @@ model CatalogProduct {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  instance WhatsappInstance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  inbox   Inbox?  @relation(fields: [instanceId], references: [id], onDelete: SetNull)
 
   @@unique([companyId, waProductId], map: "uq_catalog_company_product")
   @@index([companyId], map: "idx_catalog_company")
@@ -817,34 +822,36 @@ model GoogleCalendarConnection {
 
 // ─── AI & Knowledge ─────────────────────────────────
 
-model AiConfiguration {
-  id                 String   @id @default(uuid()) @db.Uuid
-  companyId          String   @map("company_id") @db.Uuid
-  createdBy          String?  @map("created_by") @db.Uuid
-  name               String?
-  prompts            Json?    @default("{}")
-  behaviorSettings   Json?    @default("{}") @map("behavior_settings")
-  conditions         Json?    @default("{}")
-  apiKeys            Json?    @default("{}") @map("api_keys")
-  variables          Json?    @default("{}")
-  knowledge          String?
-  memoryKey          String?  @map("memory_key")
-  productsKnowledge  String?  @map("products_knowledge")
-  whatsappInstanceId String   @unique @map("whatsapp_instance_id") @db.Uuid
-  n8nWebhookUrl      String?  @map("n8n_webhook_url")
-  followUpEnabled    Boolean  @default(false) @map("follow_up_enabled")
-  followUpStages     Json?    @default("[]") @map("follow_up_stages")
-  isActive           Boolean  @default(true) @map("is_active")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+/// AiAgent = configuracao de IA reusavel (prompts, knowledge, integracoes).
+/// Antes chamado de AiConfiguration. Pode ser referenciado por varios Inboxes
+/// (relacao M:1 invertida — `Inbox.aiAgentId` aponta pra ca).
+model AiAgent {
+  id                String   @id @default(uuid()) @db.Uuid
+  companyId         String   @map("company_id") @db.Uuid
+  createdBy         String?  @map("created_by") @db.Uuid
+  name              String?
+  prompts           Json?    @default("{}")
+  behaviorSettings  Json?    @default("{}") @map("behavior_settings")
+  conditions        Json?    @default("{}")
+  apiKeys           Json?    @default("{}") @map("api_keys")
+  variables         Json?    @default("{}")
+  knowledge         String?
+  memoryKey         String?  @map("memory_key")
+  productsKnowledge String?  @map("products_knowledge")
+  n8nWebhookUrl     String?  @map("n8n_webhook_url")
+  followUpEnabled   Boolean  @default(false) @map("follow_up_enabled")
+  followUpStages    Json?    @default("[]") @map("follow_up_stages")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at")
 
-  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  creator          User?            @relation(fields: [createdBy], references: [id], onDelete: Restrict)
-  whatsappInstance WhatsappInstance @relation(fields: [whatsappInstanceId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  creator User?   @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  inboxes Inbox[]
 
-  @@index([companyId], map: "idx_ai_config_company")
-  @@index([isActive], map: "idx_ai_config_active")
-  @@map("ai_configurations")
+  @@index([companyId], map: "idx_ai_agents_company")
+  @@index([isActive], map: "idx_ai_agents_active")
+  @@map("ai_agents")
 }
 
 model AiTokenUsage {

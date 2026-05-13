@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     if (!uazMessageId) throw new Error('Message does not have UAZ message ID');
 
-    const instance = await prisma.whatsappInstance.findFirst({
+    const instance = await prisma.inbox.findFirst({
       where: { companyId, isActive: true },
     });
 

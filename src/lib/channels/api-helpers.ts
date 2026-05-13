@@ -32,7 +32,7 @@ export async function respondToChannelError(
 
     // Marca o agente em erro quando faz sentido (UI mostra error_message)
     if (opts.agentId && error.isFatal) {
-      await prisma.whatsappInstance.update({
+      await prisma.inbox.update({
         where: { id: opts.agentId },
         data: {
           status: 'error',
@@ -43,7 +43,7 @@ export async function respondToChannelError(
     } else if (opts.agentId && (error.code === 'PROVIDER_UNREACHABLE' || error.code === 'NETWORK_ERROR')) {
       // Server offline — nao marca como `error` permanente, so loga a ultima
       // mensagem pra UI exibir. Status fica como esta.
-      await prisma.whatsappInstance.update({
+      await prisma.inbox.update({
         where: { id: opts.agentId },
         data: { errorMessage: error.message },
       }).catch(() => {});
@@ -68,7 +68,7 @@ export async function respondToChannelError(
  * Use depois de QR gerado, status=connected, etc.
  */
 export async function clearAgentError(agentId: string): Promise<void> {
-  await prisma.whatsappInstance.update({
+  await prisma.inbox.update({
     where: { id: agentId },
     data: { errorMessage: null },
   }).catch(() => {});

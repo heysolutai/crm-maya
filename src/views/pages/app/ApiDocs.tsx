@@ -448,53 +448,6 @@ Accept: application/json`}
                 ]}
               />
 
-              <ApiEndpointCard
-                method="POST"
-                path="/api/whatsapp/connect"
-                name="Gerenciar Instâncias WhatsApp"
-                description="Conectar, reconectar, desconectar, deletar ou atualizar instâncias WhatsApp (UazAPI)."
-                authentication="bearer"
-                bodyParameters={[
-                  { name: 'action', type: 'enum', required: true, description: 'connect, reconnect, disconnect, delete, update' },
-                  { name: 'company_id', type: 'UUID', required: true, description: 'ID da empresa' },
-                  { name: 'instance_id', type: 'UUID', required: false, description: 'ID da instância (obrigatório exceto para connect)' },
-                ]}
-                exampleRequest={`// Conectar nova instância
-curl -X POST "/api/whatsapp/connect" \\
-  -H "Authorization: Bearer <token>" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "action": "connect",
-    "company_id": "uuid-da-empresa"
-  }'
-
-// Reconectar instância existente
-curl -X POST "/api/whatsapp/connect" \\
-  -H "Authorization: Bearer <token>" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "action": "reconnect",
-    "company_id": "uuid-da-empresa",
-    "instance_id": "uuid-da-instancia"
-  }'`}
-                exampleResponse={`{
-  "success": true,
-  "data": {
-    "id": "uuid-da-instancia",
-    "instance_name": "empresa-abc123",
-    "status": "connecting"
-  },
-  "message": "Instance created",
-  "show_qr_modal": true,
-  "already_connected": false
-}`}
-                errors={[
-                  { code: 'UNAUTHORIZED', status: 401, message: 'Token inválido' },
-                  { code: 'MISSING_ACTION', status: 400, message: 'action e company_id são obrigatórios' },
-                  { code: 'INSTANCE_NOT_FOUND', status: 404, message: 'Instância não encontrada' },
-                  { code: 'API_ERROR', status: 500, message: 'Erro ao comunicar com UazAPI' },
-                ]}
-              />
             </ApiSection>
 
             <Separator />

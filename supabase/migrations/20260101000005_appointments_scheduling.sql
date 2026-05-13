@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS reminders (
   attempts INTEGER DEFAULT 0,
   last_attempt_at TIMESTAMPTZ,
   error_message TEXT,
-  whatsapp_instance_id UUID,  -- FK added after whatsapp_instances table creation
+  inbox_id UUID,  -- FK added after inboxes table creation (migration 006)
   created_at TIMESTAMPTZ DEFAULT now(),
   created_by UUID REFERENCES users(id) ON DELETE SET NULL,
   updated_at TIMESTAMPTZ DEFAULT now()
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS follow_up_jobs (
   attempts INTEGER DEFAULT 0,
   last_attempt_at TIMESTAMPTZ,
   error_message TEXT,
-  whatsapp_instance_id UUID,  -- FK added after whatsapp_instances table creation
+  inbox_id UUID,  -- FK added after inboxes table creation (migration 006)
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );

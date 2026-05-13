@@ -16,7 +16,7 @@ import { handleApiError } from '@/lib/api/errors'
  */
 
 async function getInstance(companyId: string) {
-  const instance = await prisma.whatsappInstance.findFirst({
+  const instance = await prisma.inbox.findFirst({
     where: { companyId, isActive: true },
     select: { id: true, apiUrl: true, instanceApiKey: true, instanceName: true, metadata: true, status: true },
   });
@@ -56,7 +56,7 @@ async function getInstance(companyId: string) {
       }
 
       // Atualizar banco como efeito colateral (sem bloquear)
-      prisma.whatsappInstance.update({
+      prisma.inbox.update({
         where: { id: instance.id },
         data: { status: "connected" },
       }).catch(() => {});

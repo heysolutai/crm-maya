@@ -105,7 +105,7 @@ ${salesLines}
     const reportGroupPhone = settings?.report_group_phone;
 
     if (reportGroupPhone) {
-      const instance = await prisma.whatsappInstance.findFirst({
+      const instance = await prisma.inbox.findFirst({
         where: { companyId: company_id, status: 'connected' },
       });
 
