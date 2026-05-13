@@ -40,6 +40,7 @@ const channelIcon: Record<ChannelType, typeof Smartphone> = {
   zapi: Zap,
   whatsapp_cloud: Cloud,
   instagram: Instagram,
+  notificame: Cloud,
 };
 
 const statusStyles: Record<string, { dot: string; label: string }> = {
@@ -60,6 +61,9 @@ export default function Agents() {
   const [serverUrl, setServerUrl] = useState('');
   const [serverApiKey, setServerApiKey] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  // NotificaMe extras (channelId + senderUserId vao em `extra` no POST)
+  const [notificameChannelId, setNotificameChannelId] = useState('');
+  const [notificameSenderId, setNotificameSenderId] = useState('');
   // Quando ja existe credencial salva, escondemos os campos por padrao;
   // user pode clicar em "Editar" pra trocar URL/token.
   const [editingCredential, setEditingCredential] = useState(false);
@@ -75,6 +79,8 @@ export default function Agents() {
   const needsServerConfig =
     selectedChannel &&
     ['uazapi', 'evolution_baileys', 'evolution_go', 'zapi'].includes(selectedChannel);
+
+  const isNotificame = selectedChannel === 'notificame';
 
   const savedCred = selectedChannel ? credentialFor(selectedChannel) : undefined;
   const hasSavedCred = !!savedCred;
@@ -92,6 +98,8 @@ export default function Agents() {
     setServerUrl('');
     setServerApiKey('');
     setPhoneNumber('');
+    setNotificameChannelId('');
+    setNotificameSenderId('');
     setEditingCredential(false);
   };
 
@@ -100,6 +108,8 @@ export default function Agents() {
     // Limpa inputs quando troca de canal — pra nao mandar credencial errada
     setServerUrl('');
     setServerApiKey('');
+    setNotificameChannelId('');
+    setNotificameSenderId('');
     setEditingCredential(false);
   };
 
@@ -109,6 +119,12 @@ export default function Agents() {
     // Se canal precisa de config e a UI esta exibindo inputs, ambos sao obrigatorios
     if (showCredentialInputs && (!serverUrl.trim() || !serverApiKey.trim())) return;
 
+    // NotificaMe: token + channelId + senderUserId sao obrigatorios (1a vez).
+    // Se ja existe credencial salva e nao esta editando, token pode vir de la.
+    const notificameNeedsInputs = isNotificame && (!hasSavedCred || editingCredential);
+    if (notificameNeedsInputs && !serverApiKey.trim()) return;
+    if (isNotificame && (!notificameChannelId.trim() || !notificameSenderId.trim())) return;
+
     createAgent(
       {
         channelType: selectedChannel,
@@ -116,8 +132,18 @@ export default function Agents() {
         // Manda URL/token apenas se o user explicitamente preencheu
         // (1a vez ou edicao). Se nao mandou, o backend usa a credencial salva.
         serverUrl: showCredentialInputs ? serverUrl.trim() : undefined,
-        serverApiKey: showCredentialInputs ? serverApiKey.trim() : undefined,
+        serverApiKey: showCredentialInputs || notificameNeedsInputs
+          ? serverApiKey.trim()
+          : undefined,
         phoneNumber: phoneNumber.trim() || undefined,
+        // NotificaMe-specific extras
+        extra: isNotificame
+          ? {
+              channelId: notificameChannelId.trim(),
+              senderUserId: notificameSenderId.trim(),
+              channel: 'whatsapp',
+            }
+          : undefined,
       },
       {
         onSuccess: (agent: Agent) => {
@@ -288,6 +314,69 @@ export default function Agents() {
               </p>
             </div>
 
+            {isNotificame && (
+              <div className="space-y-3 rounded-lg border border-dashed p-3 bg-muted/30">
+                {hasSavedCred && !editingCredential ? (
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">Token NotificaMe já configurado</p>
+                        <p className="text-xs text-muted-foreground">
+                          Token: <span className="font-mono">{savedCred?.server_api_key}</span>
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 shrink-0"
+                        onClick={() => setEditingCredential(true)}
+                      >
+                        <Pencil className="h-3 w-3 mr-1" />
+                        Editar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="notificame-token">API Token NotificaMe</Label>
+                    <Input
+                      id="notificame-token"
+                      type="password"
+                      placeholder="Token gerado no painel hub.notificame.com.br"
+                      value={serverApiKey}
+                      onChange={(e) => setServerApiKey(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Header X-API-Token. Salvo na empresa após o primeiro agente.
+                    </p>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="notificame-channel-id">Channel ID (UUID)</Label>
+                  <Input
+                    id="notificame-channel-id"
+                    placeholder="ex: 8699a97a-6fb3-443d-ab96-9df3924aa90d"
+                    value={notificameChannelId}
+                    onChange={(e) => setNotificameChannelId(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    UUID do canal WhatsApp configurado no painel NotificaMe.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="notificame-sender">Sender User ID</Label>
+                  <Input
+                    id="notificame-sender"
+                    placeholder="User ID da conta NotificaMe (campo 'from' do envio)"
+                    value={notificameSenderId}
+                    onChange={(e) => setNotificameSenderId(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
             {needsServerConfig && selectedChannel && (
               <div className="space-y-3 rounded-lg border border-dashed p-3 bg-muted/30">
                 {hasSavedCred && !editingCredential ? (
@@ -394,6 +483,10 @@ export default function Agents() {
                 !selectedChannel ||
                 !displayName.trim() ||
                 (showCredentialInputs && (!serverUrl.trim() || !serverApiKey.trim())) ||
+                (isNotificame &&
+                  (!notificameChannelId.trim() ||
+                    !notificameSenderId.trim() ||
+                    ((!hasSavedCred || editingCredential) && !serverApiKey.trim()))) ||
                 isCreating
               }
             >

@@ -48,6 +48,7 @@ export function useAgents() {
       serverUrl?: string;
       serverApiKey?: string;
       phoneNumber?: string;
+      extra?: Record<string, unknown>;
     }) => {
       const res = await fetch('/api/agents', {
         method: 'POST',

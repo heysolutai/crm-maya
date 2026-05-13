@@ -13,6 +13,7 @@ export const CHANNEL_TYPES = [
   'zapi',
   'whatsapp_cloud',
   'instagram',
+  'notificame',
 ] as const;
 
 export type ChannelType = (typeof CHANNEL_TYPES)[number];
@@ -70,6 +71,13 @@ export const CHANNEL_REGISTRY: Record<ChannelType, ChannelMeta> = {
     description: 'Instagram Direct via Meta Graph API',
     status: 'coming_soon',
     connectionMode: 'oauth',
+  },
+  notificame: {
+    type: 'notificame',
+    label: 'NotificaMe Hub',
+    description: 'NotificaMe Hub — WhatsApp via API token (sem QR Code)',
+    status: 'available',
+    connectionMode: 'token',
   },
 };
 

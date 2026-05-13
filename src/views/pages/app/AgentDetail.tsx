@@ -40,6 +40,7 @@ const channelIcon: Record<ChannelType, typeof Smartphone> = {
   zapi: Zap,
   whatsapp_cloud: Cloud,
   instagram: Instagram,
+  notificame: Cloud,
 };
 
 const statusStyles: Record<string, { dot: string; label: string; badge: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
