@@ -25,6 +25,12 @@ interface NotificameChannel {
   name?: string
   type?: string
   status?: string
+  /**
+   * Token DO CANAL — usado como `from` no sendMessage de WhatsApp.
+   * Pode nao vir nessa listagem (depende de como o NotificaMe expoe).
+   * Se nao vier, a UI pede manualmente.
+   */
+  channelToken?: string
   raw: Record<string, unknown>
 }
 
@@ -44,6 +50,13 @@ function normalize(item: any): NotificameChannel | null {
     name: pickString(item.name, item.displayName, item.display_name, item.label),
     type: pickString(item.type, item.channel, item.channelType, item.channel_type),
     status: pickString(item.status, item.state),
+    channelToken: pickString(
+      item.token,
+      item.channelToken,
+      item.channel_token,
+      item.apiKey,
+      item.api_key
+    ),
     raw: item,
   }
 }

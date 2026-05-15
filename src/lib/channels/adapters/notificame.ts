@@ -2,20 +2,25 @@
  * Adapter para NotificaMe Hub (https://hub.notificame.com.br).
  *
  * Diferente de UazAPI/Evolution, o NotificaMe e um agregador multi-canal:
- * voce configura o canal (WhatsApp Cloud, SMS, Email, etc) no painel deles
- * e fala com uma API unica. Nao tem QR code — autenticacao e por API token
- * de conta + channel UUID + sender userId.
+ * voce configura o canal (WhatsApp Cloud, Instagram, Facebook, etc.) no painel
+ * deles e fala com uma API unica. Nao tem QR code — autenticacao e por API
+ * token de conta + channelId + (no caso de WhatsApp) channelToken.
  *
- * Auth:
- * - Header: `X-API-Token: <api_token>` (conta-level)
+ * Auth (header em TODAS as requests):
+ * - `X-API-Token: <accountApiToken>` (token da conta)
  * - Base URL: https://api.notificame.com.br
  *
+ * O campo `from` no sendMessage depende do canal:
+ * - WhatsApp:        from = channelToken (token DO CANAL, secreto, diferente do account token)
+ * - Instagram:       from = channelId (UUID)
+ * - Facebook:        from = channelId (UUID)
+ * - Outros canais:   from = channelId (default)
+ *
  * Endpoints usados:
- * - POST   /v2/channels/whatsapp/messages    enviar mensagem
- * - POST   /v1/subscriptions                 criar webhook (MESSAGE/MESSAGE_STATUS)
- * - GET    /v1/subscriptions/{id}            consultar subscription
- * - DELETE /v1/subscriptions/{id}            remover subscription
- * - GET    /v1/channels                      validar token / status
+ * - GET    /v1/channels                       lista canais (valida token + lista pra UI)
+ * - POST   /v1/channels/{type}/messages       enviar mensagem
+ * - POST   /v1/subscriptions                  criar webhook (MESSAGE/MESSAGE_STATUS)
+ * - DELETE /v1/subscriptions/{id}             remover subscription
  *
  * Webhook NotificaMe NAO assina o body (sem HMAC). Defesa em duas camadas:
  * 1. URL inclui agentId em query (?agentId=...)
@@ -43,9 +48,9 @@ interface NotificameSubscriptionIds {
 }
 
 interface NotificameChannelConfig {
-  channelId?: string;        // UUID do canal no NotificaMe (usado em subscriptions)
-  channel?: string;          // tipo do canal (whatsapp/sms/email/...) — default 'whatsapp'
-  senderUserId?: string;     // userId da conta (sender identifier em sendMessage)
+  channelId?: string;        // UUID do canal no NotificaMe (sempre obrigatorio)
+  channel?: string;          // tipo do canal (whatsapp/instagram/facebook/...)
+  channelToken?: string;     // token DO CANAL (so usado quando channel === 'whatsapp')
   webhookUrl?: string;
   subscriptionIds?: NotificameSubscriptionIds;
 }
@@ -149,8 +154,6 @@ async function createSubscription(
   if (res.ok) {
     return res.data?.id || res.data?.subscriptionId || null;
   }
-  // 409 = ja existe pra essa combinacao (url + channel + eventType).
-  // NotificaMe nao retorna o id existente — registramos null e seguimos.
   if (res.status === HTTP_CONFLICT) {
     console.warn(`[notificame] subscription ${eventType} ja existia (409)`);
     return null;
@@ -167,82 +170,25 @@ async function deleteSubscription(apiToken: string, subscriptionId: string): Pro
 }
 
 /**
- * Detecta o User ID da conta. NotificaMe nao documenta publicamente o shape —
- * tentamos varios endpoints e campos comuns. Loga no servidor pra debug.
+ * `from` no sendMessage depende do tipo de canal:
+ * - whatsapp -> channelToken (token secreto do canal)
+ * - resto    -> channelId (UUID)
  */
-async function detectSenderUserId(apiToken: string): Promise<string | null> {
-  const endpoints = ['/v1/accounts', '/v1/users/me', '/v1/me', '/v1/users'];
-
-  for (const path of endpoints) {
-    let res;
-    try {
-      res = await notificameFetch(apiToken, 'GET', path);
-    } catch (e) {
-      console.warn(`[notificame] detectSenderUserId ${path} threw:`, (e as Error).message);
-      continue;
+function resolveFrom(config: NotificameChannelConfig): string {
+  const channel = (config.channel || 'whatsapp').toLowerCase();
+  if (channel === 'whatsapp') {
+    if (!config.channelToken) {
+      throw new ChannelError(
+        'Token do Canal (WhatsApp) nao configurado. Pegue em hub.notificame.com.br > canal > token.',
+        'BAD_REQUEST'
+      );
     }
-    if (!res.ok) {
-      console.warn(`[notificame] ${path} -> ${res.status}`);
-      continue;
-    }
-
-    const data = res.data;
-    const candidates: any[] = Array.isArray(data)
-      ? data
-      : Array.isArray(data?.accounts)
-        ? data.accounts
-        : Array.isArray(data?.users)
-          ? data.users
-          : Array.isArray(data?.data)
-            ? data.data
-            : [data];
-
-    for (const c of candidates) {
-      if (!c || typeof c !== 'object') continue;
-      const id =
-        c.userId ||
-        c.user_id ||
-        c.accountId ||
-        c.account_id ||
-        c.ownerId ||
-        c.owner_id ||
-        c.id;
-      if (typeof id === 'string' && id.length > 0) {
-        console.log(`[notificame] detected senderUserId via ${path}: ${id}`);
-        return id;
-      }
-      if (typeof id === 'number') return String(id);
-    }
-    console.warn(`[notificame] ${path} responded mas sem campo de id reconhecido. Keys:`,
-      candidates[0] ? Object.keys(candidates[0]).slice(0, 20) : 'empty');
+    return config.channelToken;
   }
-
-  // Ultimo recurso: tentar achar accountId/ownerId no GET /v1/channels
-  try {
-    const ch = await notificameFetch(apiToken, 'GET', '/v1/channels');
-    if (ch.ok) {
-      const list: any[] = Array.isArray(ch.data)
-        ? ch.data
-        : Array.isArray(ch.data?.channels)
-          ? ch.data.channels
-          : Array.isArray(ch.data?.data)
-            ? ch.data.data
-            : [];
-      for (const c of list) {
-        const id = c?.accountId || c?.account_id || c?.ownerId || c?.owner_id || c?.userId;
-        if (typeof id === 'string' && id.length > 0) {
-          console.log(`[notificame] detected senderUserId via /v1/channels: ${id}`);
-          return id;
-        }
-      }
-      console.warn('[notificame] /v1/channels nao tem accountId/ownerId. Keys do 1o canal:',
-        list[0] ? Object.keys(list[0]).slice(0, 20) : 'empty');
-    }
-  } catch (e) {
-    console.warn('[notificame] fallback /v1/channels falhou:', (e as Error).message);
+  if (!config.channelId) {
+    throw new ChannelError('Channel ID nao configurado', 'BAD_REQUEST');
   }
-
-  return null;
+  return config.channelId;
 }
 
 export const notificameAdapter: ChannelAdapter = {
@@ -256,37 +202,32 @@ export const notificameAdapter: ChannelAdapter = {
 
     const extra = (input.extra || {}) as {
       channelId?: string;
-      senderUserId?: string;
+      channelToken?: string;
       channel?: string;
     };
     const channelId = extra.channelId;
-    let senderUserId = extra.senderUserId;
-    const channel = extra.channel || 'whatsapp';
+    const channel = (extra.channel || 'whatsapp').toLowerCase();
+    const channelToken = extra.channelToken;
 
     if (!channelId) {
       throw new ChannelError('Channel ID (UUID) do NotificaMe e obrigatorio', 'BAD_REQUEST');
     }
 
-    // 1) Valida token — GET /v1/channels deve retornar 200
+    // WhatsApp exige channelToken (eh o `from` do sendMessage)
+    if (channel === 'whatsapp' && !channelToken) {
+      throw new ChannelError(
+        'Token do Canal WhatsApp obrigatorio. Pegue em hub.notificame.com.br > canal > token.',
+        'BAD_REQUEST'
+      );
+    }
+
+    // Valida token de conta — GET /v1/channels deve retornar 200
     const validate = await notificameFetch(apiToken, 'GET', '/v1/channels');
     if (!validate.ok) {
       throwForStatus(validate.status, validate.data, 'Token NotificaMe invalido');
     }
 
-    // 1.5) Auto-detecta o senderUserId se nao foi informado (best-effort)
-    if (!senderUserId) {
-      const detected = await detectSenderUserId(apiToken);
-      if (detected) {
-        senderUserId = detected;
-      } else {
-        throw new ChannelError(
-          'Informe o Sender User ID (User ID da sua conta NotificaMe — veja em hub.notificame.com.br > perfil)',
-          'BAD_REQUEST'
-        );
-      }
-    }
-
-    // 2) Cria subscriptions para MESSAGE e MESSAGE_STATUS apontando pro webhook
+    // Cria subscriptions para MESSAGE e MESSAGE_STATUS apontando pro webhook
     let messageSubId: string | null = null;
     let statusSubId: string | null = null;
     try {
@@ -309,7 +250,7 @@ export const notificameAdapter: ChannelAdapter = {
       channelConfig: {
         channelId,
         channel,
-        senderUserId,
+        channelToken: channel === 'whatsapp' ? channelToken : undefined,
         webhookUrl: input.webhookUrl,
         subscriptionIds: {
           messages: messageSubId || undefined,
@@ -317,14 +258,12 @@ export const notificameAdapter: ChannelAdapter = {
         },
       } as Record<string, unknown>,
       metadata: { provider: 'notificame', channelId, channel },
-      // NotificaMe nao tem QR (token-mode)
       qrCode: null,
       pairingCode: null,
     };
   },
 
   async getQrCode(_agent: ChannelAgent): Promise<QrResult> {
-    // Token-mode: nao ha QR. Status sempre "connected" se token estiver valido.
     return { qrCode: null, status: 'connected' };
   },
 
@@ -340,8 +279,6 @@ export const notificameAdapter: ChannelAdapter = {
       return { status: 'error', raw: res.data };
     }
 
-    // Token valido → conectado. NotificaMe nao expoe status per-channel via API
-    // publica desse endpoint; consideramos disponivel se o token funciona.
     return {
       status: 'connected',
       phoneNumber: agent.phoneNumber || null,
@@ -350,8 +287,7 @@ export const notificameAdapter: ChannelAdapter = {
   },
 
   async disconnect(_agent: ChannelAgent): Promise<void> {
-    // No-op: NotificaMe nao tem conceito de "logout" da sessao. Pra desconectar
-    // de verdade, o usuario deleta o agente (remove subscriptions).
+    // No-op: NotificaMe nao tem conceito de "logout" da sessao.
   },
 
   async remove(agent: ChannelAgent): Promise<void> {
@@ -369,22 +305,21 @@ export const notificameAdapter: ChannelAdapter = {
     if (!apiToken) throw new ChannelError('Token nao configurado', 'BAD_REQUEST');
 
     const config = getConfig(agent);
-    if (!config.senderUserId) {
-      throw new ChannelError('Sender User ID nao configurado no agente', 'BAD_REQUEST');
-    }
+    const channel = (config.channel || 'whatsapp').toLowerCase();
+    const from = resolveFrom(config);
 
-    const channel = config.channel || 'whatsapp';
-    const isV2 = channel === 'whatsapp' || channel === 'instagram' || channel === 'tiktok';
-    const path = isV2
-      ? `/v2/channels/${channel}/messages`
-      : `/v1/channels/${channel}/messages`;
+    // Destinatario: WhatsApp/SMS sao numeros (limpa formatacao). Instagram/Facebook
+    // sao IDs alfanumericos (mantem como veio).
+    const isNumericChannel = channel === 'whatsapp' || channel === 'sms';
+    const to = isNumericChannel ? input.to.replace(/\D/g, '') : input.to;
 
     const body = {
-      from: config.senderUserId,
-      to: input.to.replace(/\D/g, ''),
+      from,
+      to,
       contents: [{ type: 'text', text: input.text }],
     };
 
+    const path = `/v1/channels/${channel}/messages`;
     const res = await notificameFetch(apiToken, 'POST', path, body);
     if (!res.ok) {
       throwForStatus(res.status, res.data, `Falha ao enviar mensagem (${res.status})`);

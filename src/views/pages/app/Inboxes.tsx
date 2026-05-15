@@ -73,11 +73,12 @@ export default function Inboxes() {
   const [serverUrl, setServerUrl] = useState('');
   const [serverApiKey, setServerApiKey] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  // NotificaMe extras (channelId + senderUserId vao em `extra` no POST)
+  // NotificaMe extras (channelId + channelToken vao em `extra` no POST)
   const [notificameChannelId, setNotificameChannelId] = useState('');
-  const [notificameSenderId, setNotificameSenderId] = useState('');
+  // channelToken: token DO CANAL, usado como `from` no sendMessage (so WhatsApp exige).
+  const [notificameChannelToken, setNotificameChannelToken] = useState('');
   const [notificameChannels, setNotificameChannels] = useState<
-    Array<{ id: string; name?: string; type?: string; status?: string }>
+    Array<{ id: string; name?: string; type?: string; status?: string; channelToken?: string }>
   >([]);
   const [notificameLoadingChannels, setNotificameLoadingChannels] = useState(false);
   const [notificameChannelsError, setNotificameChannelsError] = useState<string | null>(null);
@@ -104,6 +105,12 @@ export default function Inboxes() {
 
   const isNotificame = selectedChannel === 'notificame';
 
+  // Tipo do canal selecionado no dropdown do NotificaMe (whatsapp/instagram/facebook/...).
+  // Define se exigimos o "Token do Canal" (so WhatsApp).
+  const selectedNotificameChannel = notificameChannels.find((c) => c.id === notificameChannelId);
+  const selectedNotificameType = (selectedNotificameChannel?.type || 'whatsapp').toLowerCase();
+  const notificameNeedsChannelToken = isNotificame && selectedNotificameType === 'whatsapp';
+
   const savedCred = selectedChannel ? credentialFor(selectedChannel) : undefined;
   const hasSavedCred = !!savedCred;
 
@@ -121,7 +128,7 @@ export default function Inboxes() {
     setServerApiKey('');
     setPhoneNumber('');
     setNotificameChannelId('');
-    setNotificameSenderId('');
+    setNotificameChannelToken('');
     setNotificameChannels([]);
     setNotificameChannelsError(null);
     setEditingCredential(false);
@@ -136,7 +143,7 @@ export default function Inboxes() {
     setServerUrl('');
     setServerApiKey('');
     setNotificameChannelId('');
-    setNotificameSenderId('');
+    setNotificameChannelToken('');
     setNotificameChannels([]);
     setNotificameChannelsError(null);
     setEditingCredential(false);
@@ -167,6 +174,8 @@ export default function Inboxes() {
       } else if (!notificameChannelId && list.length === 1) {
         // Auto-seleciona se so tem um
         setNotificameChannelId(list[0].id);
+        // Auto-popula channelToken se o NotificaMe expos
+        if (list[0].channelToken) setNotificameChannelToken(list[0].channelToken);
       }
     } catch (e) {
       setNotificameChannelsError((e as Error).message);
@@ -182,11 +191,12 @@ export default function Inboxes() {
     // Se canal precisa de config e a UI esta exibindo inputs, ambos sao obrigatorios
     if (showCredentialInputs && (!serverUrl.trim() || !serverApiKey.trim())) return;
 
-    // NotificaMe: token + channelId obrigatorios. senderUserId e opcional
-    // (adapter auto-detecta via GET /v1/accounts se nao informado).
+    // NotificaMe: token de conta + channelId sempre obrigatorios. Token do Canal
+    // so e exigido quando o canal escolhido eh WhatsApp (eh o `from` do sendMessage).
     const notificameNeedsInputs = isNotificame && (!hasSavedCred || editingCredential);
     if (notificameNeedsInputs && !serverApiKey.trim()) return;
     if (isNotificame && !notificameChannelId.trim()) return;
+    if (notificameNeedsChannelToken && !notificameChannelToken.trim()) return;
 
     // Validacao do bloco "Agente IA"
     if (aiAgentMode === 'reuse' && !selectedAiAgentId && aiAgents.length > 0) {
@@ -209,9 +219,13 @@ export default function Inboxes() {
         extra: isNotificame
           ? {
               channelId: notificameChannelId.trim(),
-              // senderUserId vazio => adapter auto-detecta via /v1/accounts
-              senderUserId: notificameSenderId.trim() || undefined,
-              channel: 'whatsapp',
+              // Tipo do canal vem da listagem (whatsapp/instagram/facebook/...).
+              channel: selectedNotificameType,
+              // Token do canal: usado como `from` no sendMessage. Obrigatorio
+              // apenas pra WhatsApp; Instagram/Facebook usam o proprio channelId.
+              channelToken: notificameNeedsChannelToken
+                ? notificameChannelToken.trim()
+                : undefined,
             }
           : undefined,
         // Bloco Agente IA
@@ -456,7 +470,14 @@ export default function Inboxes() {
                   {notificameChannels.length > 0 ? (
                     <Select
                       value={notificameChannelId}
-                      onValueChange={setNotificameChannelId}
+                      onValueChange={(id) => {
+                        setNotificameChannelId(id);
+                        // Auto-popula channelToken se a API expos ele na listagem
+                        const picked = notificameChannels.find((c) => c.id === id);
+                        if (picked?.channelToken) {
+                          setNotificameChannelToken(picked.channelToken);
+                        }
+                      }}
                     >
                       <SelectTrigger id="notificame-channel-id">
                         <SelectValue placeholder="Selecione um canal" />
@@ -487,20 +508,28 @@ export default function Inboxes() {
                     </p>
                   )}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="notificame-sender">
-                    Sender User ID <span className="text-muted-foreground font-normal">(opcional)</span>
-                  </Label>
-                  <Input
-                    id="notificame-sender"
-                    placeholder="Deixe vazio pra detectar automaticamente"
-                    value={notificameSenderId}
-                    onChange={(e) => setNotificameSenderId(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Detectado automaticamente via /v1/accounts. Preencha só se quiser sobrescrever.
-                  </p>
-                </div>
+                {notificameNeedsChannelToken && (
+                  <div className="space-y-2">
+                    <Label htmlFor="notificame-channel-token">Token do Canal (WhatsApp)</Label>
+                    <Input
+                      id="notificame-channel-token"
+                      type="text"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      data-1p-ignore
+                      data-lpignore="true"
+                      placeholder="Token específico do canal (diferente do API Token da conta)"
+                      value={notificameChannelToken}
+                      onChange={(e) => setNotificameChannelToken(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Usado como <code>from</code> no envio. Pegue em hub.notificame.com.br &gt; canal &gt; token.
+                      Instagram/Facebook não precisam — usam o próprio ID do canal.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -695,7 +724,8 @@ export default function Inboxes() {
                 (showCredentialInputs && (!serverUrl.trim() || !serverApiKey.trim())) ||
                 (isNotificame &&
                   (!notificameChannelId.trim() ||
-                    ((!hasSavedCred || editingCredential) && !serverApiKey.trim()))) ||
+                    ((!hasSavedCred || editingCredential) && !serverApiKey.trim()) ||
+                    (notificameNeedsChannelToken && !notificameChannelToken.trim()))) ||
                 (aiAgentMode === 'create' && !newAiAgentName.trim()) ||
                 isCreating
               }
