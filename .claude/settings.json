@@ -13,7 +13,8 @@
     ],
     "additionalDirectories": [
       "/home/yago/crm-maya/src/app/(dashboard)/app/agents",
-      "/home/yago/crm-maya/src/app/api/agents"
+      "/home/yago/crm-maya/src/app/api/agents",
+      "/home/yago/crm-maya/src/app/api/agents/[id]"
     ]
   }
 }

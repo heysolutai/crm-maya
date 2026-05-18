@@ -38,9 +38,18 @@ export function useConversationScroll({
   }, []);
 
   const scrollToBottom = useCallback(() => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-    }
+    if (!scrollContainerRef.current) return;
+    // Double-rAF pra cobrir o caso da lista virtualizada: o primeiro scroll
+    // usa estimateSize (ainda nao tem medicoes reais), o segundo ajusta apos
+    // o virtualizer ter medido as bubbles que entraram em vista.
+    scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+        }
+      });
+    });
   }, []);
 
   const registerUserInteraction = useCallback(() => {

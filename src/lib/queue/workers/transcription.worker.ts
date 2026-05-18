@@ -139,14 +139,33 @@ async function processTranscription(job: Job<TranscriptionJob>) {
 
   console.log(`[Transcription Worker] Processing job ${job.id} for message ${messageId}`)
 
-  // Le sempre fresh (sem cache) — worker de baixa frequencia, importante
-  // pegar valor recem-salvo na UI ou em outros processos do cluster.
-  const openAiKey = await getSystemSettingFresh('default_openai_api_key')
+  // Resolve OpenAI key: prioridade companyKey > fallback global.
+  // Mesma logica usada em /api/webhooks/whatsapp e /api/messaging/transcribe
+  // pra manter consistencia (worker antes so usava o global, ignorando key
+  // configurada pelo cliente).
+  let companyKey: string | null = null
+  try {
+    const aiConfig = await prisma.aiAgent.findFirst({
+      where: { companyId },
+      select: { apiKeys: true },
+      orderBy: { createdAt: 'desc' },
+    })
+    const candidate = (aiConfig?.apiKeys as Record<string, unknown> | null)?.openai
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      companyKey = candidate.trim()
+    }
+  } catch (err) {
+    console.warn('[Transcription Worker] Falha ao buscar aiAgent da company; usando fallback', err)
+  }
+
+  const openAiKey = companyKey || (await getSystemSettingFresh('default_openai_api_key'))
   if (!openAiKey) {
-    console.warn(`[Transcription Worker] No default OpenAI API key configured (super-admin > Sistema)`)
+    console.warn(`[Transcription Worker] No OpenAI API key (company nem global) — abortando`)
     return { messageId, transcription: null, reason: 'no_api_key' }
   }
-  console.log(`[Transcription Worker] Using OpenAI key: ...${openAiKey.slice(-4)}`)
+  console.log(
+    `[Transcription Worker] Using OpenAI key from ${companyKey ? 'company' : 'global'}: ...${openAiKey.slice(-4)}`,
+  )
 
   if (!instanceApiUrl || !instanceApiKey || !messageKey) {
     console.warn(`[Transcription Worker] Missing UazAPI credentials for message ${messageId}`)

@@ -360,6 +360,104 @@ export async function assignNextAgentInDepartment(
   }
 }
 
+/**
+ * Round-robin de atendentes membros de uma inbox especifica.
+ * Espelha assignNextAgentInDepartment, mas pega membros da `inbox_members`
+ * em vez de `department_members`. Usado pela IA quando transfere uma conversa
+ * pra humano — escolhe o proximo na fila dentro da inbox da conversa.
+ *
+ * Filtros aplicados:
+ *   - User precisa ser membro da inbox (`inbox_members`)
+ *   - User precisa estar ativo (`is_active=true`) e ONLINE (`is_online=true`)
+ *   - User precisa ter role 'agent' | 'manager' | 'company_admin'
+ *
+ * Estado persistido em `lead_distribution_state` com `inbox_id` (nao
+ * `department_id`), pra cada inbox ter seu cursor proprio de round-robin.
+ *
+ * Retorna null quando nao ha ninguem disponivel — caller decide o fallback
+ * (manter na fila, alertar manager, etc).
+ */
+export async function assignNextAgentInInbox(
+  companyId: string,
+  inboxId: string
+): Promise<string | null> {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const members = await tx.inboxMember.findMany({
+        where: { inboxId },
+        select: { userId: true },
+      });
+
+      if (!members || members.length === 0) {
+        console.log('[Inbox Round-Robin] No members in inbox:', inboxId);
+        return null;
+      }
+
+      const memberUserIds = members.map((m) => m.userId);
+
+      const onlineAgents = await tx.user.findMany({
+        where: {
+          id: { in: memberUserIds },
+          companyId,
+          isActive: true,
+          isOnline: true,
+        },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+      });
+
+      if (!onlineAgents || onlineAgents.length === 0) {
+        console.log('[Inbox Round-Robin] No online active agents in inbox:', inboxId);
+        return null;
+      }
+
+      const validRoles = ['agent', 'manager', 'company_admin'] as any[];
+      const rolesData = await tx.userRole.findMany({
+        where: {
+          userId: { in: onlineAgents.map((a) => a.id) },
+          role: { in: validRoles },
+        },
+        select: { userId: true, role: true },
+      });
+
+      if (!rolesData || rolesData.length === 0) return null;
+
+      const agentIds = [...new Set(rolesData.map((r) => r.userId))].sort();
+      if (agentIds.length === 0) return null;
+
+      const state = await tx.leadDistributionState.findFirst({
+        where: { companyId, inboxId },
+        select: { id: true, lastAssignedUserId: true },
+      });
+
+      let nextIndex = 0;
+      if (state?.lastAssignedUserId) {
+        const lastIndex = agentIds.indexOf(state.lastAssignedUserId);
+        nextIndex = (lastIndex + 1) % agentIds.length;
+      }
+
+      const nextAgentId = agentIds[nextIndex];
+
+      if (state) {
+        await tx.leadDistributionState.update({
+          where: { id: state.id },
+          data: { lastAssignedUserId: nextAgentId, updatedAt: new Date() },
+        });
+      } else {
+        await tx.leadDistributionState.create({
+          data: { companyId, inboxId, lastAssignedUserId: nextAgentId, updatedAt: new Date() },
+        });
+      }
+
+      console.log('[Inbox Round-Robin] Assigned agent:', nextAgentId, 'inbox:', inboxId, 'index:', nextIndex, 'of', agentIds.length);
+      return nextAgentId;
+    }, { isolationLevel: 'Serializable' });
+  } catch (error) {
+    console.error('[Inbox Round-Robin] Error:', error);
+    return null;
+  }
+}
+
 export async function pauseClientAIByConversation(conversationId: string): Promise<boolean> {
   try {
     const conversation = await prisma.conversation.findUnique({

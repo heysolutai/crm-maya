@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useConversations } from '@/hooks/useConversations';
@@ -169,11 +170,12 @@ export default function Conversations() {
     notifyTypingDebounced,
   });
 
-  // Scroll management
+  // Scroll management — scrollToMessage do hook usa querySelector (nao funciona
+  // bem com virtualizacao). Definimos uma versao virtualizer-aware abaixo
+  // (handleScrollToMessage).
   const {
     scrollContainerRef,
     handleScroll,
-    scrollToMessage,
     registerUserInteraction,
   } = useConversationScroll({
     selectedConversation,
@@ -347,13 +349,75 @@ export default function Conversations() {
     setMessageToDelete(null);
   };
 
-  // Message grouping helper
-  const isFirstInGroup = (idx: number) => {
-    if (idx === 0) return true;
-    const currentMsg = messages[idx];
-    const prevMsg = messages[idx - 1];
-    return currentMsg.sender_type !== prevMsg.sender_type;
-  };
+  // Pre-calculado uma vez por render do array de mensagens — evita O(n) em CADA
+  // <MessageBubble>. Antes, isFirstInGroup(idx) era chamado 500x por re-render.
+  const firstInGroupFlags = useMemo(() => {
+    const flags = new Array(messages.length);
+    for (let i = 0; i < messages.length; i++) {
+      if (i === 0) {
+        flags[i] = true;
+      } else {
+        flags[i] = messages[i].sender_type !== messages[i - 1].sender_type;
+      }
+    }
+    return flags;
+  }, [messages]);
+
+  // Callbacks estaveis pros MessageBubble nao re-renderizarem em cascata.
+  // Antes, arrow inline criava nova funcao a cada render -> memo do MessageBubble
+  // nao funcionava -> todas as ~500 bubbles re-renderizavam em qualquer mudanca.
+  const handleReact = useCallback((msgId: string, emoji: string) => {
+    addReaction({ messageId: msgId, emoji });
+  }, [addReaction]);
+
+  const handleForward = useCallback((m: Message) => {
+    setMessageToForward(m);
+    setForwardDialogOpen(true);
+  }, []);
+
+  const handleTranscribe = useCallback((msgId: string) => {
+    if (selectedConversation) {
+      transcribeMessage({ messageId: msgId, conversationId: selectedConversation });
+    }
+  }, [transcribeMessage, selectedConversation]);
+
+  // === VIRTUALIZACAO DA LISTA DE MENSAGENS ===
+  // Renderiza somente os itens visiveis + algumas linhas de overscan, em vez
+  // de manter 500+ bubbles no DOM. Combina com a paginacao infinite-scroll:
+  // - load older preserva scroll naturalmente (DOM scrollHeight cresce, scrollTop e
+  //   ajustado pelo useConversationScroll que ja existe)
+  // - getItemKey usa msg.id pra manter cache de medicao entre re-renders
+  // - estimateSize: 90px (chute razoavel pra texto curto); medidas reais
+  //   substituem quando o item entra em vista via measureElement.
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => 90,
+    overscan: 8,
+    getItemKey: (idx) => (messages[idx] as any)?.id ?? idx,
+  });
+
+  // scrollToMessage virtualizer-aware: encontra index, scroll, depois highlight.
+  // Substitui o do hook que usava querySelector (que falha quando item nao esta
+  // no DOM por causa da virtualizacao).
+  const handleScrollToMessage = useCallback(
+    (messageId: string) => {
+      const idx = messages.findIndex((m: any) => m.id === messageId);
+      if (idx === -1) return;
+      virtualizer.scrollToIndex(idx, { align: 'center', behavior: 'smooth' });
+      // Esperar item renderizar antes de highlight
+      setTimeout(() => {
+        const el = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (el) {
+          el.classList.add('ring-2', 'ring-yellow-400', 'ring-offset-2');
+          setTimeout(() => {
+            el.classList.remove('ring-2', 'ring-yellow-400', 'ring-offset-2');
+          }, 2000);
+        }
+      }, 300);
+    },
+    [messages, virtualizer],
+  );
 
   return (
     <div className="flex h-full bg-background">
@@ -433,7 +497,7 @@ export default function Conversations() {
                   <p>Nenhuma mensagem ainda. Inicie a conversa!</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <>
                   {hasMoreMessages && (
                     <div className="text-center py-2">
                       {isLoadingMessages ? (
@@ -445,40 +509,62 @@ export default function Conversations() {
                       )}
                     </div>
                   )}
-                  
-                  {messages.map((msg: Message | any, idx: number) => {
-                    // Itens marcados como _isNote sao notas internas — renderizam
-                    // como sticky note centralizado, nao como bubble de mensagem.
-                    if (msg._isNote) {
-                      return <NoteBubble key={`note-${msg.id}`} note={msg} />;
-                    }
 
-                    const isClient = msg.sender_type === 'client';
-                    const isAI = msg.sender_type === 'ai';
+                  {/* Track virtual: altura total = soma de todas as mensagens.
+                      Items absolutos posicionam-se via transform translateY. */}
+                  <div
+                    style={{
+                      height: `${virtualizer.getTotalSize()}px`,
+                      width: '100%',
+                      position: 'relative',
+                    }}
+                  >
+                    {virtualizer.getVirtualItems().map((virtualRow) => {
+                      const msg = messages[virtualRow.index] as Message | any;
+                      if (!msg) return null;
 
-                    return (
-                      <MessageBubble
-                        key={msg.id}
-                        message={msg}
-                        isClient={isClient}
-                        isAI={isAI}
-                        isFirstInGroup={isFirstInGroup(idx)}
-                        client={selectedConv.client}
-                        quotedMessage={msg.quoted_message_id ? quotedMessages[msg.quoted_message_id] : undefined}
-                        reactions={reactionsMap[msg.id]}
-                        onScrollToMessage={scrollToMessage}
-                        onSetSelectedImage={setSelectedImage}
-                        onReply={handleReply}
-                        onDelete={handleDelete}
-                        onReact={(msgId, emoji) => addReaction({ messageId: msgId, emoji })}
-                        onRemoveReaction={removeReaction}
-                        onForward={(m) => { setMessageToForward(m); setForwardDialogOpen(true); }}
-                        onTranscribe={(msgId) => transcribeMessage({ messageId: msgId, conversationId: selectedConversation! })}
-                        isTranscribing={isTranscribingMessage(msg.id)}
-                      />
-                    );
-                  })}
-                </div>
+                      return (
+                        <div
+                          key={virtualRow.key}
+                          ref={virtualizer.measureElement}
+                          data-index={virtualRow.index}
+                          data-message-id={msg.id}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            transform: `translateY(${virtualRow.start}px)`,
+                          }}
+                          className="pb-3"
+                        >
+                          {msg._isNote ? (
+                            <NoteBubble note={msg} />
+                          ) : (
+                            <MessageBubble
+                              message={msg}
+                              isClient={msg.sender_type === 'client'}
+                              isAI={msg.sender_type === 'ai'}
+                              isFirstInGroup={firstInGroupFlags[virtualRow.index]}
+                              client={selectedConv.client}
+                              quotedMessage={msg.quoted_message_id ? quotedMessages[msg.quoted_message_id] : undefined}
+                              reactions={reactionsMap[msg.id]}
+                              onScrollToMessage={handleScrollToMessage}
+                              onSetSelectedImage={setSelectedImage}
+                              onReply={handleReply}
+                              onDelete={handleDelete}
+                              onReact={handleReact}
+                              onRemoveReaction={removeReaction}
+                              onForward={handleForward}
+                              onTranscribe={handleTranscribe}
+                              isTranscribing={isTranscribingMessage(msg.id)}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
 

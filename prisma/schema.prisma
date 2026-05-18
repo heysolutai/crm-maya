@@ -183,6 +183,7 @@ model User {
   supportTicketsCreated  SupportTicket[]     @relation("TicketCreator")
   supportTicketsResolved SupportTicket[]     @relation("TicketResolver")
   departmentMemberships  DepartmentMember[]
+  inboxMemberships       InboxMember[]
   doctorSchedules        DoctorSchedule[]
 
   @@index([companyId], map: "idx_users_company")
@@ -723,6 +724,8 @@ model Inbox {
   followUpJobs    FollowUpJob[]
   catalogProducts CatalogProduct[]
   conversations   Conversation[]
+  members         InboxMember[]
+  leadDistributionStates LeadDistributionState[]
 
   @@index([companyId], map: "idx_inboxes_company")
   @@index([channelType], map: "idx_inboxes_channel")
@@ -972,12 +975,15 @@ model LeadDistributionState {
   companyId          String   @map("company_id") @db.Uuid
   lastAssignedUserId String?  @map("last_assigned_user_id") @db.Uuid
   departmentId       String?  @map("department_id") @db.Uuid
+  inboxId            String?  @map("inbox_id") @db.Uuid
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
 
   company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   department Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  inbox      Inbox?      @relation(fields: [inboxId], references: [id], onDelete: Cascade)
 
   @@index([companyId], map: "idx_lead_dist_company")
+  @@index([inboxId], map: "idx_lead_dist_inbox")
   @@map("lead_distribution_state")
 }
 
@@ -1017,6 +1023,24 @@ model DepartmentMember {
   @@index([departmentId], map: "idx_department_members_dept")
   @@index([userId], map: "idx_department_members_user")
   @@map("department_members")
+}
+
+/// M:M entre Inbox e User — atendentes que fazem parte da inbox.
+/// Define quem pode VER conversas dessa inbox (visibility B) e
+/// e a fonte do round-robin quando a IA transfere pra humano.
+model InboxMember {
+  id        String   @id @default(uuid()) @db.Uuid
+  inboxId   String   @map("inbox_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  inbox Inbox @relation(fields: [inboxId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([inboxId, userId])
+  @@index([inboxId], map: "idx_inbox_members_inbox")
+  @@index([userId], map: "idx_inbox_members_user")
+  @@map("inbox_members")
 }
 
 model Pipeline {

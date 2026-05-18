@@ -26,7 +26,9 @@ export function useConversations(filters?: ConversationFilters) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
-  const [usePolling] = useState(true); // Always use polling now
+  // Polling so atua quando SSE esta caido. Indicador reflete o estado real
+  // pra atendente saber se esta em modo degradado.
+  const usePolling = realtimeStatus === 'disconnected';
 
   const [conversationMessages, setConversationMessages] = useState<{
     [conversationId: string]: {
@@ -286,17 +288,55 @@ export function useConversations(filters?: ConversationFilters) {
     setRealtimeStatus('connecting');
     const es = new EventSource('/api/conversations/events');
 
+    // Helpers de fallback polling — so atua quando SSE esta offline.
+    // Quando SSE conecta/reconecta, polling para. Economiza requests redundantes
+    // no caso normal e cobre buracos durante reconnect/sleep.
+    const startFallbackPolling = () => {
+      if (pollingIntervalRef.current) return;
+      pollingIntervalRef.current = setInterval(() => {
+        queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
+      }, 5_000);
+    };
+    const stopFallbackPolling = () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+
     es.addEventListener('open', () => {
       console.log('[SSE] conectado');
       setRealtimeStatus('connected');
+      stopFallbackPolling();
     });
 
     es.addEventListener('connected', (evt: MessageEvent) => {
       console.log('[SSE] handshake:', evt.data);
     });
 
+    // Update surgical: muda APENAS a entrada do cache da conversa afetada.
+    // Antes era invalidateQueries() que refetchava a lista inteira de 100+ conversas
+    // em cada mensagem que chegava — causava o "travado" no frontend.
+    const updateConversationInCache = (
+      conversationId: string,
+      patch: (conv: any) => any,
+    ) => {
+      queryClient.setQueriesData(
+        { queryKey: ['conversations', companyId] },
+        (oldData: any) => {
+          if (!Array.isArray(oldData)) return oldData;
+          let changed = false;
+          const next = oldData.map((c: any) => {
+            if (c.id !== conversationId) return c;
+            changed = true;
+            return patch(c);
+          });
+          return changed ? next : oldData;
+        },
+      );
+    };
+
     es.addEventListener('message', (evt: MessageEvent) => {
-      console.log('[SSE] evento recebido:', evt.data);
       try {
         const data = JSON.parse(evt.data);
 
@@ -310,7 +350,21 @@ export function useConversations(filters?: ConversationFilters) {
               .sort((a, b) => new Date(a.createdAt || a.created_at).getTime() - new Date(b.createdAt || b.created_at).getTime());
             return { ...prev, [data.conversationId]: { ...state, messages: merged } };
           });
-          queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
+          // Atualiza o preview da lista (ultima mensagem + updatedAt) sem refetch
+          updateConversationInCache(data.conversationId, (conv) => ({
+            ...conv,
+            updatedAt: incoming.createdAt || incoming.created_at,
+            last_message: {
+              text: incoming.message_text,
+              type: incoming.message_type,
+              sender_type: incoming.sender_type,
+              created_at: incoming.createdAt || incoming.created_at,
+            },
+            // Incrementa unread apenas se for mensagem do cliente
+            unread_count: incoming.sender_type === 'client'
+              ? (conv.unread_count || 0) + 1
+              : conv.unread_count,
+          }));
           return;
         }
 
@@ -326,7 +380,8 @@ export function useConversations(filters?: ConversationFilters) {
               },
             };
           });
-          queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
+          // Delete de mensagem nao afeta a lista normalmente (a preview pode ficar
+          // levemente stale ate o proximo evento — aceitavel)
           return;
         }
 
@@ -352,11 +407,19 @@ export function useConversations(filters?: ConversationFilters) {
               },
             };
           });
-          queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
+          // Update de status (read, etc) — propaga unread_count se ficou 0
+          if (patch.readStatus === 'read' || patch.readAt) {
+            updateConversationInCache(data.conversationId, (conv) => ({
+              ...conv,
+              unread_count: 0,
+            }));
+          }
           return;
         }
 
         if (data.type === 'conversation:update') {
+          // Mudancas estruturais da conversa (transferencia, status, tags) — aqui
+          // a invalidacao se justifica porque o conjunto de campos afetados varia.
           queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
           queryClient.invalidateQueries({ queryKey: ['department-queue', companyId] });
           return;
@@ -385,22 +448,14 @@ export function useConversations(filters?: ConversationFilters) {
     });
 
     es.addEventListener('error', () => {
-      // O browser reconecta sozinho; so logamos
       console.warn('[SSE] conexao caiu, reconectando...');
       setRealtimeStatus('disconnected');
+      startFallbackPolling();
     });
-
-    // Polling de fallback — cobre buracos do SSE (ex: reconnect, browser sleep).
-    pollingIntervalRef.current = setInterval(() => {
-      queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
-    }, 10_000);
 
     return () => {
       es.close();
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
+      stopFallbackPolling();
     };
   }, [companyId, queryClient]);
 

@@ -3,6 +3,8 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useInboxes, useInboxAiAgent } from '@/hooks/useInboxes';
 import { useAiAgents } from '@/hooks/useAiAgents';
+import { useInboxMembers } from '@/hooks/useInboxMembers';
+import { useTeam } from '@/hooks/useTeam';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,7 +27,12 @@ import {
   Plug,
   ExternalLink,
   Inbox as InboxIcon,
+  Users,
+  Save,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { CHANNEL_REGISTRY, type ChannelType } from '@/lib/channels/types';
 import { cn } from '@/lib/utils';
 
@@ -48,6 +55,7 @@ const statusStyles: Record<string, { dot: string; label: string; badge: 'default
 
 const tabs = [
   { id: 'connection', label: 'Conexão', icon: Plug },
+  { id: 'members', label: 'Atendentes', icon: Users },
   { id: 'ai-agent', label: 'Agente IA', icon: Bot },
 ];
 
@@ -96,6 +104,8 @@ export default function InboxDetail({ inboxId }: Props) {
     switch (activeTab) {
       case 'connection':
         return <ConnectionTab inbox={inbox} />;
+      case 'members':
+        return <MembersTab inboxId={inbox.id} />;
       case 'ai-agent':
         return <AiAgentTab inbox={inbox} />;
       default:
@@ -481,6 +491,154 @@ function ConnectionTab({ inbox }: { inbox: ReturnType<typeof useInboxes>['inboxe
               {qrLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Gerar QR Code
             </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MembersTab({ inboxId }: { inboxId: string }) {
+  const { members, memberUserIds, isLoading, replaceMembers, isSaving } = useInboxMembers(inboxId);
+  const { teamMembers, isLoading: loadingTeam } = useTeam();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
+
+  // Sincroniza estado local com o que esta salvo no banco
+  useEffect(() => {
+    if (!isLoading) {
+      setSelected(new Set(memberUserIds));
+    }
+  }, [isLoading, memberUserIds.join(',')]);
+
+  const isAllSelected = teamMembers.length > 0 && selected.size === teamMembers.length;
+  const dirty =
+    selected.size !== memberUserIds.length ||
+    [...selected].some((id) => !memberUserIds.includes(id));
+
+  const filtered = teamMembers.filter((m: any) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      (m.full_name || '').toLowerCase().includes(q) ||
+      (m.email || '').toLowerCase().includes(q)
+    );
+  });
+
+  const toggleAll = () => {
+    if (isAllSelected) setSelected(new Set());
+    else setSelected(new Set(teamMembers.map((m: any) => m.id)));
+  };
+
+  const toggle = (userId: string) => {
+    const next = new Set(selected);
+    if (next.has(userId)) next.delete(userId);
+    else next.add(userId);
+    setSelected(next);
+  };
+
+  const handleSave = () => {
+    replaceMembers([...selected]);
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-6 space-y-5">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              Atendentes desta caixa
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Apenas atendentes selecionados podem ver as conversas desta inbox e participam do round-robin quando a IA transfere.
+            </p>
+          </div>
+          <Badge variant="outline" className="shrink-0">
+            {selected.size} de {teamMembers.length} selecionado(s)
+          </Badge>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="Buscar atendente..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="flex-1 px-3 py-2 text-sm border rounded-md bg-background"
+          />
+          <Button variant="outline" size="sm" onClick={toggleAll} disabled={teamMembers.length === 0}>
+            {isAllSelected ? (
+              <><Square className="h-4 w-4 mr-2" /> Desmarcar todos</>
+            ) : (
+              <><CheckSquare className="h-4 w-4 mr-2" /> Selecionar todos</>
+            )}
+          </Button>
+        </div>
+
+        {loadingTeam || isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : teamMembers.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground text-sm">
+            Nenhum atendente cadastrado nesta empresa.
+          </div>
+        ) : (
+          <div className="space-y-1 max-h-[420px] overflow-y-auto -mx-1 px-1">
+            {filtered.map((m: any) => {
+              const isSel = selected.has(m.id);
+              return (
+                <label
+                  key={m.id}
+                  className={cn(
+                    'flex items-center gap-3 p-3 rounded-md cursor-pointer transition-colors',
+                    isSel ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/40'
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSel}
+                    onChange={() => toggle(m.id)}
+                    className="h-4 w-4 rounded"
+                  />
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarImage src={m.avatar_url || undefined} alt={m.full_name || ''} />
+                    <AvatarFallback className="text-xs">
+                      {(m.full_name || m.email || '?').slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{m.full_name || m.email}</p>
+                    <p className="text-xs text-muted-foreground truncate">{m.email}</p>
+                  </div>
+                  {!m.is_active && (
+                    <Badge variant="outline" className="text-[10px]">Inativo</Badge>
+                  )}
+                </label>
+              );
+            })}
+            {filtered.length === 0 && (
+              <p className="text-center text-sm text-muted-foreground py-4">Nenhum resultado.</p>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-end pt-2 border-t">
+          <Button onClick={handleSave} disabled={!dirty || isSaving}>
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-2" />
+            )}
+            Salvar
+          </Button>
+        </div>
+
+        {members.length > 0 && (
+          <div className="text-xs text-muted-foreground border-t pt-3">
+            <strong>Como funciona:</strong> conversas desta inbox só aparecem pros atendentes
+            selecionados. A IA distribui em round-robin entre eles quando transfere.
           </div>
         )}
       </CardContent>

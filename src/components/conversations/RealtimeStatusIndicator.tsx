@@ -16,8 +16,8 @@ export function RealtimeStatusIndicator({ status, usePolling, onRefresh }: Realt
       return {
         icon: AlertCircle,
         color: 'text-yellow-500',
-        label: 'Modo Polling',
-        description: 'Atualização a cada 10s'
+        label: 'Modo degradado',
+        description: 'SSE caiu — atualizando a cada 5s ate reconectar'
       };
     }
 

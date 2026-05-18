@@ -52,6 +52,36 @@ export async function GET(req: NextRequest) {
     if (departmentId) where.departmentId = departmentId
     if (inboxId) where.inboxId = inboxId
 
+    // Visibilidade por membership de inbox (regra B — estrita):
+    //   - super_admin / company_admin / manager veem TUDO da empresa
+    //   - demais usuarios so veem conversas das inboxes que sao MEMBROS
+    //   - 0 inboxes selecionadas = nao ve NADA (mesmo sendo do time/department)
+    //   - conversas legadas SEM inbox tambem ficam invisiveis (so admin/manager veem)
+    if (agentId) {
+      const roleRow = await prisma.userRole.findFirst({
+        where: { userId: agentId, companyId },
+        select: { role: true },
+      })
+      const role = roleRow?.role || ''
+      const isPrivileged = ['super_admin', 'company_admin', 'manager'].includes(role)
+
+      if (!isPrivileged) {
+        const memberships = await prisma.inboxMember.findMany({
+          where: { userId: agentId },
+          select: { inboxId: true },
+        })
+        const memberInboxIds = memberships.map((m) => m.inboxId)
+
+        if (memberInboxIds.length === 0) {
+          // Sem inbox → vazio. Usamos um UUID impossivel pra garantir 0 resultados
+          // sem precisar branchar o caller (mantem o shape do where).
+          where.inboxId = '00000000-0000-0000-0000-000000000000'
+        } else {
+          where.inboxId = { in: memberInboxIds }
+        }
+      }
+    }
+
     const limit = parseInt(req.nextUrl.searchParams.get('limit') || '100')
     const offset = parseInt(req.nextUrl.searchParams.get('offset') || '0')
 
