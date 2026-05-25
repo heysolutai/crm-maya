@@ -67,6 +67,7 @@ export interface OutboundMediaJob {
 export interface InboundMessageJob {
   rawPayload: Record<string, unknown>
   receivedAt: string
+  agentId?: string
 }
 
 // Cron job types (no payload — workers poll Supabase directly)

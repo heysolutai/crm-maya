@@ -979,6 +979,9 @@ export async function POST(req: NextRequest) {
         await enqueueInboundMessage({
           rawPayload: rawPayload as Record<string, unknown>,
           receivedAt: new Date().toISOString(),
+          // Preserva o agentId da URL: o worker re-invoca este handler internamente
+          // e sem isso perderiamos a identificacao do agente em fluxo multi-agente.
+          agentId: req.nextUrl.searchParams.get('agentId') || undefined,
         });
         console.log('[Receive] Message enqueued for async processing');
         return jsonResponse({ success: true, message: 'Message queued for processing' });
@@ -1006,23 +1009,36 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 1. Buscar company_id e ID do agente através da tabela whatsapp_instances
-    const instance = await prisma.whatsappInstance.findFirst({
-      where: { instanceName: payload.instance_name },
-      select: { id: true, companyId: true, isActive: true },
-    });
+    // 1. Buscar company_id e ID do agente através da tabela whatsapp_instances.
+    // Prioridade: ?agentId= da query (fonte de verdade quando webhook foi registrado
+    // pelo fluxo multi-agente em /api/agents); fallback pra instanceName do payload
+    // (compat com instancias antigas).
+    const agentIdFromQuery = req.nextUrl.searchParams.get('agentId');
+
+    const instance = agentIdFromQuery
+      ? await prisma.whatsappInstance.findUnique({
+          where: { id: agentIdFromQuery },
+          select: { id: true, companyId: true, isActive: true, instanceName: true },
+        })
+      : await prisma.whatsappInstance.findFirst({
+          where: { instanceName: payload.instance_name },
+          select: { id: true, companyId: true, isActive: true, instanceName: true },
+        });
 
     if (!instance) {
-      console.error('WhatsApp instance not found:', payload.instance_name);
+      const lookupKey = agentIdFromQuery
+        ? `agentId=${agentIdFromQuery}`
+        : `instanceName=${payload.instance_name}`;
+      console.error('WhatsApp instance not found:', lookupKey);
       return jsonResponse({
-        error: `WhatsApp instance "${payload.instance_name}" not found. Please check if the instance is properly configured.`
+        error: `WhatsApp instance not found (${lookupKey}). Please check if the instance is properly configured.`
       }, 404);
     }
 
     if (!instance.isActive) {
-      console.warn('WhatsApp instance is inactive:', payload.instance_name);
+      console.warn('WhatsApp instance is inactive:', instance.instanceName);
       return jsonResponse({
-        error: `WhatsApp instance "${payload.instance_name}" is inactive`
+        error: `WhatsApp instance "${instance.instanceName}" is inactive`
       }, 403);
     }
 

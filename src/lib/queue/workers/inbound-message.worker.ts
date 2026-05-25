@@ -10,14 +10,14 @@ export function startInboundMessageWorker() {
   worker = new Worker<InboundMessageJob>(
     QUEUE_NAMES.INBOUND_MESSAGE,
     async (job: Job<InboundMessageJob>) => {
-      const { rawPayload } = job.data
+      const { rawPayload, agentId } = job.data
 
       // Dynamic import to avoid circular dependencies and keep worker lightweight
       const { processInboundMessageFromQueue } = await import(
         '@/app/api/webhooks/whatsapp/process-message'
       )
 
-      await processInboundMessageFromQueue(rawPayload)
+      await processInboundMessageFromQueue(rawPayload, agentId)
     },
     {
       connection: getRedisConnection(),

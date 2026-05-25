@@ -90,10 +90,17 @@ function mapAgent(i: any) {
   }
 }
 
+// uazapi compartilha o receiver legado /api/webhooks/whatsapp.
+// Os outros canais (evolution_baileys etc) tem rota propria que casa com o channelType.
+const WEBHOOK_PATH_BY_CHANNEL: Record<string, string> = {
+  uazapi: 'whatsapp',
+}
+
 function publicWebhookUrl(req: NextRequest, channelType: string, agentId: string): string {
   const envBase = process.env.PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL
   const base = envBase || `${req.nextUrl.protocol}//${req.nextUrl.host}`
-  return `${base.replace(/\/+$/, '')}/api/webhooks/${channelType}?agentId=${agentId}`
+  const pathSegment = WEBHOOK_PATH_BY_CHANNEL[channelType] || channelType
+  return `${base.replace(/\/+$/, '')}/api/webhooks/${pathSegment}?agentId=${agentId}`
 }
 
 export async function GET(req: NextRequest) {

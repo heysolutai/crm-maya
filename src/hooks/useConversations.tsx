@@ -389,9 +389,46 @@ export function useConversations(filters?: ConversationFilters) {
     });
 
     // Polling de fallback — cobre buracos do SSE (ex: reconnect, browser sleep).
+    // (1) Lista lateral a cada 10s. (2) Mensagens das conversas abertas a cada 15s
+    // (faz refetch do tail e mescla as novas — protege contra SSE morrendo
+    // silenciosamente, que faria a conversa congelar ate refresh manual).
     pollingIntervalRef.current = setInterval(() => {
       queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
     }, 10_000);
+
+    const messagesPollInterval = setInterval(async () => {
+      const all = conversationMessagesRef.current;
+      const openIds = Object.keys(all).filter((id) => all[id]?.initialLoaded);
+      if (openIds.length === 0) return;
+
+      // Faz refetch em paralelo de todas as conversas abertas.
+      // Limite de 20 mensagens — so estamos atras das mais recentes que SSE pode ter perdido.
+      await Promise.all(
+        openIds.map(async (convId) => {
+          try {
+            const fresh = await fetchMessagesForConversation(convId, undefined, 20);
+            const normalized = [...fresh].map(normalizeMessage).reverse();
+            setConversationMessages((prev) => {
+              const state = prev[convId];
+              if (!state?.initialLoaded) return prev;
+              const existingIds = new Set(state.messages.map((m: any) => m.id));
+              const additions = normalized.filter((m: any) => !existingIds.has(m.id));
+              if (additions.length === 0) return prev;
+              const merged = [...state.messages.filter((m: any) => !m._optimistic), ...additions]
+                .sort((a: any, b: any) => {
+                  const ta = new Date(a.createdAt || a.created_at || 0).getTime();
+                  const tb = new Date(b.createdAt || b.created_at || 0).getTime();
+                  return ta - tb;
+                });
+              return { ...prev, [convId]: { ...state, messages: merged } };
+            });
+          } catch (err) {
+            // Silencioso — polling, nao tem porque assustar o usuario com toast
+            console.warn(`[Polling] refetch falhou para ${convId}:`, (err as Error).message);
+          }
+        })
+      );
+    }, 15_000);
 
     return () => {
       es.close();
@@ -399,6 +436,7 @@ export function useConversations(filters?: ConversationFilters) {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
       }
+      clearInterval(messagesPollInterval);
     };
   }, [companyId, queryClient]);
 
