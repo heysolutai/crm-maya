@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   ArrowLeft,
   Bot,
@@ -23,6 +24,9 @@ import {
   Settings as SettingsIcon,
   FlaskConical,
   Plug,
+  RefreshCw,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { AIPromptsEditor } from '@/components/ai';
 import { FAQManager } from '@/components/settings/FAQManager';
@@ -229,6 +233,7 @@ export default function AgentDetail({ agentId }: Props) {
 }
 
 function ConnectionTab({ agent }: { agent: ReturnType<typeof useAgents>['agents'][number] }) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const channelMeta = CHANNEL_REGISTRY[agent.channel_type];
@@ -237,9 +242,19 @@ function ConnectionTab({ agent }: { agent: ReturnType<typeof useAgents>['agents'
   const [qrLoading, setQrLoading] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [reprovisioning, setReprovisioning] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showReprovisionDialog, setShowReprovisionDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const isConnected = agent.status === 'connected';
   const isConnecting = agent.status === 'connecting' && !!agent.qr_code;
+  const hasError = agent.status === 'error' || !!agent.error_message;
+  // Heuristica: erros do tipo "token invalido" / "unauthorized" pedem recriacao
+  // da instancia, nao so reconexao. Mostra o CTA dentro do alerta de erro.
+  const looksLikeAuthError = /token|unauthorized|401|forbidden|403|invalid.*key|invalid.*credential/i.test(
+    agent.error_message || ''
+  );
 
   // Polling de status enquanto estiver "connecting" — checa a cada 4s
   useEffect(() => {
@@ -291,6 +306,43 @@ function ConnectionTab({ agent }: { agent: ReturnType<typeof useAgents>['agents'
     }
   };
 
+  const handleReprovision = async () => {
+    setReprovisioning(true);
+    try {
+      const res = await fetch(`/api/agents/${agent.id}/reprovision`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao recriar instancia');
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      toast({
+        title: 'Instancia recriada',
+        description: data.qr_code
+          ? 'QR Code gerado. Escaneie pra reconectar.'
+          : 'Pronta pra reconexao.',
+      });
+    } catch (e: any) {
+      toast({ title: 'Erro ao recriar', description: e.message, variant: 'destructive' });
+    } finally {
+      setReprovisioning(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/agents?id=${agent.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Falha ao excluir');
+      }
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      toast({ title: 'Agente excluido' });
+      router.push('/app/agents');
+    } catch (e: any) {
+      toast({ title: 'Erro ao excluir', description: e.message, variant: 'destructive' });
+      setDeleting(false);
+    }
+  };
+
   if (!isAvailable) {
     return (
       <Card>
@@ -333,9 +385,35 @@ function ConnectionTab({ agent }: { agent: ReturnType<typeof useAgents>['agents'
         )}
 
         {agent.error_message && agent.status !== 'connected' && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-            <p className="font-medium">Último erro do provider:</p>
-            <p className="text-xs mt-1 break-words">{agent.error_message}</p>
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive space-y-3">
+            <div>
+              <p className="font-medium flex items-center gap-1.5">
+                <AlertTriangle className="h-4 w-4" />
+                Último erro do provider:
+              </p>
+              <p className="text-xs mt-1 break-words">{agent.error_message}</p>
+            </div>
+            {looksLikeAuthError && (
+              <div className="border-t border-destructive/20 pt-3">
+                <p className="text-xs mb-2">
+                  Token invalido ou expirado. Gerar QR de novo nao resolve —
+                  precisa recriar a instancia no provider.
+                </p>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setShowReprovisionDialog(true)}
+                  disabled={reprovisioning}
+                >
+                  {reprovisioning ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Recriar instancia agora
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -403,7 +481,90 @@ function ConnectionTab({ agent }: { agent: ReturnType<typeof useAgents>['agents'
             </Button>
           </div>
         )}
+
+        {/* Acoes avancadas: recriar instancia (corrige token invalido / instancia orfa)
+            e excluir agente (apaga registro local + tenta limpar no provider).
+            Discreto no fim do card pra nao competir com o fluxo normal. */}
+        <div className="pt-4 border-t space-y-3">
+          <details className="group">
+            <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground select-none">
+              Acoes avancadas
+            </summary>
+            <div className="mt-3 space-y-3">
+              <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+                <div className="text-xs">
+                  <p className="font-medium text-foreground">Recriar instancia</p>
+                  <p className="text-muted-foreground mt-0.5">
+                    Apaga a instancia no provider e cria do zero. Mantem este
+                    agente, conversas e mensagens. Use quando o token expirou
+                    ou a instancia ficou orfa.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowReprovisionDialog(true)}
+                  disabled={reprovisioning}
+                  className="shrink-0"
+                >
+                  {reprovisioning ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Recriar
+                </Button>
+              </div>
+
+              <div className="flex items-start justify-between gap-4 rounded-md border border-destructive/30 p-3">
+                <div className="text-xs">
+                  <p className="font-medium text-destructive">Excluir agente</p>
+                  <p className="text-muted-foreground mt-0.5">
+                    Remove o agente, suas conversas e configuracoes. Acao
+                    irreversivel.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setShowDeleteDialog(true)}
+                  disabled={deleting}
+                  className="shrink-0"
+                >
+                  {deleting ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Excluir
+                </Button>
+              </div>
+            </div>
+          </details>
+        </div>
       </CardContent>
+
+      <ConfirmDialog
+        open={showReprovisionDialog}
+        onOpenChange={setShowReprovisionDialog}
+        title="Recriar instancia no provider?"
+        description={`Vai apagar a instancia "${agent.instance_name}" no provider e criar uma nova. O agente local (${agent.display_name}) e suas conversas continuam. Voce vai precisar escanear o QR Code novamente.`}
+        confirmLabel="Recriar"
+        variant="destructive"
+        onConfirm={handleReprovision}
+        isLoading={reprovisioning}
+      />
+
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Excluir agente?"
+        description={`O agente "${agent.display_name}", suas conversas e mensagens serao removidos definitivamente. Esta acao nao pode ser desfeita.`}
+        confirmLabel="Excluir agente"
+        variant="destructive"
+        onConfirm={handleDelete}
+        isLoading={deleting}
+      />
     </Card>
   );
 }
