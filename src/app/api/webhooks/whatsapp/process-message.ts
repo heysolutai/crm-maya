@@ -12,7 +12,18 @@
 export async function processInboundMessageFromQueue(
   rawPayload: Record<string, unknown>
 ): Promise<void> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  // O worker roda NO MESMO processo/container que o servidor HTTP, entao
+  // chamamos o proprio app via loopback interno — NUNCA via URL publica.
+  // Motivo: se NEXT_PUBLIC_APP_URL estiver errado (ex: apontando pro servidor
+  // da UAZ), esse POST de processamento cai em outro host e retorna 404
+  // ("Route POST:/api/errors/not-found not found") -> a mensagem chega no
+  // webhook mas nunca e salva. O loopback usa a porta real do servidor (PORT,
+  // setada no container). Em dev/local cai no fallback da URL publica.
+  const appUrl =
+    process.env.INTERNAL_APP_URL ||
+    (process.env.PORT ? `http://127.0.0.1:${process.env.PORT}` : null) ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    'http://localhost:3000'
 
   // Call the webhook endpoint internally with a special header to skip re-enqueue
   const response = await fetch(`${appUrl}/api/webhooks/whatsapp`, {
