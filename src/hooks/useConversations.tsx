@@ -282,6 +282,16 @@ export function useConversations(filters?: ConversationFilters) {
   // Realtime via Server-Sent Events (push do backend -> frontend).
   // O polling de fallback continua rodando em intervalo maior, pra casos de
   // desconexao do SSE ou mensagens perdidas durante um reconnect.
+  // Ultimo evento de transferencia recebido via SSE. O componente observa isso e
+  // mostra a notificacao, decidindo a audiencia (fila -> todos; alvo -> so o agente).
+  const [lastTransferEvent, setLastTransferEvent] = useState<{
+    conversationId: string;
+    targetUserId: string | null;
+    status: 'pending' | 'active';
+    clientName: string | null;
+    nonce: number;
+  } | null>(null);
+
   useEffect(() => {
     if (!companyId) return;
 
@@ -440,6 +450,19 @@ export function useConversations(filters?: ConversationFilters) {
           });
           // Atualiza tambem o drawer de "Notas & Lembretes"
           queryClient.invalidateQueries({ queryKey: ['conversation-notes', data.conversationId] });
+          return;
+        }
+
+        if (data.type === 'conversation:transferred' && data.conversationId) {
+          // So registra o evento; o componente decide se notifica ESTE usuario
+          // (ele tem o user.id via useAuth). nonce garante re-disparo do efeito.
+          setLastTransferEvent({
+            conversationId: data.conversationId,
+            targetUserId: data.targetUserId ?? null,
+            status: data.status === 'pending' ? 'pending' : 'active',
+            clientName: data.clientName ?? null,
+            nonce: Date.now(),
+          });
           return;
         }
       } catch (err) {
@@ -946,6 +969,41 @@ export function useConversations(filters?: ConversationFilters) {
     },
   });
 
+  // Apagar varias mensagens de uma vez (selecao em massa). Espelha deleteMessage
+  // mas manda a lista de ids e remove todas do estado local de uma vez.
+  const deleteManyMessages = useMutation({
+    mutationFn: async ({ messageIds, conversationId }: { messageIds: string[]; conversationId: string }) => {
+      const res = await fetch('/api/whatsapp/delete-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageIds }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to delete messages');
+      }
+      return { messageIds, conversationId };
+    },
+    onSuccess: ({ messageIds, conversationId }) => {
+      const idSet = new Set(messageIds);
+      setConversationMessages(prev => {
+        const state = prev[conversationId];
+        if (!state) return prev;
+        return {
+          ...prev,
+          [conversationId]: {
+            ...state,
+            messages: state.messages.filter(m => !idSet.has(m.id)),
+          },
+        };
+      });
+      toast({ title: `${messageIds.length} mensagem(ns) apagada(s)`, description: 'As mensagens foram removidas com sucesso.' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Erro ao apagar mensagens', description: getErrorMessage(error), variant: 'destructive' });
+    },
+  });
+
   // Track per-message: evita disparar a mesma transcricao duas vezes
   // mesmo se o usuario clicar repetidamente antes do isPending refletir.
   const [transcribingIds, setTranscribingIds] = useState<Set<string>>(new Set());
@@ -1207,6 +1265,9 @@ export function useConversations(filters?: ConversationFilters) {
     addTag: addTag.mutate,
     removeTag: removeTag.mutate,
     deleteMessage: deleteMessage.mutate,
+    deleteManyMessages: deleteManyMessages.mutate,
+    isDeletingMessages: deleteManyMessages.isPending,
+    lastTransferEvent,
     forwardMessage: forwardMessage.mutate,
     isForwarding: forwardMessage.isPending,
     transcribeMessage: transcribeMessage.mutate,

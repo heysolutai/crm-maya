@@ -17,9 +17,10 @@ import { useDepartments } from '@/hooks/useDepartments';
 import { useInboxes } from '@/hooks/useInboxes';
 import { useDepartmentQueue } from '@/hooks/useDepartmentQueue';
 import { usePresenceContext } from '@/hooks/usePresence';
-import { MessageCircle, Loader2 } from 'lucide-react';
+import { MessageCircle, Loader2, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
 
 // Components
 import { ConversationSidebar } from '@/components/conversations/ConversationSidebar';
@@ -63,6 +64,11 @@ export default function Conversations() {
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
   const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
   const [messageToForward, setMessageToForward] = useState<Message | null>(null);
+
+  // Selecao em massa de mensagens
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   
   // Media state
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -99,6 +105,9 @@ export default function Conversations() {
     addTag,
     removeTag,
     deleteMessage,
+    deleteManyMessages,
+    isDeletingMessages,
+    lastTransferEvent,
     forwardMessage,
     isForwarding,
     transcribeMessage,
@@ -349,6 +358,95 @@ export default function Conversations() {
     setMessageToDelete(null);
   };
 
+  // === SELECAO EM MASSA ===
+  // Callbacks estaveis (useCallback) pros MessageBubble memoizados nao
+  // re-renderizarem em cascata. So a bubble cujo isSelected muda re-renderiza.
+  const handleEnterSelectionMode = useCallback((messageId: string) => {
+    setSelectionMode(true);
+    setSelectedMessageIds(new Set([messageId]));
+  }, []);
+
+  const handleToggleSelectMessage = useCallback((messageId: string) => {
+    setSelectedMessageIds(prev => {
+      const next = new Set(prev);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
+      return next;
+    });
+  }, []);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedMessageIds(new Set());
+  }, []);
+
+  const confirmBulkDelete = () => {
+    if (selectedMessageIds.size > 0 && selectedConversation) {
+      deleteManyMessages({
+        messageIds: Array.from(selectedMessageIds),
+        conversationId: selectedConversation,
+      });
+    }
+    setBulkDeleteDialogOpen(false);
+    exitSelectionMode();
+  };
+
+  // Trocar de conversa zera a selecao (evita apagar mensagem da conversa errada).
+  useEffect(() => {
+    setSelectionMode(false);
+    setSelectedMessageIds(new Set());
+  }, [selectedConversation]);
+
+  // Notificacao de transferencia (toast grande com acoes). Audiencia:
+  // - status 'pending' (foi pra fila do departamento) -> notifica todos os agentes
+  // - alvo direto -> so o agente cujo id bate com targetUserId
+  useEffect(() => {
+    if (!lastTransferEvent) return;
+    const ev = lastTransferEvent;
+    const isForMe = ev.status === 'pending' || ev.targetUserId === user?.id;
+    if (!isForMe) return;
+    if (ev.conversationId === selectedConversation) return; // ja estou nela
+
+    const t = toast({
+      title: '🔔 Conversa transferida',
+      duration: 15000,
+      description: (
+        <div className="mt-1 space-y-2">
+          <p className="text-sm">
+            {(ev.clientName || 'Cliente') +
+              (ev.status === 'pending'
+                ? ' está aguardando atendimento'
+                : ' foi transferida para você')}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setStatusFilter('pending');
+                setSelectedConversation(null);
+                t.dismiss();
+              }}
+            >
+              Ver em espera
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                setSelectedConversation(ev.conversationId);
+                t.dismiss();
+              }}
+            >
+              Atender
+            </Button>
+          </div>
+        </div>
+      ),
+    });
+    // Dispara apenas quando um novo evento de transferencia chega (nonce muda).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastTransferEvent]);
+
   // Pre-calculado uma vez por render do array de mensagens — evita O(n) em CADA
   // <MessageBubble>. Antes, isFirstInGroup(idx) era chamado 500x por re-render.
   const firstInGroupFlags = useMemo(() => {
@@ -480,7 +578,34 @@ export default function Conversations() {
               onBack={() => setSelectedConversation(null)}
             />
 
-            <div 
+            {/* Barra de seleção em massa */}
+            {selectionMode && (
+              <div className="flex items-center gap-3 px-4 py-2 border-b bg-muted/40">
+                <Button variant="ghost" size="sm" onClick={exitSelectionMode}>
+                  <X className="h-4 w-4 mr-1" />
+                  Cancelar
+                </Button>
+                <span className="text-sm font-medium">
+                  {selectedMessageIds.size} selecionada(s)
+                </span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="ml-auto"
+                  disabled={selectedMessageIds.size === 0 || isDeletingMessages}
+                  onClick={() => setBulkDeleteDialogOpen(true)}
+                >
+                  {isDeletingMessages ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-1" />
+                  )}
+                  Apagar
+                </Button>
+              </div>
+            )}
+
+            <div
               className="flex-1 p-4 overflow-y-auto min-h-0 touch-pan-y [overscroll-behavior-y:contain] [-webkit-overflow-scrolling:touch]"
               onScroll={handleScroll}
               onTouchStart={registerUserInteraction}
@@ -558,6 +683,10 @@ export default function Conversations() {
                               onForward={handleForward}
                               onTranscribe={handleTranscribe}
                               isTranscribing={isTranscribingMessage(msg.id)}
+                              selectionMode={selectionMode}
+                              isSelected={selectedMessageIds.has(msg.id)}
+                              onToggleSelect={handleToggleSelectMessage}
+                              onEnterSelectionMode={handleEnterSelectionMode}
                             />
                           )}
                         </div>
@@ -642,6 +771,13 @@ export default function Conversations() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         onConfirm={confirmDelete}
+      />
+
+      <DeleteMessageDialog
+        open={bulkDeleteDialogOpen}
+        onOpenChange={setBulkDeleteDialogOpen}
+        onConfirm={confirmBulkDelete}
+        count={selectedMessageIds.size}
       />
 
       <ForwardMessageDialog

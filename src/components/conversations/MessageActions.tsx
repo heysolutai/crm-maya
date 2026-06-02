@@ -5,7 +5,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical, Reply, Trash2, Copy, Forward } from "lucide-react";
+import { MoreVertical, Reply, Trash2, Copy, Forward, CheckSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { ReactionPicker } from "./ReactionPicker";
@@ -17,6 +17,7 @@ interface MessageActionsProps {
   onDelete: () => void;
   onReact: (emoji: string) => void;
   onForward?: () => void;
+  onSelect?: () => void;
   isClient?: boolean;
 }
 
@@ -26,6 +27,7 @@ export const MessageActions = ({
   onDelete,
   onReact,
   onForward,
+  onSelect,
   isClient = true,
 }: MessageActionsProps) => {
   const handleCopy = () => {
@@ -65,6 +67,12 @@ export const MessageActions = ({
             <DropdownMenuItem onClick={handleCopy}>
               <Copy className="h-4 w-4 mr-2" />
               Copiar
+            </DropdownMenuItem>
+          )}
+          {onSelect && (
+            <DropdownMenuItem onClick={onSelect}>
+              <CheckSquare className="h-4 w-4 mr-2" />
+              Selecionar
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />

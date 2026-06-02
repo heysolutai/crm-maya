@@ -11,7 +11,8 @@ import { ContactCard } from './ContactCard';
 import { LocationMessage } from './LocationMessage';
 import { SecureImage, SecureVideo, SecureAudioSource, SecureDocumentUrl } from './SecureMedia';
 import { QuotedMessagePreview } from './QuotedMessagePreview';
-import { formatMessageTime } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
+import { formatMessageTime, cn } from '@/lib/utils';
 import { renderTextWithLinks } from '@/lib/linkify';
 import { getInitials, type Message, type Client, type QuotedMessage } from './types';
 import type { Reaction } from '@/hooks/useMessageReactions';
@@ -33,6 +34,11 @@ interface MessageBubbleProps {
   onForward?: (message: Message) => void;
   onTranscribe: (messageId: string) => void;
   isTranscribing: boolean;
+  // Selecao em massa
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (messageId: string) => void;
+  onEnterSelectionMode?: (messageId: string) => void;
 }
 
 export const MessageBubble = memo(function MessageBubble({
@@ -52,6 +58,10 @@ export const MessageBubble = memo(function MessageBubble({
   onForward,
   onTranscribe,
   isTranscribing,
+  selectionMode = false,
+  isSelected = false,
+  onToggleSelect,
+  onEnterSelectionMode,
 }: MessageBubbleProps) {
   const msg = message;
   const [showTranscription, setShowTranscription] = useState(false);
@@ -81,10 +91,22 @@ export const MessageBubble = memo(function MessageBubble({
   return (
     <div
       data-message-id={msg.id}
-      className={`flex items-end gap-2 ${
-        isClient ? 'justify-start' : 'justify-end'
-      }`}
+      onClick={selectionMode && onToggleSelect ? () => onToggleSelect(msg.id) : undefined}
+      className={cn(
+        'flex items-end gap-2',
+        isClient ? 'justify-start' : 'justify-end',
+        selectionMode && 'cursor-pointer rounded-lg -mx-2 px-2 py-1 transition-colors hover:bg-muted/50',
+        selectionMode && isSelected && 'bg-primary/10 hover:bg-primary/15',
+      )}
     >
+      {/* Checkbox de selecao em massa */}
+      {selectionMode && (
+        <Checkbox
+          checked={!!isSelected}
+          className="self-center shrink-0 pointer-events-none"
+        />
+      )}
+
       {/* Avatar do cliente (esquerda) - só na primeira do grupo */}
       {isClient && isFirstInGroup && (
         <Avatar className="h-8 w-8 shrink-0">
@@ -115,9 +137,11 @@ export const MessageBubble = memo(function MessageBubble({
         )}
 
         {/* Bolha da mensagem */}
-        <div className={`flex items-center gap-1.5 ${
-          !isClient ? 'self-end flex-row-reverse' : 'self-start'
-        }`}>
+        <div className={cn(
+          'flex items-center gap-1.5',
+          !isClient ? 'self-end flex-row-reverse' : 'self-start',
+          selectionMode && 'pointer-events-none',
+        )}>
           <div
             className={`relative rounded-lg px-[9px] py-[6px] shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] ${
               isClient
@@ -296,16 +320,19 @@ export const MessageBubble = memo(function MessageBubble({
             </div>
           </div>
           
-          {/* Menu de ações */}
-          <MessageActions
-            messageId={msg.id}
-            messageText={msg.message_text || ''}
-            onReply={() => onReply(msg)}
-            onDelete={() => onDelete(msg.id)}
-            onReact={(emoji) => onReact(msg.id, emoji)}
-            onForward={onForward ? () => onForward(msg) : undefined}
-            isClient={isClient}
-          />
+          {/* Menu de ações (oculto no modo seleção) */}
+          {!selectionMode && (
+            <MessageActions
+              messageId={msg.id}
+              messageText={msg.message_text || ''}
+              onReply={() => onReply(msg)}
+              onDelete={() => onDelete(msg.id)}
+              onReact={(emoji) => onReact(msg.id, emoji)}
+              onForward={onForward ? () => onForward(msg) : undefined}
+              onSelect={onEnterSelectionMode ? () => onEnterSelectionMode(msg.id) : undefined}
+              isClient={isClient}
+            />
+          )}
         </div>
         
         {/* Exibir reações abaixo da mensagem */}
