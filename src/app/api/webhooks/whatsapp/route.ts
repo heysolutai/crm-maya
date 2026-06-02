@@ -1465,6 +1465,35 @@ export async function POST(req: NextRequest) {
 
     console.log('Created message:', message.id);
 
+    // Opt-out automatico: cliente respondeu STOP/SAIR/CANCELAR/PARAR.
+    // Marca optedOut=true pra excluir das proximas campanhas em massa.
+    // Roda APENAS para mensagens de texto vindas do cliente.
+    if (
+      senderType === 'client' &&
+      (payload.message_type === 'text' || !payload.message_type) &&
+      payload.message
+    ) {
+      const normalized = payload.message
+        .trim()
+        .toLowerCase()
+        .replace(/[!.?,;:]+$/g, '')
+      const OPT_OUT_KEYWORDS = ['stop', 'sair', 'cancelar', 'parar', 'descadastrar', 'remove', 'remover'];
+      if (OPT_OUT_KEYWORDS.includes(normalized)) {
+        prisma.client.updateMany({
+          where: { id: clientId, companyId, optedOut: false },
+          data: { optedOut: true, optedOutAt: new Date() },
+        })
+          .then((res) => {
+            if (res.count > 0) {
+              console.log(`[Opt-out] Cliente ${clientId} marcado como opted-out (msg: "${normalized}")`);
+            }
+          })
+          .catch((err) =>
+            console.warn('[Opt-out] falhou (nao bloqueante):', err?.message)
+          );
+      }
+    }
+
     // Quando o atendente manda mensagem direto pelo WhatsApp Web/Mobile dele,
     // a UAZapi ecoa pra ca como senderType='agent'. Pausa a IA pra nao haver
     // atropelamento entre humano e IA respondendo o mesmo cliente.

@@ -124,6 +124,7 @@ model Company {
   departments            Department[]
   pipelines              Pipeline[]
   catalogProducts        CatalogProduct[]
+  campaigns              Campaign[]
 
   @@index([planId], map: "idx_companies_plan")
   @@index([isActive], map: "idx_companies_active")
@@ -184,6 +185,7 @@ model User {
   supportTicketsResolved SupportTicket[]     @relation("TicketResolver")
   departmentMemberships  DepartmentMember[]
   doctorSchedules        DoctorSchedule[]
+  campaignsCreated       Campaign[]          @relation("CampaignCreatedBy")
 
   @@index([companyId], map: "idx_users_company")
   @@index([email], map: "idx_users_email")
@@ -296,6 +298,11 @@ model Client {
   isActive       Boolean   @default(true) @map("is_active")
   aiPaused       Boolean   @default(false) @map("ai_paused")
 
+  // Opt-out de campanhas em massa. Setado quando o cliente responde
+  // STOP/SAIR/CANCELAR ou via acao manual do atendente.
+  optedOut       Boolean   @default(false) @map("opted_out")
+  optedOutAt     DateTime? @map("opted_out_at")
+
   // Ad tracking fields (Meta/Facebook CTWA)
   utmSource      String?   @map("utm_source")
   utmMedium      String?   @map("utm_medium")
@@ -327,8 +334,10 @@ model Client {
   reminders      Reminder[]
   followUpJobs   FollowUpJob[]
   aiTokenUsage   AiTokenUsage[]
+  campaignRecipients CampaignRecipient[]
 
   @@index([companyId], map: "idx_clients_company")
+  @@index([companyId, optedOut], map: "idx_clients_opted_out")
   @@index([assignedTo], map: "idx_clients_assigned")
   @@index([stageId], map: "idx_clients_stage")
   @@index([phone], map: "idx_clients_phone")
@@ -719,6 +728,7 @@ model WhatsappInstance {
   followUpJobs     FollowUpJob[]
   catalogProducts  CatalogProduct[]
   conversations    Conversation[]
+  campaigns        Campaign[]
 
   @@index([companyId], map: "idx_whatsapp_instances_company")
   @@index([channelType], map: "idx_whatsapp_instances_channel")
@@ -1050,4 +1060,115 @@ model PipelineStage {
 
   @@index([pipelineId], map: "idx_pipeline_stages_pipeline")
   @@map("pipeline_stages")
+}
+
+// ─── Campanhas (disparo em massa) ─────────────────────────────
+
+model Campaign {
+  id                 String   @id @default(uuid()) @db.Uuid
+  companyId          String   @map("company_id") @db.Uuid
+  createdById        String?  @map("created_by_id") @db.Uuid
+  whatsappInstanceId String?  @map("whatsapp_instance_id") @db.Uuid
+
+  name        String
+  description String?
+
+  // Conteudo: messageText pode ter variaveis {{nome}} {{telefone}}.
+  // Pra image/document, messageText eh a caption.
+  messageType String  @default("text") @map("message_type") // text | image | document
+  messageText String? @map("message_text")
+  mediaUrl    String? @map("media_url")
+  mediaFilename String? @map("media_filename")
+  mediaMimeType String? @map("media_mime_type")
+
+  // Audiencia — qual fonte usada pra montar a lista de recipients.
+  // 'manual' = CSV upload / colar telefones.
+  // 'tags'   = filtro de tags em Client.
+  // 'individual' = selecao via UI (lista de clientIds).
+  audienceSource String  @map("audience_source") // manual | tags | individual
+  audienceConfig Json    @default("{}") @map("audience_config")
+
+  // Compliance / rate limit
+  minDelaySeconds Int  @default(8) @map("min_delay_seconds")
+  maxDelaySeconds Int  @default(15) @map("max_delay_seconds")
+  dailyLimit      Int? @map("daily_limit") // null = sem limite
+
+  // Janela horaria — hora local (companyTimezone). Ex: 9-18.
+  // Null em ambos = sem janela (24h).
+  windowStartHour Int?    @map("window_start_hour")
+  windowEndHour   Int?    @map("window_end_hour")
+  timezone        String? @default("America/Sao_Paulo")
+
+  // Status do disparo
+  status         CampaignStatus @default(draft)
+  scheduledFor   DateTime?      @map("scheduled_for")
+  startedAt      DateTime?      @map("started_at")
+  completedAt    DateTime?      @map("completed_at")
+  errorMessage   String?        @map("error_message")
+
+  // Stats — atualizado pelo worker, evita scan na tabela recipients
+  recipientsTotal   Int @default(0) @map("recipients_total")
+  recipientsSent    Int @default(0) @map("recipients_sent")
+  recipientsFailed  Int @default(0) @map("recipients_failed")
+  recipientsSkipped Int @default(0) @map("recipients_skipped")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy        User?             @relation("CampaignCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  whatsappInstance WhatsappInstance? @relation(fields: [whatsappInstanceId], references: [id], onDelete: SetNull)
+  recipients       CampaignRecipient[]
+
+  @@index([companyId], map: "idx_campaigns_company")
+  @@index([companyId, status], map: "idx_campaigns_company_status")
+  @@index([whatsappInstanceId], map: "idx_campaigns_whatsapp_instance")
+  @@index([status, scheduledFor], map: "idx_campaigns_status_scheduled")
+  @@map("campaigns")
+}
+
+model CampaignRecipient {
+  id         String  @id @default(uuid()) @db.Uuid
+  campaignId String  @map("campaign_id") @db.Uuid
+  clientId   String? @map("client_id") @db.Uuid
+
+  // Cache local: cliente pode mudar nome/telefone depois;
+  // o disparo usa o snapshot tirado quando a campanha foi criada.
+  phone String
+  name  String?
+
+  status       CampaignRecipientStatus @default(pending)
+  sentAt       DateTime?               @map("sent_at")
+  errorMessage String?                 @map("error_message")
+  messageId    String?                 @map("message_id") @db.Uuid // FK informal pra messages.id apos envio
+  providerMessageId String?            @map("provider_message_id") // ID retornado pela UAZapi/Evolution
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  client   Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@unique([campaignId, phone], map: "uq_campaign_recipient_phone")
+  @@index([campaignId, status], map: "idx_campaign_recipients_status")
+  @@index([clientId], map: "idx_campaign_recipients_client")
+  @@map("campaign_recipients")
+}
+
+enum CampaignStatus {
+  draft       // criada, ainda nao iniciada
+  scheduled   // agendada pra horario futuro
+  running     // em execucao
+  paused      // pausada manualmente
+  completed   // todos recipients processados
+  cancelled   // cancelada pelo usuario
+  failed      // erro fatal (worker desistiu)
+}
+
+enum CampaignRecipientStatus {
+  pending   // ainda nao enviada
+  sending   // worker pegou e esta enviando
+  sent      // enviada com sucesso
+  failed    // falhou apos retries
+  skipped   // pulada (opt-out, limite, etc)
 }

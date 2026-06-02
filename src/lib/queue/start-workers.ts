@@ -3,6 +3,7 @@ import { startN8NWebhookWorker } from './workers/n8n-webhook.worker'
 import { startTranscriptionWorker } from './workers/transcription.worker'
 import { startMediaProcessingWorker } from './workers/media-processing.worker'
 import { startOutboundMessageWorker } from './workers/outbound-message.worker'
+import { startCampaignTickWorker } from './workers/campaign-tick.worker'
 import { startRemindersWorker } from './workers/cron-reminders.worker'
 import { startFollowUpsWorker } from './workers/cron-follow-ups.worker'
 import { startWhatsAppStatusWorker } from './workers/cron-whatsapp-status.worker'
@@ -46,6 +47,9 @@ export function startAllWorkers() {
   startTranscriptionWorker()
   startMediaProcessingWorker()
   startOutboundMessageWorker()
+
+  // Campanhas — disparo em massa com rate limit/janela horaria
+  startCampaignTickWorker()
 
   // Cron workers (replace Edge Functions + pg_cron)
   startRemindersWorker()

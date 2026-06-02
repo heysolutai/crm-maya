@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import { Search, Plus, Tag, X, Image, Mic, FileText, MapPin, Video } from 'lucide-react';
+import { Search, Plus, Tag, X, Image, Mic, FileText, MapPin, Video, Clock, Bot, User as UserIcon, CheckCircle2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +10,14 @@ import { RealtimeStatusIndicator } from '@/components/conversations/RealtimeStat
 import { ConversationFilters } from '@/components/conversations/ConversationFilters';
 import { ConversationListSkeleton } from '@/components/ui/skeleton-list';
 import { cn, formatRelativeTime } from '@/lib/utils';
-import { getInitials, type Conversation, type LastMessage, type TeamMember } from './types';
+import {
+  getInitials,
+  formatPhoneMasked,
+  getConversationStatusInfo,
+  type Conversation,
+  type LastMessage,
+  type TeamMember,
+} from './types';
 
 function getMessagePreview(msg: LastMessage | null | undefined): { icon?: React.ReactNode; text: string } {
   if (!msg) return { text: '' };
@@ -297,62 +304,105 @@ export const ConversationSidebar = memo(function ConversationSidebar({
               : 'Nenhuma conversa encontrada'}
           </div>
         ) : (
-          filteredConversations?.map((conv) => {
-            const clientName = conv.client
-              ? `${conv.client.first_name} ${conv.client.last_name || ''}`.trim()
-              : 'Cliente';
+          <div className="p-2 space-y-2">
+            {filteredConversations?.map((conv) => {
+              const clientName = conv.client
+                ? `${conv.client.first_name} ${conv.client.last_name || ''}`.trim()
+                : 'Cliente';
 
-            const unreadCount = conv.unread_count || 0;
-            const hasUnread = unreadCount > 0;
-            const preview = getMessagePreview(conv.last_message);
-            const lastTime = conv.last_message?.created_at || conv.started_at;
+              const unreadCount = conv.unread_count || 0;
+              const hasUnread = unreadCount > 0;
+              const preview = getMessagePreview(conv.last_message);
+              const lastTime = conv.last_message?.created_at || conv.started_at;
+              const isSelected = selectedConversation === conv.id;
+              const statusInfo = getConversationStatusInfo(conv);
+              const phoneMasked = formatPhoneMasked(conv.client?.phone);
 
-            return (
-              <button
-                key={conv.id}
-                onClick={() => onSelectConversation(conv.id)}
-                role="listitem"
-                aria-selected={selectedConversation === conv.id}
-                aria-label={`Conversa com ${clientName}${hasUnread ? `, ${unreadCount} mensagens não lidas` : ''}`}
-                className={cn(
-                  "w-full px-4 py-3 border-b border-border transition-colors text-left cursor-pointer",
-                  "hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-                  selectedConversation === conv.id && "bg-accent",
-                  hasUnread && selectedConversation !== conv.id && "bg-primary/5"
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="relative shrink-0">
-                    <Avatar className="h-11 w-11">
-                      <AvatarImage src={conv.client?.avatar_url || undefined} alt={clientName} />
-                      <AvatarFallback className="text-sm">{getInitials(clientName)}</AvatarFallback>
-                    </Avatar>
-                    {hasUnread && (
-                      <span className="absolute -top-0.5 -right-0.5 h-3 w-3 bg-primary rounded-full border-2 border-background" />
-                    )}
-                  </div>
+              // Estilo do badge de status conforme variant
+              const statusBadgeClass =
+                statusInfo.variant === 'pending'
+                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/30'
+                  : statusInfo.variant === 'human'
+                    ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 ring-1 ring-blue-500/30'
+                    : statusInfo.variant === 'closed'
+                      ? 'bg-muted text-muted-foreground ring-1 ring-border'
+                      : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/30';
 
-                  <div className="flex-1 min-w-0">
-                    {/* Row 1: Name + Timestamp */}
-                    <div className="flex items-baseline justify-between gap-2">
-                      <h3 className={cn(
-                        "text-sm truncate",
-                        hasUnread ? "font-bold" : "font-medium"
-                      )}>{clientName}</h3>
-                      <time className={cn(
-                        "text-[11px] shrink-0",
-                        hasUnread ? "text-primary font-semibold" : "text-muted-foreground"
-                      )}>
-                        {formatRelativeTime(lastTime)}
-                      </time>
+              const StatusIcon =
+                statusInfo.variant === 'pending'
+                  ? Clock
+                  : statusInfo.variant === 'human'
+                    ? UserIcon
+                    : statusInfo.variant === 'closed'
+                      ? CheckCircle2
+                      : Bot;
+
+              return (
+                <button
+                  key={conv.id}
+                  onClick={() => onSelectConversation(conv.id)}
+                  role="listitem"
+                  aria-selected={isSelected}
+                  aria-label={`Conversa com ${clientName}${hasUnread ? `, ${unreadCount} mensagens não lidas` : ''}`}
+                  className={cn(
+                    'group block w-full rounded-xl border bg-card text-left transition-all',
+                    'hover:border-primary/40 hover:shadow-sm',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    isSelected
+                      ? 'border-primary/60 ring-2 ring-primary/30 shadow-sm'
+                      : 'border-border'
+                  )}
+                >
+                  <div className="p-3 space-y-1.5">
+                    {/* Topo: avatar + (nome + telefone) + timestamp */}
+                    <div className="flex items-start gap-3">
+                      <div className="relative shrink-0">
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={conv.client?.avatar_url || undefined} alt={clientName} />
+                          <AvatarFallback className="text-xs font-semibold bg-primary/15 text-primary">
+                            {getInitials(clientName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        {hasUnread && (
+                          <span className="absolute -top-0.5 -right-0.5 h-3 w-3 bg-primary rounded-full ring-2 ring-card" />
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <h3
+                            className={cn(
+                              'text-sm leading-tight truncate',
+                              hasUnread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
+                            )}
+                          >
+                            {clientName}
+                          </h3>
+                          <time
+                            className={cn(
+                              'text-[11px] shrink-0 tabular-nums',
+                              hasUnread ? 'text-primary font-medium' : 'text-muted-foreground'
+                            )}
+                          >
+                            {formatRelativeTime(lastTime)}
+                          </time>
+                        </div>
+                        {phoneMasked && (
+                          <p className="text-[11px] font-mono text-muted-foreground/80 leading-tight mt-0.5">
+                            {phoneMasked}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Row 2: Last message preview + unread badge */}
-                    <div className="flex items-center justify-between gap-2 mt-0.5">
-                      <p className={cn(
-                        "text-[13px] truncate flex items-center gap-1",
-                        hasUnread ? "text-foreground font-medium" : "text-muted-foreground"
-                      )}>
+                    {/* Mensagem preview */}
+                    <div className="flex items-center justify-between gap-2 pl-[52px]">
+                      <p
+                        className={cn(
+                          'text-[13px] truncate flex items-center gap-1.5 leading-snug',
+                          hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'
+                        )}
+                      >
                         {preview.icon}
                         <span className="truncate">{preview.text || 'Sem mensagens'}</span>
                       </p>
@@ -363,46 +413,39 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                       )}
                     </div>
 
-                    {/* Row 3: Status dot + agent + tags */}
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <div className={cn(
-                        "w-1.5 h-1.5 rounded-full shrink-0",
-                        conv.status === 'active' && !conv.transferred_user && "bg-green-500",
-                        conv.status === 'pending' && "bg-yellow-500",
-                        conv.status === 'closed' && "bg-gray-400",
-                        conv.status === 'active' && conv.transferred_user && "bg-blue-500"
-                      )} />
-                      <span className="text-[11px] text-muted-foreground truncate">
-                        {conv.transferred_user
-                          ? conv.transferred_user.full_name
-                          : 'IA'
-                        }
+                    {/* Status badge + acoes contextuais */}
+                    <div className="flex items-center justify-between gap-2 pl-[52px] pt-0.5 flex-wrap">
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium',
+                          statusBadgeClass
+                        )}
+                      >
+                        <StatusIcon className="h-3 w-3" />
+                        {statusInfo.label}
                       </span>
-                      {conv.department && (
-                        <>
-                          <span className="text-muted-foreground/40">·</span>
+
+                      <div className="flex items-center gap-1.5">
+                        {conv.department && (
                           <span
-                            className="text-[10px] px-1.5 py-0 h-4 inline-flex items-center rounded font-medium"
-                            style={{ backgroundColor: `${conv.department.color}20`, color: conv.department.color }}
+                            className="text-[10px] px-1.5 py-0.5 inline-flex items-center rounded font-medium"
+                            style={{
+                              backgroundColor: `${conv.department.color}20`,
+                              color: conv.department.color,
+                            }}
                           >
                             {conv.department.name}
                           </span>
-                        </>
-                      )}
-                      {(conv as any).agent && (
-                        <>
-                          <span className="text-muted-foreground/40">·</span>
+                        )}
+                        {(conv as any).agent && (
                           <span
-                            className="text-[10px] px-1.5 py-0 h-4 inline-flex items-center rounded font-medium bg-primary/10 text-primary"
+                            className="text-[10px] px-1.5 py-0.5 inline-flex items-center rounded font-medium bg-primary/10 text-primary max-w-[100px] truncate"
                             title={`Recebido por ${(conv as any).agent.display_name}`}
                           >
                             {(conv as any).agent.display_name}
                           </span>
-                        </>
-                      )}
-                      {conv.status === 'pending' && onPickupConversation && (
-                        <>
-                          <span className="text-muted-foreground/40">·</span>
+                        )}
+                        {conv.status === 'pending' && onPickupConversation && (
                           <button
                             className="text-[10px] text-primary font-semibold hover:underline"
                             onClick={(e) => {
@@ -412,27 +455,30 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                           >
                             Atender
                           </button>
-                        </>
-                      )}
-                      {conv.tags && conv.tags.length > 0 && (
-                        <>
-                          <span className="text-muted-foreground/40">·</span>
-                          {conv.tags.slice(0, 2).map((tag, idx) => (
-                            <Badge key={idx} variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                              {tag}
-                            </Badge>
-                          ))}
-                          {conv.tags.length > 2 && (
-                            <span className="text-[10px] text-muted-foreground">+{conv.tags.length - 2}</span>
-                          )}
-                        </>
-                      )}
+                        )}
+                      </div>
                     </div>
+
+                    {/* Tags — so se tiver */}
+                    {conv.tags && conv.tags.length > 0 && (
+                      <div className="flex items-center gap-1 pl-[52px] pt-0.5 flex-wrap">
+                        {conv.tags.slice(0, 3).map((tag, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {conv.tags.length > 3 && (
+                          <span className="text-[10px] text-muted-foreground">
+                            +{conv.tags.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              </button>
-            );
-          })
+                </button>
+              );
+            })}
+          </div>
         )}
       </ScrollArea>
     </div>

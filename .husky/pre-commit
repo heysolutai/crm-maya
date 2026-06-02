@@ -1,1 +1,15 @@
+#!/bin/sh
+# Validacao local antes do commit: typecheck + lint.
+#
+# Se node_modules nao esta presente (caso de dev rodando IDE sem ter
+# instalado deps localmente), pula o hook em vez de cair em loop infinito
+# tentando baixar via npx (que pega o pacote squatado tsc@2.0.4 e falha).
+#
+# A validacao real continua acontecendo no CI antes do merge.
+if [ ! -d "node_modules/typescript" ] || [ ! -d "node_modules/next" ]; then
+  echo "[husky] node_modules incompleto - pulando typecheck/lint."
+  echo "[husky] Para validar localmente antes do commit: 'pnpm install' (ou 'npm install')"
+  exit 0
+fi
+
 npx tsc --noEmit && npx next lint

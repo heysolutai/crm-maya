@@ -70,9 +70,11 @@ export interface InboundMessageJob {
   agentId?: string
 }
 
-// Cron job types (no payload — workers poll Supabase directly)
-export interface CronTickJob {
-  triggeredAt: string
+// Campaign tick: o worker pega UM recipient pending da campanha, envia,
+// e re-enfileira proximo tick com delay aleatorio entre min e max.
+// Auto-pause se janela horaria fechou / limite diario batido / campanha pausada.
+export interface CampaignTickJob {
+  campaignId: string
 }
 
 // ============================================================
@@ -86,6 +88,7 @@ export const QUEUE_NAMES = {
   MEDIA_PROCESSING: 'media-processing',
   OUTBOUND_MESSAGE: 'outbound-message',
   OUTBOUND_MEDIA: 'outbound-media',
+  CAMPAIGN_TICK: 'campaign-tick',
   CRON_REMINDERS: 'cron-reminders',
   CRON_FOLLOW_UPS: 'cron-follow-ups',
   CRON_WHATSAPP_STATUS: 'cron-whatsapp-status',
@@ -146,6 +149,10 @@ export function getOutboundMediaQueue() {
   return getOrCreateQueue<OutboundMediaJob>(QUEUE_NAMES.OUTBOUND_MEDIA)
 }
 
+export function getCampaignTickQueue() {
+  return getOrCreateQueue<CampaignTickJob>(QUEUE_NAMES.CAMPAIGN_TICK)
+}
+
 // ============================================================
 // Helper to add jobs with proper defaults per queue
 // ============================================================
@@ -190,5 +197,31 @@ export async function enqueueOutboundMedia(data: OutboundMediaJob) {
   const queue = getOutboundMediaQueue()
   return queue.add('send-media', data, {
     priority: 2,
+  })
+}
+
+/**
+ * Agenda o proximo tick de uma campanha. delayMs=0 roda imediato.
+ * Idempotente: usa jobId = `campaign:${campaignId}` pra garantir que so existe
+ * UM tick agendado por campanha. Re-chamadas substituem o anterior.
+ */
+export async function enqueueCampaignTick(
+  data: CampaignTickJob,
+  delayMs = 0
+) {
+  const queue = getCampaignTickQueue()
+  const jobId = `campaign:${data.campaignId}`
+  // Remove tick anterior se houver — evita corrida em pause/resume/cancel
+  try {
+    const existing = await queue.getJob(jobId)
+    if (existing) await existing.remove()
+  } catch {
+    // noop
+  }
+  return queue.add('tick', data, {
+    jobId,
+    delay: delayMs,
+    priority: 5, // baixa prioridade — campanhas nao devem competir com mensagens entrando
+    attempts: 2,
   })
 }
