@@ -43,23 +43,34 @@ export async function GET(req: NextRequest) {
     const { companyId } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
-    // Modo agente: filtra pelo aiAgentId vinculado a uma inbox especifica
+    // Modo agente. O param `agentId` esta sobrecarregado e pode ser:
+    //  (a) id de um AiAgent — tela de detalhe do agente. Agente e SEPARADO do
+    //      inbox (uma empresa tem N agentes; cada inbox escolhe qual usar), entao
+    //      buscamos o AiAgent direto pelo id.
+    //  (b) id de uma Inbox — useInboxAiAgent, que retorna o agente vinculado
+    //      aquela inbox (inbox.aiAgentId). Modelo legado de resolucao.
+    // IDs de tabelas diferentes nunca colidem (UUID), entao tentamos como
+    // AiAgent primeiro e so caimos pra resolucao via inbox se nao achar.
     const agentId = req.nextUrl.searchParams.get('agentId')
 
     if (agentId) {
-      // IDOR-safe: valida que a inbox pertence a empresa
+      // (a) IDOR-safe: agente direto da empresa
+      const directAgent = await prisma.aiAgent.findFirst({
+        where: { id: agentId, companyId },
+      })
+      if (directAgent) return NextResponse.json([directAgent])
+
+      // (b) Fallback: agentId era na verdade um inboxId — resolve o agente vinculado
       const inbox = await prisma.inbox.findFirst({
         where: { id: agentId, companyId },
         select: { aiAgentId: true },
       })
-      if (!inbox) return NextResponse.json([])
+      if (!inbox?.aiAgentId) return NextResponse.json([])
 
-      if (!inbox.aiAgentId) return NextResponse.json([])
-
-      const config = await prisma.aiAgent.findFirst({
+      const linkedAgent = await prisma.aiAgent.findFirst({
         where: { id: inbox.aiAgentId, companyId },
       })
-      return NextResponse.json(config ? [config] : [])
+      return NextResponse.json(linkedAgent ? [linkedAgent] : [])
     }
 
     const configurations = await prisma.aiAgent.findMany({

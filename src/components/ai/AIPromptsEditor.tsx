@@ -109,10 +109,7 @@ export function AIPromptsEditor({
       );
     } else if (variant === 'full') {
       createConfiguration(
-        // whatsapp_instance_id vincula o AiAgent recem-criado a ESTA inbox.
-        // Sem isso o config era criado "orfao" (inbox.aiAgentId = null) e sumia
-        // no reload — o toast dizia "salvo" mas o GET por agentId voltava vazio.
-        { company_id: companyId, ...(agentId ? { whatsapp_instance_id: agentId } : {}), ...formData },
+        { company_id: companyId, ...formData },
         { onSuccess: () => { setDirty(false); toast({ title: 'Configuração criada com sucesso!' }); } }
       );
     } else {
