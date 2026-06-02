@@ -108,10 +108,32 @@ function mapAgent(i: any) {
   }
 }
 
+// De-para provider -> rota do receiver de webhook.
+//
+// Pegadinha: o channelType do provider NAO bate com o nome da pasta da rota.
+// Antes a URL era montada com `/api/webhooks/${channelType}`, entao um inbox
+// uazapi recebia webhook apontado pra /api/webhooks/uazapi -> rota inexistente
+// (404) -> a instancia nunca recebia mensagem (e o erro era engolido no setup).
+// So o notificame batia por coincidencia.
+//
+//   uazapi            -> /api/webhooks/whatsapp
+//   evolution_baileys -> /api/webhooks/evolution
+//   notificame        -> /api/webhooks/notificame
+//
+// Quem chegar com um canal novo: cadastra aqui a rota correspondente.
+// (a inbox e resolvida pelo instanceName do payload; o agentId vai na query
+//  como identificador explicito/fallback).
+const WEBHOOK_ROUTE_BY_CHANNEL: Record<string, string> = {
+  uazapi: 'whatsapp',
+  evolution_baileys: 'evolution',
+  notificame: 'notificame',
+}
+
 function publicWebhookUrl(req: NextRequest, channelType: string, agentId: string): string {
   const envBase = process.env.PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL
   const base = envBase || `${req.nextUrl.protocol}//${req.nextUrl.host}`
-  return `${base.replace(/\/+$/, '')}/api/webhooks/${channelType}?agentId=${agentId}`
+  const route = WEBHOOK_ROUTE_BY_CHANNEL[channelType] || channelType
+  return `${base.replace(/\/+$/, '')}/api/webhooks/${route}?agentId=${agentId}`
 }
 
 export async function GET(req: NextRequest) {
