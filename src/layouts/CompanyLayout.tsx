@@ -43,11 +43,9 @@ import {
   Kanban,
   Users,
   MessageSquare,
-  Calendar,
   UserCog,
   Settings,
   LogOut,
-  Package,
   Clock,
   FileText,
   ArrowLeft,
@@ -106,8 +104,6 @@ const navGroups: NavGroup[] = [
     label: 'Vendas',
     items: [
       { name: 'Clientes', href: '/app/clients', icon: Users, roles: ['viewer', 'agent', 'manager', 'company_admin'], requirePermission: 'can_access_crm' },
-      { name: 'Catálogo', href: '/app/catalog', icon: Package, roles: ['agent', 'manager', 'company_admin'] },
-      { name: 'Agenda', href: '/app/appointments', icon: Calendar, roles: ['agent', 'manager', 'company_admin'], countKey: 'appointmentsToday' },
       { name: 'Follow-ups', href: '/app/follow-ups', icon: Clock, roles: ['manager', 'company_admin'], countKey: 'pendingFollowUps' },
     ],
   },
@@ -366,14 +362,6 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </p>
                       <p className="text-[9.5px] text-sidebar-foreground/50 mt-1 font-medium">conversas</p>
-                    </Link>
-                  )}
-                  {appointmentsToday > 0 && (
-                    <Link href="/app/appointments" className="text-center group/stat rounded-lg py-1 hover:bg-sidebar-accent/40 transition-colors">
-                      <p className="text-xl font-bold text-sidebar-foreground leading-none group-hover/stat:text-sidebar-primary transition-colors tabular-nums">
-                        {appointmentsToday}
-                      </p>
-                      <p className="text-[9.5px] text-sidebar-foreground/50 mt-1 font-medium">agendamentos</p>
                     </Link>
                   )}
                   {pendingFollowUps > 0 && (
@@ -676,11 +664,6 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
             );
           })}
           <CommandGroup heading="Acoes rapidas">
-            <CommandItem onSelect={() => handleCommandSelect('/app/appointments')} className="gap-3">
-              <Plus className="h-4 w-4 text-muted-foreground" />
-              <span>Novo agendamento</span>
-              <CommandShortcut>agenda</CommandShortcut>
-            </CommandItem>
             <CommandItem onSelect={() => handleCommandSelect('/app/clients')} className="gap-3">
               <Plus className="h-4 w-4 text-muted-foreground" />
               <span>Novo cliente</span>

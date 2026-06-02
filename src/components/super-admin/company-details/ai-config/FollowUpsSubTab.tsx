@@ -8,9 +8,7 @@ import { useAIConfigurations, FollowUpStage } from '@/hooks/useAIConfigurations'
 import { useToast } from '@/hooks/use-toast';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { FollowUpStagesConfig } from '../FollowUpStagesConfig';
-import { AppointmentSettingsConfig } from '@/components/appointments/AppointmentSettingsConfig';
-import { AppointmentRemindersConfig } from '../AppointmentRemindersConfig';
-import { Save, Sparkles, Clock, Bell, RefreshCw } from 'lucide-react';
+import { Save, Sparkles, RefreshCw } from 'lucide-react';
 
 interface FollowUpsSubTabProps {
   companyId: string;
@@ -78,29 +76,13 @@ export function FollowUpsSubTab({ companyId }: FollowUpsSubTabProps) {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="business-hours" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="business-hours" className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Horário de Funcionamento
-          </TabsTrigger>
-          <TabsTrigger value="reminders" className="flex items-center gap-2">
-            <Bell className="h-4 w-4" />
-            Lembretes de Agendamento
-          </TabsTrigger>
+      <Tabs defaultValue="follow-ups" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-1">
           <TabsTrigger value="follow-ups" className="flex items-center gap-2">
             <RefreshCw className="h-4 w-4" />
             Follow-ups
           </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="business-hours">
-          <AppointmentSettingsConfig companyId={companyId} variant="split-cards" />
-        </TabsContent>
-
-        <TabsContent value="reminders">
-          <AppointmentRemindersConfig companyId={companyId} />
-        </TabsContent>
 
         <TabsContent value="follow-ups">
           <div className="space-y-6">

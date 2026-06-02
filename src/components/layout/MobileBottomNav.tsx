@@ -5,7 +5,6 @@ import {
   LayoutDashboard,
   MessageSquare,
   Users,
-  Calendar,
   MoreHorizontal,
   type LucideIcon,
 } from 'lucide-react';
@@ -41,7 +40,6 @@ export function MobileBottomNav({
     { label: 'Home',      href: '/app/dashboard',     icon: LayoutDashboard },
     { label: 'Conversas', href: '/app/conversations', icon: MessageSquare, badge: unreadCount },
     { label: 'Leads',     href: '/app/clients',       icon: Users },
-    { label: 'Agenda',    href: '/app/appointments',  icon: Calendar, badge: appointmentsToday },
     { label: 'Mais',      icon: MoreHorizontal, action: 'open-menu' },
   ];
 

@@ -16,10 +16,8 @@ import { Building2, Workflow, Plus, Trash2, Clock, Shield, Plug, Smartphone, Loa
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { ScheduleManagement } from '@/components/appointments/ScheduleManagement';
 import { RolePermissionsConfig } from '@/components/settings/RolePermissionsConfig';
 import { TeamSignaturesConfig } from '@/components/settings/TeamSignaturesConfig';
-import { ReminderSettingsConfig } from '@/components/appointments/ReminderSettingsConfig';
 import { FollowUpsSubTab } from '@/components/super-admin/company-details/ai-config/FollowUpsSubTab';
 import { ApiKeysTab } from '@/components/super-admin/company-details/ApiKeysTab';
 import { useEffectiveCompanyId } from '@/hooks/useEffectiveCompanyId';
@@ -46,10 +44,8 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
-    label: 'Agenda',
+    label: 'Automação',
     items: [
-      { id: 'schedules', label: 'Profissionais', icon: UserCog, description: 'Agendas e horários por médico' },
-      { id: 'reminders', label: 'Lembretes', icon: Bell, description: 'Lembretes automáticos' },
       { id: 'follow-ups', label: 'Follow-ups', icon: CalendarClock, description: 'Acompanhamento automático' },
     ],
   },
@@ -266,10 +262,6 @@ export default function Settings() {
             toast={toast}
           />
         );
-      case 'schedules':
-        return <ScheduleManagement />;
-      case 'reminders':
-        return <ReminderSettingsConfig />;
       case 'follow-ups':
         return effectiveCompanyId ? <FollowUpsSubTab companyId={effectiveCompanyId} /> : null;
       case 'api-keys':
