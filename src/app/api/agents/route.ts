@@ -5,7 +5,8 @@ import { handleApiError } from '@/lib/api/errors'
 import { CHANNEL_TYPES, isChannelType, CHANNEL_REGISTRY } from '@/lib/channels/types'
 import { getAdapter, hasAdapter } from '@/lib/channels/registry'
 import { ChannelError } from '@/lib/channels/errors'
-import { normalizeCompanySlug } from '@/lib/api/utils'
+import { normalizeCompanySlug, buildAgentMemoryKey } from '@/lib/api/utils'
+import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 
@@ -36,8 +37,10 @@ async function ensureInboxAiAgent(inboxId: string, companyId: string, displayNam
     const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } })
     const slug = normalizeCompanySlug(company?.name || displayName)
 
+    const newAiAgentId = randomUUID()
     const created = await prisma.aiAgent.create({
       data: {
+        id: newAiAgentId,
         companyId,
         name: `${displayName} - IA`,
         prompts: {} as Prisma.InputJsonValue,
@@ -46,7 +49,7 @@ async function ensureInboxAiAgent(inboxId: string, companyId: string, displayNam
         apiKeys: {} as Prisma.InputJsonValue,
         variables: {} as Prisma.InputJsonValue,
         knowledge: slug ? `know_${slug}` : null,
-        memoryKey: slug ? `memory_${slug}` : null,
+        memoryKey: buildAgentMemoryKey(newAiAgentId, `${displayName} - IA`),
         productsKnowledge: slug ? `products_${slug}` : null,
         n8nWebhookUrl: null,
         followUpEnabled: false,
@@ -182,8 +185,10 @@ export async function POST(req: NextRequest) {
       }
       resolvedAiAgentId = agent.id
     } else if (createAiAgentNamed) {
+      const namedAiAgentId = randomUUID()
       const newAgent = await prisma.aiAgent.create({
         data: {
+          id: namedAiAgentId,
           companyId,
           name: createAiAgentNamed,
           prompts: {} as Prisma.InputJsonValue,
@@ -192,6 +197,7 @@ export async function POST(req: NextRequest) {
           apiKeys: {} as Prisma.InputJsonValue,
           variables: {} as Prisma.InputJsonValue,
           followUpStages: [] as Prisma.InputJsonValue,
+          memoryKey: buildAgentMemoryKey(namedAiAgentId, createAiAgentNamed),
           isActive: true,
         },
         select: { id: true },

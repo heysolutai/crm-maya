@@ -18,6 +18,22 @@ export function normalizeCompanySlug(name: string): string {
 }
 
 /**
+ * Gera a memoryKey de um agente IA. Formato: `<prefixo>_<nome>`, onde:
+ *   - prefixo = primeiro bloco do UUID do agente (antes do primeiro hifen)
+ *   - nome    = slug do nome do agente (sem acento/espaco/simbolo, lowercase)
+ *
+ * Sempre retorna valor nao-vazio (nome vazio -> 'agente'). Por isso o UUID do
+ * agente e gerado ANTES do create \u2014 assim a memoryKey ja nasce com o agente.
+ *
+ * Ex: id "a3c77ec5-891d-...", nome "Vendas SP" -> "a3c77ec5_vendassp"
+ */
+export function buildAgentMemoryKey(agentId: string, name: string | null | undefined): string {
+  const prefix = (agentId.split('-')[0] || agentId).toLowerCase();
+  const nameSlug = normalizeCompanySlug(name || '').slice(0, 40) || 'agente';
+  return `${prefix}_${nameSlug}`;
+}
+
+/**
  * Gera as variações válidas de um número brasileiro para matching.
  *
  * Regra específica do Brasil:

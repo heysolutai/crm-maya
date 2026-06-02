@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
-import { normalizeCompanySlug } from '@/lib/api/utils'
+import { normalizeCompanySlug, buildAgentMemoryKey } from '@/lib/api/utils'
+import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { handleApiError } from '@/lib/api/errors'
 
@@ -116,8 +117,12 @@ export async function POST(req: NextRequest) {
       inboxToLink = inbox
     }
 
+    // UUID gerado ANTES do create pra montar a memoryKey ja na criacao
+    // (formato <prefixo>_<nome> — sempre existe a partir daqui).
+    const aiAgentId = randomUUID()
     const config = await prisma.aiAgent.create({
       data: {
+        id: aiAgentId,
         companyId,
         name: validatedData.name,
         prompts: (validatedData.prompts || {}) as Prisma.InputJsonValue,
@@ -127,7 +132,7 @@ export async function POST(req: NextRequest) {
         apiKeys: (validatedData.api_keys || {}) as Prisma.InputJsonValue,
         behaviorSettings: (validatedData.behavior_settings || {}) as Prisma.InputJsonValue,
         createdBy: agentId || validatedData.created_by,
-        memoryKey: slug ? `memory_${slug}` : null,
+        memoryKey: buildAgentMemoryKey(aiAgentId, validatedData.name),
         knowledge: slug ? `know_${slug}` : null,
         productsKnowledge: slug ? `products_${slug}` : null,
       },
