@@ -198,12 +198,6 @@ export default function Inboxes() {
     if (isNotificame && !notificameChannelId.trim()) return;
     if (notificameNeedsChannelToken && !notificameChannelToken.trim()) return;
 
-    // Validacao do bloco "Agente IA"
-    if (aiAgentMode === 'reuse' && !selectedAiAgentId && aiAgents.length > 0) {
-      // Se ha agentes mas nao selecionou nenhum, considera "none"
-    }
-    if (aiAgentMode === 'create' && !newAiAgentName.trim()) return;
-
     createInbox(
       {
         channelType: selectedChannel,
@@ -228,13 +222,8 @@ export default function Inboxes() {
                 : undefined,
             }
           : undefined,
-        // Bloco Agente IA
-        aiAgentId:
-          aiAgentMode === 'reuse' && selectedAiAgentId ? selectedAiAgentId : undefined,
-        createAiAgentNamed:
-          aiAgentMode === 'create' && newAiAgentName.trim()
-            ? newAiAgentName.trim()
-            : undefined,
+        // 1:1 — cada conexao cria seu proprio agente dedicado automaticamente
+        // (backend ensureInboxAiAgent). Nao enviamos aiAgentId/createAiAgentNamed.
       },
       {
         onSuccess: (inbox: Inbox) => {
@@ -628,87 +617,15 @@ export default function Inboxes() {
               </div>
             )}
 
-            {/* ── Bloco Agente IA ── */}
-            <div className="space-y-3 rounded-lg border border-dashed p-3 bg-muted/30">
-              <div className="flex items-center gap-2">
-                <Bot className="h-4 w-4 text-primary shrink-0" />
-                <Label className="text-sm font-semibold">Agente IA</Label>
-              </div>
+            {/* 1:1 — cada conexao ja cria seu proprio Agente IA dedicado
+                (backend ensureInboxAiAgent). A config da IA fica na propria
+                conexao, na aba "Prompts". Por isso nao pedimos agente aqui. */}
+            <div className="rounded-lg border border-dashed p-3 bg-muted/30 flex items-start gap-2">
+              <Bot className="h-4 w-4 text-primary shrink-0 mt-0.5" />
               <p className="text-xs text-muted-foreground">
-                Reutilize um agente IA existente ou crie um novo para esta caixa.
+                Esta conexão terá seu próprio Agente IA, criado automaticamente.
+                Você configura os prompts depois, na aba <strong>Prompts</strong> da conexão.
               </p>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAiAgentMode('reuse')}
-                  className={cn(
-                    'rounded-md border px-2 py-1.5 text-xs font-medium transition-colors',
-                    aiAgentMode === 'reuse'
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border hover:bg-muted'
-                  )}
-                >
-                  Reutilizar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAiAgentMode('create')}
-                  className={cn(
-                    'rounded-md border px-2 py-1.5 text-xs font-medium transition-colors',
-                    aiAgentMode === 'create'
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border hover:bg-muted'
-                  )}
-                >
-                  Criar novo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAiAgentMode('none')}
-                  className={cn(
-                    'rounded-md border px-2 py-1.5 text-xs font-medium transition-colors',
-                    aiAgentMode === 'none'
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border hover:bg-muted'
-                  )}
-                >
-                  Sem agente
-                </button>
-              </div>
-              {aiAgentMode === 'reuse' && (
-                <div className="space-y-2">
-                  <Label htmlFor="ai-agent-select">Selecionar agente existente</Label>
-                  {aiAgents.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">
-                      Nenhum agente IA cadastrado ainda. Use a opção &quot;Criar novo&quot; ou crie em /app/ai-agents.
-                    </p>
-                  ) : (
-                    <Select value={selectedAiAgentId} onValueChange={setSelectedAiAgentId}>
-                      <SelectTrigger id="ai-agent-select">
-                        <SelectValue placeholder="Selecione um agente IA" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {aiAgents.map((a) => (
-                          <SelectItem key={a.id} value={a.id}>
-                            {a.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-              )}
-              {aiAgentMode === 'create' && (
-                <div className="space-y-2">
-                  <Label htmlFor="new-ai-agent-name">Nome do novo agente IA</Label>
-                  <Input
-                    id="new-ai-agent-name"
-                    placeholder="Ex: Atendimento Padrão"
-                    value={newAiAgentName}
-                    onChange={(e) => setNewAiAgentName(e.target.value)}
-                  />
-                </div>
-              )}
             </div>
           </div>
 
@@ -726,7 +643,6 @@ export default function Inboxes() {
                   (!notificameChannelId.trim() ||
                     ((!hasSavedCred || editingCredential) && !serverApiKey.trim()) ||
                     (notificameNeedsChannelToken && !notificameChannelToken.trim()))) ||
-                (aiAgentMode === 'create' && !newAiAgentName.trim()) ||
                 isCreating
               }
             >

@@ -11,13 +11,10 @@ import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 
 /**
- * Garante que a inbox recem-criada tem um AiAgent vinculado.
- * Agora a relacao e M:1 (varios inboxes podem compartilhar o mesmo agente),
- * entao se ja existir um AiAgent na empresa reutiliza o primeiro como template/default.
- *
- * Estrategia: pega o primeiro AiAgent da empresa, se houver — assim o usuario
- * nao precisa configurar prompts toda vez que adiciona um numero. Se a empresa
- * nao tem nenhum agente IA, cria em branco.
+ * Garante que a inbox recem-criada tem um AiAgent DEDICADO (1:1).
+ * Cada instancia conectada = seu proprio agente, nunca compartilhado — no
+ * produto restaurante "conexao" e "agente" sao a mesma coisa. Por isso sempre
+ * cria um agente novo (em branco) e vincula a esta inbox.
  */
 async function ensureInboxAiAgent(inboxId: string, companyId: string, displayName: string) {
   const inbox = await prisma.inbox.findUnique({
@@ -26,43 +23,33 @@ async function ensureInboxAiAgent(inboxId: string, companyId: string, displayNam
   })
   if (inbox?.aiAgentId) return
 
-  const template = await prisma.aiAgent.findFirst({
-    where: { companyId },
-    orderBy: { createdAt: 'asc' },
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } })
+  const slug = normalizeCompanySlug(company?.name || displayName)
+
+  const newAiAgentId = randomUUID()
+  await prisma.aiAgent.create({
+    data: {
+      id: newAiAgentId,
+      companyId,
+      name: displayName,
+      prompts: {} as Prisma.InputJsonValue,
+      behaviorSettings: {} as Prisma.InputJsonValue,
+      conditions: {} as Prisma.InputJsonValue,
+      apiKeys: {} as Prisma.InputJsonValue,
+      variables: {} as Prisma.InputJsonValue,
+      knowledge: slug ? `know_${slug}` : null,
+      memoryKey: buildAgentMemoryKey(newAiAgentId, displayName),
+      productsKnowledge: slug ? `products_${slug}` : null,
+      n8nWebhookUrl: null,
+      followUpEnabled: false,
+      followUpStages: [] as Prisma.InputJsonValue,
+      isActive: true,
+    },
   })
-
-  let aiAgentId = template?.id
-
-  if (!aiAgentId) {
-    const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } })
-    const slug = normalizeCompanySlug(company?.name || displayName)
-
-    const newAiAgentId = randomUUID()
-    const created = await prisma.aiAgent.create({
-      data: {
-        id: newAiAgentId,
-        companyId,
-        name: `${displayName} - IA`,
-        prompts: {} as Prisma.InputJsonValue,
-        behaviorSettings: {} as Prisma.InputJsonValue,
-        conditions: {} as Prisma.InputJsonValue,
-        apiKeys: {} as Prisma.InputJsonValue,
-        variables: {} as Prisma.InputJsonValue,
-        knowledge: slug ? `know_${slug}` : null,
-        memoryKey: buildAgentMemoryKey(newAiAgentId, `${displayName} - IA`),
-        productsKnowledge: slug ? `products_${slug}` : null,
-        n8nWebhookUrl: null,
-        followUpEnabled: false,
-        followUpStages: [] as Prisma.InputJsonValue,
-        isActive: true,
-      },
-    })
-    aiAgentId = created.id
-  }
 
   await prisma.inbox.update({
     where: { id: inboxId },
-    data: { aiAgentId },
+    data: { aiAgentId: newAiAgentId },
   })
 }
 

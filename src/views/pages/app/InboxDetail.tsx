@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useInboxes, useInboxAiAgent } from '@/hooks/useInboxes';
@@ -31,10 +31,24 @@ import {
   Save,
   CheckSquare,
   Square,
+  MessageSquareText,
+  BookOpen,
+  Key,
+  Settings as SettingsIcon,
+  FlaskConical,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { CHANNEL_REGISTRY, type ChannelType } from '@/lib/channels/types';
 import { cn } from '@/lib/utils';
+import { useEffectiveCompanyId } from '@/hooks/useEffectiveCompanyId';
+import { useCompanySettings } from '@/hooks/useCompanySettings';
+import { useAuth } from '@/hooks/useAuth';
+import { AIPromptsEditor } from '@/components/ai';
+import { FAQManager } from '@/components/settings/FAQManager';
+import { SettingsSubTab } from '@/components/super-admin/company-details/ai-config/SettingsSubTab';
+import { APIKeysSubTab } from '@/components/super-admin/company-details/ai-config/APIKeysSubTab';
+import { PlaygroundChat } from '@/components/ai/PlaygroundChat';
+import type { AIPermissionKey } from '@/components/super-admin/company-details/AIPermissionsConfig';
 
 const channelIcon: Record<ChannelType, typeof Smartphone> = {
   uazapi: Smartphone,
@@ -53,10 +67,21 @@ const statusStyles: Record<string, { dot: string; label: string; badge: 'default
   error: { dot: 'bg-rose-500', label: 'Erro', badge: 'destructive' },
 };
 
-const tabs = [
+const baseTabs = [
   { id: 'connection', label: 'Conexão', icon: Plug },
   { id: 'members', label: 'Atendentes', icon: Users },
-  { id: 'ai-agent', label: 'Agente IA', icon: Bot },
+];
+
+// Abas da IA do agente DEDICADO desta conexão (1:1). Mesmas da antiga tela
+// de "Agente IA", agora embutidas aqui — conexão e agente sao a mesma coisa.
+const aiFixedTabs = [
+  { id: 'prompts', label: 'Prompts', icon: MessageSquareText, permKey: 'prompts' as AIPermissionKey },
+  { id: 'faq', label: 'FAQ', icon: BookOpen, permKey: 'faq' as AIPermissionKey },
+];
+const aiRestrictedTabs = [
+  { id: 'integrations', label: 'Integrações', icon: Key, permKey: 'integrations' as AIPermissionKey },
+  { id: 'settings', label: 'Ajustes', icon: SettingsIcon, permKey: 'settings' as AIPermissionKey },
+  { id: 'playground', label: 'Playground', icon: FlaskConical, permKey: 'playground' as AIPermissionKey },
 ];
 
 interface Props {
@@ -66,9 +91,23 @@ interface Props {
 export default function InboxDetail({ inboxId }: Props) {
   const router = useRouter();
   const { inboxes, isLoading } = useInboxes();
+  const { effectiveCompanyId: companyId } = useEffectiveCompanyId();
+  const { company } = useCompanySettings();
+  const { role } = useAuth();
   const [activeTab, setActiveTab] = useState('connection');
 
   const inbox = inboxes.find((a) => a.id === inboxId);
+
+  // Abas da conexao + abas de IA (estas gated pelas permissoes da empresa).
+  const tabs = useMemo(() => {
+    const isSuperAdmin = role === 'super_admin';
+    if (isSuperAdmin) return [...baseTabs, ...aiFixedTabs, ...aiRestrictedTabs];
+    const settings = company?.settings as Record<string, any> | null;
+    const aiPerms = settings?.ai_permissions as Record<string, boolean> | undefined;
+    if (!aiPerms) return [...baseTabs, ...aiFixedTabs, ...aiRestrictedTabs];
+    const enabledRestricted = aiRestrictedTabs.filter((t) => aiPerms[t.permKey] === true);
+    return [...baseTabs, ...aiFixedTabs, ...enabledRestricted];
+  }, [role, company]);
 
   if (isLoading) {
     return (
@@ -100,14 +139,28 @@ export default function InboxDetail({ inboxId }: Props) {
   const channelMeta = CHANNEL_REGISTRY[inbox.channel_type];
   const status = statusStyles[inbox.status || 'disconnected'] || statusStyles.disconnected;
 
+  // Agente dedicado desta conexao (1:1). Passa o id do agente; se faltar
+  // (legado), o id da inbox tambem resolve no endpoint de ai-configurations.
+  const aiAgentId = inbox.ai_agent_id || inbox.id;
+
   const renderContent = () => {
     switch (activeTab) {
       case 'connection':
         return <ConnectionTab inbox={inbox} />;
       case 'members':
         return <MembersTab inboxId={inbox.id} />;
-      case 'ai-agent':
-        return <AiAgentTab inbox={inbox} />;
+      case 'prompts':
+        return companyId ? (
+          <AIPromptsEditor companyId={companyId} agentId={aiAgentId} variant="full" showConfigInfo showVariablesCard />
+        ) : null;
+      case 'faq':
+        return companyId ? <FAQManager companyId={companyId} /> : null;
+      case 'integrations':
+        return companyId ? <APIKeysSubTab companyId={companyId} agentId={aiAgentId} /> : null;
+      case 'settings':
+        return companyId ? <SettingsSubTab companyId={companyId} agentId={aiAgentId} /> : null;
+      case 'playground':
+        return companyId ? <PlaygroundChat companyId={companyId} agentId={aiAgentId} /> : null;
       default:
         return null;
     }
