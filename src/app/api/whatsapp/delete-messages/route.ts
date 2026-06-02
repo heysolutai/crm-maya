@@ -23,6 +23,9 @@ export async function POST(req: NextRequest) {
   if (!auth.companyId) {
     return jsonResponse({ error: 'Empresa nao encontrada' }, 403);
   }
+  // Captura em const: o narrowing de string|null -> string persiste em closures
+  // (ex: dentro do .map abaixo), o que nao acontece com a propriedade auth.companyId.
+  const companyId = auth.companyId;
 
   try {
     const body = await req.json();
@@ -92,7 +95,7 @@ export async function POST(req: NextRequest) {
     // 'message:delete' do cliente). Usa o conversationId de cada mensagem.
     await Promise.allSettled(
       messages.map((m) =>
-        publishEvent(auth.companyId, {
+        publishEvent(companyId, {
           type: 'message:delete',
           conversationId: m.conversationId,
           messageId: m.id,
