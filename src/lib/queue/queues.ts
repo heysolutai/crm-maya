@@ -77,6 +77,11 @@ export interface CampaignTickJob {
   campaignId: string
 }
 
+// Cron job types (no payload — workers poll DB direto)
+export interface CronTickJob {
+  triggeredAt: string
+}
+
 // ============================================================
 // Queue names
 // ============================================================
