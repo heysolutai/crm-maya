@@ -84,7 +84,7 @@ export function MobileBottomNav({
                     className={cn(
                       'absolute inset-0 rounded-full transition-all duration-200',
                       active
-                        ? 'bg-[#8b5cf6] scale-100 opacity-100 shadow-[0_4px_12px_rgba(139,92,246,0.35)]'
+                        ? 'bg-primary scale-100 opacity-100 shadow-[0_4px_12px_hsl(var(--primary)/0.35)]'
                         : 'scale-0 opacity-0'
                     )}
                     aria-hidden="true"
@@ -109,7 +109,7 @@ export function MobileBottomNav({
                   className={cn(
                     'text-[10px] leading-none transition-colors',
                     active
-                      ? 'text-[#8b5cf6] font-semibold'
+                      ? 'text-primary font-semibold'
                       : 'text-muted-foreground font-medium group-hover:text-foreground'
                   )}
                 >
