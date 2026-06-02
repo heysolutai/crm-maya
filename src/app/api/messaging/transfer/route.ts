@@ -34,10 +34,20 @@ export async function POST(req: NextRequest) {
 
     const conversation = await prisma.conversation.findFirst({
       where: { id: conversationId, companyId: companyId || '' },
-      select: { id: true, companyId: true, transferredTo: true, clientId: true },
+      select: {
+        id: true,
+        companyId: true,
+        transferredTo: true,
+        clientId: true,
+        client: { select: { firstName: true, lastName: true } },
+      },
     });
 
     if (!conversation) return errorResponse('Conversation not found or access denied', 404);
+
+    const clientName = conversation.client
+      ? `${conversation.client.firstName ?? ''} ${conversation.client.lastName ?? ''}`.trim() || null
+      : null;
 
     // Helper: grava ConversationNote opcional com prefixo indicando a transferencia.
     // Roda non-blocking — falha de auditoria nao quebra a transferencia.
@@ -90,6 +100,7 @@ export async function POST(req: NextRequest) {
         await saveTransferNote(`Transferida para departamento ${dept.name} (em fila)`);
 
         await publishEvent(companyId || '', { type: 'conversation:update', conversationId });
+        await publishEvent(companyId || '', { type: 'conversation:transferred', conversationId, targetUserId: null, status: 'pending', clientName });
 
         console.log(`[Transfer] Conversation ${conversationId} queued in department ${dept.name} (no online agents)`);
 
@@ -123,6 +134,7 @@ export async function POST(req: NextRequest) {
       await saveTransferNote(`Transferida para ${assignedUser?.fullName ?? 'agente'} no departamento ${dept.name}`);
 
       await publishEvent(companyId || '', { type: 'conversation:update', conversationId });
+      await publishEvent(companyId || '', { type: 'conversation:transferred', conversationId, targetUserId: assignedUserId, status: 'active', clientName });
 
       console.log(`[Transfer] Conversation ${conversationId} transferred to ${assignedUserId} in department ${dept.name}`);
 
@@ -164,6 +176,7 @@ export async function POST(req: NextRequest) {
     await saveTransferNote(`Transferida para ${assignedUser?.fullName ?? 'agente'} (${mode})`);
 
     await publishEvent(companyId || '', { type: 'conversation:update', conversationId });
+    await publishEvent(companyId || '', { type: 'conversation:transferred', conversationId, targetUserId: assignedUserId, status: 'active', clientName });
 
     console.log(`[Transfer] Conversation ${conversationId} transferred to ${assignedUserId} (mode: ${mode})`);
 

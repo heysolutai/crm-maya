@@ -289,6 +289,27 @@ export async function PUT(req: NextRequest) {
       conversationId: conversation.id,
     })
 
+    // Transferencia direta a um agente (muda transferredTo): notifica o alvo.
+    // Transferencia pra fila/departamento passa pelo /api/messaging/transfer.
+    if (updates.transferredTo && updates.transferredTo !== existing.transferredTo) {
+      const client = conversation.clientId
+        ? await prisma.client.findUnique({
+            where: { id: conversation.clientId },
+            select: { firstName: true, lastName: true },
+          })
+        : null
+      const clientName = client
+        ? `${client.firstName ?? ''} ${client.lastName ?? ''}`.trim() || null
+        : null
+      await publishEvent(companyId, {
+        type: 'conversation:transferred',
+        conversationId: conversation.id,
+        targetUserId: updates.transferredTo,
+        status: 'active',
+        clientName,
+      })
+    }
+
     return NextResponse.json(conversation)
   } catch (error) {
     return handleApiError(error, 'Erro ao atualizar conversa')

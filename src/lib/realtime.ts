@@ -45,7 +45,17 @@ export type RealtimeEvent =
   | { type: 'message:delete'; conversationId: string; messageId: string }
   | { type: 'message:update'; conversationId: string; messageId: string; patch: Record<string, unknown> }
   | { type: 'conversation:update'; conversationId: string }
-  | { type: 'note:new'; conversationId: string; note: unknown };
+  | { type: 'note:new'; conversationId: string; note: unknown }
+  // Transferencia de conversa. targetUserId = agente alvo (null = foi pra fila
+  // do departamento). O cliente decide a quem notificar: status 'pending'
+  // (fila) -> todos; alvo direto -> so o agente cujo id bate com targetUserId.
+  | {
+      type: 'conversation:transferred';
+      conversationId: string;
+      targetUserId: string | null;
+      status: 'pending' | 'active';
+      clientName: string | null;
+    };
 
 export function channelForCompany(companyId: string): string {
   return `realtime:company:${companyId}`;
