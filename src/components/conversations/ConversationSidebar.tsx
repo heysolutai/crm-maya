@@ -294,7 +294,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
         </div>
       )}
 
-      <ScrollArea className="flex-1" role="list" aria-label="Lista de conversas">
+      <ScrollArea className="flex-1 min-w-0" role="list" aria-label="Lista de conversas">
         {isLoading ? (
           <ConversationListSkeleton count={6} />
         ) : filteredConversations?.length === 0 ? (
@@ -304,7 +304,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
               : 'Nenhuma conversa encontrada'}
           </div>
         ) : (
-          <div className="p-2 space-y-2">
+          <div className="p-2 space-y-2 w-full max-w-full overflow-hidden">
             {filteredConversations?.map((conv) => {
               const clientName = conv.client
                 ? `${conv.client.first_name} ${conv.client.last_name || ''}`.trim()
@@ -345,7 +345,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                   aria-selected={isSelected}
                   aria-label={`Conversa com ${clientName}${hasUnread ? `, ${unreadCount} mensagens não lidas` : ''}`}
                   className={cn(
-                    'group block w-full rounded-xl border bg-card text-left transition-all',
+                    'group block w-full max-w-full rounded-xl border bg-card text-left transition-all overflow-hidden',
                     'hover:border-primary/40 hover:shadow-sm',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     isSelected
@@ -353,93 +353,97 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                       : 'border-border'
                   )}
                 >
-                  <div className="p-3 space-y-1.5">
-                    {/* Topo: avatar + (nome + telefone) + timestamp */}
-                    <div className="flex items-start gap-3">
-                      <div className="relative shrink-0">
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={conv.client?.avatar_url || undefined} alt={clientName} />
-                          <AvatarFallback className="text-xs font-semibold bg-primary/15 text-primary">
-                            {getInitials(clientName)}
-                          </AvatarFallback>
-                        </Avatar>
-                        {hasUnread && (
-                          <span className="absolute -top-0.5 -right-0.5 h-3 w-3 bg-primary rounded-full ring-2 ring-card" />
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <h3
-                            className={cn(
-                              'text-sm leading-tight truncate',
-                              hasUnread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
-                            )}
-                          >
-                            {clientName}
-                          </h3>
-                          <time
-                            className={cn(
-                              'text-[11px] shrink-0 tabular-nums',
-                              hasUnread ? 'text-primary font-medium' : 'text-muted-foreground'
-                            )}
-                          >
-                            {formatRelativeTime(lastTime)}
-                          </time>
-                        </div>
-                        {phoneMasked && (
-                          <p className="text-[11px] font-mono text-muted-foreground/80 leading-tight mt-0.5">
-                            {phoneMasked}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Mensagem preview */}
-                    <div className="flex items-center justify-between gap-2 pl-[52px]">
-                      <p
-                        className={cn(
-                          'text-[13px] truncate flex items-center gap-1.5 leading-snug',
-                          hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'
-                        )}
-                      >
-                        {preview.icon}
-                        <span className="truncate">{preview.text || 'Sem mensagens'}</span>
-                      </p>
-                      {unreadCount > 0 && (
-                        <Badge className="h-5 min-w-[20px] px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold shrink-0">
-                          {unreadCount > 99 ? '99+' : unreadCount}
-                        </Badge>
+                  {/* Avatar fixo na esquerda + coluna direita com flex-1/min-w-0
+                      contendo todo o resto. min-w-0 em CADA flex parent eh o
+                      que permite o truncate funcionar dentro da sidebar
+                      (sem isso o conteudo expandiria alem do container). */}
+                  <div className="p-3 flex items-start gap-3 min-w-0">
+                    <div className="relative shrink-0">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={conv.client?.avatar_url || undefined} alt={clientName} />
+                        <AvatarFallback className="text-xs font-semibold bg-primary/15 text-primary">
+                          {getInitials(clientName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      {hasUnread && (
+                        <span className="absolute -top-0.5 -right-0.5 h-3 w-3 bg-primary rounded-full ring-2 ring-card" />
                       )}
                     </div>
 
-                    {/* Status badge + acoes contextuais */}
-                    <div className="flex items-center justify-between gap-2 pl-[52px] pt-0.5 flex-wrap">
-                      <span
-                        className={cn(
-                          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium',
-                          statusBadgeClass
-                        )}
-                      >
-                        <StatusIcon className="h-3 w-3" />
-                        {statusInfo.label}
-                      </span>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      {/* Linha 1: nome + tempo */}
+                      <div className="flex items-baseline justify-between gap-2 min-w-0">
+                        <h3
+                          className={cn(
+                            'text-sm leading-tight truncate min-w-0',
+                            hasUnread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
+                          )}
+                        >
+                          {clientName}
+                        </h3>
+                        <time
+                          className={cn(
+                            'text-[11px] shrink-0 tabular-nums',
+                            hasUnread ? 'text-primary font-medium' : 'text-muted-foreground'
+                          )}
+                        >
+                          {formatRelativeTime(lastTime)}
+                        </time>
+                      </div>
 
-                      <div className="flex items-center gap-1.5">
+                      {/* Linha 2: telefone mascarado */}
+                      {phoneMasked && (
+                        <p className="text-[11px] font-mono text-muted-foreground/80 leading-tight truncate">
+                          {phoneMasked}
+                        </p>
+                      )}
+
+                      {/* Linha 3: mensagem preview + badge de unread */}
+                      <div className="flex items-center justify-between gap-2 min-w-0">
+                        <div
+                          className={cn(
+                            'text-[13px] leading-snug flex items-center gap-1.5 min-w-0 flex-1',
+                            hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'
+                          )}
+                        >
+                          {preview.icon}
+                          <span className="truncate min-w-0">{preview.text || 'Sem mensagens'}</span>
+                        </div>
+                        {unreadCount > 0 && (
+                          <Badge className="h-5 min-w-[20px] px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold shrink-0">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Linha 4: status badge + departamento/agente/atender.
+                          flex-wrap permite quebrar pra outra linha se nao
+                          couber tudo, em vez de estourar o container. */}
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium shrink-0',
+                            statusBadgeClass
+                          )}
+                        >
+                          <StatusIcon className="h-3 w-3" />
+                          {statusInfo.label}
+                        </span>
                         {conv.department && (
                           <span
-                            className="text-[10px] px-1.5 py-0.5 inline-flex items-center rounded font-medium"
+                            className="text-[10px] px-1.5 py-0.5 inline-flex items-center rounded font-medium shrink-0 max-w-[80px] truncate"
                             style={{
                               backgroundColor: `${conv.department.color}20`,
                               color: conv.department.color,
                             }}
+                            title={conv.department.name}
                           >
                             {conv.department.name}
                           </span>
                         )}
                         {(conv as any).agent && (
                           <span
-                            className="text-[10px] px-1.5 py-0.5 inline-flex items-center rounded font-medium bg-primary/10 text-primary max-w-[100px] truncate"
+                            className="text-[10px] px-1.5 py-0.5 inline-flex items-center rounded font-medium bg-primary/10 text-primary shrink-0 max-w-[80px] truncate"
                             title={`Recebido por ${(conv as any).agent.display_name}`}
                           >
                             {(conv as any).agent.display_name}
@@ -447,7 +451,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                         )}
                         {conv.status === 'pending' && onPickupConversation && (
                           <button
-                            className="text-[10px] text-primary font-semibold hover:underline"
+                            className="text-[10px] text-primary font-semibold hover:underline shrink-0"
                             onClick={(e) => {
                               e.stopPropagation();
                               onPickupConversation(conv.id);
@@ -457,23 +461,28 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                           </button>
                         )}
                       </div>
-                    </div>
 
-                    {/* Tags — so se tiver */}
-                    {conv.tags && conv.tags.length > 0 && (
-                      <div className="flex items-center gap-1 pl-[52px] pt-0.5 flex-wrap">
-                        {conv.tags.slice(0, 3).map((tag, idx) => (
-                          <Badge key={idx} variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                            {tag}
-                          </Badge>
-                        ))}
-                        {conv.tags.length > 3 && (
-                          <span className="text-[10px] text-muted-foreground">
-                            +{conv.tags.length - 3}
-                          </span>
-                        )}
-                      </div>
-                    )}
+                      {/* Linha 5 (opcional): tags */}
+                      {conv.tags && conv.tags.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap min-w-0">
+                          {conv.tags.slice(0, 3).map((tag, idx) => (
+                            <Badge
+                              key={idx}
+                              variant="secondary"
+                              className="text-[10px] px-1.5 py-0 h-4 max-w-[80px] truncate"
+                              title={tag}
+                            >
+                              {tag}
+                            </Badge>
+                          ))}
+                          {conv.tags.length > 3 && (
+                            <span className="text-[10px] text-muted-foreground">
+                              +{conv.tags.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </button>
               );
