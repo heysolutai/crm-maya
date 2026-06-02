@@ -1538,7 +1538,7 @@ export async function POST(req: NextRequest) {
             department: { select: { id: true, name: true } },
             inboxId: true,
             inbox: {
-              select: { id: true, displayName: true, instanceName: true, channelType: true, phoneNumber: true, aiAgentId: true, aiAgent: { select: { id: true, name: true } } },
+              select: { id: true, displayName: true, instanceName: true, channelType: true, phoneNumber: true, apiUrl: true, instanceApiKey: true, aiAgentId: true, aiAgent: { select: { id: true, name: true } } },
             },
           },
         }),
@@ -1644,6 +1644,12 @@ export async function POST(req: NextRequest) {
         inbox_instance_name: conversationData?.inbox?.instanceName || null,
         inbox_channel_type: conversationData?.inbox?.channelType || null,
         inbox_phone: conversationData?.inbox?.phoneNumber || null,
+        // Credenciais da instancia (UAZapi) da inbox que recebeu a mensagem.
+        // O N8N usa pra responder pelo MESMO numero/instancia (send/text etc).
+        // Vem da inbox da conversa — nao da "primeira inbox ativa" — pra nao
+        // responder pelo numero errado quando ha varias caixas de entrada.
+        inbox_api_url: conversationData?.inbox?.apiUrl || null,
+        inbox_instance_api_key: conversationData?.inbox?.instanceApiKey || null,
         // AiAgent vinculado a inbox (quando aplicavel)
         ai_agent_id: conversationData?.inbox?.aiAgent?.id || null,
         ai_agent_name: conversationData?.inbox?.aiAgent?.name || null,
