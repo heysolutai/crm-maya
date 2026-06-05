@@ -44,7 +44,14 @@
       "Bash(rmdir \"c:/Users/yagom/OneDrive/Documentos/crm-wyarp/crm-maya/src/app/api/conversations/[id]/transfer\")",
       "Bash(npx tsc *)",
       "Bash(./node_modules/.bin/tsc --noEmit --incremental --skipLibCheck)",
-      "Bash(awk '/^model /{model=$2} /conversation_id|conversationId/ && model {print model; model=\"\"}' /home/yago/crm-maya/prisma/schema.prisma)"
+      "Bash(awk '/^model /{model=$2} /conversation_id|conversationId/ && model {print model; model=\"\"}' /home/yago/crm-maya/prisma/schema.prisma)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "mcp__4049575a-a11d-43fd-b2db-0b60373b2eb0__ads_get_ad_entities",
+      "mcp__4049575a-a11d-43fd-b2db-0b60373b2eb0__ads_activate_entity",
+      "Bash(git --version)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)"
     ],
     "additionalDirectories": [
       "/tmp"

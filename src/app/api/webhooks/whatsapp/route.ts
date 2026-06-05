@@ -1717,9 +1717,20 @@ export async function POST(req: NextRequest) {
         timestamp: new Date().toISOString(),
       };
 
+      // FIX (pause IA): se cliente esta pausado E mensagem eh incoming, nao
+      // chama N8N de jeito nenhum. Defesa no source — independente do workflow
+      // N8N olhar ou nao o campo ai_status. Audio/midia ainda sao processados
+      // (transcricao e upload pro B2 continuam) so nao sao enviados pro N8N.
+      const skipN8N = aiStatus === 'paused' && payload.type === 'incoming';
+      const effectiveN8nUrl = skipN8N ? undefined : (n8nWebhookUrl || undefined);
+
       // For audio messages: skip N8N, transcription worker sends it after transcription
       if (shouldQueueTranscription && whatsappInstance && mediaMessageId) {
-        console.log(`[N8N Webhook] ⏳ Skipping for audio message ${message.id} — will send after transcription`);
+        if (skipN8N) {
+          console.log(`[N8N Webhook] ⛔ IA pausada — audio ${message.id} sera transcrito mas N8N NAO sera chamado`);
+        } else {
+          console.log(`[N8N Webhook] ⏳ Skipping for audio message ${message.id} — will send after transcription`);
+        }
         try {
           await enqueueTranscription({
             messageId: message.id,
@@ -1729,7 +1740,7 @@ export async function POST(req: NextRequest) {
             instanceApiUrl: whatsappInstance.apiUrl || '',
             instanceApiKey: whatsappInstance.instanceApiKey || '',
             messageKey: mediaMessageId,
-            n8nWebhookUrl: n8nWebhookUrl || undefined,
+            n8nWebhookUrl: effectiveN8nUrl,
             n8nPayload: webhookPayload,
           });
           console.log('[Audio Transcription] ✅ Queued transcription job for message', message.id);
@@ -1737,7 +1748,11 @@ export async function POST(req: NextRequest) {
           console.error('[Audio Transcription] Failed to queue transcription:', queueError);
         }
       } else if (shouldQueueMedia && whatsappInstance && mediaMessageId) {
-        console.log(`[N8N Webhook] ⏳ Skipping for media message ${message.id} — will send after S3 upload`);
+        if (skipN8N) {
+          console.log(`[N8N Webhook] ⛔ IA pausada — midia ${message.id} sera processada mas N8N NAO sera chamado`);
+        } else {
+          console.log(`[N8N Webhook] ⏳ Skipping for media message ${message.id} — will send after S3 upload`);
+        }
         try {
           await enqueueMediaProcessing({
             messageId: message.id,
@@ -1751,13 +1766,15 @@ export async function POST(req: NextRequest) {
             instanceApiUrl: whatsappInstance.apiUrl || '',
             instanceApiKey: whatsappInstance.instanceApiKey || '',
             messageKey: mediaMessageId,
-            n8nWebhookUrl: n8nWebhookUrl || undefined,
+            n8nWebhookUrl: effectiveN8nUrl,
             n8nPayload: webhookPayload,
           });
           console.log('[Media Processing] ✅ Queued for message', message.id);
         } catch (queueError) {
           console.error('[Media Processing] Failed to queue:', queueError);
         }
+      } else if (skipN8N) {
+        console.log(`[N8N Webhook] ⛔ IA pausada — mensagem ${message.id} NAO sera enviada pro N8N (client.aiPaused=true)`);
       } else if (n8nWebhookUrl) {
         try {
           await enqueueN8NWebhook({

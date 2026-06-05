@@ -254,6 +254,18 @@ export async function POST(req: NextRequest) {
         // mensagem veio do cliente (nao eco do proprio agente), enfileira
         // pro N8N processar.
         if (!fromMe) {
+          // Checa se a IA esta pausada pra esse cliente (flag aiPaused na tabela
+          // clients). Resolve por telefone + companyId. Se paused, pula N8N
+          // independente do flag ai_status que o N8N pode ou nao verificar.
+          const client = await prisma.client.findFirst({
+            where: { companyId: agent.companyId, phone },
+            select: { id: true, aiPaused: true },
+          })
+          if (client?.aiPaused) {
+            console.log(`[webhook:evolution] ⛔ IA pausada — mensagem ${message.id} NAO sera enviada pro N8N (client.aiPaused=true)`)
+            break
+          }
+
           const aiConfig = await prisma.aiConfiguration.findFirst({
             where: { whatsappInstanceId: agent.id, isActive: true },
             select: {
