@@ -67,6 +67,7 @@ import {
   Plus,
   Sparkles,
   TrendingUp,
+  Megaphone,
   type LucideIcon,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -108,6 +109,7 @@ const navGroups: NavGroup[] = [
       { name: 'Catálogo', href: '/app/catalog', icon: Package, roles: ['agent', 'manager', 'company_admin'] },
       { name: 'Agenda', href: '/app/appointments', icon: Calendar, roles: ['agent', 'manager', 'company_admin'], countKey: 'appointmentsToday' },
       { name: 'Follow-ups', href: '/app/follow-ups', icon: Clock, roles: ['manager', 'company_admin'], countKey: 'pendingFollowUps' },
+      { name: 'Campanhas', href: '/app/campaigns', icon: Megaphone, roles: ['manager', 'company_admin'] },
     ],
   },
   {

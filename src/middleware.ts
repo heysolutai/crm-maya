@@ -145,7 +145,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // Pages restricted to manager+ (manager, company_admin)
-    const managerPages = ['/app/follow-ups', '/app/api-docs']
+    const managerPages = ['/app/follow-ups', '/app/api-docs', '/app/campaigns']
     if (managerPages.some(p => pathname.startsWith(p)) && !isSuperAdmin && !['manager', 'company_admin'].includes(role || '')) {
       const url = request.nextUrl.clone()
       url.pathname = '/app/dashboard'
