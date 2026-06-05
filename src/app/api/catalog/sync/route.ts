@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { authenticate } from "@/lib/api/auth";
+import { getSystemSetting } from "@/lib/system-settings";
 
 // POST /api/catalog/sync — importa todos os produtos da UazAPI e salva no banco
 export async function POST(req: NextRequest) {
@@ -165,11 +166,78 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Catalog Sync] Synced=${synced}, Deleted=${deleted}, Total WA=${allRawProducts.length}`);
 
+    // 5. Dispara webhook N8N (fire-and-forget) com os produtos sincronizados.
+    // Use case: N8N indexa em base vetorial / RAG / OpenAI embeddings.
+    // Falha aqui nao quebra o sync — usuario ja viu o resultado e pode clicar
+    // de novo se precisar.
+    const catalogWebhookUrl = await getSystemSetting("n8n_catalog_webhook_url");
+    if (catalogWebhookUrl) {
+      // Busca os produtos atualizados do DB pra enviar payload limpo
+      // (com attributes preservados, sem o rawData cru da UazAPI).
+      const products = await prisma.catalogProduct.findMany({
+        where: { companyId: auth.companyId },
+        select: {
+          id: true,
+          waProductId: true,
+          retailerId: true,
+          name: true,
+          description: true,
+          price: true,
+          priceAmount: true,
+          currency: true,
+          availability: true,
+          isHidden: true,
+          url: true,
+          images: true,
+          attributes: true,
+          syncedAt: true,
+        },
+      });
+
+      const webhookPayload = {
+        event: "catalog.synced",
+        company_id: auth.companyId,
+        instance_id: instance.id,
+        instance_name: instance.instanceName,
+        synced_at: new Date().toISOString(),
+        stats: {
+          synced,
+          deleted,
+          total: products.length,
+        },
+        products,
+      };
+
+      // Dispara em paralelo — nao aguarda. Logs servem pra diagnostico.
+      fetch(catalogWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(webhookPayload),
+      })
+        .then((res) => {
+          if (!res.ok) {
+            console.warn(
+              `[Catalog Sync] N8N webhook respondeu ${res.status} (URL: ${catalogWebhookUrl})`
+            );
+          } else {
+            console.log(
+              `[Catalog Sync] N8N webhook OK (${products.length} produtos enviados)`
+            );
+          }
+        })
+        .catch((err) =>
+          console.error("[Catalog Sync] N8N webhook falhou:", (err as Error).message)
+        );
+    } else {
+      console.log("[Catalog Sync] n8n_catalog_webhook_url nao configurado, pulando webhook");
+    }
+
     return NextResponse.json({
       success: true,
       synced,
       deleted,
       total: allRawProducts.length,
+      webhook_dispatched: !!catalogWebhookUrl,
     });
   } catch (error) {
     // Log detalhado no servidor

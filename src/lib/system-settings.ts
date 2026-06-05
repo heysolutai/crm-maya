@@ -44,6 +44,7 @@ async function loadCache(): Promise<void> {
 const ENV_FALLBACK: Record<string, string> = {
   n8n_ai_webhook_url:           'N8N_AI_WEBHOOK_URL',
   n8n_faq_upload_webhook_url:   'N8N_FAQ_UPLOAD_WEBHOOK_URL',
+  n8n_catalog_webhook_url:      'N8N_CATALOG_WEBHOOK_URL',
   knowledge_webhook_url:        'KNOWLEDGE_WEBHOOK_URL',
   default_openai_api_key:       'DEFAULT_OPENAI_API_KEY',
 };
@@ -113,6 +114,13 @@ export const KNOWN_SETTINGS = [
     description: 'URL do N8N que recebe arquivos enviados pra base de conhecimento.',
     isSecret: false,
     placeholder: 'https://n8n.exemplo.com/webhook/faq-upload',
+  },
+  {
+    key: 'n8n_catalog_webhook_url',
+    label: 'N8N - Sync Catalogo',
+    description: 'URL do N8N que recebe os produtos do catalogo apos sync. Use pra indexar em base vetorial / RAG.',
+    isSecret: false,
+    placeholder: 'https://n8n.exemplo.com/webhook/catalog-sync',
   },
   {
     key: 'knowledge_webhook_url',
