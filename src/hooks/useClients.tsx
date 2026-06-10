@@ -31,16 +31,19 @@ export function useClients() {
   const { effectiveCompanyId: companyId } = useEffectiveCompanyId();
   const queryClient = useQueryClient();
 
-  const { data: clients = [], isLoading: loading } = useQuery({
+  // Cache do total real (header X-Total-Count). O array de clients pode estar
+  // limitado pelo limit da query — total reflete o tamanho real na empresa.
+  const { data: queryResult, isLoading: loading } = useQuery({
     queryKey: ['clients', companyId],
     queryFn: async () => {
-      if (!companyId) return [];
+      if (!companyId) return { clients: [], total: 0 };
 
       const res = await fetch(`/api/clients?companyId=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch clients');
       const data = await res.json();
+      const total = parseInt(res.headers.get('X-Total-Count') || '0', 10);
 
-      return (data || []).map((client: any) => {
+      const clients = (data || []).map((client: any) => {
         const appointments = client.appointments || [];
         const sales = client.sales || [];
 
@@ -81,9 +84,17 @@ export function useClients() {
           ),
         };
       });
+
+      return { clients, total };
     },
     enabled: !!companyId,
   });
+
+  // Backwards compat: a maioria dos consumers le `clients` direto do hook.
+  // Tambem exporta `totalClients` (do header X-Total-Count) que pode ser
+  // diferente de clients.length quando a empresa passa de 1000 (limit do API).
+  const clients = queryResult?.clients || [];
+  const totalClients = queryResult?.total ?? 0;
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['clients', companyId] });
 
@@ -182,6 +193,7 @@ export function useClients() {
 
   return {
     clients,
+    totalClients,
     loading,
     fetchClients: invalidate,
     createClient,

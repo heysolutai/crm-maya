@@ -53,17 +53,41 @@ export async function GET(req: NextRequest) {
     const companyId = req.nextUrl.searchParams.get('companyId') || authCompanyId
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
-    const clients = await prisma.client.findMany({
-      where: { companyId },
-      include: {
-        appointments: { select: { id: true, scheduledFor: true, status: true } },
-        sales: { select: { id: true, totalAmount: true, status: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 1000,
-    })
+    // ?summary=true: resposta rapida so com a contagem total (sem o array).
+    // Util pra widgets/dashboards que so querem o numero.
+    if (req.nextUrl.searchParams.get('summary') === 'true') {
+      const total = await prisma.client.count({ where: { companyId } })
+      return NextResponse.json({ total }, { headers: { 'X-Total-Count': String(total) } })
+    }
 
-    return NextResponse.json(clients)
+    // Paginacao opcional via ?page=&limit=. Default mantem o comportamento
+    // historico (1000 primeiros) pra nao quebrar consumidores que esperavam
+    // tudo de uma vez. UI mais nova le X-Total-Count pra mostrar o real.
+    const page = Math.max(1, parseInt(req.nextUrl.searchParams.get('page') || '1', 10))
+    const limit = Math.min(5000, Math.max(1, parseInt(req.nextUrl.searchParams.get('limit') || '1000', 10)))
+    const skip = (page - 1) * limit
+
+    const [clients, total] = await Promise.all([
+      prisma.client.findMany({
+        where: { companyId },
+        include: {
+          appointments: { select: { id: true, scheduledFor: true, status: true } },
+          sales: { select: { id: true, totalAmount: true, status: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip,
+      }),
+      prisma.client.count({ where: { companyId } }),
+    ])
+
+    return NextResponse.json(clients, {
+      headers: {
+        'X-Total-Count': String(total),
+        'X-Page': String(page),
+        'X-Limit': String(limit),
+      },
+    })
   } catch (error) {
     return handleApiError(error, 'Erro ao buscar clientes')
   }

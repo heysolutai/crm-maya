@@ -69,7 +69,7 @@ function getAvatarColor(name: string) {
 
 export default function Clients() {
   const router = useRouter();
-  const { clients, loading, createClient, updateClient, deleteClient } = useClients();
+  const { clients, totalClients, loading, createClient, updateClient, deleteClient } = useClients();
   const { user, role } = useAuth();
   const { permissions } = useUserPermissions();
   const [openingConversationId, setOpeningConversationId] = useState<string | null>(null);
@@ -101,7 +101,7 @@ export default function Clients() {
     const totalRevenue = clients.reduce((sum: number, c: typeof clients[0]) => sum + ((c as any).total_revenue || 0), 0);
 
     return [
-      { label: 'Total de Clientes', value: clients.length, icon: Users, color: 'blue' },
+      { label: 'Total de Clientes', value: totalClients || clients.length, icon: Users, color: 'blue' },
       { label: 'Ativos', value: active, icon: UserCheck, color: 'green' },
       { label: 'Novos (30 dias)', value: recentClients, icon: ContactRound, color: 'purple' },
       {
@@ -111,7 +111,7 @@ export default function Clients() {
         color: 'cyan',
       },
     ];
-  }, [clients]);
+  }, [clients, totalClients]);
 
   if (!hasAccessToCRM) {
     return (

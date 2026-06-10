@@ -29,6 +29,7 @@ function mapClient(raw: any): ClientForCompany {
 
 export function useClientsForCompany(companyId: string | undefined) {
   const [clients, setClients] = useState<ClientForCompany[]>([]);
+  const [totalClients, setTotalClients] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
@@ -40,8 +41,10 @@ export function useClientsForCompany(companyId: string | undefined) {
       const res = await fetch(`/api/clients?companyId=${companyId}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch clients');
       const data = await res.json();
+      const total = parseInt(res.headers.get('X-Total-Count') || '0', 10);
 
       setClients((data || []).map(mapClient));
+      setTotalClients(total);
     } catch (error) {
       console.error('Error fetching clients:', error);
       toast({
@@ -94,6 +97,7 @@ export function useClientsForCompany(companyId: string | undefined) {
 
   return {
     clients,
+    totalClients,
     isLoading,
     fetchClients,
     toggleAIPaused,

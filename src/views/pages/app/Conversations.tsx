@@ -81,6 +81,9 @@ export default function Conversations() {
   // Hooks
   const {
     conversations,
+    totalConversations,
+    loadMoreConversations,
+    hasMoreConversations,
     isLoading,
     getConversationMessages,
     getUnreadCount,
@@ -393,6 +396,9 @@ export default function Conversations() {
           onRefresh={manualRefresh}
           onNewConversation={() => setNewConversationDialogOpen(true)}
           onPickupConversation={(id) => pickupConversation(id)}
+          totalConversations={totalConversations}
+          hasMoreConversations={hasMoreConversations}
+          onLoadMore={loadMoreConversations}
         />
       </div>
 

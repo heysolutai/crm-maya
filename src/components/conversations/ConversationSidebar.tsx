@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 import { Search, Plus, Tag, X, Image, Mic, FileText, MapPin, Video, Clock, Bot, User as UserIcon, CheckCircle2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -83,6 +83,11 @@ interface ConversationSidebarProps {
   onRefresh: () => void;
   onNewConversation: () => void;
   onPickupConversation?: (conversationId: string) => void;
+  // Infinite scroll — total real da empresa + callback pra carregar mais.
+  // Quando o usuario chega no fim da lista, chama onLoadMore se hasMore.
+  totalConversations?: number;
+  hasMoreConversations?: boolean;
+  onLoadMore?: () => void;
 }
 
 const channelLabel: Record<string, string> = {
@@ -121,8 +126,14 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   onRefresh,
   onNewConversation,
   onPickupConversation,
+  totalConversations,
+  hasMoreConversations,
+  onLoadMore,
 }: ConversationSidebarProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // ref pra detectar quando o usuario chegou perto do fim e disparar loadMore.
+  // Usa Intersection Observer no elemento sentinela no final da lista.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const filteredConversations =
     statusFilter === 'unread'
@@ -130,6 +141,19 @@ export const ConversationSidebar = memo(function ConversationSidebar({
       : statusFilter === 'transferred'
         ? conversations?.filter((c) => !!c.transferred_user)
         : conversations;
+
+  const filteredCount = filteredConversations?.length || 0;
+  useEffect(() => {
+    if (!hasMoreConversations || !onLoadMore || !sentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onLoadMore();
+      },
+      { rootMargin: '300px' } // dispara 300px antes do fim — UX mais fluida
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMoreConversations, onLoadMore, filteredCount]);
 
   return (
     <div className="w-full md:w-[420px] border-r border-border flex flex-col h-full min-h-0">
@@ -259,7 +283,9 @@ export const ConversationSidebar = memo(function ConversationSidebar({
               )}
             >
               Todos
-              <span className="ml-1.5 opacity-70">({conversations?.length || 0})</span>
+              <span className="ml-1.5 opacity-70">
+                ({totalConversations ?? conversations?.length ?? 0})
+              </span>
             </button>
             {agents.map((a) => {
               const count = (conversations || []).filter(
@@ -487,6 +513,17 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                 </button>
               );
             })}
+            {/* Sentinel pra disparar loadMore quando o usuario chega no fim */}
+            {hasMoreConversations && (
+              <div ref={sentinelRef} className="py-3 text-center text-[11px] text-muted-foreground">
+                Carregando mais conversas...
+              </div>
+            )}
+            {!hasMoreConversations && totalConversations && totalConversations > 0 && filteredCount > 0 && (
+              <div className="py-3 text-center text-[10px] text-muted-foreground/60">
+                {filteredCount} de {totalConversations} conversas
+              </div>
+            )}
           </div>
         )}
       </ScrollArea>

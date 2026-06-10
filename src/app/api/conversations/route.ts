@@ -53,32 +53,41 @@ export async function GET(req: NextRequest) {
     if (departmentId) where.departmentId = departmentId
     if (whatsappInstanceId) where.whatsappInstanceId = whatsappInstanceId
 
-    const limit = parseInt(req.nextUrl.searchParams.get('limit') || '100')
-    const offset = parseInt(req.nextUrl.searchParams.get('offset') || '0')
+    const limit = Math.min(500, Math.max(1, parseInt(req.nextUrl.searchParams.get('limit') || '100', 10)))
+    const offset = Math.max(0, parseInt(req.nextUrl.searchParams.get('offset') || '0', 10))
 
-    const conversations = await prisma.conversation.findMany({
-      where,
-      include: {
-        client: {
-          select: { id: true, firstName: true, lastName: true, phone: true, email: true, avatarUrl: true, aiPaused: true },
+    const [conversations, total] = await Promise.all([
+      prisma.conversation.findMany({
+        where,
+        include: {
+          client: {
+            select: { id: true, firstName: true, lastName: true, phone: true, email: true, avatarUrl: true, aiPaused: true },
+          },
+          transferAgent: { select: { fullName: true } },
+          department: { select: { id: true, name: true, color: true } },
+          whatsappInstance: {
+            select: { id: true, displayName: true, instanceName: true, channelType: true, phoneNumber: true },
+          },
+          messages: {
+            select: { messageText: true, messageType: true, senderType: true, createdAt: true },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
         },
-        transferAgent: { select: { fullName: true } },
-        department: { select: { id: true, name: true, color: true } },
-        whatsappInstance: {
-          select: { id: true, displayName: true, instanceName: true, channelType: true, phoneNumber: true },
-        },
-        messages: {
-          select: { messageText: true, messageType: true, senderType: true, createdAt: true },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
+        orderBy: [{ updatedAt: 'desc' }, { startedAt: 'desc' }],
+        take: limit,
+        skip: offset,
+      }),
+      prisma.conversation.count({ where }),
+    ])
+
+    return NextResponse.json(conversations, {
+      headers: {
+        'X-Total-Count': String(total),
+        'X-Limit': String(limit),
+        'X-Offset': String(offset),
       },
-      orderBy: [{ updatedAt: 'desc' }, { startedAt: 'desc' }],
-      take: limit,
-      skip: offset,
     })
-
-    return NextResponse.json(conversations)
   } catch (error) {
     return handleApiError(error, 'Erro ao buscar conversas')
   }

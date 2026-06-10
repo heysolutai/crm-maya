@@ -19,6 +19,8 @@ export type ConversationFilters = {
   whatsappInstanceId?: string;
 };
 
+const CONVERSATIONS_PAGE_SIZE = 100;
+
 export function useConversations(filters?: ConversationFilters) {
   const { user, role } = useAuth();
   const { effectiveCompanyId: companyId } = useEffectiveCompanyId();
@@ -27,6 +29,18 @@ export function useConversations(filters?: ConversationFilters) {
   const queryClient = useQueryClient();
   const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
   const [usePolling] = useState(true); // Always use polling now
+  // Infinite scroll: limit cresce em multiplos de CONVERSATIONS_PAGE_SIZE quando
+  // o usuario chega no final da lista. Reinicia ao trocar filtros.
+  const [pageLimit, setPageLimit] = useState(CONVERSATIONS_PAGE_SIZE);
+  const [totalConversations, setTotalConversations] = useState(0);
+  // Reset do limit quando filtros mudam
+  const filtersKey = JSON.stringify(filters || {});
+  const lastFiltersKeyRef = useRef(filtersKey);
+  if (lastFiltersKeyRef.current !== filtersKey) {
+    lastFiltersKeyRef.current = filtersKey;
+    // Use setTimeout pra evitar setState durante render
+    setTimeout(() => setPageLimit(CONVERSATIONS_PAGE_SIZE), 0);
+  }
 
   const [conversationMessages, setConversationMessages] = useState<{
     [conversationId: string]: {
@@ -88,11 +102,11 @@ export function useConversations(filters?: ConversationFilters) {
   });
 
   const { data: conversations, isLoading } = useQuery({
-    queryKey: ['conversations', companyId, filters],
+    queryKey: ['conversations', companyId, filters, pageLimit],
     queryFn: async () => {
       if (!companyId) return [];
 
-      const params = new URLSearchParams({ companyId });
+      const params = new URLSearchParams({ companyId, limit: String(pageLimit) });
 
       // If not admin/manager AND cannot see all conversations, filter by assigned
       if (role && !['super_admin', 'company_admin', 'manager'].includes(role) &&
@@ -111,6 +125,10 @@ export function useConversations(filters?: ConversationFilters) {
 
       const res = await fetch(`/api/conversations?${params}`);
       if (!res.ok) throw new Error('Failed to fetch conversations');
+      // Total real da empresa (vem do header). UI usa pra mostrar contagem
+      // correta e decidir se ha mais paginas pra carregar no scroll infinito.
+      const total = parseInt(res.headers.get('X-Total-Count') || '0', 10);
+      setTotalConversations(total);
       let results = await res.json();
 
       // Filter by tags and search on client side
@@ -1165,8 +1183,19 @@ export function useConversations(filters?: ConversationFilters) {
     isPending: sendMediaMessage.isPending,
   };
 
+  // Infinite scroll: incrementa o limit em uma pagina, React Query refetcha
+  // automaticamente. hasMore compara o tamanho carregado vs total da empresa.
+  const loadMoreConversations = useCallback(() => {
+    setPageLimit((prev) => prev + CONVERSATIONS_PAGE_SIZE);
+  }, []);
+  const hasMoreConversations =
+    totalConversations > 0 && (conversations?.length || 0) < totalConversations;
+
   return {
     conversations,
+    totalConversations,
+    loadMoreConversations,
+    hasMoreConversations,
     isLoading,
     getConversationMessages,
     getUnreadCount,
