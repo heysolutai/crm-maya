@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Eye, EyeOff, Key, AlertTriangle } from "lucide-react";
 import { APIKeys } from "@/hooks/useAIConfigurations";
 import { AI_MODELS } from "@/lib/aiModels";
+import { REDACTED } from "@/lib/api/redact";
 
 interface APIKeysSectionProps {
   apiKeys: APIKeys;
@@ -29,7 +30,8 @@ const LLM_PROVIDERS: { value: LLMProvider; label: string; icon: string; descript
 ];
 
 function isKeyFormatValid(provider: string, value: string | undefined): boolean {
-  if (!value || value.trim() === '') return true;
+  // Chave configurada (redigida pelo servidor) — nao valida formato.
+  if (!value || value.trim() === '' || value === REDACTED) return true;
   const validation = KEY_VALIDATIONS[provider];
   if (!validation) return true;
   return validation.prefix.some(p => value.startsWith(p));
@@ -66,7 +68,8 @@ export function APIKeysSection({
     elevenlabs: isKeyFormatValid('elevenlabs', apiKeys.elevenlabs),
   }), [apiKeys]);
 
-  const getKeyDisplay = (key: string | undefined) => key || "";
+  // Nunca mostra o sentinel de chave redigida no input — fica em branco.
+  const getKeyDisplay = (key: string | undefined) => (key && key !== REDACTED ? key : "");
 
   const filteredModels = AI_MODELS.filter(m => m.provider === activeProvider);
 
@@ -98,6 +101,11 @@ export function APIKeysSection({
           {showKeys[provider] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </Button>
       </div>
+      {value === REDACTED && (
+        <p className="text-xs text-emerald-600 dark:text-emerald-400">
+          ✓ Chave configurada — deixe em branco para manter, ou digite uma nova para trocar.
+        </p>
+      )}
       {!validations[provider] && (
         <div className="flex items-center gap-1.5 text-destructive text-xs">
           <AlertTriangle className="h-3.5 w-3.5" />

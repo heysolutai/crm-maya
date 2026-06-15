@@ -6,6 +6,7 @@ import { CHANNEL_TYPES, isChannelType, CHANNEL_REGISTRY } from '@/lib/channels/t
 import { getAdapter, hasAdapter } from '@/lib/channels/registry'
 import { ChannelError } from '@/lib/channels/errors'
 import { normalizeCompanySlug, buildAgentMemoryKey } from '@/lib/api/utils'
+import { maskKey, redactChannelConfig } from '@/lib/api/redact'
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
@@ -83,15 +84,16 @@ function mapAgent(i: any) {
     phone_number: i.phoneNumber,
     instance_name: i.instanceName,
     api_url: i.apiUrl,
-    instance_api_key: i.instanceApiKey,
-    admin_token: i.adminToken,
+    // Segredos mascarados — nunca vao em texto puro pro cliente (vazamento).
+    instance_api_key: maskKey(i.instanceApiKey),
+    admin_token: maskKey(i.adminToken),
     status: i.status,
     is_active: i.isActive,
     qr_code: i.qrCode,
     error_message: i.errorMessage,
     last_connected_at: i.lastConnectedAt,
     metadata: i.metadata,
-    channel_config: i.channelConfig,
+    channel_config: redactChannelConfig(i.channelConfig),
     ai_agent_id: i.aiAgentId,
     created_at: i.createdAt,
     updated_at: i.updatedAt,

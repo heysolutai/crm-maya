@@ -6,6 +6,10 @@ import { normalizeCompanySlug, buildAgentMemoryKey } from '@/lib/api/utils'
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { handleApiError } from '@/lib/api/errors'
+import { redactAiApiKeys, mergeAiApiKeys } from '@/lib/api/redact'
+
+// Redige os segredos (apiKeys) do AiAgent antes de devolver pro cliente.
+const redactAgent = (a: any) => ({ ...a, apiKeys: redactAiApiKeys(a?.apiKeys) })
 
 const createAiConfigurationSchema = z.object({
   company_id: z.string().uuid('Invalid company_id format').optional(),
@@ -59,7 +63,7 @@ export async function GET(req: NextRequest) {
       const directAgent = await prisma.aiAgent.findFirst({
         where: { id: agentId, companyId },
       })
-      if (directAgent) return NextResponse.json([directAgent])
+      if (directAgent) return NextResponse.json([redactAgent(directAgent)])
 
       // (b) Fallback: agentId era na verdade um inboxId — resolve o agente vinculado
       const inbox = await prisma.inbox.findFirst({
@@ -71,7 +75,7 @@ export async function GET(req: NextRequest) {
       const linkedAgent = await prisma.aiAgent.findFirst({
         where: { id: inbox.aiAgentId, companyId },
       })
-      return NextResponse.json(linkedAgent ? [linkedAgent] : [])
+      return NextResponse.json(linkedAgent ? [redactAgent(linkedAgent)] : [])
     }
 
     const configurations = await prisma.aiAgent.findMany({
@@ -79,7 +83,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json(configurations)
+    return NextResponse.json(configurations.map(redactAgent))
   } catch (error) {
     return handleApiError(error, 'Erro')
   }
@@ -146,7 +150,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    return NextResponse.json(config)
+    return NextResponse.json(redactAgent(config))
   } catch (error) {
     return handleApiError(error, 'Erro')
   }
@@ -179,7 +183,8 @@ export async function PUT(req: NextRequest) {
     // whatsapp_instance_id agora e gerenciado no Inbox.aiAgentId — body legado e no-op aqui.
     if (updates.follow_up_stages !== undefined) data.followUpStages = updates.follow_up_stages
     if (updates.follow_up_enabled !== undefined) data.followUpEnabled = updates.follow_up_enabled
-    if (updates.api_keys !== undefined) data.apiKeys = updates.api_keys
+    // Mescla: chaves que voltaram redigidas (REDACTED) preservam o valor original.
+    if (updates.api_keys !== undefined) data.apiKeys = mergeAiApiKeys(updates.api_keys, existing.apiKeys)
     if (updates.behavior_settings !== undefined) data.behaviorSettings = updates.behavior_settings
     if (updates.knowledge !== undefined) data.knowledge = updates.knowledge
     if (updates.memory_key !== undefined) data.memoryKey = updates.memory_key
@@ -193,7 +198,7 @@ export async function PUT(req: NextRequest) {
       data,
     })
 
-    return NextResponse.json(config)
+    return NextResponse.json(redactAgent(config))
   } catch (error) {
     return handleApiError(error, 'Erro')
   }
