@@ -6,6 +6,7 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAIConfigurations, APIKeys } from '@/hooks/useAIConfigurations';
+import { REDACTED } from '@/lib/api/redact';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { invokeFn } from '@/lib/api-functions';
 import { useToast } from '@/hooks/use-toast';
@@ -75,7 +76,9 @@ export function APIKeysSubTab({ companyId, agentId }: APIKeysSubTabProps) {
   }, [existingConfig]);
 
   useEffect(() => {
-    if (apiKey) fetchVoices();
+    // Nao chama a ElevenLabs com a chave redigida (servidor nao manda mais a real
+    // pro browser). A lista de vozes so carrega ao digitar uma chave nova.
+    if (apiKey && apiKey !== REDACTED) fetchVoices();
   }, [apiKey]);
 
   const fetchVoices = async () => {
@@ -141,7 +144,7 @@ export function APIKeysSubTab({ companyId, agentId }: APIKeysSubTabProps) {
     ];
 
     for (const check of keyChecks) {
-      if (check.key && check.key.trim() !== '' && !check.prefixes.some(p => check.key!.startsWith(p))) {
+      if (check.key && check.key.trim() !== '' && check.key !== REDACTED && !check.prefixes.some(p => check.key!.startsWith(p))) {
         toast({
           title: `Chave ${check.name} inválida`,
           description: `A chave ${check.name} deve começar com "${check.prefixes.join('" ou "')}"`,

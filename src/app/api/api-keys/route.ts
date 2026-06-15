@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
+import { maskKey } from '@/lib/api/redact'
 
 const createApiKeySchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -23,7 +24,8 @@ export async function GET(req: NextRequest) {
       where: { companyId },
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json(keys)
+    // Mascara a chave — o valor cheio so e mostrado uma vez, na criacao (POST).
+    return NextResponse.json(keys.map((k) => ({ ...k, key: maskKey(k.key) })))
   } catch (error) {
     return handleApiError(error, 'Erro')
   }
