@@ -108,12 +108,6 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: 'Relatórios',
-    items: [
-      { name: 'Relatório', href: '/app/daily-report', icon: FileText, roles: ['agent', 'manager', 'company_admin'] },
-    ],
-  },
-  {
     label: 'Administração',
     items: [
       { name: 'Equipe', href: '/app/team', icon: UserCog, roles: ['company_admin'] },

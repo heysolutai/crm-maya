@@ -44,7 +44,11 @@
       "Bash(rmdir \"c:/Users/yagom/OneDrive/Documentos/crm-wyarp/crm-maya/src/app/api/conversations/[id]/transfer\")",
       "Bash(npx tsc *)",
       "Bash(./node_modules/.bin/tsc --noEmit --incremental --skipLibCheck)",
-      "Bash(awk '/^model /{model=$2} /conversation_id|conversationId/ && model {print model; model=\"\"}' /home/yago/crm-maya/prisma/schema.prisma)"
+      "Bash(awk '/^model /{model=$2} /conversation_id|conversationId/ && model {print model; model=\"\"}' /home/yago/crm-maya/prisma/schema.prisma)",
+      "Bash(git stash *)",
+      "Bash(git checkout *)",
+      "Bash(git cherry-pick *)",
+      "Bash(grep -nA 14 \"model ApiKey\" prisma/schema.prisma)"
     ],
     "additionalDirectories": [
       "/tmp"
