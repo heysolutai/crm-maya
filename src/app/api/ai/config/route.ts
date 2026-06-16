@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse, errorResponse, unauthorizedResponse } from '@/lib/api/cors';
+import { logSecurityEvent } from '@/lib/security-log';
 
 export async function OPTIONS(req: NextRequest) {
   return handleCors(req) || jsonResponse(null);
@@ -30,6 +31,9 @@ export async function GET(req: NextRequest) {
       where: { id: keyData.id },
       data: { lastUsedAt: new Date() },
     });
+
+    // Auditoria: quem (IP) usou a API key da empresa pra puxar a config de IA (devolve apiKeys).
+    await logSecurityEvent({ event: 'access_ai_config', companyId: keyData.companyId, req });
 
     // Filtros opcionais: agentId (inboxId) e conversationId
     // (resolve a inbox automaticamente). Quando nenhum e passado, retorna
