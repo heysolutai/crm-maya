@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { handleApiError } from '@/lib/api/errors'
 import { redactAiApiKeys, mergeAiApiKeys } from '@/lib/api/redact'
+import { logSecurityEvent } from '@/lib/security-log'
 
 // Redige os segredos (apiKeys) do AiAgent antes de devolver pro cliente.
 const redactAgent = (a: any) => ({ ...a, apiKeys: redactAiApiKeys(a?.apiKeys) })
@@ -45,8 +46,11 @@ const updateAiConfigurationSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const { companyId } = await authenticate(req)
+    const { companyId, agentId: userId } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+
+    // Auditoria: registra quem (userId/IP) acessou a config de IA (recurso sensivel).
+    await logSecurityEvent({ event: 'access_ai_config', userId, companyId, req })
 
     // Modo agente. O param `agentId` esta sobrecarregado e pode ser:
     //  (a) id de um AiAgent — tela de detalhe do agente. Agente e SEPARADO do

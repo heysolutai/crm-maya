@@ -3,6 +3,7 @@ import Credentials from 'next-auth/providers/credentials'
 import { prisma } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import type { AppRole } from '@prisma/client'
+import { getClientIp, logSecurityEvent } from '@/lib/security-log'
 
 declare module 'next-auth' {
   interface Session {
@@ -37,10 +38,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         email: { label: 'Email', type: 'email' },
         password: { label: 'Senha', type: 'password' },
       },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null
+      async authorize(credentials, request) {
+        const ip = request ? getClientIp(request as Request) : null
+        const userAgent = request ? (request as Request).headers.get('user-agent') : null
+        const email = (credentials?.email as string) || ''
 
-        const email = credentials.email as string
+        if (!email || !credentials?.password) return null
         const password = credentials.password as string
 
         const user = await prisma.user.findUnique({
@@ -52,11 +55,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           },
         })
 
-        if (!user || !user.passwordHash) return null
-        if (!user.isActive) return null
+        // Falha (usuario inexistente / inativo): registra email + IP e nega.
+        if (!user || !user.passwordHash || !user.isActive) {
+          await logSecurityEvent({ event: 'login_failed', email, ip, userAgent })
+          return null
+        }
 
         const isValid = await bcrypt.compare(password, user.passwordHash)
-        if (!isValid) return null
+        if (!isValid) {
+          await logSecurityEvent({ event: 'login_failed', email, ip, userAgent })
+          return null
+        }
 
         const superAdminRole = user.userRoles.find(r => r.role === 'super_admin')
         // Pick the highest-privilege company role for this user's company
@@ -65,13 +74,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           .filter(r => r.companyId)
           .sort((a, b) => roleHierarchy.indexOf(a.role) - roleHierarchy.indexOf(b.role))
         const companyRole = companyRoles[0] || null
+        const companyId = companyRole?.companyId ?? null
+
+        // Login OK: atualiza lastLogin + registra evento. Best-effort — uma
+        // falha aqui NUNCA pode impedir o login.
+        try {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { lastLoginAt: new Date(), lastLoginIp: ip },
+          })
+        } catch (e) {
+          console.error('[auth] falha ao gravar lastLogin (ignorado):', (e as Error)?.message)
+        }
+        await logSecurityEvent({ event: 'login_success', userId: user.id, email: user.email, companyId, ip, userAgent })
 
         return {
           id: user.id,
           email: user.email,
           name: user.fullName,
           role: superAdminRole?.role ?? companyRole?.role ?? null,
-          companyId: companyRole?.companyId ?? null,
+          companyId,
         }
       },
     }),

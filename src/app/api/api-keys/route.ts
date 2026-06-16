@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
 import { maskKey } from '@/lib/api/redact'
+import { logSecurityEvent } from '@/lib/security-log'
 
 const createApiKeySchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -17,8 +18,11 @@ const updateApiKeySchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const { companyId } = await authenticate(req)
+    const { companyId, agentId: userId } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+
+    // Auditoria: registra quem (userId/IP) listou as API keys da empresa.
+    await logSecurityEvent({ event: 'access_api_keys', userId, companyId, req })
 
     const keys = await prisma.apiKey.findMany({
       where: { companyId },

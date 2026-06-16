@@ -156,6 +156,8 @@ model User {
   isActive               Boolean   @default(true) @map("is_active")
   isOnline               Boolean   @default(false) @map("is_online")
   lastSeenAt             DateTime? @map("last_seen_at")
+  lastLoginAt            DateTime? @map("last_login_at")
+  lastLoginIp            String?   @map("last_login_ip")
   settings               Json?     @default("{}")
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at")
@@ -190,6 +192,25 @@ model User {
   @@index([email], map: "idx_users_email")
   @@index([isOnline], map: "idx_users_is_online")
   @@map("users")
+}
+
+/// Log de eventos de seguranca: logins (ok/falha) e acessos a recursos
+/// sensiveis (config de IA, API keys). Append-only, sem relacao (nao bloqueia
+/// delete de usuario). Use pra auditar acessos estranhos.
+model LoginLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  email     String?
+  companyId String?  @map("company_id") @db.Uuid
+  event     String
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId], map: "idx_login_logs_user")
+  @@index([companyId, createdAt], map: "idx_login_logs_company_created")
+  @@index([createdAt], map: "idx_login_logs_created")
+  @@map("login_logs")
 }
 
 model UserRole {
