@@ -1,0 +1,111 @@
+# ============================================================
+#  CRM My Restaurante — Stack Docker Swarm + Traefik
+# ============================================================
+#  Pré-requisitos:
+#   1) Traefik já rodando no Swarm, com a rede externa `network_public`
+#      e um certresolver chamado `letsencryptresolver` (ajuste o nome se
+#      o seu for outro).
+#   2) Imagem já buildada e publicada num registry (ver README abaixo):
+#        docker build -t ghcr.io/SEU_USUARIO/crm-maya:restaurante .
+#        docker push   ghcr.io/SEU_USUARIO/crm-maya:restaurante
+#   3) DNS do domínio apontando pro servidor.
+#
+#  Deploy:  docker stack deploy -c deploy/stack.swarm.yml crm-rest
+#
+#  Os ${VAR} são interpolados do ambiente no deploy (ou defina no Portainer).
+#  O entrypoint.sh roda `prisma db push` no boot → cria o schema sozinho.
+# ============================================================
+
+version: '3.8'
+
+services:
+  crm:
+    image: ghcr.io/SEU_USUARIO/crm-maya:restaurante   # << troque pelo seu registry/imagem
+    environment:
+      # ----- Banco / Redis (apontam pros serviços abaixo) -----
+      DATABASE_URL: "postgresql://crm:${DB_PASSWORD}@crm_db:5432/crm_restaurante"
+      REDIS_URL: "redis://crm_redis:6379"
+
+      # ----- URL pública (domínio DESTE app) -----
+      NEXTAUTH_URL: "https://${APP_DOMAIN}"
+      NEXT_PUBLIC_APP_URL: "https://${APP_DOMAIN}"
+      PUBLIC_APP_URL: "https://${APP_DOMAIN}"
+      AUTH_TRUST_HOST: "true"
+      NODE_ENV: "production"
+
+      # ----- Secrets (gere: openssl rand -base64 32 / -hex 32) -----
+      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET}"
+      INTERNAL_API_SECRET: "${INTERNAL_API_SECRET}"
+      CRON_SECRET: "${CRON_SECRET}"
+      API_KEY_ENCRYPTION_SECRET: "${API_KEY_ENCRYPTION_SECRET}"
+
+      # ----- Storage de mídia (Backblaze B2 / S3) — necessário p/ áudio/imagem -----
+      B2_KEY_ID: "${B2_KEY_ID}"
+      B2_APP_KEY: "${B2_APP_KEY}"
+      B2_BUCKET_NAME: "${B2_BUCKET_NAME}"
+      B2_BUCKET_REGION: "${B2_BUCKET_REGION}"
+      B2_ENDPOINT: "${B2_ENDPOINT}"
+      B2_PUBLIC_URL: "${B2_PUBLIC_URL}"
+
+      # ----- Opcionais -----
+      DEFAULT_OPENAI_API_KEY: "${DEFAULT_OPENAI_API_KEY:-}"
+      UAZAPI_BASE_URL: "${UAZAPI_BASE_URL:-https://uazapi.heysolut.com.br}"
+      N8N_AI_WEBHOOK_URL: "${N8N_AI_WEBHOOK_URL:-}"
+    networks:
+      - network_public
+      - crm_internal
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=network_public
+        - traefik.http.routers.crm-rest.rule=Host(`${APP_DOMAIN}`)
+        - traefik.http.routers.crm-rest.entrypoints=websecure
+        - traefik.http.routers.crm-rest.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.crm-rest.service=crm-rest
+        - traefik.http.services.crm-rest.loadbalancer.server.port=3000
+        - traefik.http.services.crm-rest.loadbalancer.passHostHeader=true
+
+  crm_db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+      POSTGRES_DB: crm_restaurante
+    volumes:
+      - crm_db_data:/var/lib/postgresql/data
+    networks:
+      - crm_internal
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+  crm_redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - crm_redis_data:/data
+    networks:
+      - crm_internal
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+volumes:
+  crm_db_data:
+  crm_redis_data:
+
+networks:
+  # Rede do Traefik (já existe). Se não existir:
+  #   docker network create --driver overlay --attachable network_public
+  network_public:
+    external: true
+  # Rede interna (db/redis não ficam expostos ao Traefik)
+  crm_internal:
+    driver: overlay

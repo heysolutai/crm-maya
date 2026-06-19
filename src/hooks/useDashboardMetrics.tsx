@@ -95,6 +95,8 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
       const departments = raw.departments ?? [];
       const activeConversations = raw.activeConversationsCount ?? 0;
       const todayAppointmentsCount = raw.todayAppointmentsCount ?? 0;
+      const aiMessagesCount = raw.aiMessagesCount ?? 0;
+      const aiReservations = raw.aiReservationsCount ?? 0;
 
       // === KPIs ===
       const totalConversations = conversations.length;
@@ -103,6 +105,11 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
 
       const revenue = sales.reduce((sum: number, s: any) => sum + (Number(s.totalAmount) || 0), 0);
       const prevRevenue = prevSales.reduce((sum: number, s: any) => sum + (Number(s.totalAmount) || 0), 0);
+
+      // Tempo economizado: estimativa = mensagens respondidas pela IA x minutos
+      // que um atendente humano levaria por mensagem (leitura + digitacao + contexto).
+      const MINUTES_PER_AI_MESSAGE = 2;
+      const timeSavedMinutes = aiMessagesCount * MINUTES_PER_AI_MESSAGE;
 
       const agentsOnline = users.filter((u: any) => u.isOnline).length;
       const totalAgents = users.length;
@@ -230,6 +237,9 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
         dailyRevenue,
         departmentData,
         dailyRates,
+        // Restaurante — cards de valor da IA
+        timeSavedMinutes,
+        aiReservations,
       };
     },
     enabled: !!companyId,
@@ -254,6 +264,8 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
     dailyRevenue: [] as { date: string; receita: number }[],
     departmentData: [] as { name: string; value: number; fill: string }[],
     dailyRates: [] as { date: string; conversao: number; noShow: number }[],
+    timeSavedMinutes: 0,
+    aiReservations: 0,
   };
 
   return { ...(data ?? defaults), isLoading };

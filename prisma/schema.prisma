@@ -213,6 +213,30 @@ model LoginLog {
   @@map("login_logs")
 }
 
+/// Reservas atribuidas (produto restaurante). O sistema de reservas e EXTERNO;
+/// aqui so registramos pra metrica de valor (quantas a IA fez). A IA (via N8N)
+/// ou o atendente cria um registro ao confirmar a reserva. source='ai' conta
+/// no card "Reservas pela IA" do dashboard.
+model Reservation {
+  id             String    @id @default(uuid()) @db.Uuid
+  companyId      String    @map("company_id") @db.Uuid
+  conversationId String?   @map("conversation_id") @db.Uuid
+  clientId       String?   @map("client_id") @db.Uuid
+  source         String    @default("ai")
+  customerName   String?   @map("customer_name")
+  partySize      Int?      @map("party_size")
+  reservedFor    DateTime? @map("reserved_for")
+  status         String    @default("confirmed")
+  notes          String?
+  metadata       Json?     @default("{}")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@index([companyId, createdAt], map: "idx_reservations_company_created")
+  @@index([companyId, source], map: "idx_reservations_company_source")
+  @@map("reservations")
+}
+
 model UserRole {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @map("user_id") @db.Uuid

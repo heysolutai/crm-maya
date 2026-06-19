@@ -266,6 +266,7 @@ export default function CompanyDashboard() {
     agentsOnline, totalAgents,
     hourlyData, agentData, funnelData,
     dailyRevenue, departmentData, dailyRates,
+    timeSavedMinutes, aiReservations,
     isLoading,
   } = useDashboardMetrics(dateFrom, dateTo);
 
@@ -355,6 +356,40 @@ export default function CompanyDashboard() {
             </PopoverContent>
           </Popover>
         </div>
+      </div>
+
+      {/* Valor gerado pela IA (restaurante) — painel de destaque */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <KpiCard
+          title="Tempo economizado"
+          value={`${Math.floor(timeSavedMinutes / 60)}h ${String(timeSavedMinutes % 60).padStart(2, '0')}min`}
+          subtitle={`${periodLabel} · IA atendendo`}
+          icon={Clock}
+          iconColor="text-primary"
+          iconBg="bg-primary/10"
+          highlight
+          isLoading={isLoading}
+        />
+        <KpiCard
+          title="Reservas pela IA"
+          value={aiReservations}
+          subtitle={periodLabel}
+          icon={CalendarCheck}
+          iconColor="text-primary"
+          iconBg="bg-primary/10"
+          highlight
+          isLoading={isLoading}
+        />
+        <KpiCard
+          title="Receita gerada"
+          value={formatCurrency(revenue)}
+          subtitle={periodLabel}
+          icon={DollarSign}
+          iconColor="text-primary"
+          iconBg="bg-primary/10"
+          highlight
+          isLoading={isLoading}
+        />
       </div>
 
       {/* Row 1: KPI Cards */}

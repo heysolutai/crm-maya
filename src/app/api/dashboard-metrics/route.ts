@@ -32,6 +32,8 @@ export async function GET(req: NextRequest) {
       departments,
       activeConversationsCount,
       todayAppointmentsCount,
+      aiMessagesCount,
+      aiReservationsCount,
     ] = await Promise.all([
       prisma.client.count({
         where: { companyId, createdAt: { gte: new Date(from), lte: new Date(to) } },
@@ -94,6 +96,18 @@ export async function GET(req: NextRequest) {
           status: { not: 'cancelled' },
         },
       }),
+      // Restaurante: mensagens respondidas pela IA (base do "tempo economizado")
+      // e reservas atribuidas a IA (card de valor).
+      prisma.message.count({
+        where: {
+          senderType: 'ai',
+          conversation: { companyId },
+          createdAt: { gte: new Date(from), lte: new Date(to) },
+        },
+      }),
+      prisma.reservation.count({
+        where: { companyId, source: 'ai', createdAt: { gte: new Date(from), lte: new Date(to) } },
+      }),
     ])
 
     return NextResponse.json({
@@ -110,6 +124,8 @@ export async function GET(req: NextRequest) {
       departments,
       activeConversationsCount,
       todayAppointmentsCount,
+      aiMessagesCount,
+      aiReservationsCount,
     })
   } catch (error) {
     return handleApiError(error, 'Erro')}
