@@ -219,11 +219,11 @@ function ChartCard({
       {isLoading ? (
         <Skeleton className="h-[280px] w-full" />
       ) : isEmpty ? (
-        <div className="h-[280px] flex flex-col items-center justify-center text-sm text-muted-foreground gap-2 bg-muted/20 rounded-xl border border-dashed border-border/60">
-          <div className="h-12 w-12 rounded-full bg-muted/40 flex items-center justify-center">
-            {Icon && <Icon className="h-5 w-5 text-muted-foreground/50" />}
+        <div className="h-[180px] flex flex-col items-center justify-center text-center text-[13px] text-muted-foreground gap-2.5 rounded-xl border border-dashed border-border/50 bg-gradient-to-b from-primary/[0.03] to-transparent">
+          <div className="h-11 w-11 rounded-full bg-primary/10 flex items-center justify-center">
+            {Icon && <Icon className="h-5 w-5 text-primary/60" />}
           </div>
-          <span className="font-medium">{emptyMessage}</span>
+          <span className="font-medium text-muted-foreground/80">{emptyMessage}</span>
         </div>
       ) : (
         children
@@ -271,6 +271,18 @@ export default function CompanyDashboard() {
     aiVsHumanData, reservationsSourceData,
     isLoading,
   } = useDashboardMetrics(dateFrom, dateTo);
+
+  // Conta nova / periodo sem movimento → todos os graficos vazios.
+  // Nesse caso mostramos UM painel de boas-vindas no lugar da parede de caixas vazias.
+  const allChartsEmpty =
+    !isLoading &&
+    aiVsHumanData.length === 0 &&
+    reservationsSourceData.length === 0 &&
+    agentData.length === 0 &&
+    funnelData.length === 0 &&
+    dailyRevenue.length === 0 &&
+    departmentData.length === 0 &&
+    hourlyData.every((d) => d.mensagens === 0);
 
   const handlePreset = (key: PresetKey) => {
     setPreset(key);
@@ -394,6 +406,19 @@ export default function CompanyDashboard() {
         />
       </div>
 
+      {allChartsEmpty ? (
+        <div className="rounded-2xl border border-dashed border-border/60 bg-gradient-to-b from-primary/[0.05] to-transparent px-6 py-16 flex flex-col items-center justify-center text-center gap-3">
+          <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <UtensilsCrossed className="h-7 w-7 text-primary" />
+          </div>
+          <h3 className="text-lg font-semibold tracking-tight">Seus gráficos aparecem aqui</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Assim que seu restaurante começar a receber atendimentos e reservas pela IA,
+            os gráficos de desempenho aparecem automaticamente nesta tela.
+          </p>
+        </div>
+      ) : (
+        <>
       {/* Pizzas — IA vs Humano + Reservas por origem */}
       <div className="grid gap-4 md:grid-cols-2">
         <ChartCard
@@ -626,6 +651,8 @@ export default function CompanyDashboard() {
           </div>
         </ChartCard>
       </div>
+        </>
+      )}
     </div>
   );
 }
