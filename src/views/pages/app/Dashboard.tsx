@@ -267,6 +267,7 @@ export default function CompanyDashboard() {
     hourlyData, agentData, funnelData,
     dailyRevenue, departmentData, dailyRates,
     timeSavedMinutes, aiReservations,
+    aiVsHumanData, reservationsSourceData,
     isLoading,
   } = useDashboardMetrics(dateFrom, dateTo);
 
@@ -392,66 +393,62 @@ export default function CompanyDashboard() {
         />
       </div>
 
-      {/* Row 1: KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <KpiCard
-          title="Novos Leads"
-          value={newClients}
-          subtitle={periodLabel}
-          icon={UserPlus}
-          iconColor="text-blue-500"
-          iconBg="bg-blue-500/10"
-          trend={newClientsTrend}
-          isLoading={isLoading}
-        />
-        <KpiCard
-          title="Em Atendimento"
-          value={activeConversations}
-          subtitle={`${totalConversations} no período · ${aiPercentage.toFixed(0)}% IA`}
+      {/* Pizzas — IA vs Humano + Reservas por origem */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <ChartCard
+          title="Atendimentos: IA vs Humano"
           icon={MessageSquare}
-          iconColor="text-orange-500"
-          iconBg="bg-orange-500/10"
+          iconColor="text-primary"
+          iconBg="bg-primary/10"
           isLoading={isLoading}
-        />
-        <KpiCard
-          title="Agendamentos Hoje"
-          value={todayAppointments}
-          subtitle="para hoje"
+          isEmpty={aiVsHumanData.length === 0}
+        >
+          <ResponsiveContainer width="100%" height={240}>
+            <PieChart>
+              <Pie data={aiVsHumanData} cx="50%" cy="50%" innerRadius={55} outerRadius={95} paddingAngle={3} dataKey="value" nameKey="name">
+                {aiVsHumanData.map((entry, i) => (<Cell key={i} fill={entry.fill} />))}
+              </Pie>
+              <RechartsTooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number, name: string) => [`${v} conversas`, name]} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-1">
+            {aiVsHumanData.map((item) => (
+              <div key={item.name} className="flex items-center gap-1.5 text-xs">
+                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.fill }} />
+                <span className="text-muted-foreground">{item.name}</span>
+                <span className="font-semibold">{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </ChartCard>
+
+        <ChartCard
+          title="Reservas por origem"
           icon={CalendarCheck}
-          iconColor="text-purple-500"
-          iconBg="bg-purple-500/10"
+          iconColor="text-primary"
+          iconBg="bg-primary/10"
+          emptyMessage="As reservas aparecerão aqui"
           isLoading={isLoading}
-        />
-        <KpiCard
-          title="Tempo de Resposta"
-          value={formatResponseTime(avgResponseTime)}
-          subtitle="tempo médio hoje"
-          icon={Clock}
-          iconColor="text-cyan-500"
-          iconBg="bg-cyan-500/10"
-          invertTrend
-          isLoading={isLoading}
-        />
-        <KpiCard
-          title="Receita"
-          value={formatCurrency(revenue)}
-          subtitle={periodLabel}
-          icon={DollarSign}
-          iconColor="text-emerald-500"
-          iconBg="bg-emerald-500/10"
-          trend={revenueTrend}
-          isLoading={isLoading}
-        />
-        <KpiCard
-          title="Agentes Online"
-          value={`${agentsOnline}/${totalAgents}`}
-          subtitle={agentsOnline === totalAgents && totalAgents > 0 ? '✓ todos conectados' : 'conectados'}
-          icon={Users}
-          iconColor="text-blue-600"
-          iconBg="bg-blue-500/15"
-          highlight
-          isLoading={isLoading}
-        />
+          isEmpty={reservationsSourceData.length === 0}
+        >
+          <ResponsiveContainer width="100%" height={240}>
+            <PieChart>
+              <Pie data={reservationsSourceData} cx="50%" cy="50%" innerRadius={55} outerRadius={95} paddingAngle={3} dataKey="value" nameKey="name">
+                {reservationsSourceData.map((entry, i) => (<Cell key={i} fill={entry.fill} />))}
+              </Pie>
+              <RechartsTooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number, name: string) => [`${v} reservas`, name]} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-1">
+            {reservationsSourceData.map((item) => (
+              <div key={item.name} className="flex items-center gap-1.5 text-xs">
+                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.fill }} />
+                <span className="text-muted-foreground">{item.name}</span>
+                <span className="font-semibold">{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </ChartCard>
       </div>
 
       {/* Row 2: Hourly + Agent Performance */}
@@ -585,8 +582,8 @@ export default function CompanyDashboard() {
         </ChartCard>
       </div>
 
-      {/* Row 4: Department Donut + Conversion vs No-Show */}
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* Atendimentos por Departamento */}
+      <div className="grid gap-4">
         <ChartCard
           title="Atendimentos por Departamento"
           icon={Users}
@@ -626,45 +623,6 @@ export default function CompanyDashboard() {
               </div>
             ))}
           </div>
-        </ChartCard>
-
-        <ChartCard
-          title="Conversão vs No-Show"
-          icon={CalendarCheck}
-          iconColor="text-pink-500"
-          iconBg="bg-pink-500/10"
-          isLoading={isLoading}
-          isEmpty={dailyRates.length === 0}
-        >
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={dailyRates} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={AXIS_LINE.stroke} />
-              <XAxis dataKey="date" tick={AXIS_TICK} axisLine={AXIS_LINE} />
-              <YAxis tick={AXIS_TICK} axisLine={AXIS_LINE} unit="%" />
-              <RechartsTooltip
-                contentStyle={TOOLTIP_STYLE}
-                labelStyle={LABEL_STYLE}
-                formatter={(v: number, name: string) => [`${v}%`, name]}
-              />
-              <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-              <Line
-                type="monotone"
-                dataKey="conversao"
-                name="Conversão"
-                stroke="hsl(var(--primary))"
-                strokeWidth={2}
-                dot={{ r: 3, fill: 'hsl(var(--primary))' }}
-              />
-              <Line
-                type="monotone"
-                dataKey="noShow"
-                name="No-Show"
-                stroke="hsl(var(--destructive))"
-                strokeWidth={2}
-                dot={{ r: 3, fill: 'hsl(var(--destructive))' }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
         </ChartCard>
       </div>
     </div>

@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
       todayAppointmentsCount,
       aiMessagesCount,
       aiReservationsCount,
+      reservationsTotalCount,
     ] = await Promise.all([
       prisma.client.count({
         where: { companyId, createdAt: { gte: new Date(from), lte: new Date(to) } },
@@ -108,6 +109,9 @@ export async function GET(req: NextRequest) {
       prisma.reservation.count({
         where: { companyId, source: 'ai', createdAt: { gte: new Date(from), lte: new Date(to) } },
       }),
+      prisma.reservation.count({
+        where: { companyId, createdAt: { gte: new Date(from), lte: new Date(to) } },
+      }),
     ])
 
     return NextResponse.json({
@@ -126,6 +130,7 @@ export async function GET(req: NextRequest) {
       todayAppointmentsCount,
       aiMessagesCount,
       aiReservationsCount,
+      reservationsTotalCount,
     })
   } catch (error) {
     return handleApiError(error, 'Erro')}

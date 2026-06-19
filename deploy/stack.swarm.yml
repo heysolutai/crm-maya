@@ -20,7 +20,7 @@ version: '3.8'
 
 services:
   crm:
-    image: ghcr.io/SEU_USUARIO/crm-maya:restaurante   # << troque pelo seu registry/imagem
+    image: heysolutitsolution/crm-maya:restaurante   # Docker Hub
     environment:
       # ----- Banco / Redis (apontam pros serviços abaixo) -----
       DATABASE_URL: "postgresql://crm:${DB_PASSWORD}@crm_db:5432/crm_restaurante"
@@ -50,6 +50,9 @@ services:
       # ----- Opcionais -----
       DEFAULT_OPENAI_API_KEY: "${DEFAULT_OPENAI_API_KEY:-}"
       UAZAPI_BASE_URL: "${UAZAPI_BASE_URL:-https://uazapi.heysolut.com.br}"
+      # Admin token global da UAZapi — OPCIONAL (so default/fallback). A config
+      # real e por instancia, no painel (cada conexao guarda o proprio token).
+      WHATSAPP_ADMIN_TOKEN: "${WHATSAPP_ADMIN_TOKEN:-}"
       N8N_AI_WEBHOOK_URL: "${N8N_AI_WEBHOOK_URL:-}"
     networks:
       - network_public

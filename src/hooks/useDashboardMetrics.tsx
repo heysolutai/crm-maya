@@ -97,6 +97,7 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
       const todayAppointmentsCount = raw.todayAppointmentsCount ?? 0;
       const aiMessagesCount = raw.aiMessagesCount ?? 0;
       const aiReservations = raw.aiReservationsCount ?? 0;
+      const reservationsTotal = raw.reservationsTotalCount ?? 0;
 
       // === KPIs ===
       const totalConversations = conversations.length;
@@ -219,6 +220,21 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
           noShow: data.total > 0 ? Math.round((data.noShow / data.total) * 100) : 0,
         }));
 
+      // === Pizzas (restaurante) ===
+      const humanConversations = Math.max(0, totalConversations - aiConversations);
+      const aiVsHumanData = totalConversations > 0
+        ? [
+            { name: 'IA', value: aiConversations, fill: 'hsl(var(--primary))' },
+            { name: 'Humano', value: humanConversations, fill: 'hsl(var(--muted-foreground))' },
+          ]
+        : [];
+      const reservationsSourceData = reservationsTotal > 0
+        ? [
+            { name: 'IA', value: aiReservations, fill: 'hsl(var(--primary))' },
+            { name: 'Outras', value: Math.max(0, reservationsTotal - aiReservations), fill: 'hsl(var(--muted-foreground))' },
+          ]
+        : [];
+
       return {
         newClients,
         newClientsTrend,
@@ -240,6 +256,8 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
         // Restaurante — cards de valor da IA
         timeSavedMinutes,
         aiReservations,
+        aiVsHumanData,
+        reservationsSourceData,
       };
     },
     enabled: !!companyId,
@@ -266,6 +284,8 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
     dailyRates: [] as { date: string; conversao: number; noShow: number }[],
     timeSavedMinutes: 0,
     aiReservations: 0,
+    aiVsHumanData: [] as { name: string; value: number; fill: string }[],
+    reservationsSourceData: [] as { name: string; value: number; fill: string }[],
   };
 
   return { ...(data ?? defaults), isLoading };

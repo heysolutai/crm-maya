@@ -48,7 +48,11 @@
       "Bash(git stash *)",
       "Bash(git checkout *)",
       "Bash(git cherry-pick *)",
-      "Bash(grep -nA 14 \"model ApiKey\" prisma/schema.prisma)"
+      "Bash(grep -nA 14 \"model ApiKey\" prisma/schema.prisma)",
+      "Bash(git grep *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ],
     "additionalDirectories": [
       "/tmp"
