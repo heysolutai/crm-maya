@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useInboxes, type Inbox } from '@/hooks/useInboxes';
-import { useAiAgents } from '@/hooks/useAiAgents';
 import { useChannelCredentials } from '@/hooks/useChannelCredentials';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -59,12 +58,9 @@ const statusStyles: Record<string, { dot: string; label: string }> = {
   error: { dot: 'bg-rose-500', label: 'Erro' },
 };
 
-type AiAgentMode = 'reuse' | 'create' | 'none';
-
 export default function Inboxes() {
   const router = useRouter();
   const { inboxes, isLoading, createInbox, deleteInbox, isCreating, isDeleting } = useInboxes();
-  const { aiAgents } = useAiAgents();
   const { credentialFor, hasCredentialFor } = useChannelCredentials();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -89,11 +85,6 @@ export default function Inboxes() {
     open: false,
     id: null,
   });
-
-  // Estado do bloco "Agente IA" no dialog
-  const [aiAgentMode, setAiAgentMode] = useState<AiAgentMode>('reuse');
-  const [selectedAiAgentId, setSelectedAiAgentId] = useState<string>('');
-  const [newAiAgentName, setNewAiAgentName] = useState('');
 
   const channels = Object.values(CHANNEL_REGISTRY);
 
@@ -132,9 +123,6 @@ export default function Inboxes() {
     setNotificameChannels([]);
     setNotificameChannelsError(null);
     setEditingCredential(false);
-    setAiAgentMode('reuse');
-    setSelectedAiAgentId('');
-    setNewAiAgentName('');
   };
 
   const handleSelectChannel = (type: ChannelType) => {
@@ -262,9 +250,9 @@ export default function Inboxes() {
       ) : inboxes.length === 0 ? (
         <EmptyState
           icon={InboxIcon}
-          title="Nenhuma caixa de entrada cadastrada"
-          description="Crie sua primeira caixa de entrada conectando um canal de atendimento."
-          actionLabel="Criar caixa de entrada"
+          title="Conecte o WhatsApp do seu restaurante"
+          description="Conecte um número e deixe a IA atender os clientes e registrar reservas — 24h, sem perder mensagem."
+          actionLabel="Conectar WhatsApp"
           onAction={() => setDialogOpen(true)}
         />
       ) : (

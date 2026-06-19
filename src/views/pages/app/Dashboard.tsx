@@ -11,6 +11,7 @@ import {
   UserPlus,
   MessageSquare,
   CalendarCheck,
+  UtensilsCrossed,
   Clock,
   DollarSign,
   Users,
@@ -293,7 +294,7 @@ export default function CompanyDashboard() {
               </span>
             )}
           </div>
-          <p className="text-muted-foreground text-[14px] mt-1">Visão geral das métricas da sua empresa</p>
+          <p className="text-muted-foreground text-[14px] mt-1">O que a IA fez pelo seu restaurante — atendimento, reservas e receita</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {PRESETS.map(p => (
@@ -375,7 +376,7 @@ export default function CompanyDashboard() {
           title="Reservas pela IA"
           value={aiReservations}
           subtitle={periodLabel}
-          icon={CalendarCheck}
+          icon={UtensilsCrossed}
           iconColor="text-primary"
           iconBg="bg-primary/10"
           highlight
@@ -424,7 +425,7 @@ export default function CompanyDashboard() {
 
         <ChartCard
           title="Reservas por origem"
-          icon={CalendarCheck}
+          icon={UtensilsCrossed}
           iconColor="text-primary"
           iconBg="bg-primary/10"
           emptyMessage="As reservas aparecerão aqui"

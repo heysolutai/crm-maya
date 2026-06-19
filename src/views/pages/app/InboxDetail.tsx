@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { useInboxes, useInboxAiAgent } from '@/hooks/useInboxes';
-import { useAiAgents } from '@/hooks/useAiAgents';
+import { useInboxes } from '@/hooks/useInboxes';
 import { useInboxMembers } from '@/hooks/useInboxMembers';
 import { useTeam } from '@/hooks/useTeam';
 import { useToast } from '@/hooks/use-toast';
@@ -248,105 +247,6 @@ export default function InboxDetail({ inboxId }: Props) {
         <div className="flex-1 min-w-0">{renderContent()}</div>
       </div>
     </div>
-  );
-}
-
-function AiAgentTab({ inbox }: { inbox: ReturnType<typeof useInboxes>['inboxes'][number] }) {
-  const router = useRouter();
-  const { aiAgents } = useAiAgents();
-  const { updateInbox, isUpdating } = useInboxes();
-  const { data: linkedAgent, isLoading: loadingLinked } = useInboxAiAgent(inbox.id);
-  const [selectedId, setSelectedId] = useState<string>('');
-
-  const currentAgent = linkedAgent || aiAgents.find((a) => a.id === inbox.ai_agent_id);
-
-  const handleChange = (value: string) => {
-    const newId = value === 'none' ? null : value;
-    setSelectedId(value);
-    updateInbox({ id: inbox.id, aiAgentId: newId });
-  };
-
-  return (
-    <Card>
-      <CardContent className="p-6 space-y-5">
-        <div>
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Bot className="h-5 w-5 text-primary" />
-            Agente IA vinculado
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            Esta caixa de entrada usa o agente IA selecionado para responder automaticamente.
-          </p>
-        </div>
-
-        {loadingLinked ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Carregando agente vinculado...
-          </div>
-        ) : currentAgent ? (
-          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-muted-foreground">Agente atual</p>
-                <p className="font-semibold text-base truncate">{currentAgent.name}</p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push(`/app/ai-agents/${currentAgent.id}`)}
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Editar agente
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-dashed p-6 text-center space-y-2">
-            <Bot className="h-8 w-8 mx-auto text-muted-foreground/50" />
-            <p className="text-sm font-medium">Nenhum agente IA vinculado</p>
-            <p className="text-xs text-muted-foreground">
-              Selecione um agente IA abaixo para que ele responda nesta caixa.
-            </p>
-          </div>
-        )}
-
-        <div className="space-y-2 pt-2 border-t">
-          <label className="text-sm font-medium" htmlFor="change-ai-agent">
-            Trocar agente IA
-          </label>
-          <Select
-            value={selectedId || inbox.ai_agent_id || 'none'}
-            onValueChange={handleChange}
-            disabled={isUpdating}
-          >
-            <SelectTrigger id="change-ai-agent">
-              <SelectValue placeholder="Selecione um agente IA" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Sem agente IA</SelectItem>
-              {aiAgents.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex items-center justify-between pt-1">
-            <p className="text-xs text-muted-foreground">
-              Vários inboxes podem compartilhar o mesmo agente IA.
-            </p>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push('/app/ai-agents')}
-            >
-              Gerenciar agentes IA
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
