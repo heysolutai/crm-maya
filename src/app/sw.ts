@@ -20,6 +20,18 @@ const serwist = new Serwist({
   runtimeCaching: defaultCache,
 });
 
+// IMPORTANTE: nunca deixar o SW tocar em requests NAO-GET (uploads de arquivo
+// com FormData, POST/PUT/DELETE de API). O re-fetch do Serwist/Workbox corrompe
+// o body multipart e o servidor falha com "Failed to parse body as FormData".
+// Registrado ANTES do addEventListeners: stopImmediatePropagation impede o
+// handler do Serwist de rodar e, sem respondWith, o browser faz o fetch nativo
+// (body intacto). So mexe em mutacoes — GET (cache de assets/paginas) segue igual.
+self.addEventListener("fetch", (event: FetchEvent) => {
+  if (event.request.method !== "GET") {
+    event.stopImmediatePropagation();
+  }
+});
+
 serwist.addEventListeners();
 
 // ─── PUSH NOTIFICATIONS ─────────────────────────────────────
