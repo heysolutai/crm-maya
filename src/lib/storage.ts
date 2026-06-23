@@ -13,23 +13,47 @@
 
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { randomUUID } from "crypto";
+import { getSystemSetting } from "./system-settings";
 
-function getS3Client(): S3Client {
-  const endpoint = process.env.B2_ENDPOINT;
-  const region = process.env.B2_BUCKET_REGION || "us-west-004";
-  const keyId = process.env.B2_KEY_ID;
-  const appKey = process.env.B2_APP_KEY;
+export interface StorageConfig {
+  endpoint?: string;
+  region: string;
+  keyId?: string;
+  appKey?: string;
+  bucket?: string;
+  publicUrl?: string;
+}
 
-  if (!endpoint || !keyId || !appKey) {
-    throw new Error("Backblaze B2 não configurado. Defina B2_ENDPOINT, B2_KEY_ID e B2_APP_KEY no .env");
+/**
+ * Resolve a config do B2 do system_settings (editavel no Super-admin >
+ * Configuracoes do Sistema) com fallback pro .env. Assim da pra trocar
+ * credenciais pela UI, sem redeploy.
+ */
+export async function getStorageConfig(): Promise<StorageConfig> {
+  const [endpoint, region, keyId, appKey, bucket, publicUrl] = await Promise.all([
+    getSystemSetting("b2_endpoint"),
+    getSystemSetting("b2_bucket_region", "us-west-004"),
+    getSystemSetting("b2_key_id"),
+    getSystemSetting("b2_app_key"),
+    getSystemSetting("b2_bucket_name"),
+    getSystemSetting("b2_public_url"),
+  ]);
+  return { endpoint, region: region || "us-west-004", keyId, appKey, bucket, publicUrl };
+}
+
+function buildS3Client(cfg: StorageConfig): S3Client {
+  if (!cfg.endpoint || !cfg.keyId || !cfg.appKey) {
+    throw new Error(
+      "Backblaze B2 nao configurado. Preencha endpoint, key id e app key em Super-admin > Configuracoes do Sistema (ou no .env)."
+    );
   }
 
   return new S3Client({
-    endpoint,
-    region,
+    endpoint: cfg.endpoint,
+    region: cfg.region,
     credentials: {
-      accessKeyId: keyId,
-      secretAccessKey: appKey,
+      accessKeyId: cfg.keyId,
+      secretAccessKey: cfg.appKey,
     },
     forcePathStyle: true, // Obrigatório para B2
   });
@@ -43,20 +67,20 @@ export async function uploadToB2(
   key: string,
   contentType: string
 ): Promise<string> {
-  const client = getS3Client();
-  const bucket = process.env.B2_BUCKET_NAME;
-  if (!bucket) throw new Error("B2_BUCKET_NAME não definido");
+  const cfg = await getStorageConfig();
+  if (!cfg.bucket) throw new Error("Bucket do B2 nao definido (b2_bucket_name)");
+  const client = buildS3Client(cfg);
 
   await client.send(
     new PutObjectCommand({
-      Bucket: bucket,
+      Bucket: cfg.bucket,
       Key: key,
       Body: buffer,
       ContentType: contentType,
     })
   );
 
-  const publicUrl = process.env.B2_PUBLIC_URL || `${process.env.B2_ENDPOINT}/${bucket}`;
+  const publicUrl = cfg.publicUrl || `${cfg.endpoint}/${cfg.bucket}`;
   return `${publicUrl.replace(/\/$/, "")}/${key}`;
 }
 
@@ -64,23 +88,26 @@ export async function uploadToB2(
  * Deleta um arquivo do B2 pela key.
  */
 export async function deleteFromB2(key: string): Promise<void> {
-  const client = getS3Client();
-  const bucket = process.env.B2_BUCKET_NAME;
-  if (!bucket) throw new Error("B2_BUCKET_NAME não definido");
+  const cfg = await getStorageConfig();
+  if (!cfg.bucket) throw new Error("Bucket do B2 nao definido (b2_bucket_name)");
+  const client = buildS3Client(cfg);
 
-  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  await client.send(new DeleteObjectCommand({ Bucket: cfg.bucket, Key: key }));
 }
 
 /**
  * Extrai a key do B2 a partir de uma URL pública (ou retorna null se nao parecer B2).
  * Suporta tanto o formato path-style (endpoint/bucket/key) quanto o B2_PUBLIC_URL customizado.
  */
-export function extractB2Key(url: string | null | undefined): string | null {
+export function extractB2Key(
+  url: string | null | undefined,
+  cfg?: Pick<StorageConfig, "bucket" | "publicUrl" | "endpoint">
+): string | null {
   if (!url) return null;
 
-  const bucket = process.env.B2_BUCKET_NAME;
-  const publicUrl = (process.env.B2_PUBLIC_URL || "").replace(/\/$/, "");
-  const endpoint = (process.env.B2_ENDPOINT || "").replace(/\/$/, "");
+  const bucket = cfg?.bucket ?? process.env.B2_BUCKET_NAME;
+  const publicUrl = (cfg?.publicUrl ?? process.env.B2_PUBLIC_URL ?? "").replace(/\/$/, "");
+  const endpoint = (cfg?.endpoint ?? process.env.B2_ENDPOINT ?? "").replace(/\/$/, "");
 
   // 1) Match contra B2_PUBLIC_URL customizado (CDN, etc)
   if (publicUrl && url.startsWith(publicUrl + "/")) {
@@ -105,7 +132,8 @@ export function extractB2Key(url: string | null | undefined): string | null {
  * Deleta mídia do B2 silenciosamente (nao propaga erros — cleanup best-effort).
  */
 export async function deleteMediaFromUrl(url: string | null | undefined): Promise<void> {
-  const key = extractB2Key(url);
+  const cfg = await getStorageConfig();
+  const key = extractB2Key(url, cfg);
   if (!key) return;
   try {
     await deleteFromB2(key);

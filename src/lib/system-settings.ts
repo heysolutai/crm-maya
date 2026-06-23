@@ -46,6 +46,13 @@ const ENV_FALLBACK: Record<string, string> = {
   n8n_faq_upload_webhook_url:   'N8N_FAQ_UPLOAD_WEBHOOK_URL',
   knowledge_webhook_url:        'KNOWLEDGE_WEBHOOK_URL',
   default_openai_api_key:       'DEFAULT_OPENAI_API_KEY',
+  // Storage B2 (editavel no Super-admin; cai pro .env/stack se vazio)
+  b2_endpoint:                  'B2_ENDPOINT',
+  b2_bucket_name:               'B2_BUCKET_NAME',
+  b2_bucket_region:             'B2_BUCKET_REGION',
+  b2_key_id:                    'B2_KEY_ID',
+  b2_app_key:                   'B2_APP_KEY',
+  b2_public_url:                'B2_PUBLIC_URL',
 };
 
 export async function getSystemSetting(
@@ -127,5 +134,48 @@ export const KNOWN_SETTINGS = [
     description: 'Chave OpenAI usada quando a empresa nao tem chave propria configurada.',
     isSecret: true,
     placeholder: 'sk-...',
+  },
+  // ===== Storage de midia/arquivos (Backblaze B2 / S3) =====
+  {
+    key: 'b2_endpoint',
+    label: 'Storage B2 — Endpoint',
+    description: 'Endpoint S3 do Backblaze B2. Ex: https://s3.us-west-004.backblazeb2.com',
+    isSecret: false,
+    placeholder: 'https://s3.us-west-004.backblazeb2.com',
+  },
+  {
+    key: 'b2_bucket_name',
+    label: 'Storage B2 — Bucket',
+    description: 'Nome do bucket onde midia e arquivos de FAQ sao guardados.',
+    isSecret: false,
+    placeholder: 'crm-media',
+  },
+  {
+    key: 'b2_bucket_region',
+    label: 'Storage B2 — Regiao',
+    description: 'Regiao do bucket. Ex: us-west-004',
+    isSecret: false,
+    placeholder: 'us-west-004',
+  },
+  {
+    key: 'b2_key_id',
+    label: 'Storage B2 — Key ID',
+    description: 'keyID da Application Key do B2 (comeca com 00...).',
+    isSecret: true,
+    placeholder: '005...',
+  },
+  {
+    key: 'b2_app_key',
+    label: 'Storage B2 — App Key',
+    description: 'applicationKey (secreta) da Application Key do B2.',
+    isSecret: true,
+    placeholder: 'K005...',
+  },
+  {
+    key: 'b2_public_url',
+    label: 'Storage B2 — URL publica',
+    description: 'URL publica do bucket (ou CDN). O N8N baixa os arquivos por aqui. Ex: https://crm-media.s3.us-west-004.backblazeb2.com',
+    isSecret: false,
+    placeholder: 'https://crm-media.s3.us-west-004.backblazeb2.com',
   },
 ] as const;
