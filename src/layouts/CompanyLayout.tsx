@@ -98,22 +98,14 @@ const navGroups: NavGroup[] = [
       { name: 'Dashboard', href: '/app/dashboard', icon: LayoutDashboard, roles: ['viewer', 'agent', 'manager', 'company_admin'] },
       { name: 'Conversas', href: '/app/conversations', icon: MessageSquare, roles: ['agent', 'manager', 'company_admin'], countKey: 'unread' },
       { name: 'CRM', href: '/app/crm', icon: Kanban, roles: ['agent', 'manager', 'company_admin'] },
-    ],
-  },
-  {
-    label: 'Vendas',
-    items: [
       { name: 'Clientes', href: '/app/clients', icon: Users, roles: ['viewer', 'agent', 'manager', 'company_admin'], requirePermission: 'can_access_crm' },
-      { name: 'Follow-ups', href: '/app/follow-ups', icon: Clock, roles: ['manager', 'company_admin'], countKey: 'pendingFollowUps' },
     ],
   },
   {
     label: 'Administração',
     items: [
       { name: 'Equipe', href: '/app/team', icon: UserCog, roles: ['company_admin'] },
-      { name: 'Departamentos', href: '/app/departments', icon: Building2, roles: ['company_admin'] },
       { name: 'Conexões', href: '/app/inboxes', icon: Inbox, roles: ['company_admin'] },
-      { name: 'API Docs', href: '/app/api-docs', icon: Code, roles: ['manager', 'company_admin'] },
     ],
   },
 ];
