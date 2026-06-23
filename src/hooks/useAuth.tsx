@@ -16,7 +16,7 @@ interface AuthContextType {
   isSuperAdmin: boolean
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: any }>
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>
+  signUp: (email: string, password: string, fullName: string, companyName: string) => Promise<{ error: any }>
   signOut: () => Promise<void>
 }
 
@@ -54,16 +54,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const signUp = async (email: string, password: string, fullName: string, companyName: string) => {
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, fullName }),
+        body: JSON.stringify({ email, password, fullName, companyName }),
       })
       const data = await res.json()
       if (!res.ok) {
         return { error: { message: data.error || 'Erro ao criar conta' } }
+      }
+      // Loga automatico apos cadastrar — o dono cai direto no dashboard (checklist).
+      const signInResult = await nextAuthSignIn('credentials', { email, password, redirect: false })
+      if (signInResult?.error) {
+        return { error: { message: 'Conta criada! Faca login para entrar.' } }
       }
       return { error: null }
     } catch (err: any) {

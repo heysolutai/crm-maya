@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Sparkles } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Sparkles, UtensilsCrossed } from 'lucide-react';
 import Image from 'next/image';
 import logoMileto from '@/assets/logo-mileto.png';
 
@@ -14,6 +14,7 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [restaurantName, setRestaurantName] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
@@ -43,11 +44,11 @@ export default function Auth() {
           toast.success('Login realizado com sucesso!');
         }
       } else {
-        const { error } = await signUp(email, password, fullName);
+        const { error } = await signUp(email, password, fullName, restaurantName);
         if (error) {
           toast.error(error.message);
         } else {
-          toast.success('Cadastro realizado! Verifique seu email.');
+          toast.success('Conta criada! Bem-vindo 🍽️');
         }
       }
     } catch (error: any) {
@@ -137,6 +138,26 @@ export default function Auth() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
+            {!isLogin && (
+              <div className="space-y-2">
+                <Label htmlFor="restaurantName" className="text-sm font-medium">
+                  Nome do restaurante
+                </Label>
+                <div className="relative">
+                  <UtensilsCrossed className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    id="restaurantName"
+                    type="text"
+                    placeholder="Ex: Cantina da Nonna"
+                    value={restaurantName}
+                    onChange={(e) => setRestaurantName(e.target.value)}
+                    required
+                    className="pl-10 h-12 bg-muted/50 border-border/50 focus:border-brand-primary focus:ring-brand-primary/20"
+                  />
+                </div>
+              </div>
+            )}
+
             {!isLogin && (
               <div className="space-y-2">
                 <Label htmlFor="fullName" className="text-sm font-medium">
