@@ -54,6 +54,9 @@ services:
       # real e por instancia, no painel (cada conexao guarda o proprio token).
       WHATSAPP_ADMIN_TOKEN: "${WHATSAPP_ADMIN_TOKEN:-}"
       N8N_AI_WEBHOOK_URL: "${N8N_AI_WEBHOOK_URL:-}"
+      # FAQ/Knowledge: N8N le o arquivo subido (URL do B2) e insere na base da IA.
+      # Pode tambem ser configurado pela UI (system setting n8n_faq_upload_webhook_url).
+      NEXT_PUBLIC_N8N_FAQ_WEBHOOK_URL: "${NEXT_PUBLIC_N8N_FAQ_WEBHOOK_URL:-}"
     networks:
       - network_public
       - crm_internal

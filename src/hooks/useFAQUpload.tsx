@@ -82,7 +82,11 @@ export function useFAQUpload(companyId: string | undefined) {
       const { data: notifyData, error: notifyError } = await invokeFn(
         'notify-faq-upload',
         {
-          fileUrl: `${window.location.origin}${fileUrl}`,
+          // /api/upload retorna a URL publica COMPLETA do B2. Mandamos ela direto
+          // pro N8N — prefixar window.location.origin gerava URL quebrada
+          // (https://app/https://b2/arquivo) e o N8N nao conseguia baixar o arquivo.
+          // So prefixa se por acaso vier um caminho relativo (compatibilidade).
+          fileUrl: fileUrl.startsWith('http') ? fileUrl : `${window.location.origin}${fileUrl}`,
           companyId: companyId,
           fileName: file.name,
           fileType: file.type || fileExtension,
