@@ -1,6 +1,4 @@
-import { defaultCache } from "@serwist/next/worker";
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
-import { Serwist } from "serwist";
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -12,27 +10,35 @@ declare const self: ServiceWorkerGlobalScope & {
   __SW_MANIFEST: (PrecacheEntry | string)[] | undefined;
 };
 
-const serwist = new Serwist({
-  precacheEntries: self.__SW_MANIFEST,
-  skipWaiting: true,
-  clientsClaim: true,
-  navigationPreload: true,
-  runtimeCaching: defaultCache,
+// ─────────────────────────────────────────────────────────────────────────
+//  SW ENXUTO — SEM cache de paginas/assets.
+//
+//  Motivo: o precache do Serwist guardava o app-shell e, depois de um deploy
+//  novo, o SW antigo servia HTML/chunks desatualizados -> "pagina em branco"
+//  + erro de manifest no console. Tambem corrompia uploads (FormData).
+//
+//  Aqui o SW NAO faz cache nenhum (tudo vem fresco da rede). Mantemos APENAS
+//  push notifications. No `activate` apagamos qualquer cache deixado por
+//  versoes antigas do SW — entao, ao atualizar pra esta versao, o lixo some.
+//  O __SW_MANIFEST e injetado pelo build mas nao e usado (sem precache).
+// ─────────────────────────────────────────────────────────────────────────
+void self.__SW_MANIFEST;
+
+self.addEventListener("install", () => {
+  self.skipWaiting();
 });
 
-// IMPORTANTE: nunca deixar o SW tocar em requests NAO-GET (uploads de arquivo
-// com FormData, POST/PUT/DELETE de API). O re-fetch do Serwist/Workbox corrompe
-// o body multipart e o servidor falha com "Failed to parse body as FormData".
-// Registrado ANTES do addEventListeners: stopImmediatePropagation impede o
-// handler do Serwist de rodar e, sem respondWith, o browser faz o fetch nativo
-// (body intacto). So mexe em mutacoes — GET (cache de assets/paginas) segue igual.
-self.addEventListener("fetch", (event: FetchEvent) => {
-  if (event.request.method !== "GET") {
-    event.stopImmediatePropagation();
-  }
+self.addEventListener("activate", (event: ExtendableEvent) => {
+  event.waitUntil(
+    (async () => {
+      // Limpa caches de versoes anteriores (precache/runtime) — corrige o
+      // app-shell em branco deixado pelo SW antigo.
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+      await self.clients.claim();
+    })()
+  );
 });
-
-serwist.addEventListeners();
 
 // ─── PUSH NOTIFICATIONS ─────────────────────────────────────
 
