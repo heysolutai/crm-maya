@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
@@ -108,6 +109,23 @@ export async function POST(req: NextRequest) {
         await prisma.user.delete({ where: { id: ownerId } });
       }
       return errorResponse('Erro interno do servidor', 500);
+    }
+
+    // A empresa ja nasce com uma API key ativa (pronta pro N8N). Best-effort —
+    // nao quebra o cadastro se falhar. Aparece na checklist de primeiros passos
+    // e nas configuracoes pra o dono copiar.
+    try {
+      await prisma.apiKey.create({
+        data: {
+          companyId,
+          name: 'API padrão',
+          key: `rm_${randomBytes(24).toString('hex')}`,
+          isActive: true,
+          createdBy: ownerId,
+        },
+      });
+    } catch (apiKeyError) {
+      console.error('Falha ao auto-criar API key da empresa:', apiKeyError);
     }
 
     // Skip link generation (was supabase.auth.admin.generateLink)

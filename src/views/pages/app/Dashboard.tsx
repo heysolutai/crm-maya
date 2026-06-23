@@ -20,6 +20,7 @@ import {
   ArrowDownRight,
 } from 'lucide-react';
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
+import { OnboardingChecklist } from '@/components/dashboard/OnboardingChecklist';
 import {
   BarChart,
   Bar,
@@ -294,6 +295,9 @@ export default function CompanyDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Primeiros passos (some quando tudo configurado) */}
+      <OnboardingChecklist />
+
       {/* Header + Date Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
