@@ -43,6 +43,7 @@ import { useEffectiveCompanyId } from '@/hooks/useEffectiveCompanyId';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { useAuth } from '@/hooks/useAuth';
 import { AIPromptsEditor } from '@/components/ai';
+import { SimpleAgentConfig } from '@/components/ai/SimpleAgentConfig';
 import { FAQManager } from '@/components/settings/FAQManager';
 import { SettingsSubTab } from '@/components/super-admin/company-details/ai-config/SettingsSubTab';
 import { APIKeysSubTab } from '@/components/super-admin/company-details/ai-config/APIKeysSubTab';
@@ -150,7 +151,7 @@ export default function InboxDetail({ inboxId }: Props) {
         return <MembersTab inboxId={inbox.id} />;
       case 'prompts':
         return companyId ? (
-          <AIPromptsEditor companyId={companyId} agentId={aiAgentId} variant="full" showConfigInfo showVariablesCard />
+          <SimpleAgentConfig companyId={companyId} agentId={aiAgentId} />
         ) : null;
       case 'faq':
         return companyId ? <FAQManager companyId={companyId} /> : null;
