@@ -25,6 +25,16 @@ function createPrismaClient() {
     min: parseInt(process.env.DB_POOL_MIN || '5'),
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
+    // Em Docker Swarm/overlay (e atras de proxies) conexoes TCP ociosas sao
+    // derrubadas silenciosamente → a proxima query falha com "Connection
+    // terminated unexpectedly". keepAlive mantem a conexao viva.
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
+  })
+  // Sem este handler, um erro numa conexao OCIOSA do pool (ex: o servidor
+  // fechou a conexao) vira um 'error' nao tratado e pode derrubar o processo.
+  pool.on('error', (err) => {
+    console.error('[db] erro em conexao ociosa do pool:', err.message)
   })
   const adapter = new PrismaPg(pool)
   return new PrismaClient({
