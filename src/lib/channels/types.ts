@@ -32,8 +32,8 @@ export interface ChannelMeta {
 export const CHANNEL_REGISTRY: Record<ChannelType, ChannelMeta> = {
   uazapi: {
     type: 'uazapi',
-    label: 'UazAPI',
-    description: 'WhatsApp via UazAPI — conexao por QR Code',
+    label: 'API Reservemaya',
+    description: 'WhatsApp via API Reservemaya — conexao por QR Code',
     status: 'available',
     connectionMode: 'qr',
   },

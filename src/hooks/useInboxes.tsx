@@ -58,7 +58,7 @@ export function useInboxes() {
       aiAgentId?: string;
       createAiAgentNamed?: string;
     }) => {
-      const res = await fetch('/api/agents', {
+      const res = await fetch(`/api/agents?companyId=${companyId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -95,7 +95,7 @@ export function useInboxes() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: { id: string; displayName?: string; isActive?: boolean; aiAgentId?: string | null }) => {
-      const res = await fetch('/api/agents', {
+      const res = await fetch(`/api/agents?companyId=${companyId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -115,7 +115,7 @@ export function useInboxes() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/agents?id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/agents?id=${id}&companyId=${companyId}`, { method: 'DELETE' });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Falha ao remover');
       return json;

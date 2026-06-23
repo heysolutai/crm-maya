@@ -86,13 +86,17 @@ export default function Inboxes() {
     id: null,
   });
 
-  const channels = Object.values(CHANNEL_REGISTRY);
+  // Restaurante: so 2 canais — API Reservemaya (uazapi) e WhatsApp Cloud.
+  const ALLOWED_CHANNELS: ChannelType[] = ['uazapi', 'whatsapp_cloud'];
+  const channels = Object.values(CHANNEL_REGISTRY).filter((c) => ALLOWED_CHANNELS.includes(c.type));
 
   // Canais que precisam de URL + API key/admin token do servidor self-hosted.
   // UazAPI tambem entra: novas inboxes pegam admin token do form (nao mais do .env).
+  // uazapi (API Reservemaya) NAO precisa mais de config no form — URL + admin
+  // token vem do ambiente (.env/stack). So canais self-hosted legados pedem.
   const needsServerConfig =
     selectedChannel &&
-    ['uazapi', 'evolution_baileys', 'evolution_go', 'zapi'].includes(selectedChannel);
+    ['evolution_baileys', 'evolution_go', 'zapi'].includes(selectedChannel);
 
   const isNotificame = selectedChannel === 'notificame';
 

@@ -223,6 +223,12 @@ export async function POST(req: NextRequest) {
           serverUrl = serverUrl || saved.serverUrl
           serverApiKey = serverApiKey || saved.serverApiKey
         }
+        // UAZAPI (API Reservemaya): URL + admin token vem do AMBIENTE (.env/stack),
+        // nao do form. Fallback final pra config global — usuario nao digita nada.
+        if (channelType === 'uazapi') {
+          serverUrl = serverUrl || process.env.UAZAPI_BASE_URL || ''
+          serverApiKey = serverApiKey || process.env.WHATSAPP_ADMIN_TOKEN || ''
+        }
       } else {
         // Persiste/atualiza pra proxima criacao nao precisar redigitar
         await prisma.channelCredential.upsert({
