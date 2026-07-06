@@ -4,8 +4,8 @@ import { Providers } from "@/components/providers";
 
 // Placeholder generico — o titulo real e setado em runtime pelo BrandingProvider
 // (useBranding.tsx) usando systemName configurado no painel super-admin.
-const APP_NAME = "CRM";
-const APP_DESCRIPTION = "CRM inteligente com IA e automação WhatsApp";
+const APP_NAME = "Reservemaya";
+const APP_DESCRIPTION = "IA que atende clientes e registra reservas no WhatsApp, 24h";
 
 export const metadata: Metadata = {
   applicationName: APP_NAME,

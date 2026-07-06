@@ -15,13 +15,13 @@ export async function GET() {
     if (!settings) {
       // Return defaults if no row exists yet
       return NextResponse.json({
-        systemName: 'CRM',
+        systemName: 'Reservemaya',
         logoUrl: null,
         faviconUrl: null,
-        primaryColor: '150 80% 36%',
-        secondaryColor: '170 70% 35%',
-        accentColor: '175 60% 32%',
-        loginDescription: null,
+        primaryColor: '18 80% 51%',
+        secondaryColor: '32 80% 52%',
+        accentColor: '8 65% 42%',
+        loginDescription: 'Sua IA atende os clientes e registra reservas no WhatsApp, 24 horas por dia.',
       })
     }
 
@@ -52,12 +52,12 @@ export async function PUT(req: NextRequest) {
       where: { id: SINGLETON_ID },
       create: {
         id: SINGLETON_ID,
-        systemName: body.systemName ?? 'CRM',
+        systemName: body.systemName ?? 'Reservemaya',
         logoUrl: body.logoUrl ?? null,
         faviconUrl: body.faviconUrl ?? null,
-        primaryColor: body.primaryColor ?? '150 80% 36%',
-        secondaryColor: body.secondaryColor ?? '170 70% 35%',
-        accentColor: body.accentColor ?? '175 60% 32%',
+        primaryColor: body.primaryColor ?? '18 80% 51%',
+        secondaryColor: body.secondaryColor ?? '32 80% 52%',
+        accentColor: body.accentColor ?? '8 65% 42%',
         loginDescription: body.loginDescription ?? null,
       },
       update: {

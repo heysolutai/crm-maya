@@ -54,12 +54,12 @@ function hexToHsl(hex: string): string {
 }
 
 const defaults: BrandingData = {
-  systemName: 'Wyarp',
+  systemName: 'Reservemaya',
   logoUrl: null,
   faviconUrl: null,
-  primaryColor: '150 80% 36%',
-  secondaryColor: '170 70% 35%',
-  accentColor: '175 60% 32%',
+  primaryColor: '18 80% 51%',
+  secondaryColor: '32 80% 52%',
+  accentColor: '8 65% 42%',
   loginDescription: null,
 }
 

@@ -1,14 +1,14 @@
 {
-  "name": "Wyarp CRM",
-  "short_name": "Wyarp",
-  "description": "CRM inteligente com IA e automação WhatsApp",
+  "name": "Reservemaya",
+  "short_name": "Reservemaya",
+  "description": "IA que atende clientes e registra reservas no WhatsApp, 24h",
   "start_url": "/app/dashboard",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#0b0c10",
-  "theme_color": "#005c4b",
-  "categories": ["business", "productivity"],
+  "background_color": "#ffffff",
+  "theme_color": "#e65a1e",
+  "categories": ["business", "food", "productivity"],
   "lang": "pt-BR",
   "icons": [
     {
@@ -32,16 +32,16 @@
   ],
   "shortcuts": [
     {
-      "name": "Conversas",
-      "short_name": "Conversas",
+      "name": "Atendimentos",
+      "short_name": "Atendimentos",
       "url": "/app/conversations",
       "description": "Abrir conversas ativas"
     },
     {
-      "name": "Agenda",
-      "short_name": "Agenda",
-      "url": "/app/appointments",
-      "description": "Ver agendamentos"
+      "name": "Reservas",
+      "short_name": "Reservas",
+      "url": "/app/reservations",
+      "description": "Ver reservas"
     }
   ]
 }

@@ -13,13 +13,13 @@ export interface BrandingData {
 }
 
 const defaultBranding: BrandingData = {
-  systemName: 'CRM',
+  systemName: 'Reservemaya',
   logoUrl: null,
   faviconUrl: null,
-  primaryColor: '217 91% 50%',
-  secondaryColor: '217 70% 58%',
-  accentColor: '217 80% 38%',
-  loginDescription: null,
+  primaryColor: '18 80% 51%',
+  secondaryColor: '32 80% 52%',
+  accentColor: '8 65% 42%',
+  loginDescription: 'Sua IA atende os clientes e registra reservas no WhatsApp, 24 horas por dia.',
 }
 
 interface BrandingContextType {

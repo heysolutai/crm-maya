@@ -66,9 +66,9 @@ export default function AuthPage() {
   }
 
   const features = [
-    { icon: Sparkles, label: 'Atendimento automatizado 24/7' },
-    { icon: MessageSquare, label: 'Integração com WhatsApp' },
-    { icon: Calendar, label: 'Agendamentos inteligentes' },
+    { icon: Sparkles, label: 'IA que atende seus clientes 24/7' },
+    { icon: MessageSquare, label: 'Reservas direto pelo WhatsApp' },
+    { icon: Calendar, label: 'Menos no-show, salão mais cheio' },
   ]
 
   // Inicial do nome do sistema pra usar como fallback quando nao ha logo
@@ -118,7 +118,7 @@ export default function AuthPage() {
           )}
 
           <p className="text-white/70 text-lg text-center max-w-md mb-10 leading-relaxed">
-            {branding.loginDescription || 'O CRM mais inteligente para impulsionar suas vendas com Inteligência Artificial'}
+            {branding.loginDescription || 'Sua IA atende os clientes e registra reservas no WhatsApp, 24 horas por dia.'}
           </p>
 
           {/* Features — bullets discretos, todos usam a cor primaria */}
