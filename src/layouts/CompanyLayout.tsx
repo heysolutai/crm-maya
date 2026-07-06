@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/command';
 import {
   LayoutDashboard,
+  CalendarCheck,
   Kanban,
   Users,
   MessageSquare,
@@ -96,13 +97,14 @@ const navGroups: NavGroup[] = [
     label: 'Principal',
     items: [
       { name: 'Dashboard', href: '/app/dashboard', icon: LayoutDashboard, roles: ['viewer', 'agent', 'manager', 'company_admin'] },
-      { name: 'Conversas', href: '/app/conversations', icon: MessageSquare, roles: ['agent', 'manager', 'company_admin'], countKey: 'unread' },
+      { name: 'Atendimentos', href: '/app/conversations', icon: MessageSquare, roles: ['agent', 'manager', 'company_admin'], countKey: 'unread' },
+      { name: 'Reservas', href: '/app/reservations', icon: CalendarCheck, roles: ['agent', 'manager', 'company_admin'] },
       { name: 'CRM', href: '/app/crm', icon: Kanban, roles: ['agent', 'manager', 'company_admin'] },
       { name: 'Clientes', href: '/app/clients', icon: Users, roles: ['viewer', 'agent', 'manager', 'company_admin'], requirePermission: 'can_access_crm' },
     ],
   },
   {
-    label: 'Administração',
+    label: 'Gestão',
     items: [
       { name: 'Equipe', href: '/app/team', icon: UserCog, roles: ['company_admin'] },
       { name: 'Conexões', href: '/app/inboxes', icon: Inbox, roles: ['company_admin'] },

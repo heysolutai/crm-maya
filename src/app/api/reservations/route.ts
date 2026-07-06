@@ -95,3 +95,52 @@ export async function POST(req: NextRequest) {
     return handleApiError(error, 'Erro ao criar reserva')
   }
 }
+
+const updateSchema = z.object({
+  id: z.string().uuid(),
+  status: z.enum(['confirmed', 'cancelled', 'no_show']).optional(),
+  customerName: z.string().max(255).optional().nullable(),
+  partySize: z.number().int().positive().max(1000).optional().nullable(),
+  reservedFor: z.string().datetime().optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+})
+
+export async function PUT(req: NextRequest) {
+  const auth = await authenticate(req)
+  if (!auth.companyId) {
+    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+  }
+
+  try {
+    const body = await req.json()
+    const validation = updateSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+    const { id, ...updates } = validation.data
+
+    // IDOR: a reserva tem que ser da empresa antes de atualizar.
+    const existing = await prisma.reservation.findFirst({
+      where: { id, companyId: auth.companyId },
+      select: { id: true },
+    })
+    if (!existing) return NextResponse.json({ error: 'Reserva nao encontrada' }, { status: 404 })
+
+    const data: Record<string, unknown> = {}
+    if (updates.status !== undefined) data.status = updates.status
+    if (updates.customerName !== undefined) data.customerName = updates.customerName
+    if (updates.partySize !== undefined) data.partySize = updates.partySize
+    if (updates.notes !== undefined) data.notes = updates.notes
+    if (updates.reservedFor !== undefined) {
+      data.reservedFor = updates.reservedFor ? new Date(updates.reservedFor) : null
+    }
+
+    const updated = await prisma.reservation.update({ where: { id }, data })
+    return NextResponse.json(updated)
+  } catch (error) {
+    return handleApiError(error, 'Erro ao atualizar reserva')
+  }
+}
