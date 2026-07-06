@@ -129,6 +129,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.id = user.id!
         token.role = (user as any).role ?? null
         token.companyId = (user as any).companyId ?? null
+        token.checkedAt = Math.floor(Date.now() / 1000)
+        return token
+      }
+      // Revogacao: re-checa isActive + role no banco no maximo a cada 5 min.
+      // Assim desativar/demitir/demover um usuario tem efeito em ate 5 min
+      // (antes o token de 30 dias nunca era re-checado).
+      const now = Math.floor(Date.now() / 1000)
+      const lastCheck = (token.checkedAt as number) || 0
+      if (token.id && now - lastCheck > 300) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: { isActive: true, userRoles: { select: { role: true, companyId: true } } },
+          })
+          if (!dbUser || !dbUser.isActive) return null
+          const superAdminRole = dbUser.userRoles.find((r) => r.role === 'super_admin')
+          const roleHierarchy = ['company_admin', 'manager', 'agent', 'viewer']
+          const companyRole =
+            dbUser.userRoles
+              .filter((r) => r.companyId)
+              .sort((a, b) => roleHierarchy.indexOf(a.role) - roleHierarchy.indexOf(b.role))[0] || null
+          token.role = superAdminRole?.role ?? companyRole?.role ?? null
+          token.companyId = companyRole?.companyId ?? null
+          token.checkedAt = now
+        } catch {
+          // best-effort: um blip do banco nao desloga todo mundo
+        }
       }
       return token
     },

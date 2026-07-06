@@ -53,6 +53,9 @@ services:
       # Admin token global da UAZapi — OPCIONAL (so default/fallback). A config
       # real e por instancia, no painel (cada conexao guarda o proprio token).
       WHATSAPP_ADMIN_TOKEN: "${WHATSAPP_ADMIN_TOKEN:-}"
+      # Seguranca do webhook (OPCIONAL): se setar, o /api/webhooks/whatsapp passa
+      # a exigir ?token=<este valor> — configure a MESMA URL com ?token= na UAZapi.
+      WHATSAPP_WEBHOOK_SECRET: "${WHATSAPP_WEBHOOK_SECRET:-}"
       N8N_AI_WEBHOOK_URL: "${N8N_AI_WEBHOOK_URL:-}"
       # FAQ/Knowledge: N8N le o arquivo subido (URL do B2) e insere na base da IA.
       # Pode tambem ser configurado pela UI (system setting n8n_faq_upload_webhook_url).

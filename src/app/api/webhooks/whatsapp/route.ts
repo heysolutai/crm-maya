@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
@@ -655,6 +656,18 @@ export async function OPTIONS(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    // Seguranca OPT-IN: se WHATSAPP_WEBHOOK_SECRET estiver setado, exige ?token=
+    // igual (timing-safe). Sem o env, mantem compat (aceita como hoje) — assim
+    // ativa a protecao sem quebrar a integracao UAZapi ate reconfigurar a URL.
+    const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const provided = Buffer.from(req.nextUrl.searchParams.get('token') || '');
+      const expected = Buffer.from(webhookSecret);
+      if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+        return jsonResponse({ error: 'Unauthorized' }, 401);
+      }
+    }
+
     // Parse e validar payload RAW da UAZapi
     const rawPayload = await req.json();
 
