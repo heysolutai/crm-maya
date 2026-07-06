@@ -41,7 +41,8 @@ export async function POST(req: NextRequest) {
       return badRequestResponse('Invalid request data: ' + JSON.stringify(validation.error.flatten().fieldErrors));
     }
 
-    const { companyName, ownerEmail, ownerFullName, ownerPassword } = validation.data;
+    const { companyName, ownerFullName, ownerPassword } = validation.data;
+    const ownerEmail = validation.data.ownerEmail.toLowerCase();
 
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({

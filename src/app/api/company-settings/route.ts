@@ -45,6 +45,11 @@ export async function PATCH(req: NextRequest) {
     })
     if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 })
 
+    // Valida que `settings` e um objeto simples — evita corromper o JSON
+    // (spread de string/array) e mass-assignment de tipo inesperado.
+    if (body.settings === null || typeof body.settings !== 'object' || Array.isArray(body.settings)) {
+      return NextResponse.json({ error: 'settings deve ser um objeto' }, { status: 400 })
+    }
     const currentSettings = (company.settings as Record<string, any>) || {}
     const newSettings = { ...currentSettings, ...body.settings }
 

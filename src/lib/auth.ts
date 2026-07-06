@@ -46,6 +46,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!email || !credentials?.password) return null
         const password = credentials.password as string
 
+        // Anti brute-force: bloqueia apos muitas falhas recentes pro mesmo email
+        // (independente de IP — robusto contra spoof de x-forwarded-for).
+        try {
+          const recentFails = await prisma.loginLog.count({
+            where: {
+              email,
+              event: 'login_failed',
+              createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+            },
+          })
+          if (recentFails >= 8) {
+            await logSecurityEvent({ event: 'login_locked', email, ip, userAgent })
+            return null
+          }
+        } catch {
+          // best-effort: se a checagem falhar, nao trava o login
+        }
+
         const user = await prisma.user.findUnique({
           where: { email },
           include: {

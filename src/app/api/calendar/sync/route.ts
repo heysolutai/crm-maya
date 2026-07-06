@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
     const accessToken = await getValidToken(connection);
     if (!accessToken) return errorResponse('Failed to get valid access token');
 
-    const appointment = await prisma.appointment.findUnique({
-      where: { id: appointment_id },
+    const appointment = await prisma.appointment.findFirst({
+      where: { id: appointment_id, companyId: company_id },
       include: { client: { select: { firstName: true, lastName: true, phone: true, email: true } } },
     });
     if (!appointment) return notFoundResponse('Appointment not found');

@@ -70,7 +70,8 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const { companyId } = await authenticate(req)
+    const auth = await authenticate(req)
+    const companyId = auth.companyId
     const body = await req.json()
     const validation = updateTeamSchema.safeParse(body)
 
@@ -85,6 +86,17 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 403 })
     }
     const targetCompanyId = validatedBody.companyId || companyId
+
+    // Apenas company_admin (ou super-admin) pode gerenciar a equipe — evita que
+    // qualquer membro (viewer/agent) se promova a admin ou remova o dono.
+    const uid = auth.agentId
+    const canManage = auth.isSuperAdmin || (!!uid && !!(await prisma.userRole.findFirst({
+      where: { userId: uid, companyId: targetCompanyId, role: 'company_admin' },
+      select: { userId: true },
+    })))
+    if (!canManage) {
+      return NextResponse.json({ error: 'Apenas administradores podem gerenciar a equipe' }, { status: 403 })
+    }
 
     if (action === 'updateRole') {
       await prisma.userRole.updateMany({

@@ -39,7 +39,23 @@ const updateAiConfigurationSchema = z.object({
   knowledge: z.any().optional(),
   memory_key: z.string().optional().nullable(),
   products_knowledge: z.string().optional().nullable(),
-  n8n_webhook_url: z.string().optional(),
+  n8n_webhook_url: z
+    .string()
+    .url()
+    .refine((v) => {
+      // Bloqueia SSRF: nao deixa apontar pra loopback / redes internas.
+      try {
+        const h = new URL(v).hostname.toLowerCase()
+        if (h === 'localhost' || h.endsWith('.localhost') || h === '::1' || h === '[::1]') return false
+        if (/^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(h)) return false
+        if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return false
+        return true
+      } catch {
+        return false
+      }
+    }, 'URL de webhook invalida ou aponta pra rede interna')
+    .nullable()
+    .optional(),
   conditions: z.any().optional(),
   variables: z.any().optional(),
 });

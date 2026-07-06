@@ -8,7 +8,7 @@ export async function OPTIONS(req: NextRequest) { return handleCors(req) || json
 
 export async function POST(req: NextRequest) {
   try {
-    await authenticate(req);
+    const { companyId: authCompanyId, isSuperAdmin } = await authenticate(req);
 
     const { conversationId, presence = 'composing', delay = 30000 } = await req.json();
     if (!conversationId) return jsonResponse({ success: false, error: 'conversationId is required' }, 400);
@@ -18,6 +18,11 @@ export async function POST(req: NextRequest) {
       select: { clientId: true, companyId: true },
     });
     if (!conversation) return jsonResponse({ success: false, error: 'Conversation not found' }, 404);
+
+    // Isolamento multi-tenant: a conversa tem que ser da empresa do caller.
+    if (!isSuperAdmin && conversation.companyId !== authCompanyId) {
+      return jsonResponse({ success: false, error: 'Nao encontrado' }, 404);
+    }
 
     if (!conversation.clientId) return jsonResponse({ success: false, error: 'Client not found for conversation' }, 404);
 

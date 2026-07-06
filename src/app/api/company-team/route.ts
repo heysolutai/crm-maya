@@ -26,9 +26,12 @@ const updateCompanyTeamSchema = z.discriminatedUnion('action', [
 
 export async function GET(req: NextRequest) {
   try {
-    await authenticate(req)
-    const companyId = req.nextUrl.searchParams.get('companyId')
-    if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
+    const { companyId: authCompanyId, isSuperAdmin } = await authenticate(req)
+    const qsCompanyId = req.nextUrl.searchParams.get('companyId')
+    // Isolamento multi-tenant: so super-admin pode consultar outra empresa;
+    // usuario comum SEMPRE usa a propria (ignora ?companyId= adulterado).
+    const companyId = isSuperAdmin ? (qsCompanyId || authCompanyId) : authCompanyId
+    if (!companyId) return NextResponse.json({ error: 'Nao autorizado' }, { status: 403 })
 
     // Get super admin IDs to exclude
     const superAdmins = await prisma.userRole.findMany({
@@ -73,7 +76,8 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const { companyId } = await authenticate(req)
+    const auth = await authenticate(req)
+    const companyId = auth.companyId
     const body = await req.json()
     const validation = updateCompanyTeamSchema.safeParse(body)
 
@@ -88,6 +92,17 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 403 })
     }
     const targetCompanyId = validatedBody.companyId || companyId
+
+    // Apenas company_admin (ou super-admin) pode gerenciar a equipe — evita que
+    // qualquer membro (viewer/agent) se promova a admin ou remova o dono.
+    const uid = auth.agentId
+    const canManage = auth.isSuperAdmin || (!!uid && !!(await prisma.userRole.findFirst({
+      where: { userId: uid, companyId: targetCompanyId, role: 'company_admin' },
+      select: { userId: true },
+    })))
+    if (!canManage) {
+      return NextResponse.json({ error: 'Apenas administradores podem gerenciar a equipe' }, { status: 403 })
+    }
 
     if (action === 'updateRole') {
       await prisma.userRole.updateMany({

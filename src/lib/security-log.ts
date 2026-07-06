@@ -10,6 +10,7 @@ export function getClientIp(req: Request): string | null {
 export type SecurityEvent =
   | 'login_success'
   | 'login_failed'
+  | 'login_locked'
   | 'access_ai_config'
   | 'access_api_keys';
 

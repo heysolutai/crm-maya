@@ -14,7 +14,7 @@ export async function OPTIONS(req: NextRequest) { return handleCors(req) || json
 
 export async function POST(req: NextRequest) {
   try {
-    const { agentId } = await authenticate(req);
+    const { agentId, companyId: authCompanyId, isSuperAdmin } = await authenticate(req);
 
     const body = await req.json();
     const validation = sendReactionSchema.safeParse(body);
@@ -45,6 +45,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (!message) throw new Error('Message not found');
+
+    // Isolamento multi-tenant: a mensagem tem que pertencer a empresa do caller.
+    if (!isSuperAdmin && message.conversation.companyId !== authCompanyId) {
+      return jsonResponse({ success: false, error: 'Nao encontrado' }, 404);
+    }
 
     if (!message.conversation.client) throw new Error('Client not found for this conversation');
 

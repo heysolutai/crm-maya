@@ -486,7 +486,7 @@ async function downloadMediaFromWhatsApp(
 
     const result = await response.json();
 
-    console.log('[Media Download] UAZapi response:', JSON.stringify(result));
+    // Nao logar o response completo — contem base64 do arquivo (pesado/sensivel).
     console.log('[Media Download] Response keys:', Object.keys(result));
 
     const base64Data = result.base64Data || result.base64 || result.data || result.file || result.content;

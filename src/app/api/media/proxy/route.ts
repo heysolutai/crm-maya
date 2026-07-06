@@ -31,7 +31,7 @@ function isAllowedUpstream(url: string): boolean {
     const host = u.hostname.toLowerCase();
 
     // 1) Match por sufixo de hostname (cobre B2 + S3 + CDNs comuns)
-    if (TRUSTED_HOSTNAME_SUFFIXES.some(suffix => host.endsWith(suffix))) {
+    if (TRUSTED_HOSTNAME_SUFFIXES.some(suffix => host === suffix || host.endsWith(`.${suffix}`))) {
       return true;
     }
 
