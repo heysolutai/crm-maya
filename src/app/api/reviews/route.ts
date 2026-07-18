@@ -1,0 +1,163 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { prisma } from '@/lib/db'
+import { authenticate } from '@/lib/api/auth'
+import { handleApiError } from '@/lib/api/errors'
+
+/**
+ * Avaliacoes do cliente sobre o atendimento/experiencia.
+ * A IA (via n8n, com x-api-key) cria ao coletar a nota no WhatsApp; o atendente
+ * tambem pode registrar manualmente.
+ */
+
+const createSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().max(2000).optional().nullable(),
+  customerName: z.string().max(255).optional().nullable(),
+  source: z.enum(['ai', 'agent', 'manual']).optional().default('ai'),
+  clientId: z.string().uuid().optional().nullable(),
+  conversationId: z.string().uuid().optional().nullable(),
+  reservationId: z.string().uuid().optional().nullable(),
+})
+
+export async function GET(req: NextRequest) {
+  const auth = await authenticate(req)
+  if (!auth.companyId) {
+    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+  }
+  const companyId = auth.companyId
+
+  try {
+    const { searchParams } = new URL(req.url)
+    const page = Math.max(parseInt(searchParams.get('page') || '1'), 1)
+    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '20'), 1), 100)
+    const rating = searchParams.get('rating')
+    const search = searchParams.get('search') || ''
+
+    const where = {
+      companyId,
+      ...(rating ? { rating: parseInt(rating) } : {}),
+      ...(search
+        ? {
+            OR: [
+              { customerName: { contains: search, mode: 'insensitive' as const } },
+              { comment: { contains: search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    }
+
+    const [data, total, aggregate] = await Promise.all([
+      prisma.review.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.review.count({ where }),
+      // Media geral da empresa (nao do filtro) — serve de referencia fixa
+      prisma.review.aggregate({
+        where: { companyId },
+        _avg: { rating: true },
+        _count: { _all: true },
+      }),
+    ])
+
+    return NextResponse.json({
+      data,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      summary: {
+        average: aggregate._avg.rating
+          ? Math.round(aggregate._avg.rating * 10) / 10
+          : null,
+        total: aggregate._count._all,
+      },
+    })
+  } catch (error) {
+    return handleApiError(error, 'Erro ao listar avaliacoes')
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const auth = await authenticate(req)
+  if (!auth.companyId) {
+    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+  }
+  const companyId = auth.companyId
+
+  try {
+    const body = await req.json()
+    const validation = createSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+    const d = validation.data
+
+    // IDOR: os IDs de referencia precisam pertencer a mesma empresa.
+    if (d.clientId) {
+      const client = await prisma.client.findFirst({
+        where: { id: d.clientId, companyId },
+        select: { id: true },
+      })
+      if (!client) return NextResponse.json({ error: 'Cliente invalido' }, { status: 400 })
+    }
+    if (d.conversationId) {
+      const conv = await prisma.conversation.findFirst({
+        where: { id: d.conversationId, companyId },
+        select: { id: true },
+      })
+      if (!conv) return NextResponse.json({ error: 'Conversa invalida' }, { status: 400 })
+    }
+    if (d.reservationId) {
+      const resv = await prisma.reservation.findFirst({
+        where: { id: d.reservationId, companyId },
+        select: { id: true },
+      })
+      if (!resv) return NextResponse.json({ error: 'Reserva invalida' }, { status: 400 })
+    }
+
+    const review = await prisma.review.create({
+      data: {
+        companyId,
+        rating: d.rating,
+        comment: d.comment ?? null,
+        customerName: d.customerName ?? null,
+        source: d.source,
+        clientId: d.clientId ?? null,
+        conversationId: d.conversationId ?? null,
+        reservationId: d.reservationId ?? null,
+      },
+    })
+
+    return NextResponse.json(review, { status: 201 })
+  } catch (error) {
+    return handleApiError(error, 'Erro ao criar avaliacao')
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const auth = await authenticate(req)
+  if (!auth.companyId) {
+    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+  }
+
+  try {
+    const id = req.nextUrl.searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'ID obrigatorio' }, { status: 400 })
+
+    // IDOR: so remove se a avaliacao for da empresa autenticada
+    const existing = await prisma.review.findFirst({
+      where: { id, companyId: auth.companyId },
+      select: { id: true },
+    })
+    if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
+
+    await prisma.review.delete({ where: { id } })
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    return handleApiError(error, 'Erro ao remover avaliacao')
+  }
+}

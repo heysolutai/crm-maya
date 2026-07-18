@@ -241,6 +241,31 @@ model Reservation {
   @@map("reservations")
 }
 
+/// Avaliacao do cliente sobre o atendimento/experiencia.
+/// Criada pela IA (via n8n, com x-api-key) ao coletar a nota no WhatsApp, ou
+/// pelo atendente manualmente. Os vinculos sao opcionais porque nem toda
+/// avaliacao vem de uma conversa ou reserva conhecida.
+model Review {
+  id             String   @id @default(uuid()) @db.Uuid
+  companyId      String   @map("company_id") @db.Uuid
+  clientId       String?  @map("client_id") @db.Uuid
+  conversationId String?  @map("conversation_id") @db.Uuid
+  reservationId  String?  @map("reservation_id") @db.Uuid
+  /// Nota de 1 a 5
+  rating         Int
+  comment        String?
+  customerName   String?  @map("customer_name")
+  /// Origem do registro: 'ai' | 'agent' | 'manual'
+  source         String   @default("ai")
+  metadata       Json?    @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([companyId, createdAt], map: "idx_reviews_company_created")
+  @@index([companyId, rating], map: "idx_reviews_company_rating")
+  @@map("reviews")
+}
+
 model UserRole {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @map("user_id") @db.Uuid
