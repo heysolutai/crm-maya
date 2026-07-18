@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
+import { indexFaq, unindexFaq } from '@/lib/ai/faq-indexer'
 
 const createFaqSchema = z.object({
   question: z.string().min(1),
@@ -66,6 +67,10 @@ export async function POST(req: NextRequest) {
       await prisma.companyFaq.deleteMany({
         where: { id: { in: deleteValidation.data.ids }, companyId },
       })
+      // Tira da base vetorial tambem, senao a IA continuaria achando os FAQs
+      for (const faqId of deleteValidation.data.ids) {
+        await unindexFaq(companyId, faqId)
+      }
       return NextResponse.json({ success: true })
     }
 
@@ -105,6 +110,11 @@ export async function POST(req: NextRequest) {
         orderPosition: validation.data.orderPosition ?? 0,
       },
     })
+
+    // Indexa na base vetorial. Nunca lanca — se a OpenAI ou o banco vetorial
+    // falharem, o FAQ ja esta salvo e a falha fica no log.
+    await indexFaq(companyId, faq)
+
     return NextResponse.json(faq, { status: 201 })
   } catch (error) {
     return handleApiError(error, 'Erro')
@@ -132,6 +142,10 @@ export async function PUT(req: NextRequest) {
     if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
 
     const faq = await prisma.companyFaq.update({ where: { id }, data: updates as any })
+
+    // Reindexa com o conteudo novo. FAQ desativado sai do indice.
+    await indexFaq(companyId, faq)
+
     return NextResponse.json(faq)
   } catch (error) {
     return handleApiError(error, 'Erro')
@@ -150,6 +164,10 @@ export async function DELETE(req: NextRequest) {
     if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
 
     await prisma.companyFaq.delete({ where: { id } })
+
+    // Remove tambem da base vetorial.
+    await unindexFaq(companyId, id)
+
     return NextResponse.json({ success: true })
   } catch (error) {
     return handleApiError(error, 'Erro')
