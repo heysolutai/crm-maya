@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useReviews } from '@/hooks/useReviews';
+import { useReviews, type SentimentFilter } from '@/hooks/useReviews';
 import {
   Table,
   TableBody,
@@ -16,7 +16,17 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Star, Search, Trash2, MessageSquareQuote, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Star,
+  Search,
+  Trash2,
+  MessageSquareQuote,
+  ChevronLeft,
+  ChevronRight,
+  ThumbsUp,
+  ThumbsDown,
+  Minus,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const RATING_FILTERS = [5, 4, 3, 2, 1];
@@ -44,6 +54,29 @@ const SOURCE_LABELS: Record<string, string> = {
   manual: 'Manual',
 };
 
+const SENTIMENTS = [
+  { key: 'positivo' as const, label: 'Positivo', icon: ThumbsUp, className: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
+  { key: 'neutro' as const, label: 'Neutro', icon: Minus, className: 'bg-muted text-muted-foreground border-border' },
+  { key: 'negativo' as const, label: 'Negativo', icon: ThumbsDown, className: 'bg-red-500/10 text-red-600 border-red-500/20' },
+];
+
+function SentimentBadge({ sentiment }: { sentiment: string }) {
+  const meta = SENTIMENTS.find((s) => s.key === sentiment);
+  if (!meta) return <span className="text-muted-foreground text-sm">—</span>;
+  const Icon = meta.icon;
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium',
+        meta.className
+      )}
+    >
+      <Icon className="h-3 w-3" />
+      {meta.label}
+    </span>
+  );
+}
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', {
     day: '2-digit',
@@ -59,6 +92,7 @@ export default function Reviews() {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [ratingFilter, setRatingFilter] = useState<number | null>(null);
+  const [sentimentFilter, setSentimentFilter] = useState<SentimentFilter>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: string | null }>({
     open: false,
     id: null,
@@ -67,6 +101,7 @@ export default function Reviews() {
   const { reviews, pagination, summary, isLoading, deleteReview, isDeleting } = useReviews({
     page,
     rating: ratingFilter,
+    sentiment: sentimentFilter,
     search,
   });
 
@@ -110,6 +145,17 @@ export default function Reviews() {
                   <p className="text-xs text-muted-foreground">Total</p>
                   <p className="text-2xl font-bold tabular-nums">{summary.total}</p>
                 </div>
+                <div className="border-l pl-4 space-y-0.5">
+                  <p className="text-xs text-emerald-600 tabular-nums">
+                    {summary.positivo} positivas
+                  </p>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {summary.neutro} neutras
+                  </p>
+                  <p className="text-xs text-red-600 tabular-nums">
+                    {summary.negativo} negativas
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -129,6 +175,29 @@ export default function Reviews() {
           <Button variant="outline" size="icon" onClick={applySearch}>
             <Search className="h-4 w-4" />
           </Button>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {SENTIMENTS.map((s) => {
+            const Icon = s.icon;
+            const active = sentimentFilter === s.key;
+            return (
+              <Button
+                key={s.key}
+                type="button"
+                size="sm"
+                variant={active ? 'default' : 'outline'}
+                onClick={() => {
+                  setSentimentFilter((cur) => (cur === s.key ? null : s.key));
+                  setPage(1);
+                }}
+                className="gap-1.5"
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {s.label}
+              </Button>
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-1.5 ml-auto">
@@ -160,7 +229,8 @@ export default function Reviews() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[130px]">Nota</TableHead>
-                <TableHead className="w-[200px]">Cliente</TableHead>
+                <TableHead className="w-[120px]">Tipo</TableHead>
+                <TableHead className="w-[180px]">Cliente</TableHead>
                 <TableHead>Comentário</TableHead>
                 <TableHead className="w-[110px]">Origem</TableHead>
                 <TableHead className="w-[160px]">Data</TableHead>
@@ -171,7 +241,7 @@ export default function Reviews() {
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 6 }).map((__, j) => (
+                    {Array.from({ length: 7 }).map((__, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -180,11 +250,11 @@ export default function Reviews() {
                 ))
               ) : reviews.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center">
+                  <TableCell colSpan={7} className="h-32 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <MessageSquareQuote className="h-8 w-8 opacity-40" />
                       <p className="text-sm">
-                        {search || ratingFilter
+                        {search || ratingFilter || sentimentFilter
                           ? 'Nenhuma avaliação encontrada com esses filtros.'
                           : 'Nenhuma avaliação registrada ainda.'}
                       </p>
@@ -199,6 +269,9 @@ export default function Reviews() {
                         <span className="font-semibold tabular-nums">{r.rating}</span>
                         <Stars rating={r.rating} />
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <SentimentBadge sentiment={r.sentiment} />
                     </TableCell>
                     <TableCell className="font-medium">
                       {r.customerName || <span className="text-muted-foreground">—</span>}

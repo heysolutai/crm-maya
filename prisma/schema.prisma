@@ -253,6 +253,10 @@ model Review {
   reservationId  String?  @map("reservation_id") @db.Uuid
   /// Nota de 1 a 5
   rating         Int
+  /// 'positivo' | 'neutro' | 'negativo'. Se nao vier na criacao, e derivado
+  /// da nota (4-5 positivo, 3 neutro, 1-2 negativo). A IA pode sobrescrever
+  /// quando o texto contradiz a nota.
+  sentiment      String   @default("neutro")
   comment        String?
   customerName   String?  @map("customer_name")
   /// Origem do registro: 'ai' | 'agent' | 'manual'
@@ -263,6 +267,7 @@ model Review {
 
   @@index([companyId, createdAt], map: "idx_reviews_company_created")
   @@index([companyId, rating], map: "idx_reviews_company_rating")
+  @@index([companyId, sentiment], map: "idx_reviews_company_sentiment")
   @@map("reviews")
 }
 

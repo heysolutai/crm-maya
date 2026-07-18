@@ -8,6 +8,7 @@ export interface Review {
   conversationId: string | null
   reservationId: string | null
   rating: number
+  sentiment: 'positivo' | 'neutro' | 'negativo' | string
   comment: string | null
   customerName: string | null
   source: string
@@ -17,24 +18,40 @@ export interface Review {
 export interface ReviewsResponse {
   data: Review[]
   pagination: { page: number; limit: number; total: number; totalPages: number }
-  summary: { average: number | null; total: number }
+  summary: {
+    average: number | null
+    total: number
+    positivo: number
+    neutro: number
+    negativo: number
+  }
 }
+
+export type SentimentFilter = 'positivo' | 'neutro' | 'negativo' | null
 
 interface UseReviewsParams {
   page?: number
   limit?: number
   rating?: number | null
+  sentiment?: SentimentFilter
   search?: string
 }
 
-export function useReviews({ page = 1, limit = 20, rating = null, search = '' }: UseReviewsParams = {}) {
+export function useReviews({
+  page = 1,
+  limit = 20,
+  rating = null,
+  sentiment = null,
+  search = '',
+}: UseReviewsParams = {}) {
   const queryClient = useQueryClient()
 
   const query = useQuery<ReviewsResponse>({
-    queryKey: ['reviews', page, limit, rating, search],
+    queryKey: ['reviews', page, limit, rating, sentiment, search],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) })
       if (rating) params.set('rating', String(rating))
+      if (sentiment) params.set('sentiment', sentiment)
       if (search) params.set('search', search)
 
       const res = await fetch(`/api/reviews?${params}`)

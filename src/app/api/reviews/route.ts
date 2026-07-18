@@ -10,8 +10,22 @@ import { handleApiError } from '@/lib/api/errors'
  * tambem pode registrar manualmente.
  */
 
+/**
+ * Deriva o sentimento a partir da nota.
+ * Usado quando a IA nao manda 'sentiment' explicito — assim o campo nunca
+ * fica vazio nem contradiz a nota por omissao.
+ */
+function sentimentFromRating(rating: number): 'positivo' | 'neutro' | 'negativo' {
+  if (rating >= 4) return 'positivo'
+  if (rating <= 2) return 'negativo'
+  return 'neutro'
+}
+
 const createSchema = z.object({
   rating: z.number().int().min(1).max(5),
+  // Opcional: se ausente, derivamos da nota. A IA pode mandar explicito quando
+  // o texto contradiz a nota (ex: nota 4 com reclamacao seria 'negativo').
+  sentiment: z.enum(['positivo', 'neutro', 'negativo']).optional(),
   comment: z.string().max(2000).optional().nullable(),
   customerName: z.string().max(255).optional().nullable(),
   source: z.enum(['ai', 'agent', 'manual']).optional().default('ai'),
@@ -32,11 +46,13 @@ export async function GET(req: NextRequest) {
     const page = Math.max(parseInt(searchParams.get('page') || '1'), 1)
     const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '20'), 1), 100)
     const rating = searchParams.get('rating')
+    const sentiment = searchParams.get('sentiment')
     const search = searchParams.get('search') || ''
 
     const where = {
       companyId,
       ...(rating ? { rating: parseInt(rating) } : {}),
+      ...(sentiment ? { sentiment } : {}),
       ...(search
         ? {
             OR: [
@@ -47,7 +63,7 @@ export async function GET(req: NextRequest) {
         : {}),
     }
 
-    const [data, total, aggregate] = await Promise.all([
+    const [data, total, aggregate, bySentiment] = await Promise.all([
       prisma.review.findMany({
         where,
         orderBy: { createdAt: 'desc' },
@@ -61,6 +77,12 @@ export async function GET(req: NextRequest) {
         _avg: { rating: true },
         _count: { _all: true },
       }),
+      // Quantas positivas/neutras/negativas no total da empresa
+      prisma.review.groupBy({
+        by: ['sentiment'],
+        where: { companyId },
+        _count: { _all: true },
+      }),
     ])
 
     return NextResponse.json({
@@ -71,6 +93,9 @@ export async function GET(req: NextRequest) {
           ? Math.round(aggregate._avg.rating * 10) / 10
           : null,
         total: aggregate._count._all,
+        positivo: bySentiment.find((s) => s.sentiment === 'positivo')?._count._all ?? 0,
+        neutro: bySentiment.find((s) => s.sentiment === 'neutro')?._count._all ?? 0,
+        negativo: bySentiment.find((s) => s.sentiment === 'negativo')?._count._all ?? 0,
       },
     })
   } catch (error) {
@@ -123,6 +148,7 @@ export async function POST(req: NextRequest) {
       data: {
         companyId,
         rating: d.rating,
+        sentiment: d.sentiment ?? sentimentFromRating(d.rating),
         comment: d.comment ?? null,
         customerName: d.customerName ?? null,
         source: d.source,
