@@ -36,7 +36,12 @@ export async function indexFaq(
   faq: IndexableFaq
 ): Promise<boolean> {
   try {
-    if (!process.env.VECTOR_DATABASE_URL) return false
+    if (!process.env.VECTOR_DATABASE_URL) {
+      console.warn(
+        '[FaqIndexer] VECTOR_DATABASE_URL nao configurada — FAQ salvo, mas NAO indexado'
+      )
+      return false
+    }
 
     // Nome da tabela = knowledge_name (`know_<slug>`), o mesmo que vai no
     // webhook do n8n. Sem ele nao ha onde gravar.
@@ -80,6 +85,7 @@ export async function indexFaq(
       },
     })
 
+    console.log(`[FaqIndexer] FAQ ${faq.id} indexado na tabela "${knowledgeName}"`)
     return true
   } catch (err) {
     console.error('[FaqIndexer] Falha ao indexar FAQ:', (err as Error).message)
@@ -134,7 +140,10 @@ export async function syncCompanyFaqs(
 ): Promise<FaqSyncResult> {
   const result: FaqSyncResult = { added: 0, updated: 0, skipped: 0, removed: 0, failed: 0 }
 
-  if (!process.env.VECTOR_DATABASE_URL) return result
+  if (!process.env.VECTOR_DATABASE_URL) {
+    console.warn('[FaqIndexer] VECTOR_DATABASE_URL nao configurada — sync vetorial pulado')
+    return result
+  }
 
   const knowledgeName = await getKnowledgeName(companyId)
   if (!knowledgeName) {
