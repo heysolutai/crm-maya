@@ -49,6 +49,27 @@ export interface ProvisionInput {
 }
 
 /**
+ * Inputs para ADOTAR uma instancia que JA EXISTE no provider — o usuario cola
+ * o token dela em vez de criar uma nova.
+ *
+ * Diferenca chave pro provision: aqui nao criamos nada no provider. Precisamos
+ * descobrir o `instanceName` real consultando o provider com o token, porque o
+ * receiver de webhook resolve a inbox por esse nome — se gravarmos um nome
+ * inventado, as mensagens recebidas nunca casam com a inbox.
+ */
+export interface AdoptInput {
+  companyId: string;
+  displayName: string;
+  /** URL do servidor do provider */
+  serverUrl?: string;
+  /** Token DA INSTANCIA existente (nao e o admin token) */
+  instanceToken: string;
+  /** URL publica que vai receber webhooks deste agente */
+  webhookUrl: string;
+  extra?: Record<string, unknown>;
+}
+
+/**
  * Retorno do provision: dados que sao gravados no whatsapp_instances pro
  * adapter conseguir operar nas chamadas seguintes.
  */
@@ -102,6 +123,13 @@ export interface ChannelAdapter {
 
   /** Cria a instancia no provider. Chamado quando POST /api/agents */
   provision(input: ProvisionInput): Promise<ProvisionResult>;
+
+  /**
+   * Adota uma instancia ja existente no provider a partir do token dela.
+   * Opcional: canais que nao suportam esse fluxo simplesmente nao implementam
+   * (a rota responde com erro amigavel).
+   */
+  adopt?(input: AdoptInput): Promise<ProvisionResult>;
 
   /** Retorna QR atual (gera novo se necessario) */
   getQrCode(agent: ChannelAgent): Promise<QrResult>;

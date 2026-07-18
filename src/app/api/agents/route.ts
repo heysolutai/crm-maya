@@ -65,6 +65,14 @@ const createAgentSchema = z.object({
   // Vinculacao de AiAgent (M:1) — escolha do usuario no dialog de criacao
   aiAgentId: z.string().uuid().optional(),         // reutilizar agente existente
   createAiAgentNamed: z.string().min(1).optional(), // criar novo agente com esse nome
+  // Como obter a instancia no provider:
+  //   'create'   -> provisiona uma instancia nova (default, comportamento antigo)
+  //   'existing' -> adota uma instancia que ja existe, usando o token dela
+  mode: z.enum(['create', 'existing']).optional(),
+  /** Token DA INSTANCIA existente — obrigatorio quando mode = 'existing'. */
+  instanceToken: z.string().min(1).optional(),
+  /** Identificador do restaurante no sistema de reservas. */
+  restaurantId: z.string().max(120).optional(),
 })
 
 const updateAgentSchema = z.object({
@@ -94,6 +102,8 @@ function mapAgent(i: any) {
     last_connected_at: i.lastConnectedAt,
     metadata: i.metadata,
     channel_config: redactChannelConfig(i.channelConfig),
+    // Atalho pro identificador do restaurante (fica dentro do channel_config)
+    restaurant_id: (i.channelConfig as Record<string, unknown> | null)?.restaurantId ?? null,
     ai_agent_id: i.aiAgentId,
     created_at: i.createdAt,
     updated_at: i.updatedAt,
@@ -158,8 +168,20 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { channelType, displayName, phoneNumber, extra, aiAgentId, createAiAgentNamed } = validation.data
+    const {
+      channelType, displayName, phoneNumber, extra, aiAgentId, createAiAgentNamed,
+      mode, instanceToken, restaurantId,
+    } = validation.data
     let { serverUrl, serverApiKey } = validation.data
+
+    // 'existing' = usuario colou o token de uma instancia que ja existe.
+    const useExisting = mode === 'existing'
+    if (useExisting && !instanceToken) {
+      return NextResponse.json(
+        { error: 'Informe o token da instancia existente' },
+        { status: 400 }
+      )
+    }
 
     // Resolve qual AiAgent vinculado: prioridade explicita do user > fallback (primeiro existente / criar novo).
     // Valida ownership do aiAgentId pra evitar IDOR.
@@ -244,6 +266,14 @@ export async function POST(req: NextRequest) {
     if (hasAdapter(channelType)) {
       const adapter = getAdapter(channelType)
 
+      // Canal precisa implementar adopt() pra aceitar token de instancia existente.
+      if (useExisting && typeof adapter.adopt !== 'function') {
+        return NextResponse.json(
+          { error: 'Este canal nao aceita token de instancia existente', code: 'ADOPT_UNSUPPORTED' },
+          { status: 400 }
+        )
+      }
+
       // Cria placeholder no banco antes pra ter agent.id pra usar no webhook URL
       const placeholder = await prisma.inbox.create({
         data: {
@@ -260,15 +290,31 @@ export async function POST(req: NextRequest) {
       const webhookUrl = publicWebhookUrl(req, channelType, placeholder.id)
 
       try {
-        const result = await adapter.provision({
-          companyId,
-          displayName,
-          serverUrl,
-          serverApiKey,
-          phoneNumber,
-          webhookUrl,
-          extra,
-        })
+        const result = useExisting
+          ? await adapter.adopt!({
+              companyId,
+              displayName,
+              serverUrl,
+              instanceToken: instanceToken!,
+              webhookUrl,
+              extra,
+            })
+          : await adapter.provision({
+              companyId,
+              displayName,
+              serverUrl,
+              serverApiKey,
+              phoneNumber,
+              webhookUrl,
+              extra,
+            })
+
+        // restaurantId entra no channelConfig (JSON ja existente) — evita
+        // migration so pra guardar um identificador do sistema de reservas.
+        const channelConfig = {
+          ...result.channelConfig,
+          ...(restaurantId ? { restaurantId } : {}),
+        }
 
         const agent = await prisma.inbox.update({
           where: { id: placeholder.id },
@@ -276,7 +322,7 @@ export async function POST(req: NextRequest) {
             instanceName: result.providerInstanceName,
             apiUrl: result.apiUrl,
             instanceApiKey: result.instanceApiKey,
-            channelConfig: result.channelConfig as any,
+            channelConfig: channelConfig as any,
             metadata: result.metadata as any,
             qrCode: result.qrCode || null,
             status: result.qrCode ? 'connecting' : 'disconnected',

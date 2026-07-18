@@ -18,6 +18,7 @@
 import type {
   ChannelAdapter,
   ChannelAgent,
+  AdoptInput,
   ProvisionInput,
   ProvisionResult,
   QrResult,
@@ -167,6 +168,26 @@ function normalizeQr(code: string | null | undefined): string | null {
   return `data:image/png;base64,${code}`;
 }
 
+/**
+ * Nome da instancia na resposta do /instance/status.
+ *
+ * CRITICO no fluxo de adocao: o receiver de webhook resolve a inbox pelo
+ * instanceName que vem no payload. Se gravarmos o nome errado, a instancia
+ * conecta mas NENHUMA mensagem recebida casa com a inbox.
+ * A UazAPI varia entre `instance.name`, `status.name` e `name` conforme versao.
+ */
+function extractInstanceName(raw: any): string | null {
+  for (const source of [
+    raw?.instance?.name,
+    raw?.instance?.instanceName,
+    raw?.status?.name,
+    raw?.name,
+  ]) {
+    if (typeof source === 'string' && source.trim()) return source.trim();
+  }
+  return null;
+}
+
 export const uazapiAdapter: ChannelAdapter = {
   type: 'uazapi',
 
@@ -257,6 +278,85 @@ export const uazapiAdapter: ChannelAdapter = {
         webhookUrl: input.webhookUrl,
       },
       metadata: initRes.data,
+      qrCode: normalizeQr(qrCode),
+      pairingCode: null,
+    };
+  },
+
+  /**
+   * Adota uma instancia que JA existe na UazAPI, a partir do token dela.
+   * Nao cria nada no provider: valida o token, descobre o nome real da
+   * instancia e aponta o webhook pro nosso receiver.
+   */
+  async adopt(input: AdoptInput): Promise<ProvisionResult> {
+    if (!input.serverUrl) {
+      throw new ChannelError('URL do servidor UazAPI e obrigatoria', 'BAD_REQUEST');
+    }
+    if (!input.instanceToken) {
+      throw new ChannelError('Token da instancia e obrigatorio', 'BAD_REQUEST');
+    }
+
+    const apiUrl = trimUrl(input.serverUrl);
+    const instanceToken = input.instanceToken.trim();
+
+    // 1) Valida o token consultando o status. Token invalido falha aqui, antes
+    //    de gravarmos qualquer coisa no banco.
+    const statusRes = await uazapiFetch(apiUrl, 'instance', instanceToken, 'GET', '/instance/status');
+    if (!statusRes.ok) {
+      throwForStatus(
+        statusRes.status,
+        statusRes.data,
+        `Token da instancia invalido ou instancia inacessivel (${statusRes.status})`
+      );
+    }
+
+    const instanceName = extractInstanceName(statusRes.data);
+    if (!instanceName) {
+      throw new ChannelError(
+        'Nao foi possivel identificar o nome da instancia na UazAPI. Verifique o token.',
+        'UNKNOWN',
+        { providerBody: statusRes.data }
+      );
+    }
+
+    // 2) Aponta o webhook pro nosso receiver. Sem isso a instancia conecta mas
+    //    nao entrega mensagem nenhuma pro CRM.
+    try {
+      await uazapiFetch(apiUrl, 'instance', instanceToken, 'POST', '/webhook', {
+        action: 'add',
+        enabled: true,
+        url: input.webhookUrl,
+        events: ['messages', 'messages_update'],
+        excludeMessages: ['isGroupYes'],
+      });
+    } catch (e) {
+      console.warn('[uazapi:adopt] webhook setup falhou (ignorado):', (e as Error).message);
+    }
+
+    // 3) Se ainda nao esta logada, tenta trazer o QR pra UI mostrar.
+    let qrCode: string | null = null;
+    if (mapState(statusRes.data) !== 'connected') {
+      try {
+        const connRes = await uazapiFetch(apiUrl, 'instance', instanceToken, 'POST', '/instance/connect', {
+          phone: '',
+        });
+        if (connRes.ok) {
+          qrCode = connRes.data?.instance?.qrcode || connRes.data?.qrcode || null;
+        }
+      } catch (e) {
+        console.warn('[uazapi:adopt] connect falhou (ignorado):', (e as Error).message);
+      }
+    }
+
+    return {
+      providerInstanceName: instanceName,
+      instanceApiKey: instanceToken,
+      apiUrl,
+      channelConfig: {
+        webhookUrl: input.webhookUrl,
+        adopted: true,
+      },
+      metadata: statusRes.data,
       qrCode: normalizeQr(qrCode),
       pairingCode: null,
     };

@@ -81,6 +81,12 @@ export default function Inboxes() {
   // Quando ja existe credencial salva, escondemos os campos por padrao;
   // user pode clicar em "Editar" pra trocar URL/token.
   const [editingCredential, setEditingCredential] = useState(false);
+  // Como obter a instancia: criar uma nova no provider ou adotar uma existente
+  // colando o token dela.
+  const [instanceMode, setInstanceMode] = useState<'create' | 'existing'>('create');
+  const [instanceToken, setInstanceToken] = useState('');
+  // Identificador do restaurante no sistema de reservas.
+  const [restaurantId, setRestaurantId] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string | null }>({
     open: false,
     id: null,
@@ -99,6 +105,10 @@ export default function Inboxes() {
     ['evolution_baileys', 'evolution_go', 'zapi'].includes(selectedChannel);
 
   const isNotificame = selectedChannel === 'notificame';
+
+  // Só a API Reservemaya (uazapi) implementa adopt() no backend — os outros
+  // canais só sabem provisionar instância nova.
+  const supportsInstanceMode = selectedChannel === 'uazapi';
 
   // Tipo do canal selecionado no dropdown do NotificaMe (whatsapp/instagram/facebook/...).
   // Define se exigimos o "Token do Canal" (so WhatsApp).
@@ -127,6 +137,9 @@ export default function Inboxes() {
     setNotificameChannels([]);
     setNotificameChannelsError(null);
     setEditingCredential(false);
+    setInstanceMode('create');
+    setInstanceToken('');
+    setRestaurantId('');
   };
 
   const handleSelectChannel = (type: ChannelType) => {
@@ -139,6 +152,8 @@ export default function Inboxes() {
     setNotificameChannels([]);
     setNotificameChannelsError(null);
     setEditingCredential(false);
+    setInstanceMode('create');
+    setInstanceToken('');
   };
 
   const fetchNotificameChannels = async () => {
@@ -190,10 +205,19 @@ export default function Inboxes() {
     if (isNotificame && !notificameChannelId.trim()) return;
     if (notificameNeedsChannelToken && !notificameChannelToken.trim()) return;
 
+    // Adotar instancia existente exige o token dela.
+    if (supportsInstanceMode && instanceMode === 'existing' && !instanceToken.trim()) return;
+
     createInbox(
       {
         channelType: selectedChannel,
         displayName: displayName.trim(),
+        mode: supportsInstanceMode ? instanceMode : undefined,
+        instanceToken:
+          supportsInstanceMode && instanceMode === 'existing'
+            ? instanceToken.trim()
+            : undefined,
+        restaurantId: restaurantId.trim() || undefined,
         // Manda URL/token apenas se o user explicitamente preencheu
         // (1a vez ou edicao). Se nao mandou, o backend usa a credencial salva.
         serverUrl: showCredentialInputs ? serverUrl.trim() : undefined,
@@ -383,6 +407,74 @@ export default function Inboxes() {
               />
               <p className="text-xs text-muted-foreground">
                 Use um nome interno para identificar a caixa. O número aparece após a conexão.
+              </p>
+            </div>
+
+            {supportsInstanceMode && (
+              <div className="space-y-2">
+                <Label>Instância</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setInstanceMode('create')}
+                    className={cn(
+                      'rounded-lg border p-3 text-left transition-all',
+                      instanceMode === 'create'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-foreground/20'
+                    )}
+                  >
+                    <p className="font-medium text-sm">Criar instância</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Cria uma instância nova e gera o QR Code
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInstanceMode('existing')}
+                    className={cn(
+                      'rounded-lg border p-3 text-left transition-all',
+                      instanceMode === 'existing'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-foreground/20'
+                    )}
+                  >
+                    <p className="font-medium text-sm">Usar token existente</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Conecta a uma instância que já existe
+                    </p>
+                  </button>
+                </div>
+
+                {instanceMode === 'existing' && (
+                  <div className="space-y-2 pt-1">
+                    <Label htmlFor="instance-token">Token da instância</Label>
+                    <Input
+                      id="instance-token"
+                      type="password"
+                      placeholder="Cole aqui o token da instância existente"
+                      value={instanceToken}
+                      onChange={(e) => setInstanceToken(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      É o token da instância (não o token de administrador). Validamos
+                      o token e apontamos o webhook automaticamente.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="restaurant-id">ID do restaurante</Label>
+              <Input
+                id="restaurant-id"
+                placeholder="Ex: 1042"
+                value={restaurantId}
+                onChange={(e) => setRestaurantId(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Identificador do restaurante no sistema de reservas. Opcional.
               </p>
             </div>
 

@@ -57,6 +57,10 @@ export function useInboxes() {
       extra?: Record<string, unknown>;
       aiAgentId?: string;
       createAiAgentNamed?: string;
+      /** 'create' provisiona instancia nova; 'existing' adota uma pelo token. */
+      mode?: 'create' | 'existing';
+      instanceToken?: string;
+      restaurantId?: string;
     }) => {
       const res = await fetch(`/api/agents?companyId=${companyId}`, {
         method: 'POST',
