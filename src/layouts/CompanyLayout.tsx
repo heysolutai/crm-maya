@@ -41,6 +41,7 @@ import {
 import {
   LayoutDashboard,
   CalendarCheck,
+  BarChart3,
   Kanban,
   Users,
   MessageSquare,
@@ -101,6 +102,7 @@ const navGroups: NavGroup[] = [
       { name: 'Reservas', href: '/app/reservations', icon: CalendarCheck, roles: ['agent', 'manager', 'company_admin'] },
       { name: 'CRM', href: '/app/crm', icon: Kanban, roles: ['agent', 'manager', 'company_admin'] },
       { name: 'Clientes', href: '/app/clients', icon: Users, roles: ['viewer', 'agent', 'manager', 'company_admin'], requirePermission: 'can_access_crm' },
+      { name: 'Relatórios', href: '/app/reports', icon: BarChart3, roles: ['manager', 'company_admin'] },
     ],
   },
   {
