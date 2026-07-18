@@ -42,7 +42,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
 # Entrypoint script
 COPY --chown=nextjs:nodejs entrypoint.sh ./
-RUN chmod +x entrypoint.sh
+# Remove CR do fim das linhas antes de tornar executavel.
+# Sem isso, um checkout feito no Windows (CRLF) faz o shebang virar
+# `#!/bin/sh\r` e o container falha com a mensagem enganosa:
+#     exec: ./entrypoint.sh: not found
+# O .gitattributes ja forca LF, mas isso aqui garante a imagem mesmo se
+# alguem clonar com outra config de git.
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
 
 USER nextjs
 

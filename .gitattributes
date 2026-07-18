@@ -1,0 +1,34 @@
+# Normalizacao de fim de linha.
+#
+# Por que isso existe: no Windows o Git converte LF -> CRLF no checkout. Um
+# shell script com CRLF quebra dentro do container Linux — o shebang vira
+# `#!/bin/sh\r`, o kernel procura um interpretador chamado "/bin/sh\r" e o
+# erro que aparece e enganoso:
+#     exec: ./entrypoint.sh: not found
+# (o arquivo esta la; quem "nao existe" e o interpretador com \r no nome)
+#
+# Forcamos LF em tudo que roda dentro de container ou e lido por ferramenta Unix.
+
+# Por padrao, normaliza texto no repositorio
+* text=auto
+
+# Scripts e arquivos que rodam no Linux — SEMPRE LF
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.Dockerfile    text eol=lf
+docker-*.yml    text eol=lf
+docker-*.yaml   text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+.env.example    text eol=lf
+*.sql           text eol=lf
+
+# Binarios — nao mexer
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.woff  binary
+*.woff2 binary
