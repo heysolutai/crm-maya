@@ -24,6 +24,10 @@ export interface ReportOverview {
     byAi: number
     byHuman: number
     byStatus: Array<{ status: string; total: number }>
+    /** Reservas de mesa comum */
+    normal: number
+    /** Eventos personalizados (aniversario, confraternizacao, etc) */
+    evento: number
   }
 }
 

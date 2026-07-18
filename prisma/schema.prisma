@@ -223,6 +223,9 @@ model Reservation {
   conversationId String?   @map("conversation_id") @db.Uuid
   clientId       String?   @map("client_id") @db.Uuid
   source         String    @default("ai")
+  /// Tipo da reserva: 'normal' (mesa comum) ou 'evento' (evento personalizado).
+  /// Default 'normal' pra que reservas ja existentes nao fiquem sem valor.
+  type           String    @default("normal")
   customerName   String?   @map("customer_name")
   partySize      Int?      @map("party_size")
   reservedFor    DateTime? @map("reserved_for")
@@ -234,6 +237,7 @@ model Reservation {
 
   @@index([companyId, createdAt], map: "idx_reservations_company_created")
   @@index([companyId, source], map: "idx_reservations_company_source")
+  @@index([companyId, type], map: "idx_reservations_company_type")
   @@map("reservations")
 }
 

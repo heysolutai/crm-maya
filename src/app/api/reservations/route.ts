@@ -9,6 +9,9 @@ import { handleApiError } from '@/lib/api/errors'
 // card "Reservas pela IA" do dashboard.
 const createSchema = z.object({
   source: z.enum(['ai', 'agent', 'manual']).optional().default('ai'),
+  // 'normal' = mesa comum; 'evento' = evento personalizado (aniversario,
+  // confraternizacao, etc). Alimenta a quebra do relatorio mensal.
+  type: z.enum(['normal', 'evento']).optional().default('normal'),
   customerName: z.string().max(255).optional().nullable(),
   partySize: z.number().int().positive().max(1000).optional().nullable(),
   reservedFor: z.string().datetime().optional().nullable(),
@@ -80,6 +83,7 @@ export async function POST(req: NextRequest) {
       data: {
         companyId: auth.companyId,
         source: d.source,
+        type: d.type,
         customerName: d.customerName ?? null,
         partySize: d.partySize ?? null,
         reservedFor: d.reservedFor ? new Date(d.reservedFor) : null,

@@ -22,6 +22,8 @@ import {
   Megaphone,
   Sprout,
   Bot,
+  Utensils,
+  PartyPopper,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -211,6 +213,17 @@ export default function Reports() {
               label="Pediram atendimento humano"
               value={data.conversations.humanHandoff}
               hint="conversas transferidas"
+            />
+            <Metric
+              icon={Utensils}
+              label="Reservas normais"
+              value={data.reservations.normal}
+              hint="mesa comum"
+            />
+            <Metric
+              icon={PartyPopper}
+              label="Eventos personalizados"
+              value={data.reservations.evento}
             />
           </div>
 

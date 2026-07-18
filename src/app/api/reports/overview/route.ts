@@ -72,6 +72,7 @@ export async function GET(req: NextRequest) {
       reservationsByAi,
       humanHandoff,
       reservationsByStatus,
+      reservationsByType,
       conversationsByDayRaw,
     ] = await Promise.all([
       // Leads novos no periodo
@@ -97,6 +98,13 @@ export async function GET(req: NextRequest) {
       // Reservas quebradas por status (confirmed/cancelled/...)
       prisma.reservation.groupBy({
         by: ['status'],
+        where: { companyId, createdAt: range },
+        _count: { _all: true },
+      }),
+
+      // Reservas normais x eventos personalizados
+      prisma.reservation.groupBy({
+        by: ['type'],
         where: { companyId, createdAt: range },
         _count: { _all: true },
       }),
@@ -146,6 +154,9 @@ export async function GET(req: NextRequest) {
           status: r.status,
           total: r._count._all,
         })),
+        // Quebra normal x evento personalizado
+        normal: reservationsByType.find((r) => r.type === 'normal')?._count._all ?? 0,
+        evento: reservationsByType.find((r) => r.type === 'evento')?._count._all ?? 0,
       },
     })
   } catch (error) {
