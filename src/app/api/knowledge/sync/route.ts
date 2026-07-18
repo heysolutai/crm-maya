@@ -4,10 +4,9 @@ import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, notFoundResponse, unauthorizedResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
 import { getSystemSetting } from '@/lib/system-settings'
-
-function normalizeCompanyName(name: string): string {
-  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
-}
+// Nome da base vive em um lugar so: o mesmo identificador e usado no webhook do
+// n8n, no campo `knowledge` do AiAgent e como nome da tabela no banco vetorial.
+import { buildKnowledgeName } from '@/lib/ai/knowledge-name'
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
@@ -69,7 +68,7 @@ export async function POST(req: NextRequest) {
       return notFoundResponse('Company not found');
     }
 
-    const knowledgeName = 'know_' + normalizeCompanyName(company.name);
+    const knowledgeName = buildKnowledgeName(company.name);
     console.log('[Sync KB] Generated knowledge name:', knowledgeName);
 
     const faqs = await prisma.companyFaq.findMany({

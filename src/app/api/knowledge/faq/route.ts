@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
+import { indexFaq, indexFaqs } from '@/lib/ai/faq-indexer'
 
 const apiError = (message: string, errorCode: string, status: number) =>
   jsonResponse({ success: false, error: errorCode, message }, status);
@@ -117,6 +118,12 @@ export async function POST(req: NextRequest) {
         faqsToInsert.map(faq => prisma.companyFaq.create({ data: faq }))
       );
 
+      // Indexa na base vetorial em background: lote grande faria o cliente
+      // esperar uma chamada de embedding por FAQ. indexFaqs nunca lanca.
+      void indexFaqs(companyId, data).then(({ indexed, failed }) => {
+        console.log(`[FAQ] Indexacao em lote: ${indexed} ok, ${failed} falhas`);
+      });
+
       return jsonResponse({ success: true, data, count: data.length }, 201);
     }
 
@@ -142,6 +149,10 @@ export async function POST(req: NextRequest) {
         orderPosition: nextOrder,
       },
     });
+
+    // FAQ unico: aguarda a indexacao (uma chamada so, latencia aceitavel) pra
+    // que o FAQ ja esteja pesquisavel assim que a resposta voltar.
+    await indexFaq(companyId, data);
 
     return jsonResponse({ success: true, data }, 201);
   } catch (error) {

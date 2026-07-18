@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
+import { indexFaq, unindexFaq } from '@/lib/ai/faq-indexer'
 
 const apiError = (message: string, errorCode: string, status: number) =>
   jsonResponse({ success: false, error: errorCode, message }, status);
@@ -74,6 +75,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       where: { id },
       data: updateData,
     });
+
+    // Reindexa com o conteudo novo. Se o FAQ foi desativado, o indexer remove
+    // do indice — assim a IA para de responder com conteudo desativado.
+    await indexFaq(companyId, data);
+
     return apiSuccess(data);
   } catch (error) {
     return handleApiErrorCors(error, 'Erro')
@@ -95,6 +101,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!existing) return apiError('Pergunta frequente não encontrada.', 'FAQ_NOT_FOUND', 404);
 
     await prisma.companyFaq.delete({ where: { id } });
+
+    // Remove tambem da base vetorial, senao a IA continuaria achando o FAQ.
+    await unindexFaq(companyId, id);
+
     return apiSuccess({ message: 'Pergunta frequente excluída com sucesso.' });
   } catch (error) {
     return handleApiErrorCors(error, 'Erro')
