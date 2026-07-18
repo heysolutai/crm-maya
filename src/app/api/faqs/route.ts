@@ -111,9 +111,14 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // Log de entrada: serve tambem como marcador de versao. Se esta linha nao
+    // aparece no log do container, a imagem em execucao NAO tem este codigo.
+    console.log(`[FAQ] Criado ${faq.id} — iniciando indexacao vetorial`)
+
     // Indexa na base vetorial. Nunca lanca — se a OpenAI ou o banco vetorial
     // falharem, o FAQ ja esta salvo e a falha fica no log.
-    await indexFaq(companyId, faq)
+    const indexed = await indexFaq(companyId, faq)
+    console.log(`[FAQ] Indexacao de ${faq.id}: ${indexed ? 'OK' : 'PULADA (ver motivo acima)'}`)
 
     return NextResponse.json(faq, { status: 201 })
   } catch (error) {
