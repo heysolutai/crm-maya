@@ -169,6 +169,37 @@ export async function deleteFaqVector(
   }
 }
 
+/**
+ * Lista o que ja esta indexado: faq_id -> updated_at gravado no metadata.
+ *
+ * Usado pela sincronizacao incremental — com isso decidimos quem precisa de
+ * embedding novo (FAQ novo ou editado) e quem pode ser pulado. Sem isso, cada
+ * sync re-embeddaria tudo e pagaria OpenAI a toa.
+ */
+export async function listIndexedFaqs(
+  knowledgeName: string,
+  companyId: string
+): Promise<Map<string, string>> {
+  const table = assertSafeKnowledgeName(knowledgeName)
+  const out = new Map<string, string>()
+  try {
+    const res = await getVectorPool().query(
+      `SELECT metadata->>'faq_id' AS faq_id, metadata->>'updated_at' AS updated_at
+       FROM "${table}"
+       WHERE metadata->>'company_id' = $1`,
+      [companyId]
+    )
+    for (const row of res.rows) {
+      if (row.faq_id) out.set(row.faq_id as string, (row.updated_at as string) || '')
+    }
+  } catch (err) {
+    const msg = (err as Error).message || ''
+    // Tabela ainda nao existe = nada indexado.
+    if (!msg.includes('does not exist')) throw err
+  }
+  return out
+}
+
 export interface FaqSearchResult {
   text: string
   metadata: Record<string, unknown>
