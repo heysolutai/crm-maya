@@ -11,10 +11,10 @@ import { logSecurityEvent } from '@/lib/security-log'
 import { consolidatePrompt } from '@/lib/promptConsolidation'
 
 /**
- * Normaliza o campo `prompts` do agente pra resposta: consolida os 3 esquemas
- * (prompt_completo / n8n / legado) num unico `prompt_completo` e descarta as
- * chaves espalhadas repetidas. Preserva `simple` (form do modo simples) e
- * `first_message` (boas-vindas), que ainda sao usados por telas.
+ * Normaliza o campo `prompts` do agente pra resposta: consolida os esquemas
+ * antigos (n8n / legado) num unico `prompt_completo` e descarta as chaves
+ * espalhadas repetidas. Preserva apenas `simple` (snapshot do formulario do
+ * modo simples — usado pra restaurar o estado dos botoes).
  *
  * Nao altera o banco — so o formato do retorno. Assim o front sempre recebe o
  * prompt no lugar certo, sem duplicidade.
@@ -22,9 +22,6 @@ import { consolidatePrompt } from '@/lib/promptConsolidation'
 function normalizePrompts(raw: any): Record<string, unknown> {
   const p = (raw || {}) as Record<string, unknown>
   const out: Record<string, unknown> = { prompt_completo: consolidatePrompt(p) }
-  if (typeof p.first_message === 'string' && p.first_message.trim()) {
-    out.first_message = p.first_message
-  }
   if (p.simple && typeof p.simple === 'object') {
     out.simple = p.simple
   }
