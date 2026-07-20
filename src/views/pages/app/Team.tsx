@@ -20,11 +20,29 @@ import { TableSkeleton, CardListSkeleton } from '@/components/ui/table-skeleton'
 import { EmptyState } from '@/components/ui/empty-state';
 
 const roleLabels = {
+  super_admin: { label: 'Super Admin', icon: Crown, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-500/10' },
   company_admin: { label: 'Administrador', icon: Crown, color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-500/10' },
   manager: { label: 'Gerente', icon: Shield, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-500/10' },
   agent: { label: 'Agente', icon: User, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500/10' },
   viewer: { label: 'Visualizador', icon: Eye, color: 'text-gray-600 dark:text-gray-400', bg: 'bg-gray-500/10' },
 };
+
+// Fallback pra QUALQUER papel fora do mapa acima. Sem isso, um papel inesperado
+// (ex: um valor novo no enum) faz roleInfo virar undefined e derruba a pagina
+// inteira em `roleInfo.icon`.
+function getRoleInfo(role: string) {
+  return roleLabels[role as keyof typeof roleLabels] ?? roleLabels.viewer;
+}
+
+// date-fns `format` lanca "Invalid time value" se a data for invalida. Um valor
+// inesperado em last_seen_at derrubaria a pagina — aqui devolvemos null e o
+// caller mostra o fallback "Nunca acessou".
+function safeFormat(date: string | null | undefined, pattern: string): string | null {
+  if (!date) return null;
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return null;
+  return format(d, pattern, { locale: ptBR });
+}
 
 const avatarColors = [
   'bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-amber-500',
@@ -232,7 +250,7 @@ export default function Team() {
                 {filteredMembers.map((member: typeof filteredMembers[0]) => {
                   const userRole = Array.isArray(member.user_roles) ? member.user_roles[0] : member.user_roles;
                   const role = (userRole as any)?.role || 'viewer';
-                  const roleInfo = roleLabels[role as keyof typeof roleLabels];
+                  const roleInfo = getRoleInfo(role);
                   const RoleIcon = roleInfo.icon;
 
                   return (
@@ -286,9 +304,8 @@ export default function Team() {
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
-                        {member.last_seen_at
-                          ? format(new Date(member.last_seen_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                          : <span className="text-xs italic">Nunca acessou</span>}
+                        {safeFormat(member.last_seen_at, "dd/MM/yyyy 'às' HH:mm")
+                          ?? <span className="text-xs italic">Nunca acessou</span>}
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
@@ -333,7 +350,7 @@ export default function Team() {
             {filteredMembers.map((member: typeof filteredMembers[0]) => {
               const userRole = Array.isArray(member.user_roles) ? member.user_roles[0] : member.user_roles;
               const memberRole = (userRole as any)?.role || 'viewer';
-              const roleInfo = roleLabels[memberRole as keyof typeof roleLabels];
+              const roleInfo = getRoleInfo(memberRole);
               const RoleIcon = roleInfo.icon;
 
               return (
@@ -393,9 +410,9 @@ export default function Team() {
                         </DropdownMenu>
                       </div>
                     </div>
-                    {member.last_seen_at && (
+                    {safeFormat(member.last_seen_at, "dd/MM 'às' HH:mm") && (
                       <p className="text-[11px] text-muted-foreground mt-2">
-                        Último acesso: {format(new Date(member.last_seen_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                        Último acesso: {safeFormat(member.last_seen_at, "dd/MM 'às' HH:mm")}
                       </p>
                     )}
                   </CardContent>
