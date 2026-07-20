@@ -8,9 +8,35 @@ import { Prisma } from '@prisma/client'
 import { handleApiError } from '@/lib/api/errors'
 import { redactAiApiKeys, mergeAiApiKeys } from '@/lib/api/redact'
 import { logSecurityEvent } from '@/lib/security-log'
+import { consolidatePrompt } from '@/lib/promptConsolidation'
 
-// Redige os segredos (apiKeys) do AiAgent antes de devolver pro cliente.
-const redactAgent = (a: any) => ({ ...a, apiKeys: redactAiApiKeys(a?.apiKeys) })
+/**
+ * Normaliza o campo `prompts` do agente pra resposta: consolida os 3 esquemas
+ * (prompt_completo / n8n / legado) num unico `prompt_completo` e descarta as
+ * chaves espalhadas repetidas. Preserva `simple` (form do modo simples) e
+ * `first_message` (boas-vindas), que ainda sao usados por telas.
+ *
+ * Nao altera o banco — so o formato do retorno. Assim o front sempre recebe o
+ * prompt no lugar certo, sem duplicidade.
+ */
+function normalizePrompts(raw: any): Record<string, unknown> {
+  const p = (raw || {}) as Record<string, unknown>
+  const out: Record<string, unknown> = { prompt_completo: consolidatePrompt(p) }
+  if (typeof p.first_message === 'string' && p.first_message.trim()) {
+    out.first_message = p.first_message
+  }
+  if (p.simple && typeof p.simple === 'object') {
+    out.simple = p.simple
+  }
+  return out
+}
+
+// Redige os segredos (apiKeys) e consolida os prompts antes de devolver.
+const redactAgent = (a: any) => ({
+  ...a,
+  apiKeys: redactAiApiKeys(a?.apiKeys),
+  prompts: normalizePrompts(a?.prompts),
+})
 
 const createAiConfigurationSchema = z.object({
   company_id: z.string().uuid('Invalid company_id format').optional(),
@@ -197,7 +223,14 @@ export async function PUT(req: NextRequest) {
 
     // Map snake_case to camelCase for known fields
     const data: any = {}
-    if (updates.prompts !== undefined) data.prompts = updates.prompts
+    // Merge (nao substitui) com os prompts atuais do banco. Como o GET agora
+    // devolve os prompts consolidados (so prompt_completo/simple/first_message),
+    // um replace apagaria as chaves do esquema n8n (papel/objetivo/...) que
+    // podem ser lidas por fora. Merge preserva tudo; o consolidatePrompt sempre
+    // prioriza o prompt_completo editado, entao a edicao tem efeito.
+    if (updates.prompts !== undefined) {
+      data.prompts = { ...((existing.prompts as Record<string, unknown>) || {}), ...updates.prompts }
+    }
     if (updates.is_active !== undefined) data.isActive = updates.is_active
     if (updates.name !== undefined) data.name = updates.name
     // whatsapp_instance_id agora e gerenciado no Inbox.aiAgentId — body legado e no-op aqui.
