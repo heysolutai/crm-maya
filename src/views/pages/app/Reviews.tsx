@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ReviewSettingsPanel } from '@/components/reviews/ReviewSettingsPanel';
 import {
   Star,
   Search,
@@ -26,6 +27,7 @@ import {
   ThumbsUp,
   ThumbsDown,
   Minus,
+  Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -93,6 +95,8 @@ export default function Reviews() {
   const [searchInput, setSearchInput] = useState('');
   const [ratingFilter, setRatingFilter] = useState<number | null>(null);
   const [sentimentFilter, setSentimentFilter] = useState<SentimentFilter>(null);
+  // Alterna entre a lista (default) e o painel de configurações.
+  const [showSettings, setShowSettings] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: string | null }>({
     open: false,
     id: null,
@@ -115,6 +119,11 @@ export default function Reviews() {
     setPage(1);
   };
 
+  // Tela de configurações — substitui a lista quando aberta.
+  if (showSettings) {
+    return <ReviewSettingsPanel onBack={() => setShowSettings(false)} />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -128,7 +137,13 @@ export default function Reviews() {
           </p>
         </div>
 
-        {summary && summary.total > 0 && (
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={() => setShowSettings(true)}>
+            <Settings className="h-4 w-4 mr-2" />
+            Configurações
+          </Button>
+
+          {summary && summary.total > 0 && (
           <Card className="shrink-0">
             <CardContent className="py-3 px-5">
               <div className="flex items-center gap-4">
@@ -159,7 +174,8 @@ export default function Reviews() {
               </div>
             </CardContent>
           </Card>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Filtros */}

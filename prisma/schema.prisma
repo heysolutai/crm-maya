@@ -271,6 +271,24 @@ model Review {
   @@map("reviews")
 }
 
+/// Configuracoes do fluxo de avaliacao por empresa (1:1).
+/// Links de avaliacao externa (Google/TripAdvisor), prompts que a IA usa pra
+/// pedir a avaliacao e a saudacao inicial.
+model ReviewSettings {
+  id             String   @id @default(uuid()) @db.Uuid
+  companyId      String   @unique @map("company_id") @db.Uuid
+  googleUrl      String?  @map("google_url")
+  tripadvisorUrl String?  @map("tripadvisor_url")
+  prompt1        String?
+  prompt2        String?
+  /// Saudacao inicial enviada ao pedir a avaliacao
+  greeting       String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("review_settings")
+}
+
 model UserRole {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @map("user_id") @db.Uuid
