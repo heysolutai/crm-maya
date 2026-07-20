@@ -153,22 +153,22 @@ export function ReviewSettingsPanel({ onBack }: Props) {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="prompt1">Prompt 1</Label>
+                <Label htmlFor="prompt1">Prompt de feedback</Label>
                 <Textarea
                   id="prompt1"
                   rows={5}
-                  placeholder="Instruções da IA para pedir a avaliação..."
+                  placeholder="Instruções da IA para coletar o feedback do cliente sobre a experiência..."
                   value={form.prompt1}
                   onChange={(e) => set({ prompt1: e.target.value })}
                   className="font-mono text-sm"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="prompt2">Prompt 2</Label>
+                <Label htmlFor="prompt2">Prompt de critério de resposta</Label>
                 <Textarea
                   id="prompt2"
                   rows={5}
-                  placeholder="Segundo prompt (ex: follow-up da avaliação)..."
+                  placeholder="Critérios que a IA usa para responder / classificar a avaliação..."
                   value={form.prompt2}
                   onChange={(e) => set({ prompt2: e.target.value })}
                   className="font-mono text-sm"

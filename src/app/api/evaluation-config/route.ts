@@ -30,10 +30,15 @@ export async function GET(req: NextRequest) {
     })
 
     // Sem registro ainda? Devolve tudo null — o fluxo decide o que fazer.
+    // prompt_feedback = prompt 1; prompt_response_criteria = prompt 2.
+    // Mantemos prompt_1/prompt_2 como alias pra compat.
     return jsonResponse({
       company_id: auth.companyId,
+      enabled: settings?.enabled ?? false,
       google_url: settings?.googleUrl ?? null,
       tripadvisor_url: settings?.tripadvisorUrl ?? null,
+      prompt_feedback: settings?.prompt1 ?? null,
+      prompt_response_criteria: settings?.prompt2 ?? null,
       prompt_1: settings?.prompt1 ?? null,
       prompt_2: settings?.prompt2 ?? null,
       greeting: settings?.greeting ?? null,
