@@ -41,16 +41,37 @@ export function ApiKeysTab({ companyId }: ApiKeysTabProps) {
     });
   };
 
-  const toggleShowKey = (keyId: string) => {
-    setShowKeys(prev => ({ ...prev, [keyId]: !prev[keyId] }));
+  // Chave REAL, buscada sob demanda (a lista vem mascarada).
+  const [realKeys, setRealKeys] = useState<Record<string, string>>({});
+
+  const fetchRealKey = async (keyId: string): Promise<string | null> => {
+    if (realKeys[keyId]) return realKeys[keyId];
+    try {
+      const res = await fetch(`/api/api-keys/${keyId}?companyId=${companyId}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const real = data.key as string | null;
+      if (real) setRealKeys(prev => ({ ...prev, [keyId]: real }));
+      return real;
+    } catch {
+      return null;
+    }
   };
 
-  const copyToClipboard = (key: string) => {
-    navigator.clipboard.writeText(key);
-    toast({
-      title: 'Copiado!',
-      description: 'API Key copiada para a área de transferência',
-    });
+  const toggleShowKey = async (keyId: string) => {
+    const willShow = !showKeys[keyId];
+    if (willShow) await fetchRealKey(keyId); // busca a real ao revelar
+    setShowKeys(prev => ({ ...prev, [keyId]: willShow }));
+  };
+
+  const copyToClipboard = async (keyId: string) => {
+    const real = await fetchRealKey(keyId);
+    if (!real) {
+      toast({ title: 'Erro ao copiar', description: 'Não foi possível obter a chave', variant: 'destructive' });
+      return;
+    }
+    await navigator.clipboard.writeText(real);
+    toast({ title: 'Copiado!', description: 'API Key copiada para a área de transferência' });
   };
 
   const maskApiKey = (key: string) => {
@@ -166,7 +187,7 @@ export function ApiKeysTab({ companyId }: ApiKeysTabProps) {
 
                           <div className="flex items-center gap-2">
                             <code className="flex-1 bg-muted px-3 py-2 rounded text-sm font-mono break-all">
-                              {showKeys[key.id] ? key.key : maskApiKey(key.key)}
+                              {showKeys[key.id] ? (realKeys[key.id] ?? key.key) : maskApiKey(key.key)}
                             </code>
                             <Button
                               variant="ghost"
@@ -183,7 +204,7 @@ export function ApiKeysTab({ companyId }: ApiKeysTabProps) {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => copyToClipboard(key.key)}
+                              onClick={() => copyToClipboard(key.id)}
                               title="Copiar"
                             >
                               <Copy className="h-4 w-4" />
