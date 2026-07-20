@@ -9,6 +9,7 @@ import { handleApiError } from '@/lib/api/errors'
 import { redactAiApiKeys, mergeAiApiKeys } from '@/lib/api/redact'
 import { logSecurityEvent } from '@/lib/security-log'
 import { consolidatePrompt } from '@/lib/promptConsolidation'
+import { extractChoices } from '@/lib/agentSimpleConfig'
 
 /**
  * Normaliza o campo `prompts` do agente pra resposta: consolida os esquemas
@@ -29,10 +30,14 @@ function normalizePrompts(raw: any): Record<string, unknown> {
 }
 
 // Redige os segredos (apiKeys) e consolida os prompts antes de devolver.
+// `choices` = escolhas do cliente no modo simples (tom de voz, verbosidade,
+// capacidades) com rotulos legiveis. Modo simples e avancado compartilham o
+// mesmo prompt_completo; o `choices` so aparece quando houve config simples.
 const redactAgent = (a: any) => ({
   ...a,
   apiKeys: redactAiApiKeys(a?.apiKeys),
   prompts: normalizePrompts(a?.prompts),
+  choices: extractChoices(a?.prompts),
 })
 
 const createAiConfigurationSchema = z.object({

@@ -11,63 +11,18 @@ import { useAIConfigurations } from '@/hooks/useAIConfigurations';
 import { AIPromptsEditor } from '@/components/ai/AIPromptsEditor';
 import { Loader2, Save, Bot, Sliders, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  TONES,
+  VERBOSITY,
+  CAPABILITIES,
+  DEFAULT_SIMPLE_FORM as DEFAULT_FORM,
+  buildPromptCompleto,
+  type SimpleForm,
+} from '@/lib/agentSimpleConfig';
 
 interface Props {
   companyId: string;
   agentId?: string;
-}
-
-const TONES = [
-  { value: 'amigavel', label: 'Amigável', hint: 'Caloroso e simpático', promptText: 'Fale de forma calorosa, simpática e próxima, como um bom anfitrião recebendo o cliente.' },
-  { value: 'formal', label: 'Formal', hint: 'Educado e profissional', promptText: 'Mantenha um tom educado, profissional e respeitoso o tempo todo.' },
-  { value: 'descontraido', label: 'Descontraído', hint: 'Leve e divertido', promptText: 'Use um tom leve, descontraído e bem-humorado, sem perder a clareza.' },
-];
-
-const CAPABILITIES = [
-  { value: 'duvidas', label: 'Tirar dúvidas', promptText: 'Responder dúvidas gerais dos clientes sobre o restaurante.' },
-  { value: 'cardapio', label: 'Informar cardápio e preços', promptText: 'Informar pratos, cardápio e preços quando o cliente perguntar.' },
-  { value: 'reservas', label: 'Registrar reservas', promptText: 'Ajudar o cliente a reservar uma mesa, coletando nome, data, horário e número de pessoas, e confirmando antes de registrar.' },
-  { value: 'agendar', label: 'Agendar com as ferramentas', promptText: 'Usar as ferramentas (tools) disponíveis para consultar disponibilidade, criar e confirmar reservas/agendamentos diretamente no sistema. Sempre conclua a ação pelas ferramentas — nunca invente uma confirmação.' },
-  { value: 'localizacao', label: 'Informar endereço e como chegar', promptText: 'Informar o endereço, a localização e como chegar ao restaurante.' },
-];
-
-interface SimpleForm {
-  aiName: string;
-  restaurantName: string;
-  tone: string;
-  hours: string;
-  capabilities: string[];
-  about: string;
-}
-
-const DEFAULT_FORM: SimpleForm = {
-  aiName: '',
-  restaurantName: '',
-  tone: 'amigavel',
-  hours: '',
-  capabilities: ['duvidas', 'cardapio', 'reservas', 'agendar'],
-  about: '',
-};
-
-function buildPromptCompleto(s: SimpleForm): string {
-  const tone = TONES.find((t) => t.value === s.tone)?.promptText || '';
-  const caps = CAPABILITIES.filter((c) => s.capabilities.includes(c.value))
-    .map((c) => `- ${c.promptText}`)
-    .join('\n');
-
-  const nome = s.aiName.trim() || 'o atendente virtual';
-  const rest = s.restaurantName.trim();
-
-  return [
-    `Você é ${nome}, atendente virtual${rest ? ` do restaurante ${rest}` : ''}. Atenda os clientes pelo WhatsApp.`,
-    tone && `\n## TOM DE VOZ\n${tone}`,
-    s.hours.trim() && `\n## HORÁRIO DE FUNCIONAMENTO\n${s.hours.trim()}`,
-    caps && `\n## O QUE VOCÊ PODE FAZER\n${caps}`,
-    s.about.trim() && `\n## SOBRE O RESTAURANTE\n${s.about.trim()}`,
-    `\n## REGRAS GERAIS\n- Sempre cordial, claro e objetivo, em português do Brasil.\n- Para reservas, confirme data, horário e número de pessoas antes de registrar.\n- Quando precisar agendar, reservar ou consultar disponibilidade, use SEMPRE as ferramentas (tools) disponíveis — nunca invente confirmações ou horários.\n- Se não souber responder, ofereça encaminhar para um atendente humano.`,
-  ]
-    .filter(Boolean)
-    .join('\n');
 }
 
 export function SimpleAgentConfig({ companyId, agentId }: Props) {
@@ -190,6 +145,28 @@ export function SimpleAgentConfig({ companyId, agentId }: Props) {
               >
                 <p className="text-sm font-medium">{t.label}</p>
                 <p className="text-xs text-muted-foreground">{t.hint}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Como a IA responde</Label>
+          <div className="grid grid-cols-3 gap-2">
+            {VERBOSITY.map((v) => (
+              <button
+                key={v.value}
+                type="button"
+                onClick={() => set({ verbosity: v.value })}
+                className={cn(
+                  'rounded-xl border p-3 text-left transition-colors',
+                  form.verbosity === v.value
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                    : 'border-border/60 hover:border-primary/40'
+                )}
+              >
+                <p className="text-sm font-medium">{v.label}</p>
+                <p className="text-xs text-muted-foreground">{v.hint}</p>
               </button>
             ))}
           </div>
