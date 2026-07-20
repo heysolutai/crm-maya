@@ -18,6 +18,12 @@ import { getDecryptedApiKey } from '@/lib/api/api-key-utils'
  *   2. Inbox ativo com restaurant_id preenchido (channelConfig.restaurantId)
  */
 async function dispatchReviewCron() {
+  const now = new Date()
+  console.log(
+    `[Cron Review] Disparo iniciado — ${now.toISOString()} (UTC) | ` +
+    `${now.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (BRT)`
+  )
+
   // URL do webhook do n8n — system setting tem prioridade, com fallback pro env.
   const webhookUrl =
     (await getSystemSetting('n8n_review_webhook_url')) ||
@@ -107,15 +113,15 @@ export function startReviewDispatchWorker() {
   })
 
   // 1x por dia. Pattern e timezone configuraveis por env; default 09:00 BRT.
+  const pattern = process.env.REVIEW_DISPATCH_CRON || '0 9 * * *'
+  const tz = process.env.REVIEW_DISPATCH_TZ || 'America/Sao_Paulo'
   queue
     .upsertJobScheduler(
       'review-dispatch-scheduler',
-      {
-        pattern: process.env.REVIEW_DISPATCH_CRON || '0 9 * * *',
-        tz: process.env.REVIEW_DISPATCH_TZ || 'America/Sao_Paulo',
-      },
+      { pattern, tz },
       { name: 'dispatch-reviews', data: { triggeredAt: new Date().toISOString() } }
     )
+    .then(() => console.log(`[Cron Review] Scheduler criado — pattern='${pattern}' tz='${tz}'`))
     .catch((err) => console.error('[Cron Review] Falha ao criar scheduler:', err.message))
 
   worker = new Worker<CronTickJob>(
