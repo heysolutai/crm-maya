@@ -46,8 +46,22 @@ export function AIPromptsEditor({
   useEffect(() => {
     if (existingConfig?.id) {
       const p = existingConfig.prompts as any;
-      // Se já tem prompt_completo, usa ele; senão monta a partir dos campos antigos
+      // Se já tem prompt_completo, usa ele; senão monta a partir dos campos
+      // avulsos. Existem DOIS esquemas antigos que precisam ser cobertos:
+      //  - editor legado: persona / behavior / attendance_funnel / ...
+      //  - endpoint do n8n (/api/ai/update-prompts): papel / objetivo / funcao /
+      //    funil / regras / regras_horarios / boas_vindas
+      // Sem cobrir o segundo, um prompt salvo pelo n8n aparecia como campo vazio.
       const promptCompleto = p?.prompt_completo || [
+        // esquema n8n
+        p?.papel && `## PAPEL\n${p.papel}`,
+        p?.objetivo && `## OBJETIVO\n${p.objetivo}`,
+        p?.funcao && `## FUNÇÃO\n${p.funcao}`,
+        p?.funil && `## FUNIL\n${p.funil}`,
+        p?.regras && `## REGRAS\n${p.regras}`,
+        p?.regras_horarios && `## REGRAS DE HORÁRIOS\n${p.regras_horarios}`,
+        p?.boas_vindas && `## MENSAGEM DE BOAS-VINDAS\n${p.boas_vindas}`,
+        // esquema legado do editor
         p?.persona && `## PERSONA\n${p.persona}`,
         p?.behavior && `## COMPORTAMENTO\n${p.behavior}`,
         p?.attendance_funnel && `## FUNIL DE ATENDIMENTO\n${p.attendance_funnel}`,
