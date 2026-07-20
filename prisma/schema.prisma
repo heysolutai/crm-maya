@@ -277,9 +277,10 @@ model Review {
 model ReviewSettings {
   id             String   @id @default(uuid()) @db.Uuid
   companyId      String   @unique @map("company_id") @db.Uuid
-  /// Liga/desliga o modulo de avaliacao. A cron diaria so dispara pro n8n
-  /// quando este flag esta true (e o inbox tem restaurant_id).
-  enabled        Boolean  @default(true)
+  /// Liga/desliga o modulo de avaliacao. Quem controla e o SUPER-ADMIN (a
+  /// empresa nao ativa sozinha). Comeca desligado (opt-in). A cron diaria so
+  /// dispara pro n8n quando este flag esta true (e o inbox tem restaurant_id).
+  enabled        Boolean  @default(false)
   googleUrl      String?  @map("google_url")
   tripadvisorUrl String?  @map("tripadvisor_url")
   prompt1        String?

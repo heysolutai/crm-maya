@@ -10,8 +10,9 @@ import { handleApiError } from '@/lib/api/errors'
  * avaliacao e a saudacao inicial.
  */
 
+// Nota: `enabled` (ativar o modulo) NAO entra aqui — quem controla e o
+// super-admin (/api/admin/review-module). A empresa so edita o conteudo.
 const updateSchema = z.object({
-  enabled: z.boolean().optional(),
   googleUrl: z.string().url().max(2000).or(z.literal('')).nullable().optional(),
   tripadvisorUrl: z.string().url().max(2000).or(z.literal('')).nullable().optional(),
   prompt1: z.string().max(4000).nullable().optional(),
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       settings ?? {
         companyId: auth.companyId,
-        enabled: true,
+        enabled: false,
         googleUrl: '',
         tripadvisorUrl: '',
         prompt1: '',
@@ -69,7 +70,6 @@ export async function PUT(req: NextRequest) {
       typeof v === 'string' && v.trim() === '' ? null : v ?? undefined
 
     const data = {
-      ...(validation.data.enabled !== undefined ? { enabled: validation.data.enabled } : {}),
       googleUrl: clean(validation.data.googleUrl),
       tripadvisorUrl: clean(validation.data.tripadvisorUrl),
       prompt1: clean(validation.data.prompt1),

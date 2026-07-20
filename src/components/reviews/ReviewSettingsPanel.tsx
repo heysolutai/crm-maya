@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import { ArrowLeft, Loader2, Save, Link2, Bot, MessageSquare, Power } from 'lucide-react';
 
 interface Props {
@@ -83,24 +84,30 @@ export function ReviewSettingsPanel({ onBack }: Props) {
         </div>
       ) : (
         <>
-          {/* Liga/desliga o módulo */}
+          {/* Status do módulo (read-only — quem ativa é o suporte/super-admin) */}
           <Card>
             <CardContent className="flex items-center justify-between py-4">
               <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-                  <Power className="h-4 w-4 text-primary" />
+                <span
+                  className={cn(
+                    'flex h-9 w-9 items-center justify-center rounded-lg',
+                    form.enabled ? 'bg-emerald-500/10' : 'bg-muted'
+                  )}
+                >
+                  <Power className={cn('h-4 w-4', form.enabled ? 'text-emerald-600' : 'text-muted-foreground')} />
                 </span>
                 <div>
-                  <p className="font-medium text-sm">Módulo de avaliações ativo</p>
+                  <p className="font-medium text-sm">Módulo de avaliações</p>
                   <p className="text-xs text-muted-foreground">
-                    Quando ligado, a cron diária avisa o n8n para coletar avaliações deste restaurante.
+                    {form.enabled
+                      ? 'Ativo — a coleta diária de avaliações está habilitada.'
+                      : 'Inativo — fale com o suporte para ativar.'}
                   </p>
                 </div>
               </div>
-              <Switch
-                checked={form.enabled}
-                onCheckedChange={(v) => set({ enabled: v })}
-              />
+              <Badge variant={form.enabled ? 'default' : 'secondary'}>
+                {form.enabled ? 'Ativo' : 'Inativo'}
+              </Badge>
             </CardContent>
           </Card>
 

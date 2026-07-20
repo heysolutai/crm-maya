@@ -2,12 +2,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Settings, Bot } from 'lucide-react';
+import { Settings, Bot, Star } from 'lucide-react';
 import { Company } from '@/hooks/useCompanies';
 import { WhatsAppConfigCard } from './WhatsAppConfigCard';
 
 import { useToast } from '@/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 interface SettingsTabProps {
@@ -21,6 +21,44 @@ export function SettingsTab({ company }: SettingsTabProps) {
 
   const companySettings = company.settings as Record<string, any> | null;
   const allowPromptEditing = companySettings?.allow_prompt_editing || false;
+
+  // Estado do modulo de avaliacao (controlado so pelo super-admin).
+  const { data: reviewModule } = useQuery({
+    queryKey: ['admin-review-module', company.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/review-module?companyId=${company.id}`);
+      if (!res.ok) throw new Error('Falha ao carregar modulo de avaliacao');
+      return res.json() as Promise<{ enabled: boolean }>;
+    },
+  });
+  const reviewEnabled = reviewModule?.enabled ?? false;
+  const [isTogglingReview, setIsTogglingReview] = useState(false);
+
+  const handleToggleReviewModule = async (checked: boolean) => {
+    setIsTogglingReview(true);
+    try {
+      const res = await fetch('/api/admin/review-module', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId: company.id, enabled: checked }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro');
+
+      queryClient.invalidateQueries({ queryKey: ['admin-review-module', company.id] });
+      toast({
+        title: checked ? 'Módulo de avaliações ativado' : 'Módulo de avaliações desativado',
+        description: checked
+          ? 'A cron diária passará a disparar este restaurante para o n8n'
+          : 'A empresa não entrará mais na cron de avaliações',
+      });
+    } catch (error) {
+      console.error('Error updating review module:', error);
+      toast({ title: 'Erro ao atualizar', description: 'Não foi possível atualizar o módulo', variant: 'destructive' });
+    } finally {
+      setIsTogglingReview(false);
+    }
+  };
 
   const handleTogglePromptEditing = async (checked: boolean) => {
     setIsUpdating(true);
@@ -93,6 +131,23 @@ export function SettingsTab({ company }: SettingsTabProps) {
                 checked={allowPromptEditing}
                 onCheckedChange={handleTogglePromptEditing}
                 disabled={isUpdating}
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-2 border-b">
+              <div className="flex items-center gap-2">
+                <Star className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Módulo de Avaliações</p>
+                  <p className="text-xs text-muted-foreground">
+                    Habilita a cron diária que dispara o restaurante para o n8n
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={reviewEnabled}
+                onCheckedChange={handleToggleReviewModule}
+                disabled={isTogglingReview}
               />
             </div>
 
