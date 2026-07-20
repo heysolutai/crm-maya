@@ -29,13 +29,17 @@ function normalizePrompts(raw: any): Record<string, unknown> {
   return out
 }
 
-// Redige os segredos (apiKeys) e consolida os prompts antes de devolver.
-// `choices` = escolhas do cliente no modo simples (tom de voz, verbosidade,
-// capacidades) com rotulos legiveis. Modo simples e avancado compartilham o
-// mesmo prompt_completo; o `choices` so aparece quando houve config simples.
-const redactAgent = (a: any) => ({
+// Monta o agente pra resposta: consolida os prompts e extrai as `choices`
+// (tom de voz, verbosidade, capacidades) do modo simples.
+//
+// revealKeys: as apiKeys (OpenAI etc.) sao dinamicas por cliente e o n8n
+// precisa da chave REAL. Entao:
+//  - x-api-key (n8n / server-to-server) -> revealKeys=true, chave em texto puro
+//  - sessao (navegador/painel)          -> revealKeys=false, chave mascarada
+// Assim o segredo nunca vaza pro front, mas o n8n consegue usar.
+const mapAgent = (a: any, revealKeys = false) => ({
   ...a,
-  apiKeys: redactAiApiKeys(a?.apiKeys),
+  apiKeys: revealKeys ? (a?.apiKeys ?? {}) : redactAiApiKeys(a?.apiKeys),
   prompts: normalizePrompts(a?.prompts),
   choices: extractChoices(a?.prompts),
 })
@@ -93,6 +97,10 @@ export async function GET(req: NextRequest) {
     const { companyId, agentId: userId } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
+    // Auth por x-api-key nao tem userId (sessao tem). So o chamador via API key
+    // (n8n) recebe as apiKeys em texto puro; o navegador recebe mascarado.
+    const revealKeys = userId === null
+
     // Auditoria: registra quem (userId/IP) acessou a config de IA (recurso sensivel).
     await logSecurityEvent({ event: 'access_ai_config', userId, companyId, req })
 
@@ -111,7 +119,7 @@ export async function GET(req: NextRequest) {
       const directAgent = await prisma.aiAgent.findFirst({
         where: { id: agentId, companyId },
       })
-      if (directAgent) return NextResponse.json([redactAgent(directAgent)])
+      if (directAgent) return NextResponse.json([mapAgent(directAgent, revealKeys)])
 
       // (b) Fallback: agentId era na verdade um inboxId — resolve o agente vinculado
       const inbox = await prisma.inbox.findFirst({
@@ -123,7 +131,7 @@ export async function GET(req: NextRequest) {
       const linkedAgent = await prisma.aiAgent.findFirst({
         where: { id: inbox.aiAgentId, companyId },
       })
-      return NextResponse.json(linkedAgent ? [redactAgent(linkedAgent)] : [])
+      return NextResponse.json(linkedAgent ? [mapAgent(linkedAgent, revealKeys)] : [])
     }
 
     const configurations = await prisma.aiAgent.findMany({
@@ -131,7 +139,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json(configurations.map(redactAgent))
+    return NextResponse.json(configurations.map((c) => mapAgent(c, revealKeys)))
   } catch (error) {
     return handleApiError(error, 'Erro')
   }
@@ -198,7 +206,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    return NextResponse.json(redactAgent(config))
+    return NextResponse.json(mapAgent(config))
   } catch (error) {
     return handleApiError(error, 'Erro')
   }
@@ -253,7 +261,7 @@ export async function PUT(req: NextRequest) {
       data,
     })
 
-    return NextResponse.json(redactAgent(config))
+    return NextResponse.json(mapAgent(config))
   } catch (error) {
     return handleApiError(error, 'Erro')
   }
