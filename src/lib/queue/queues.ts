@@ -89,6 +89,7 @@ export const QUEUE_NAMES = {
   CRON_FOLLOW_UPS: 'cron-follow-ups',
   CRON_WHATSAPP_STATUS: 'cron-whatsapp-status',
   CRON_CLEANUP_PRESENCE: 'cron-cleanup-presence',
+  CRON_REVIEW_DISPATCH: 'cron-review-dispatch',
 } as const
 
 // ============================================================

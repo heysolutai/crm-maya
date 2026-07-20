@@ -7,14 +7,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Loader2, Save, Link2, Bot, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Link2, Bot, MessageSquare, Power } from 'lucide-react';
 
 interface Props {
   onBack: () => void;
 }
 
 interface FormState {
+  enabled: boolean;
   googleUrl: string;
   tripadvisorUrl: string;
   prompt1: string;
@@ -23,6 +25,7 @@ interface FormState {
 }
 
 const EMPTY: FormState = {
+  enabled: true,
   googleUrl: '',
   tripadvisorUrl: '',
   prompt1: '',
@@ -38,6 +41,7 @@ export function ReviewSettingsPanel({ onBack }: Props) {
   useEffect(() => {
     if (settings) {
       setForm({
+        enabled: settings.enabled ?? true,
         googleUrl: settings.googleUrl ?? '',
         tripadvisorUrl: settings.tripadvisorUrl ?? '',
         prompt1: settings.prompt1 ?? '',
@@ -79,6 +83,27 @@ export function ReviewSettingsPanel({ onBack }: Props) {
         </div>
       ) : (
         <>
+          {/* Liga/desliga o módulo */}
+          <Card>
+            <CardContent className="flex items-center justify-between py-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                  <Power className="h-4 w-4 text-primary" />
+                </span>
+                <div>
+                  <p className="font-medium text-sm">Módulo de avaliações ativo</p>
+                  <p className="text-xs text-muted-foreground">
+                    Quando ligado, a cron diária avisa o n8n para coletar avaliações deste restaurante.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={form.enabled}
+                onCheckedChange={(v) => set({ enabled: v })}
+              />
+            </CardContent>
+          </Card>
+
           {/* Links externos */}
           <Card>
             <CardHeader>

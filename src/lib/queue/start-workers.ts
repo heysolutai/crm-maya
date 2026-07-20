@@ -7,6 +7,7 @@ import { startRemindersWorker } from './workers/cron-reminders.worker'
 import { startFollowUpsWorker } from './workers/cron-follow-ups.worker'
 import { startWhatsAppStatusWorker } from './workers/cron-whatsapp-status.worker'
 import { startCleanupPresenceWorker } from './workers/cron-cleanup-presence.worker'
+import { startReviewDispatchWorker } from './workers/cron-review-dispatch.worker'
 
 let workersStarted = false
 
@@ -52,6 +53,7 @@ export function startAllWorkers() {
   startFollowUpsWorker()
   startWhatsAppStatusWorker()
   startCleanupPresenceWorker()
+  startReviewDispatchWorker()
 
   workersStarted = true
   console.log('[Queue] All workers started successfully (including cron jobs)')
