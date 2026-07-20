@@ -523,6 +523,39 @@ function ConnectionsSection({
 }: any) {
   const [catalogBusinessId, setCatalogBusinessId] = useState<Record<string, string>>({});
   const [savingCatalogId, setSavingCatalogId] = useState<Record<string, boolean>>({});
+  // Chave REAL da instancia, buscada sob demanda (a lista vem mascarada).
+  const [realKeys, setRealKeys] = useState<Record<string, string>>({});
+
+  // Busca (e cacheia) o token real da instancia. Retorna null se falhar.
+  const fetchRealKey = async (instanceId: string): Promise<string | null> => {
+    if (realKeys[instanceId]) return realKeys[instanceId];
+    try {
+      const res = await fetch(`/api/agents/${instanceId}/api-key`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const key = data.instance_api_key as string | null;
+      if (key) setRealKeys((prev) => ({ ...prev, [instanceId]: key }));
+      return key;
+    } catch {
+      return null;
+    }
+  };
+
+  const revealKey = async (instanceId: string) => {
+    const willShow = !visibleKeys[instanceId];
+    if (willShow) await fetchRealKey(instanceId); // busca a real ao revelar
+    setVisibleKeys((prev: any) => ({ ...prev, [instanceId]: willShow }));
+  };
+
+  const copyKey = async (instanceId: string) => {
+    const key = await fetchRealKey(instanceId);
+    if (!key) {
+      toast({ title: 'Erro ao copiar', description: 'Não foi possível obter a chave', variant: 'destructive' });
+      return;
+    }
+    await navigator.clipboard.writeText(key);
+    toast({ title: 'API Key copiada!' });
+  };
 
   // Preenche o campo com o valor já salvo
   useEffect(() => {
@@ -618,7 +651,7 @@ function ConnectionsSection({
                         <div className="relative flex-1">
                           <Input
                             type={visibleKeys[inst.id] ? 'text' : 'password'}
-                            value={inst.instance_api_key}
+                            value={visibleKeys[inst.id] ? (realKeys[inst.id] ?? inst.instance_api_key) : inst.instance_api_key}
                             readOnly
                             className="h-8 font-mono text-xs bg-muted pr-8"
                           />
@@ -626,7 +659,7 @@ function ConnectionsSection({
                             variant="ghost"
                             size="icon"
                             className="absolute right-0 top-0 h-8 w-8"
-                            onClick={() => setVisibleKeys((prev: any) => ({ ...prev, [inst.id]: !prev[inst.id] }))}
+                            onClick={() => revealKey(inst.id)}
                           >
                             {visibleKeys[inst.id] ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                           </Button>
@@ -635,10 +668,7 @@ function ConnectionsSection({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => {
-                            navigator.clipboard.writeText(inst.instance_api_key!);
-                            toast({ title: 'API Key copiada!' });
-                          }}
+                          onClick={() => copyKey(inst.id)}
                         >
                           <Copy className="h-3 w-3" />
                         </Button>
