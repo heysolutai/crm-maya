@@ -1193,24 +1193,29 @@ curl -X POST "/api/knowledge/faq" \\
             >
               <ApiEndpointCard
                 method="GET"
-                path="/api/ai/config"
+                path="/api/ai-configurations"
                 name="Obter Configuração de IA"
-                description="Retorna as configurações de IA da empresa (prompts, modelo, follow-ups, etc)."
+                description="Retorna as configurações do agente: prompt consolidado (prompt_completo), as escolhas do modo simples (tom de voz, verbosidade, capacidades) e as chaves de API. Autenticado por x-api-key, as chaves vêm em texto puro (via sessão, mascaradas)."
                 authentication="api-key"
-                exampleRequest={`curl -X GET "/api/ai/config" \\
+                exampleRequest={`curl -X GET "/api/ai-configurations" \\
   -H "x-api-key: sua-api-key"`}
-                exampleResponse={`{
-  "configurations": [
-    {
-      "id": "uuid",
-      "company_id": "uuid",
-      "is_active": true,
-      "n8n_webhook_url": "https://...",
-      "follow_up_enabled": true,
-      "follow_up_stages": [...]
+                exampleResponse={`[
+  {
+    "id": "uuid",
+    "name": "Agente Restaurante",
+    "is_active": true,
+    "apiKeys": { "openai": "sk-..." },
+    "prompts": {
+      "prompt_completo": "Você é ...",
+      "simple": { "...": "..." }
+    },
+    "choices": {
+      "tone": "amigavel", "tone_label": "Amigável",
+      "verbosity": "objetivo", "verbosity_label": "Fala pouco",
+      "capabilities": [{ "value": "reservas", "label": "Registrar reservas" }]
     }
-  ]
-}`}
+  }
+]`}
                 errors={[
                   { code: 'INVALID_API_KEY', status: 401, message: 'API key inválida' },
                 ]}

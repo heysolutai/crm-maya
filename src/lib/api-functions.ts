@@ -37,7 +37,6 @@ const routeMap: Record<string, string> = {
   'reset-user-password': '/api/user/reset-password',
 
   // AI
-  'get-ai-config': '/api/ai/config',
   'get-audio-settings': '/api/ai/audio-settings',
   'get-elevenlabs-voices': '/api/ai/elevenlabs-voices',
   'track-ai-usage': '/api/ai/track-usage',
