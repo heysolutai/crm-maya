@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
@@ -88,7 +89,7 @@ export function useFollowUpJobs(filters?: Filters) {
       if (filters?.dateFrom) params.set('dateFrom', filters.dateFrom);
       if (filters?.dateTo) params.set('dateTo', filters.dateTo);
 
-      const res = await fetch(`/api/follow-up-jobs?${params.toString()}`);
+      const res = await apiFetch(`/api/follow-up-jobs?${params.toString()}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch follow-up jobs');
       const data = await res.json();
       return (data || []).map(mapJob) as FollowUpJob[];
@@ -98,7 +99,7 @@ export function useFollowUpJobs(filters?: Filters) {
 
   const cancelJob = useMutation({
     mutationFn: async (jobId: string) => {
-      const res = await fetch('/api/follow-up-jobs', {
+      const res = await apiFetch('/api/follow-up-jobs', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: jobId, status: 'cancelled' }),
@@ -121,7 +122,7 @@ export function useFollowUpJobs(filters?: Filters) {
 
   const rescheduleJob = useMutation({
     mutationFn: async ({ jobId, newDate }: { jobId: string; newDate: string }) => {
-      const res = await fetch('/api/follow-up-jobs', {
+      const res = await apiFetch('/api/follow-up-jobs', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -93,10 +93,14 @@ export default function AuthPage() {
             <div className="absolute inset-0 -m-6 bg-brand-primary/15 rounded-full blur-2xl" />
 
             {branding.logoUrl ? (
+              // A logo enviada e escura (arte preta com fundo transparente) e este
+              // painel tem fundo escuro — sem o filtro ela some. `brightness-0 invert`
+              // pinta de branco qualquer pixel opaco, preservando a transparencia.
+              // Se um dia a logo enviada ja for clara, remover essas duas classes.
               <Image
                 src={branding.logoUrl}
                 alt={branding.systemName}
-                className="relative w-auto h-auto max-w-sm max-h-56 object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
+                className="relative w-auto h-auto max-w-sm max-h-56 object-contain brightness-0 invert drop-shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
                 width={500}
                 height={500}
                 priority

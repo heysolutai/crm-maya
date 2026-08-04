@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState, useEffect } from 'react';
 import { Shield, Save, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,7 +58,7 @@ export function AIPermissionsConfig({ companyId }: AIPermissionsConfigProps) {
     async function load() {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/company-settings?companyId=${companyId}`);
+        const res = await apiFetch(`/api/company-settings?companyId=${companyId}`);
         if (res.ok) {
           const settings = await res.json();
           const saved = settings?.ai_permissions as Partial<AIPermissions> | undefined;
@@ -86,7 +87,7 @@ export function AIPermissionsConfig({ companyId }: AIPermissionsConfigProps) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const res = await fetch('/api/company-settings', {
+      const res = await apiFetch('/api/company-settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

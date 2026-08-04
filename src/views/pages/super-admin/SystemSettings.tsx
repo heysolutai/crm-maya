@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
@@ -29,7 +30,7 @@ export default function SystemSettings() {
   const { data: settings, isLoading } = useQuery<SystemSetting[]>({
     queryKey: ['system-settings'],
     queryFn: async () => {
-      const res = await fetch('/api/admin/system-settings');
+      const res = await apiFetch('/api/admin/system-settings');
       if (!res.ok) throw new Error('Falha ao buscar settings');
       return res.json();
     },
@@ -57,7 +58,7 @@ export default function SystemSettings() {
         return { key: s.key, value: values[s.key] || null };
       }).filter((x): x is { key: string; value: string | null } => x !== null);
 
-      const res = await fetch('/api/admin/system-settings', {
+      const res = await apiFetch('/api/admin/system-settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings: toSave }),
@@ -85,7 +86,7 @@ export default function SystemSettings() {
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch('/api/admin/system-settings/test-openai');
+      const res = await apiFetch('/api/admin/system-settings/test-openai');
       const data = await res.json();
       const details =
         data.length !== undefined

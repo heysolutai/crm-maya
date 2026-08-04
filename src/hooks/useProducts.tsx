@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from '@/hooks/use-toast';
@@ -27,7 +28,7 @@ export function useProducts() {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const res = await fetch(`/api/products?companyId=${companyId}`);
+      const res = await apiFetch(`/api/products?companyId=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch products');
       const data = await res.json();
       return (data || []).map((p: any) => ({
@@ -52,7 +53,7 @@ export function useProducts() {
     }
 
     try {
-      const res = await fetch('/api/products', {
+      const res = await apiFetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...productData, company_id: companyId }),
@@ -74,7 +75,7 @@ export function useProducts() {
 
   const updateProduct = async (id: string, productData: Partial<Product>) => {
     try {
-      const res = await fetch('/api/products', {
+      const res = await apiFetch('/api/products', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...productData }),
@@ -95,7 +96,7 @@ export function useProducts() {
 
   const deleteProduct = async (id: string) => {
     try {
-      const res = await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/products?id=${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Failed to delete product');

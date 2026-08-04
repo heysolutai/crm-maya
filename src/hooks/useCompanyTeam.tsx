@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { invokeFn } from '@/lib/api-functions';
 import { toast } from 'sonner';
@@ -30,7 +31,7 @@ export function useCompanyTeam(companyId: string | undefined) {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const res = await fetch(`/api/company-team?companyId=${companyId}`);
+      const res = await apiFetch(`/api/company-team?companyId=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch team');
       return await res.json() as TeamMember[];
     },
@@ -67,7 +68,7 @@ export function useCompanyTeam(companyId: string | undefined) {
     mutationFn: async ({ userId, newRole }: { userId: string; newRole: string }) => {
       if (!companyId) throw new Error('Company ID is required');
 
-      const res = await fetch('/api/company-team', {
+      const res = await apiFetch('/api/company-team', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'updateRole', userId, companyId, newRole }),
@@ -89,7 +90,7 @@ export function useCompanyTeam(companyId: string | undefined) {
 
   const toggleStatusMutation = useMutation({
     mutationFn: async ({ userId, isActive }: { userId: string; isActive: boolean }) => {
-      const res = await fetch('/api/company-team', {
+      const res = await apiFetch('/api/company-team', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'toggleStatus', userId, isActive }),
@@ -113,7 +114,7 @@ export function useCompanyTeam(companyId: string | undefined) {
     mutationFn: async (userId: string) => {
       if (!companyId) throw new Error('Company ID is required');
 
-      const res = await fetch('/api/company-team', {
+      const res = await apiFetch('/api/company-team', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'remove', userId, companyId }),

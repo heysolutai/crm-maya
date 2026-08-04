@@ -1,7 +1,33 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { AuthError } from './errors'
+import { IMPERSONATION_HEADER, isValidCompanyId } from './impersonation'
 import type { AuthResult } from './types'
+
+/**
+ * Empresa que um super admin esta personificando, se houver.
+ *
+ * Dois canais aceitos, nessa ordem:
+ *   1. `?companyId=` — usado pelas rotas que ja montam a query com o id
+ *   2. header `x-impersonate-company` — injetado automaticamente pelo `apiFetch`
+ *
+ * O header cobre as rotas cujo path nao tem onde encaixar o companyId
+ * (ex: `/api/agents/[id]/members`), que antes respondiam 403 pro super admin.
+ * Ids malformados sao descartados em vez de irem parar numa query do Prisma.
+ */
+function getImpersonationOverride(req: Request): string | null {
+  let fromQuery: string | null = null
+  try {
+    fromQuery = new URL(req.url).searchParams.get('companyId')
+  } catch {
+    // ignore URL parse errors
+  }
+
+  if (isValidCompanyId(fromQuery)) return fromQuery
+
+  const fromHeader = req.headers.get(IMPERSONATION_HEADER)
+  return isValidCompanyId(fromHeader) ? fromHeader : null
+}
 
 /**
  * Validates internal service-to-service calls using INTERNAL_API_SECRET.
@@ -24,16 +50,11 @@ export async function authenticate(req: Request): Promise<AuthResult> {
     let companyId = session.user.companyId ?? null
     const isSuperAdmin = session.user.isSuperAdmin ?? false
 
-    // Super admin impersonation: accept companyId from query string
+    // Super admin impersonation: accept companyId from query string or header.
     // ONLY super admins can override — regular users always use their session companyId
     if (isSuperAdmin) {
-      try {
-        const url = new URL(req.url)
-        const qsCompanyId = url.searchParams.get('companyId')
-        if (qsCompanyId) companyId = qsCompanyId
-      } catch {
-        // ignore URL parse errors
-      }
+      const override = getImpersonationOverride(req)
+      if (override) companyId = override
     }
 
     return {

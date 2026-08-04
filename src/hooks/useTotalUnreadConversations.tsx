@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from '@/hooks/useEffectiveCompanyId';
 
@@ -9,7 +10,7 @@ export function useTotalUnreadConversations() {
     queryFn: async () => {
       if (!effectiveCompanyId) return 0;
 
-      const res = await fetch(`/api/total-unread?companyId=${effectiveCompanyId}`);
+      const res = await apiFetch(`/api/total-unread?companyId=${effectiveCompanyId}`);
       if (!res.ok) {
         console.error('[UnreadCount] Error fetching unread count');
         return 0;

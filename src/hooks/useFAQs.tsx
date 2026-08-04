@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { invokeFn } from '@/lib/api-functions';
 import { useToast } from '@/hooks/use-toast';
@@ -40,7 +41,7 @@ export function useFAQs(companyId: string | undefined) {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const res = await fetch(`/api/faqs?companyId=${companyId}`);
+      const res = await apiFetch(`/api/faqs?companyId=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch FAQs');
       const data = await res.json();
       return (data || []).map((f: any) => ({
@@ -61,7 +62,7 @@ export function useFAQs(companyId: string | undefined) {
 
       const maxPosition = faqs?.reduce((max, faq) => Math.max(max, faq.order_position), -1) ?? -1;
 
-      const res = await fetch('/api/faqs', {
+      const res = await apiFetch('/api/faqs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -92,7 +93,7 @@ export function useFAQs(companyId: string | undefined) {
 
   const updateFAQMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: UpdateFAQData }) => {
-      const res = await fetch('/api/faqs', {
+      const res = await apiFetch('/api/faqs', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...updates }),
@@ -116,7 +117,7 @@ export function useFAQs(companyId: string | undefined) {
 
   const deleteFAQMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/faqs?id=${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/faqs?id=${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Failed to delete FAQ');
@@ -134,7 +135,7 @@ export function useFAQs(companyId: string | undefined) {
 
   const deleteManyFAQsMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      const res = await fetch('/api/faqs', {
+      const res = await apiFetch('/api/faqs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'deleteMany', ids }),
@@ -156,7 +157,7 @@ export function useFAQs(companyId: string | undefined) {
 
   const toggleFAQMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const res = await fetch('/api/faqs', {
+      const res = await apiFetch('/api/faqs', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, isActive: is_active }),
@@ -178,7 +179,7 @@ export function useFAQs(companyId: string | undefined) {
 
   const reorderFAQsMutation = useMutation({
     mutationFn: async (orderedIds: string[]) => {
-      const res = await fetch('/api/faqs', {
+      const res = await apiFetch('/api/faqs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'reorder', orderedIds }),

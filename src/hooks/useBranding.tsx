@@ -1,5 +1,6 @@
 'use client'
 
+import { apiFetch } from '@/lib/api/client';
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 
 export interface BrandingData {
@@ -142,7 +143,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch('/api/system-settings')
+      const res = await apiFetch('/api/system-settings')
       if (res.ok) {
         const data = await res.json()
         setBranding(data)

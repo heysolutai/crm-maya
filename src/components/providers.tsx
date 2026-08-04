@@ -24,8 +24,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
     },
   }))
 
+  // A sessao expira por INATIVIDADE (1h). Sem renovar do lado do navegador,
+  // quem fica so acompanhando as conversas — lendo a tela, sem clicar em nada
+  // — seria deslogado no meio do expediente, porque "olhar" nao gera
+  // requisicao nenhuma.
+  //
+  // Entao renovamos a cada 5 min enquanto a aba estiver aberta. Isso NAO torna
+  // a sessao eterna: o teto absoluto de 3h vive no servidor (SESSAO_MAX em
+  // lib/auth.ts) e nao ha nada que o navegador possa fazer pra escapar dele.
   return (
-    <SessionProvider>
+    <SessionProvider refetchInterval={5 * 60} refetchOnWindowFocus>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
           <AuthProvider>

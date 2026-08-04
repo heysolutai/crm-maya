@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
 import { useToast } from './use-toast';
@@ -57,7 +58,7 @@ export function useRolePermissions(companyId?: string) {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const res = await fetch(`/api/role-permissions?companyId=${companyId}`);
+      const res = await apiFetch(`/api/role-permissions?companyId=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch role permissions');
       const data = await res.json();
       return (data || []).map((rp: any) => ({
@@ -79,7 +80,7 @@ export function useRolePermissions(companyId?: string) {
     mutationFn: async (params: UpdateRolePermissionParams) => {
       if (!companyId) throw new Error('Company ID is required');
 
-      const res = await fetch('/api/role-permissions', {
+      const res = await apiFetch('/api/role-permissions', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companyId, ...params }),

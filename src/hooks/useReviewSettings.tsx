@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -16,7 +17,7 @@ export function useReviewSettings() {
   const query = useQuery<ReviewSettings>({
     queryKey: ['review-settings'],
     queryFn: async () => {
-      const res = await fetch('/api/reviews/settings')
+      const res = await apiFetch('/api/reviews/settings')
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || 'Falha ao carregar configurações')
@@ -27,7 +28,7 @@ export function useReviewSettings() {
 
   const save = useMutation({
     mutationFn: async (data: Partial<ReviewSettings>) => {
-      const res = await fetch('/api/reviews/settings', {
+      const res = await apiFetch('/api/reviews/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

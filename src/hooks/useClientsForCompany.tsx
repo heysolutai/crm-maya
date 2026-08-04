@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -37,7 +38,7 @@ export function useClientsForCompany(companyId: string | undefined) {
 
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/clients?companyId=${companyId}`);
+      const res = await apiFetch(`/api/clients?companyId=${companyId}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch clients');
       const data = await res.json();
 
@@ -56,7 +57,7 @@ export function useClientsForCompany(companyId: string | undefined) {
 
   const toggleAIPaused = async (clientId: string, currentValue: boolean) => {
     try {
-      const res = await fetch('/api/clients', {
+      const res = await apiFetch('/api/clients', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: clientId, aiPaused: !currentValue }),

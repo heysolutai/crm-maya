@@ -1,5 +1,6 @@
 'use client'
 
+import { apiFetch } from '@/lib/api/client';
 import { useState, useEffect, useRef } from 'react'
 import { useBranding, BrandingData } from '@/hooks/useBranding'
 import { toast } from 'sonner'
@@ -79,7 +80,7 @@ export default function AppearanceSettings() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const res = await fetch('/api/system-settings', {
+      const res = await apiFetch('/api/system-settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -110,7 +111,7 @@ export default function AppearanceSettings() {
       formData.append('file', file)
       formData.append('bucket', 'branding')
 
-      const res = await fetch('/api/upload', {
+      const res = await apiFetch('/api/upload', {
         method: 'POST',
         body: formData,
       })

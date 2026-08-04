@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState } from 'react';
 import { useToast } from './use-toast';
 
@@ -146,7 +147,7 @@ export function useMediaUpload() {
       formData.append('file', fileToUpload);
       formData.append('bucket', getStorageFolder(mediaType));
 
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const res = await apiFetch('/api/upload', { method: 'POST', body: formData });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Upload failed');

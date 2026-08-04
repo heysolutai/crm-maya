@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/api/client';
 import { useToast } from './use-toast';
 
 export interface InboxMember {
@@ -23,7 +24,7 @@ export function useInboxMembers(inboxId: string | undefined) {
     queryKey: ['inbox-members', inboxId],
     queryFn: async () => {
       if (!inboxId) return [];
-      const res = await fetch(`/api/agents/${inboxId}/members`);
+      const res = await apiFetch(`/api/agents/${inboxId}/members`);
       if (!res.ok) throw new Error('Falha ao buscar membros');
       return res.json();
     },
@@ -34,7 +35,7 @@ export function useInboxMembers(inboxId: string | undefined) {
   const replaceMutation = useMutation({
     mutationFn: async (userIds: string[]) => {
       if (!inboxId) throw new Error('inboxId obrigatorio');
-      const res = await fetch(`/api/agents/${inboxId}/members`, {
+      const res = await apiFetch(`/api/agents/${inboxId}/members`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userIds }),

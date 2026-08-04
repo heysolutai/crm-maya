@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -38,7 +39,7 @@ export function EditClientDialog({ open, onOpenChange, client }: EditClientDialo
     if (!canSubmit || !client) return;
     setSaving(true);
     try {
-      const res = await fetch('/api/clients', {
+      const res = await apiFetch('/api/clients', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -16,7 +16,18 @@ export interface SimpleForm {
   tone: string
   /** Quanto a IA fala: objetivo (pouco) / equilibrado / detalhado (muito). */
   verbosity: string
+  /** Funcionamento da casa. Ex: "Seg a sex 11h-15h e 18h-23h". */
   hours: string
+  /** Endereco completo — a IA precisa dele pra informar como chegar. */
+  address: string
+  /**
+   * Janela em que a IA pode oferecer e registrar reserva. Costuma ser MENOR
+   * que o horario de funcionamento (a cozinha fecha antes da casa), por isso
+   * e um campo proprio e nao derivado de `hours`.
+   */
+  reservationHours: string
+  /** Faixa de preco, couvert, taxa de servico — o que evita pergunta repetida. */
+  prices: string
   capabilities: string[]
   about: string
 }
@@ -47,15 +58,34 @@ export const DEFAULT_SIMPLE_FORM: SimpleForm = {
   tone: 'amigavel',
   verbosity: 'equilibrado',
   hours: '',
+  address: '',
+  reservationHours: '',
+  prices: '',
   capabilities: ['duvidas', 'cardapio', 'reservas', 'agendar'],
   about: '',
 }
 
-/** Monta o prompt_completo a partir das escolhas do modo simples. */
+/**
+ * Monta o prompt_completo a partir das escolhas do modo simples.
+ *
+ * Duas regras de ouro aqui:
+ *
+ * 1. Campo vazio NAO vira secao. Versoes antigas emitiam o cabecalho de
+ *    qualquer jeito, e o prompt chegava no modelo cheio de "## ENDEREÇO"
+ *    seguido de nada — pior ainda, com frases penduradas do tipo "Só ofereça
+ *    reservas dentro destes horários:" sem horario nenhum depois. Isso nao e
+ *    so feio: instrucao vazia confunde o modelo e gasta contexto a toa.
+ *
+ * 2. Os fatos da casa ficam JUNTOS, em linhas rotuladas, e nao espalhados em
+ *    quatro cabecalhos de uma linha cada. Endereco, funcionamento, reservas e
+ *    preco sao a mesma coisa pro modelo — dados do restaurante — e agrupados
+ *    ficam mais faceis de consultar do que picotados.
+ */
 export function buildPromptCompleto(s: SimpleForm): string {
   const tone = TONES.find((t) => t.value === s.tone)?.promptText || ''
   const verb = VERBOSITY.find((v) => v.value === s.verbosity)?.promptText || ''
-  const style = [tone, verb].filter(Boolean).join(' ')
+  const estilo = [tone, verb].filter(Boolean).join(' ')
+
   const caps = CAPABILITIES.filter((c) => s.capabilities.includes(c.value))
     .map((c) => `- ${c.promptText}`)
     .join('\n')
@@ -63,16 +93,69 @@ export function buildPromptCompleto(s: SimpleForm): string {
   const nome = s.aiName.trim() || 'o atendente virtual'
   const rest = s.restaurantName.trim()
 
+  // Fatos da casa: so entram os preenchidos, cada um numa linha rotulada.
+  const fatos = [
+    s.address.trim() && `Endereço: ${s.address.trim()}`,
+    s.hours.trim() && `Funcionamento: ${s.hours.trim()}`,
+    s.reservationHours.trim() && `Horários para reserva: ${s.reservationHours.trim()}`,
+    s.prices.trim() && `Preços: ${s.prices.trim()}`,
+  ].filter(Boolean)
+
+  // Regras condicionais: so aparecem quando ha dado que as sustente. Mandar a
+  // IA respeitar um horario que ela nao conhece e o caminho pra ela inventar.
+  const regras = [
+    '- Responda em português do Brasil, de forma clara e direta.',
+    s.reservationHours.trim() &&
+      '- Só ofereça e registre reservas dentro dos horários para reserva informados acima.',
+    '- Antes de registrar uma reserva, confirme com o cliente: nome, data, horário e número de pessoas.',
+    '- Para consultar disponibilidade, reservar ou agendar, use SEMPRE as ferramentas (tools) disponíveis. Nunca invente confirmação, horário ou número de reserva.',
+    '- Se a informação não estiver aqui, diga que vai verificar e ofereça encaminhar para um atendente humano. Não invente.',
+  ].filter(Boolean)
+
   return [
     `Você é ${nome}, atendente virtual${rest ? ` do restaurante ${rest}` : ''}. Atenda os clientes pelo WhatsApp.`,
-    style && `\n## TOM DE VOZ E ESTILO\n${style}`,
-    s.hours.trim() && `\n## HORÁRIO DE FUNCIONAMENTO\n${s.hours.trim()}`,
+    estilo && `\n## COMO FALAR\n${estilo}`,
+    fatos.length && `\n## O RESTAURANTE\n${fatos.join('\n')}`,
+    s.about.trim() && `\n## MAIS SOBRE A CASA\n${s.about.trim()}`,
     caps && `\n## O QUE VOCÊ PODE FAZER\n${caps}`,
-    s.about.trim() && `\n## SOBRE O RESTAURANTE\n${s.about.trim()}`,
-    `\n## REGRAS GERAIS\n- Sempre cordial, claro e objetivo, em português do Brasil.\n- Para reservas, confirme data, horário e número de pessoas antes de registrar.\n- Quando precisar agendar, reservar ou consultar disponibilidade, use SEMPRE as ferramentas (tools) disponíveis — nunca invente confirmações ou horários.\n- Se não souber responder, ofereça encaminhar para um atendente humano.`,
+    `\n## REGRAS\n${regras.join('\n')}`,
   ]
     .filter(Boolean)
     .join('\n')
+}
+
+/**
+ * Le o `simple` gravado e devolve SO os campos que existem hoje.
+ *
+ * Registros antigos carregam lixo de versoes anteriores — `template` (com
+ * placeholders {{tom}} que ninguem mais interpreta), `temperament`,
+ * `serviceStyle`. Espalhar o objeto salvo direto no formulario faria esse
+ * lixo ser regravado a cada salvamento, para sempre. Aqui ele fica de fora e
+ * o proximo save limpa o registro.
+ *
+ * Campos que sobreviveram a refatoracao (endereco, precos, horarios de
+ * reserva) sao preservados: quem preencheu na versao antiga nao perde nada.
+ */
+export function normalizeSimpleForm(bruto: unknown): SimpleForm {
+  const s = (bruto || {}) as Partial<SimpleForm>
+  const texto = (v: unknown) => (typeof v === 'string' ? v : '')
+
+  return {
+    aiName: texto(s.aiName),
+    restaurantName: texto(s.restaurantName),
+    tone: TONES.some((t) => t.value === s.tone) ? s.tone! : DEFAULT_SIMPLE_FORM.tone,
+    verbosity: VERBOSITY.some((v) => v.value === s.verbosity)
+      ? s.verbosity!
+      : DEFAULT_SIMPLE_FORM.verbosity,
+    hours: texto(s.hours),
+    address: texto(s.address),
+    reservationHours: texto(s.reservationHours),
+    prices: texto(s.prices),
+    capabilities: Array.isArray(s.capabilities)
+      ? s.capabilities.filter((c) => CAPABILITIES.some((cap) => cap.value === c))
+      : DEFAULT_SIMPLE_FORM.capabilities,
+    about: texto(s.about),
+  }
 }
 
 export interface AgentChoices {
@@ -83,6 +166,9 @@ export interface AgentChoices {
   verbosity: string | null
   verbosity_label: string | null
   hours: string | null
+  address: string | null
+  reservation_hours: string | null
+  prices: string | null
   about: string | null
   capabilities: Array<{ value: string; label: string }>
 }
@@ -106,6 +192,9 @@ export function extractChoices(prompts: unknown): AgentChoices | null {
     verbosity: simple.verbosity ?? null,
     verbosity_label: verbMeta?.label ?? null,
     hours: simple.hours ?? null,
+    address: simple.address ?? null,
+    reservation_hours: simple.reservationHours ?? null,
+    prices: simple.prices ?? null,
     about: simple.about ?? null,
     capabilities: (simple.capabilities ?? []).map((c) => ({
       value: c,

@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api/client';
 import { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from 'react';
 import { useAuth } from './useAuth';
 import { invokeFn } from '@/lib/api-functions';
@@ -32,7 +33,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const setPresence = useCallback(async (action: 'online' | 'offline' | 'heartbeat') => {
     if (!user?.id) return;
     try {
-      await fetch('/api/user/presence', {
+      await apiFetch('/api/user/presence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, user_id: user.id }),
@@ -53,7 +54,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
   const pollOnlineUsers = useCallback(async () => {
     if (!companyId) return;
     try {
-      const res = await fetch(`/api/presence-poll?companyId=${companyId}`);
+      const res = await apiFetch(`/api/presence-poll?companyId=${companyId}`);
       if (res.ok) {
         const data = await res.json();
         setOnlineUserIds(data.onlineUserIds || []);

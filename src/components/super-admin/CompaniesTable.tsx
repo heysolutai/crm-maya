@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState } from 'react';
 import {
   Table,
@@ -79,7 +80,7 @@ export function CompaniesTable({ companies, searchTerm, onSearchChange, totalCou
   const { data: ticketCounts } = useQuery({
     queryKey: ['support-ticket-counts'],
     queryFn: async () => {
-      const res = await fetch('/api/support-tickets?counts=true');
+      const res = await apiFetch('/api/support-tickets?counts=true');
       if (!res.ok) throw new Error('Failed to fetch ticket counts');
       return await res.json();
     },

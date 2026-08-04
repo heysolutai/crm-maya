@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Relatório de Tráfego — Red Celulares Portal</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .gradient-header { background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 50%, #EC4899 100%); }
+  .kpi-card { transition: transform .2s ease, box-shadow .2s ease; }
+  .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 12px 30px -10px rgba(0,0,0,.15); }
+  .badge-active { background: #10B981; }
+  .badge-paused { background: #6B7280; }
+  @media print {
+    body { background: white; }
+    .no-print { display: none !important; }
+    .shadow-lg, .shadow-md { box-shadow: none !important; }
+  }
+</style>
+</head>
+<body class="bg-slate-50">
+
+<!-- Cabeçalho -->
+<header class="gradient-header text-white">
+  <div class="max-w-7xl mx-auto px-6 py-10">
+    <div class="flex items-center justify-between flex-wrap gap-4">
+      <div>
+        <p class="text-indigo-100 text-sm uppercase tracking-wider font-semibold">Relatório de Campanha de Tráfego</p>
+        <h1 class="text-4xl font-bold mt-2">Red Celulares Portal</h1>
+        <p class="text-indigo-100 mt-1">Tony Cell • Ecommerce — Eletrônicos / Bens Duráveis</p>
+      </div>
+      <div class="text-right">
+        <p class="text-indigo-100 text-sm">Período analisado</p>
+        <p class="text-xl font-semibold">21/05/2026 → 27/05/2026</p>
+        <p class="text-indigo-100 text-xs mt-1">Últimos 7 dias • BRL</p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-10 space-y-10">
+
+  <!-- KPIs Principais -->
+  <section>
+    <h2 class="text-2xl font-bold text-slate-800 mb-5">📊 Visão Geral da Conta</h2>
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div class="kpi-card bg-white rounded-2xl p-5 shadow-md border border-slate-100">
+        <p class="text-xs font-semibold text-slate-500 uppercase">Investimento</p>
+        <p class="text-2xl font-bold text-slate-900 mt-2">R$ 610,63</p>
+        <p class="text-xs text-slate-400 mt-1">Total gasto</p>
+      </div>
+      <div class="kpi-card bg-white rounded-2xl p-5 shadow-md border border-slate-100">
+        <p class="text-xs font-semibold text-slate-500 uppercase">Impressões</p>
+        <p class="text-2xl font-bold text-slate-900 mt-2">13.211</p>
+        <p class="text-xs text-slate-400 mt-1">Vezes exibido</p>
+      </div>
+      <div class="kpi-card bg-white rounded-2xl p-5 shadow-md border border-slate-100">
+        <p class="text-xs font-semibold text-slate-500 uppercase">Alcance</p>
+        <p class="text-2xl font-bold text-slate-900 mt-2">8.136</p>
+        <p class="text-xs text-slate-400 mt-1">Pessoas únicas</p>
+      </div>
+      <div class="kpi-card bg-white rounded-2xl p-5 shadow-md border border-slate-100">
+        <p class="text-xs font-semibold text-slate-500 uppercase">Cliques</p>
+        <p class="text-2xl font-bold text-slate-900 mt-2">320</p>
+        <p class="text-xs text-slate-400 mt-1">Total</p>
+      </div>
+      <div class="kpi-card bg-white rounded-2xl p-5 shadow-md border border-slate-100">
+        <p class="text-xs font-semibold text-slate-500 uppercase">Frequência</p>
+        <p class="text-2xl font-bold text-slate-900 mt-2">1,62</p>
+        <p class="text-xs text-emerald-500 mt-1">✓ Saudável</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+      <div class="kpi-card bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl p-5 shadow-md border border-emerald-200">
+        <p class="text-xs font-semibold text-emerald-700 uppercase">CTR</p>
+        <p class="text-2xl font-bold text-emerald-900 mt-2">2,42%</p>
+        <p class="text-xs text-emerald-600 mt-1">Acima da média</p>
+      </div>
+      <div class="kpi-card bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-5 shadow-md border border-blue-200">
+        <p class="text-xs font-semibold text-blue-700 uppercase">CPC</p>
+        <p class="text-2xl font-bold text-blue-900 mt-2">R$ 1,91</p>
+        <p class="text-xs text-blue-600 mt-1">Custo por clique</p>
+      </div>
+      <div class="kpi-card bg-gradient-to-br from-violet-50 to-violet-100 rounded-2xl p-5 shadow-md border border-violet-200">
+        <p class="text-xs font-semibold text-violet-700 uppercase">CPM</p>
+        <p class="text-2xl font-bold text-violet-900 mt-2">R$ 46,22</p>
+        <p class="text-xs text-violet-600 mt-1">Custo por mil</p>
+      </div>
+      <div class="kpi-card bg-gradient-to-br from-pink-50 to-pink-100 rounded-2xl p-5 shadow-md border border-pink-200">
+        <p class="text-xs font-semibold text-pink-700 uppercase">Custo / Conversa</p>
+        <p class="text-2xl font-bold text-pink-900 mt-2">R$ 4,36</p>
+        <p class="text-xs text-pink-600 mt-1">Por lead WhatsApp</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Campanhas -->
+  <section>
+    <div class="flex items-center justify-between mb-5">
+      <h2 class="text-2xl font-bold text-slate-800">📁 Campanhas</h2>
+      <div class="flex gap-2 text-sm">
+        <span class="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-medium">1 Ativa</span>
+        <span class="px-3 py-1 rounded-full bg-slate-200 text-slate-700 font-medium">12 Pausadas</span>
+      </div>
+    </div>
+
+    <!-- Campanha ativa destacada -->
+    <div class="bg-white rounded-2xl shadow-lg border-2 border-emerald-300 overflow-hidden">
+      <div class="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="w-3 h-3 rounded-full bg-white animate-pulse"></span>
+          <h3 class="text-xl font-bold">CP-04 - GERAL</h3>
+          <span class="badge-active text-white text-xs font-semibold px-2 py-1 rounded-full bg-emerald-700">ATIVA</span>
+        </div>
+        <span class="text-emerald-100 text-sm">Objetivo: Engajamento (Mensagens)</span>
+      </div>
+      <div class="p-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div class="bg-slate-50 rounded-lg p-3"><p class="text-xs text-slate-500">Gasto</p><p class="text-lg font-bold text-slate-900">R$ 610,63</p></div>
+          <div class="bg-slate-50 rounded-lg p-3"><p class="text-xs text-slate-500">Impressões</p><p class="text-lg font-bold text-slate-900">13.211</p></div>
+          <div class="bg-slate-50 rounded-lg p-3"><p class="text-xs text-slate-500">CTR</p><p class="text-lg font-bold text-slate-900">2,42%</p></div>
+          <div class="bg-slate-50 rounded-lg p-3"><p class="text-xs text-slate-500">CPC</p><p class="text-lg font-bold text-slate-900">R$ 1,91</p></div>
+        </div>
+
+        <h4 class="font-semibold text-slate-700 mb-3">🏆 Resultados de Mensagens</h4>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-100 text-slate-700">
+              <tr>
+                <th class="text-left px-4 py-2 font-semibold">Indicador</th>
+                <th class="text-right px-4 py-2 font-semibold">Volume</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr><td class="px-4 py-2">💬 Conversas iniciadas</td><td class="px-4 py-2 text-right font-bold text-emerald-600">140</td></tr>
+              <tr><td class="px-4 py-2">📲 Novos contatos por mensagem</td><td class="px-4 py-2 text-right font-medium">138</td></tr>
+              <tr><td class="px-4 py-2">📬 Total de contatos por mensagem</td><td class="px-4 py-2 text-right font-medium">165</td></tr>
+              <tr><td class="px-4 py-2">🔁 2 trocas de mensagem</td><td class="px-4 py-2 text-right font-medium">107</td></tr>
+              <tr><td class="px-4 py-2">🔁 3 trocas de mensagem</td><td class="px-4 py-2 text-right font-medium">78</td></tr>
+              <tr><td class="px-4 py-2">🔁 5 trocas de mensagem</td><td class="px-4 py-2 text-right font-medium">243</td></tr>
+              <tr><td class="px-4 py-2">▶️ Visualizações de vídeo (3s)</td><td class="px-4 py-2 text-right font-medium">2.407</td></tr>
+              <tr><td class="px-4 py-2">💬 Engajamento na página</td><td class="px-4 py-2 text-right font-medium">2.654</td></tr>
+              <tr><td class="px-4 py-2">🔗 Cliques no link</td><td class="px-4 py-2 text-right font-medium">188</td></tr>
+              <tr><td class="px-4 py-2">👍 Reações em post</td><td class="px-4 py-2 text-right font-medium">47</td></tr>
+              <tr><td class="px-4 py-2">🔁 Compartilhamentos</td><td class="px-4 py-2 text-right font-medium">7</td></tr>
+              <tr><td class="px-4 py-2">💬 Comentários</td><td class="px-4 py-2 text-right font-medium">2</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-pink-50 border border-pink-200 rounded-lg p-4">
+            <p class="text-xs font-semibold text-pink-700 uppercase">Custo por Conversa</p>
+            <p class="text-2xl font-bold text-pink-900 mt-1">R$ 4,36</p>
+          </div>
+          <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+            <p class="text-xs font-semibold text-emerald-700 uppercase">Custo por Engajamento</p>
+            <p class="text-2xl font-bold text-emerald-900 mt-1">R$ 0,23</p>
+          </div>
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p class="text-xs font-semibold text-blue-700 uppercase">Custo por Clique no Link</p>
+            <p class="text-2xl font-bold text-blue-900 mt-1">R$ 3,25</p>
+          </div>
+        </div>
+
+        <div class="mt-6 bg-slate-50 rounded-lg p-4 border border-slate-200">
+          <p class="text-xs font-semibold text-slate-500 uppercase mb-2">Anúncio em veiculação</p>
+          <div class="flex items-center justify-between">
+            <span class="font-semibold text-slate-800">🎨 ADS 06 - INFLUENCER</span>
+            <span class="text-xs text-emerald-600 font-semibold">100% dos resultados</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Campanhas pausadas -->
+    <div class="mt-6 bg-white rounded-2xl shadow-md border border-slate-200">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <h3 class="text-lg font-bold text-slate-700">⏸️ Campanhas pausadas (sem gasto no período)</h3>
+        <span class="text-sm text-slate-500">12 campanhas</span>
+      </div>
+      <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+        <div class="flex items-center gap-2 text-slate-600"><span class="w-2 h-2 rounded-full bg-amber-400"></span>CP-02 - REMARKETING</div>
+        <div class="flex items-center gap-2 text-slate-600"><span class="w-2 h-2 rounded-full bg-slate-400"></span>CP-01 - GERAL</div>
+        <div class="flex items-center gap-2 text-slate-600"><span class="w-2 h-2 rounded-full bg-slate-400"></span>CAPTAÇÃO CRIATIVO PAIS</div>
+        <div class="flex items-center gap-2 text-slate-600"><span class="w-2 h-2 rounded-full bg-slate-400"></span>CARROSSEL JULHO</div>
+        <div class="flex items-center gap-2 text-slate-600"><span class="w-2 h-2 rounded-full bg-slate-400"></span>RECONHECIMENTO 10-07</div>
+        <div class="flex items-center gap-2 text-slate-600"><span class="w-2 h-2 rounded-full bg-slate-400"></span>CAPTAÇÃO CELULAR BOLETO JULHO</div>
+        <div class="flex items-center gap-2 text-slate-600"><span class="w-2 h-2 rounded-full bg-slate-400"></span>REMARKETING 14 A 30D</div>
+        <div class="flex items-center gap-2 text-slate-600"><span class="w-2 h-2 rounded-full bg-slate-400"></span>CAPTAÇÃO CELULAR BOLETO JUNHO CÓPIA</div>
+        <div class="flex items-center gap-2 text-slate-600"><span class="w-2 h-2 rounded-full bg-slate-400"></span>CAPTAÇÃO CELULAR BOLETO JUNHO</div>
+        <div class="flex items-center gap-2 text-slate-600"><span class="w-2 h-2 rounded-full bg-slate-400"></span>CELULAR REALME</div>
+        <div class="flex items-center gap-2 text-slate-600"><span class="w-2 h-2 rounded-full bg-slate-400"></span>CAMPANHA DE RECONHECIMENTO</div>
+        <div class="flex items-center gap-2 text-slate-600"><span class="w-2 h-2 rounded-full bg-slate-400"></span>19/05 CAMPANHA TESTE 01</div>
+      </div>
+      <div class="px-6 pb-5">
+        <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+          ⚠️ Em destaque amarelo: <strong>CP-02 - REMARKETING</strong> — recomendado reativar para capturar leads que não converteram (107 chegaram a 2 trocas, 78 a 3 trocas).
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Análise -->
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="bg-white rounded-2xl shadow-md p-6 border-l-4 border-emerald-500">
+      <h3 class="text-lg font-bold text-slate-800 mb-4">✅ Pontos Positivos</h3>
+      <ul class="space-y-3 text-sm text-slate-600">
+        <li class="flex gap-3"><span class="text-emerald-500 font-bold">→</span><span><strong>CTR de 2,42%</strong> está saudável para campanha de engajamento (acima da média de 1–1,5%).</span></li>
+        <li class="flex gap-3"><span class="text-emerald-500 font-bold">→</span><span><strong>Frequência 1,62</strong> — não está saturando o público (ideal &lt; 2,5).</span></li>
+        <li class="flex gap-3"><span class="text-emerald-500 font-bold">→</span><span><strong>140 conversas iniciadas a R$ 4,36</strong> — custo competitivo para lead via WhatsApp.</span></li>
+        <li class="flex gap-3"><span class="text-emerald-500 font-bold">→</span><span>O criativo de <strong>influencer</strong> está performando muito bem.</span></li>
+      </ul>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-md p-6 border-l-4 border-amber-500">
+      <h3 class="text-lg font-bold text-slate-800 mb-4">⚠️ Pontos de Atenção</h3>
+      <ul class="space-y-3 text-sm text-slate-600">
+        <li class="flex gap-3"><span class="text-amber-500 font-bold">→</span><span><strong>Dependência total de 1 anúncio</strong> — risco alto se ele saturar.</span></li>
+        <li class="flex gap-3"><span class="text-amber-500 font-bold">→</span><span><strong>Remarketing pausado</strong> — perdendo oportunidades de fechar com quem já interagiu.</span></li>
+        <li class="flex gap-3"><span class="text-amber-500 font-bold">→</span><span><strong>Drop-off de mensagens:</strong> de 165 contatos, apenas 1 conversa respondida — possível gargalo no atendimento.</span></li>
+        <li class="flex gap-3"><span class="text-amber-500 font-bold">→</span><span><strong>CPM de R$ 46,22</strong> elevado — vale testar Advantage+.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Recomendações -->
+  <section class="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-8 text-white shadow-xl">
+    <h2 class="text-2xl font-bold mb-5">💡 Plano de Ação Recomendado</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div class="bg-white/10 backdrop-blur rounded-xl p-5 border border-white/20">
+        <div class="flex items-center gap-3 mb-2"><span class="text-3xl">1️⃣</span><h4 class="font-semibold">Reativar CP-02 Remarketing</h4></div>
+        <p class="text-sm text-indigo-100">Com público dos últimos 14 dias para resgatar quem abandonou. Budget atual: R$ 30/dia.</p>
+      </div>
+      <div class="bg-white/10 backdrop-blur rounded-xl p-5 border border-white/20">
+        <div class="flex items-center gap-3 mb-2"><span class="text-3xl">2️⃣</span><h4 class="font-semibold">Criar 2–3 variações criativas</h4></div>
+        <p class="text-sm text-indigo-100">Do anúncio do influencer para evitar fadiga e diversificar o ângulo.</p>
+      </div>
+      <div class="bg-white/10 backdrop-blur rounded-xl p-5 border border-white/20">
+        <div class="flex items-center gap-3 mb-2"><span class="text-3xl">3️⃣</span><h4 class="font-semibold">Revisar fluxo no WhatsApp</h4></div>
+        <p class="text-sm text-indigo-100">Drop entre "contato" e "conversa respondida" está alto. Avaliar tempo de resposta e scripts.</p>
+      </div>
+      <div class="bg-white/10 backdrop-blur rounded-xl p-5 border border-white/20">
+        <div class="flex items-center gap-3 mb-2"><span class="text-3xl">4️⃣</span><h4 class="font-semibold">Testar Advantage+ Shopping</h4></div>
+        <p class="text-sm text-indigo-100">Para diversificar canais e potencialmente reduzir CPM.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="text-center pt-8 pb-4 border-t border-slate-200 text-sm text-slate-500">
+    <p>Relatório gerado em <strong>28/05/2026</strong> • Fonte: Meta Ads via MCP</p>
+    <p class="text-xs mt-1">Conta: 1501950154099917 • Maya CRM</p>
+  </footer>
+
+</main>
+
+<button onclick="window.print()" class="no-print fixed bottom-6 right-6 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-full shadow-xl font-semibold flex items-center gap-2 transition-colors">
+  🖨️ Imprimir / Salvar PDF
+</button>
+
+</body>
+</html>

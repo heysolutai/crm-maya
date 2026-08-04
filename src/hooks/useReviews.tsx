@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -54,7 +55,7 @@ export function useReviews({
       if (sentiment) params.set('sentiment', sentiment)
       if (search) params.set('search', search)
 
-      const res = await fetch(`/api/reviews?${params}`)
+      const res = await apiFetch(`/api/reviews?${params}`)
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || 'Falha ao carregar avaliações')
@@ -65,7 +66,7 @@ export function useReviews({
 
   const deleteReview = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/reviews?id=${id}`, { method: 'DELETE' })
+      const res = await apiFetch(`/api/reviews?id=${id}`, { method: 'DELETE' })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || 'Falha ao remover')

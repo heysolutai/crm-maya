@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
@@ -47,7 +48,7 @@ export function useReminders(conversationId?: string) {
     queryFn: async () => {
       if (!conversationId || !companyId) return [];
 
-      const res = await fetch(`/api/reminders?companyId=${companyId}&conversationId=${conversationId}`);
+      const res = await apiFetch(`/api/reminders?companyId=${companyId}&conversationId=${conversationId}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch reminders');
       const data = await res.json();
       return (data || []).map(mapReminder) as Reminder[];
@@ -61,7 +62,7 @@ export function useReminders(conversationId?: string) {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const res = await fetch(`/api/reminders?companyId=${companyId}&pendingOnly=true`);
+      const res = await apiFetch(`/api/reminders?companyId=${companyId}&pendingOnly=true`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch pending reminders');
       return await res.json();
     },
@@ -83,7 +84,7 @@ export function useReminders(conversationId?: string) {
     }) => {
       if (!companyId || !user?.id) throw new Error('Missing company or user');
 
-      const res = await fetch('/api/reminders', {
+      const res = await apiFetch('/api/reminders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,7 +117,7 @@ export function useReminders(conversationId?: string) {
   // Cancel a reminder
   const cancelReminder = useMutation({
     mutationFn: async (reminderId: string) => {
-      const res = await fetch('/api/reminders', {
+      const res = await apiFetch('/api/reminders', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: reminderId, status: 'cancelled' }),

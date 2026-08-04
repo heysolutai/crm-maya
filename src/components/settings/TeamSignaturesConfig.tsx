@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState, useMemo } from 'react';
 import { useTeam } from '@/hooks/useTeam';
 import { useToast } from '@/hooks/use-toast';
@@ -57,7 +58,7 @@ export function TeamSignaturesConfig() {
 
     try {
       // Get current settings first
-      const getRes = await fetch(`/api/user-settings?userId=${editingAgent.id}`);
+      const getRes = await apiFetch(`/api/user-settings?userId=${editingAgent.id}`);
       const currentSettings = getRes.ok ? await getRes.json() : {};
 
       const updatedSettings = {
@@ -67,7 +68,7 @@ export function TeamSignaturesConfig() {
         },
       };
 
-      const res = await fetch('/api/user-settings', {
+      const res = await apiFetch('/api/user-settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

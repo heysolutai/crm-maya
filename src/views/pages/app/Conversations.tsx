@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useSearchParams } from 'next/navigation';
@@ -224,7 +225,7 @@ export default function Conversations() {
     if (!selectedConversation) return;
 
     const markMessagesAsRead = async () => {
-      const res = await fetch('/api/messages/mark-read', {
+      const res = await apiFetch('/api/messages/mark-read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversationId: selectedConversation }),

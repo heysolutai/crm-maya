@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
 
@@ -59,7 +60,7 @@ export function useTokenUsage(days: number = 30) {
         throw new Error('Unauthorized: Super admin access required');
       }
 
-      const res = await fetch(`/api/admin/token-usage?days=${days}`);
+      const res = await apiFetch(`/api/admin/token-usage?days=${days}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch token usage');
       return await res.json();
     },

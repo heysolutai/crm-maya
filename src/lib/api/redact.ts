@@ -49,6 +49,21 @@ export function maskKey(key: unknown): string | null {
   return '••••' + key.slice(-4);
 }
 
+/** Nomes de campo que NUNCA podem sair pro navegador, em qualquer nivel. */
+const CAMPOS_SECRETOS = [
+  'serverapikey',
+  'channeltoken',
+  'admintoken',
+  'instanceapikey',
+  'apikey',
+  'token',
+  'apitoken',
+  'secret',
+  'password',
+  'authorization',
+  'hash',
+];
+
 /** Redige subcampos secretos conhecidos do channelConfig de uma Inbox, mantendo o resto. */
 export function redactChannelConfig(cfg: unknown): unknown {
   if (!cfg || typeof cfg !== 'object') return cfg ?? null;
@@ -56,6 +71,43 @@ export function redactChannelConfig(cfg: unknown): unknown {
   const out: Record<string, unknown> = { ...(cfg as Record<string, unknown>) };
   for (const k of SECRET_SUBFIELDS) {
     if (typeof out[k] === 'string' && (out[k] as string).length > 0) out[k] = REDACTED;
+  }
+  return out;
+}
+
+/**
+ * Redige segredos em profundidade, por NOME de campo.
+ *
+ * Serve pro `metadata` da Inbox, que guarda a resposta CRUA do provedor no
+ * momento do provisionamento. Essa resposta contem o token da instancia — a
+ * Evolution devolve em `hash.apikey`, a UazAPI no corpo do init. Ou seja: a
+ * mesma chave que a listagem mascara com cuidado em `instance_api_key` ia
+ * inteira pro navegador dentro do metadata, anulando o mascaramento.
+ *
+ * Como o formato varia por provedor (e muda quando eles atualizam a API), a
+ * redacao e por nome de campo em qualquer profundidade, e nao por caminho
+ * conhecido — provedor novo ja nasce coberto.
+ */
+export function redactDeep(valor: unknown, profundidade = 0): unknown {
+  // Guarda contra estrutura ciclica ou absurdamente aninhada.
+  if (profundidade > 8) return valor;
+
+  if (Array.isArray(valor)) {
+    return valor.map((v) => redactDeep(v, profundidade + 1));
+  }
+  if (!valor || typeof valor !== 'object') return valor;
+
+  const out: Record<string, unknown> = {};
+  for (const [chave, v] of Object.entries(valor as Record<string, unknown>)) {
+    const ehSecreto = CAMPOS_SECRETOS.includes(chave.toLowerCase());
+    if (ehSecreto && typeof v === 'string' && v.length > 0) {
+      out[chave] = REDACTED;
+    } else if (ehSecreto && v && typeof v === 'object') {
+      // Ex: Evolution manda `hash: { apikey: "..." }` — o objeto inteiro cai.
+      out[chave] = REDACTED;
+    } else {
+      out[chave] = redactDeep(v, profundidade + 1);
+    }
   }
   return out;
 }

@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { useToast } from './use-toast';
@@ -31,7 +32,7 @@ export function useAiAgents() {
     queryKey: ['ai-agents', companyId],
     queryFn: async () => {
       if (!companyId) return [];
-      const res = await fetch(`/api/ai-configurations?companyId=${companyId}`);
+      const res = await apiFetch(`/api/ai-configurations?companyId=${companyId}`);
       if (!res.ok) throw new Error('Falha ao buscar agentes IA');
       const data = await res.json();
       return (data || []).map(mapAiAgent);
@@ -42,7 +43,7 @@ export function useAiAgents() {
   const createMutation = useMutation({
     mutationFn: async (data: { name: string; isActive?: boolean }) => {
       if (!companyId) throw new Error('Empresa não selecionada');
-      const res = await fetch('/api/ai-configurations', {
+      const res = await apiFetch(`/api/ai-configurations?companyId=${companyId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -68,7 +69,9 @@ export function useAiAgents() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: { id: string; name?: string; isActive?: boolean }) => {
-      const res = await fetch('/api/ai-configurations', {
+      // ?companyId= carrega a personificacao: a sessao do super-admin nao tem
+      // empresa, e sem isso a rota responde "Empresa nao encontrada".
+      const res = await apiFetch(`/api/ai-configurations?companyId=${companyId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -89,7 +92,7 @@ export function useAiAgents() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/ai-configurations?id=${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/ai-configurations?id=${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error || 'Falha ao remover agente IA');

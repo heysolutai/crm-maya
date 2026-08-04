@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { invokeFn } from '@/lib/api-functions';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
@@ -26,7 +27,7 @@ export function useGoogleCalendar() {
     queryFn: async () => {
       if (!companyId) return null;
 
-      const res = await fetch(`/api/google-calendar-connections?companyId=${companyId}`);
+      const res = await apiFetch(`/api/google-calendar-connections?companyId=${companyId}`);
       if (!res.ok) return null;
       const data = await res.json();
       if (!data) return null;
@@ -80,7 +81,7 @@ export function useGoogleCalendar() {
     mutationFn: async (settings: { sync_enabled?: boolean; create_meet_links?: boolean }) => {
       if (!connection?.id) throw new Error('No connection found');
 
-      const res = await fetch('/api/google-calendar-connections', {
+      const res = await apiFetch('/api/google-calendar-connections', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,8 +1,10 @@
 'use client'
 
 import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import { IMPERSONATION_STORAGE_KEY } from '@/lib/api/impersonation';
 
-const STORAGE_KEY = 'impersonation_state';
+// Mesma chave lida pelo `apiFetch` pra injetar o header de personificacao.
+const STORAGE_KEY = IMPERSONATION_STORAGE_KEY;
 
 interface ImpersonationState {
   companyId: string;

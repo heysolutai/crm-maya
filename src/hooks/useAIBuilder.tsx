@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState } from 'react';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { useQuery } from '@tanstack/react-query';
@@ -27,7 +28,7 @@ export function useAIBuilder() {
     queryKey: ['ai-builder-webhook', effectiveCompanyId],
     queryFn: async () => {
       if (!effectiveCompanyId) return null;
-      const res = await fetch(`/api/ai-builder?companyId=${effectiveCompanyId}`);
+      const res = await apiFetch(`/api/ai-builder?companyId=${effectiveCompanyId}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch webhook');
       const data = await res.json();
       return data?.webhookUrl || null;

@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from './use-toast';
 import { getErrorMessage } from '@/utils/getErrorMessage';
@@ -16,7 +17,7 @@ export function useWhatsAppIntegrationForCompany(companyId: string | undefined) 
     queryFn: async () => {
       if (!companyId) return [];
 
-      const res = await fetch(`/api/agents?companyId=${companyId}`);
+      const res = await apiFetch(`/api/agents?companyId=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch instances');
       const data = await res.json();
       return (data || []).map((item: any) => ({
@@ -43,7 +44,7 @@ export function useWhatsAppIntegrationForCompany(companyId: string | undefined) 
 
   const reconnectMutation = useMutation({
     mutationFn: async (instanceId: string) => {
-      const res = await fetch(`/api/agents/${instanceId}/qr`);
+      const res = await apiFetch(`/api/agents/${instanceId}/qr?companyId=${companyId}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Falha ao reconectar');
       return data;
@@ -58,7 +59,7 @@ export function useWhatsAppIntegrationForCompany(companyId: string | undefined) 
 
   const disconnectMutation = useMutation({
     mutationFn: async (instanceId: string) => {
-      const res = await fetch(`/api/agents/${instanceId}/disconnect`, { method: 'POST' });
+      const res = await apiFetch(`/api/agents/${instanceId}/disconnect?companyId=${companyId}`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Falha ao desconectar');
       return data;
@@ -74,7 +75,7 @@ export function useWhatsAppIntegrationForCompany(companyId: string | undefined) 
 
   const deleteMutation = useMutation({
     mutationFn: async (instanceId: string) => {
-      const res = await fetch(`/api/agents?id=${instanceId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/agents?id=${instanceId}&companyId=${companyId}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Falha ao excluir');
       return data;
@@ -90,7 +91,7 @@ export function useWhatsAppIntegrationForCompany(companyId: string | undefined) 
 
   const updateStatusMutation = useMutation({
     mutationFn: async (instanceId: string) => {
-      const res = await fetch(`/api/agents/${instanceId}/status`);
+      const res = await apiFetch(`/api/agents/${instanceId}/status?companyId=${companyId}`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Falha ao atualizar status');

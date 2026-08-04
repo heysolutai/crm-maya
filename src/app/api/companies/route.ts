@@ -100,8 +100,23 @@ export async function DELETE(req: NextRequest) {
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-    // Use raw query for cascade delete
-    await prisma.$executeRaw`SELECT delete_company_cascade(${id}::uuid)`
+    // Confere que existe antes de apagar, pra devolver 404 em vez de um erro
+    // de banco quando o id nao bate.
+    const existing = await prisma.company.findUnique({ where: { id }, select: { id: true } })
+    if (!existing) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 404 })
+
+    // Cascata pelo PROPRIO schema, nao por funcao SQL.
+    //
+    // Antes isto chamava `SELECT delete_company_cascade(id)` — uma funcao que
+    // existia no Supabase e que o `prisma db push` nunca cria, porque push so
+    // sincroniza tabelas e colunas. Em qualquer Postgres proprio a exclusao
+    // quebrava com "function delete_company_cascade(uuid) does not exist".
+    //
+    // Nao ha o que reimplementar: as 28 relacoes que apontam pra Company ja
+    // sao `onDelete: Cascade` no schema (a unica excecao e User, que e
+    // SetNull de proposito — usuario sobrevive a empresa). O banco faz a
+    // cascata sozinho.
+    await prisma.company.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
     return handleApiError(error, 'Erro')}

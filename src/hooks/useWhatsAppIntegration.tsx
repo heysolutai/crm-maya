@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { useToast } from './use-toast';
+import { apiFetch } from '@/lib/api/client';
 
 /**
  * @deprecated Use `useInboxes` em vez disso. Mantido temporariamente apenas
@@ -17,7 +18,7 @@ export function useWhatsAppIntegration() {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const res = await fetch(`/api/agents?companyId=${companyId}`);
+      const res = await apiFetch(`/api/agents?companyId=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch instances');
       return await res.json();
     },
@@ -26,7 +27,7 @@ export function useWhatsAppIntegration() {
 
   const reconnectMutation = useMutation({
     mutationFn: async (instanceId: string) => {
-      const res = await fetch(`/api/agents/${instanceId}/qr`);
+      const res = await apiFetch(`/api/agents/${instanceId}/qr`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Falha ao reconectar');
       return data;
@@ -43,7 +44,7 @@ export function useWhatsAppIntegration() {
 
   const disconnectMutation = useMutation({
     mutationFn: async (instanceId: string) => {
-      const res = await fetch(`/api/agents/${instanceId}/disconnect`, { method: 'POST' });
+      const res = await apiFetch(`/api/agents/${instanceId}/disconnect`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Falha ao desconectar');
       return data;
@@ -60,7 +61,7 @@ export function useWhatsAppIntegration() {
 
   const deleteMutation = useMutation({
     mutationFn: async (instanceId: string) => {
-      const res = await fetch(`/api/agents?id=${instanceId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/agents?id=${instanceId}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Falha ao excluir');
       return data;
@@ -77,7 +78,7 @@ export function useWhatsAppIntegration() {
 
   const updateStatusMutation = useMutation({
     mutationFn: async (instanceId: string) => {
-      const res = await fetch(`/api/agents/${instanceId}/status`);
+      const res = await apiFetch(`/api/agents/${instanceId}/status`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Falha ao atualizar status');

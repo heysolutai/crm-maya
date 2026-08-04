@@ -4,6 +4,7 @@ import { findOrCreateConversation } from '@/lib/api/database'
 import { publishEvent } from '@/lib/realtime'
 import { enqueueN8NWebhook } from '@/lib/queue'
 import { getSystemSetting } from '@/lib/system-settings'
+import { restaurantIdDaInbox } from '@/lib/api/utils'
 
 /**
  * Webhook receiver para NotificaMe Hub.
@@ -254,6 +255,9 @@ export async function POST(req: NextRequest) {
               inbox_instance_name: agent.instanceName,
               inbox_channel_type: agent.channelType,
               inbox_phone: agent.phoneNumber,
+              // Identificador do restaurante no sistema de reservas — sai igual
+              // em todos os canais pro fluxo do n8n nao ter que tratar cada um.
+              restaurant_id: restaurantIdDaInbox(agent.channelConfig),
               // AiAgent vinculado a inbox (quando aplicavel)
               ai_agent_id: aiConfig?.id || null,
               ai_agent_name: aiConfig?.name || null,

@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery } from '@tanstack/react-query';
 
 export type ChecklistStatus = 'red' | 'yellow' | 'green';
@@ -14,7 +15,7 @@ export function useSetupChecklist(companyId: string | undefined) {
     queryKey: ['setup-checklist', companyId],
     queryFn: async () => {
       if (!companyId) return null;
-      const res = await fetch(`/api/setup-checklist?companyId=${companyId}`);
+      const res = await apiFetch(`/api/setup-checklist?companyId=${companyId}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch checklist data');
       return await res.json();
     },

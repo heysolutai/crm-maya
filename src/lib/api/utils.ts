@@ -148,3 +148,21 @@ export function validateMediaPayload(payload: any): void {
     throw new Error(`Invalid type. Must be one of: ${validTypes.join(', ')}`);
   }
 }
+
+/**
+ * Extrai o identificador do restaurante guardado no channelConfig da inbox.
+ *
+ * Ele vive dentro do Json porque e especifico do canal/integracao, mas os
+ * fluxos do n8n precisam dele no topo do payload: e por ele que se consulta
+ * mesa, horario e se cria a reserva no estabelecimento certo. Sem isso o
+ * fluxo teria que fazer uma chamada extra pro CRM so pra descobrir de qual
+ * restaurante veio a mensagem.
+ *
+ * Centralizado aqui porque cada canal monta o proprio payload — uazapi,
+ * evolution e notificame — e o campo tem que sair igual nos tres.
+ */
+export function restaurantIdDaInbox(channelConfig: unknown): string | null {
+  if (!channelConfig || typeof channelConfig !== 'object') return null;
+  const valor = (channelConfig as Record<string, unknown>).restaurantId;
+  return typeof valor === 'string' && valor.trim() ? valor.trim() : null;
+}

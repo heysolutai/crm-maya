@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
 import { toast } from '@/hooks/use-toast';
@@ -9,7 +10,7 @@ export function useApiKeys(companyId: string) {
   const { data: apiKeys, isLoading } = useQuery({
     queryKey: ['api-keys', companyId],
     queryFn: async () => {
-      const res = await fetch(`/api/api-keys?companyId=${companyId}`);
+      const res = await apiFetch(`/api/api-keys?companyId=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch API keys');
       return await res.json();
     },
@@ -21,7 +22,7 @@ export function useApiKeys(companyId: string) {
       const randomHash = crypto.randomUUID().replace(/-/g, '');
       const key = `sk_${companyId.substring(0, 8)}_${randomHash}`;
 
-      const res = await fetch('/api/api-keys', {
+      const res = await apiFetch('/api/api-keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companyId, name, key }),
@@ -47,7 +48,7 @@ export function useApiKeys(companyId: string) {
 
   const deleteApiKey = useMutation({
     mutationFn: async (keyId: string) => {
-      const res = await fetch(`/api/api-keys?id=${keyId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/api-keys?id=${keyId}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Failed to delete API key');
@@ -64,7 +65,7 @@ export function useApiKeys(companyId: string) {
 
   const toggleApiKeyStatus = useMutation({
     mutationFn: async ({ keyId, isActive }: { keyId: string; isActive: boolean }) => {
-      const res = await fetch('/api/api-keys', {
+      const res = await apiFetch('/api/api-keys', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: keyId, isActive: !isActive }),

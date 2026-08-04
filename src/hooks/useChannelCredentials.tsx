@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { useToast } from './use-toast';
@@ -23,7 +24,7 @@ export function useChannelCredentials() {
     queryKey: ['channel-credentials', companyId],
     queryFn: async () => {
       if (!companyId) return [];
-      const res = await fetch(`/api/channel-credentials`);
+      const res = await apiFetch(`/api/channel-credentials`);
       if (!res.ok) throw new Error('Falha ao buscar credenciais');
       return res.json();
     },
@@ -32,7 +33,7 @@ export function useChannelCredentials() {
 
   const upsertMutation = useMutation({
     mutationFn: async (input: { channelType: ChannelType; serverUrl: string; serverApiKey: string }) => {
-      const res = await fetch('/api/channel-credentials', {
+      const res = await apiFetch('/api/channel-credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
@@ -51,7 +52,7 @@ export function useChannelCredentials() {
 
   const deleteMutation = useMutation({
     mutationFn: async (channelType: ChannelType) => {
-      const res = await fetch(`/api/channel-credentials?channelType=${channelType}`, {
+      const res = await apiFetch(`/api/channel-credentials?channelType=${channelType}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Falha ao remover credencial');

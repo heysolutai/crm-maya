@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useInboxes, type Inbox } from '@/hooks/useInboxes';
@@ -23,6 +24,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { EditInboxDialog } from '@/components/inboxes/EditInboxDialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { CardListSkeleton } from '@/components/ui/table-skeleton';
 import {
@@ -60,7 +62,8 @@ const statusStyles: Record<string, { dot: string; label: string }> = {
 
 export default function Inboxes() {
   const router = useRouter();
-  const { inboxes, isLoading, createInbox, deleteInbox, isCreating, isDeleting } = useInboxes();
+  const { inboxes, isLoading, createInbox, updateInbox, deleteInbox, isCreating, isUpdating, isDeleting } = useInboxes();
+  const [editando, setEditando] = useState<Inbox | null>(null);
   const { credentialFor, hasCredentialFor } = useChannelCredentials();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -165,7 +168,7 @@ export default function Inboxes() {
     setNotificameLoadingChannels(true);
     setNotificameChannelsError(null);
     try {
-      const res = await fetch('/api/channels/notificame/list', {
+      const res = await apiFetch('/api/channels/notificame/list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiToken: token }),
@@ -308,18 +311,32 @@ export default function Inboxes() {
                         </p>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteConfirm({ open: true, id: inbox.id });
-                      }}
-                      aria-label="Remover caixa de entrada"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditando(inbox);
+                        }}
+                        aria-label="Editar caixa de entrada"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteConfirm({ open: true, id: inbox.id });
+                        }}
+                        aria-label="Remover caixa de entrada"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="space-y-1.5 text-sm">
@@ -752,6 +769,14 @@ export default function Inboxes() {
             setDeleteConfirm({ open: false, id: null });
           }
         }}
+      />
+
+      <EditInboxDialog
+        open={!!editando}
+        onOpenChange={(v) => !v && setEditando(null)}
+        inbox={editando}
+        onSalvar={updateInbox}
+        salvando={isUpdating}
       />
     </div>
   );

@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from '@/hooks/use-toast';
@@ -36,7 +37,7 @@ export function useClients() {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const res = await fetch(`/api/clients?companyId=${companyId}`);
+      const res = await apiFetch(`/api/clients?companyId=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch clients');
       const data = await res.json();
 
@@ -96,7 +97,7 @@ export function useClients() {
 
     try {
       const { full_name, ...insertData } = clientData;
-      const res = await fetch('/api/clients', {
+      const res = await apiFetch('/api/clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -123,7 +124,7 @@ export function useClients() {
   const updateClient = async (id: string, clientData: Partial<Client>) => {
     try {
       const { full_name, ...updateData } = clientData;
-      const res = await fetch('/api/clients', {
+      const res = await apiFetch('/api/clients', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...updateData }),
@@ -144,7 +145,7 @@ export function useClients() {
 
   const deleteClient = async (id: string) => {
     try {
-      const res = await fetch(`/api/clients?id=${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/clients?id=${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Failed to delete client');
@@ -161,7 +162,7 @@ export function useClients() {
 
   const moveClientToStage = async (clientId: string, stageId: string) => {
     try {
-      const res = await fetch('/api/clients', {
+      const res = await apiFetch('/api/clients', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: clientId, stageId }),

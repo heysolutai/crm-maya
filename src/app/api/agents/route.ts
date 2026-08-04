@@ -6,7 +6,7 @@ import { CHANNEL_TYPES, isChannelType, CHANNEL_REGISTRY } from '@/lib/channels/t
 import { getAdapter, hasAdapter } from '@/lib/channels/registry'
 import { ChannelError } from '@/lib/channels/errors'
 import { normalizeCompanySlug, buildAgentMemoryKey } from '@/lib/api/utils'
-import { maskKey, redactChannelConfig } from '@/lib/api/redact'
+import { maskKey, redactChannelConfig, redactDeep, REDACTED } from '@/lib/api/redact'
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
@@ -75,12 +75,33 @@ const createAgentSchema = z.object({
   restaurantId: z.string().max(120).optional(),
 })
 
+/**
+ * Edicao da inbox.
+ *
+ * TUDO que se define na criacao precisa ser editavel aqui: token expira, o
+ * servidor muda de endereco, o restaurante e recadastrado. Sem isso o unico
+ * caminho seria remover a inbox e criar de novo — perdendo as conversas
+ * vinculadas a ela.
+ *
+ * Campos ausentes nao sao tocados. Nos segredos, string vazia tambem nao
+ * muda nada: a tela recebe o valor MASCARADO, e tratar "vazio" como "apagar"
+ * faria um salvamento distraido zerar o token da instancia.
+ */
 const updateAgentSchema = z.object({
   id: z.string().uuid(),
   displayName: z.string().min(1).max(255).optional(),
   isActive: z.boolean().optional(),
   // Permite trocar/remover o vinculo com AiAgent. Mande string vazia/null pra remover.
   aiAgentId: z.union([z.string().uuid(), z.null()]).optional(),
+  phoneNumber: z.string().max(30).optional(),
+  /** URL do servidor do provedor (ex: https://sua.uazapi.com). */
+  apiUrl: z.string().url().optional(),
+  /** Token DA INSTANCIA — o que autentica os envios (UazAPI, Evolution). */
+  instanceApiKey: z.string().optional(),
+  /** Token de ADMIN do servidor — cria/remove instancias. */
+  adminToken: z.string().optional(),
+  /** Identificador do restaurante no sistema de reservas (vive no channelConfig). */
+  restaurantId: z.string().max(120).optional(),
 })
 
 function mapAgent(i: any) {
@@ -100,7 +121,11 @@ function mapAgent(i: any) {
     qr_code: i.qrCode,
     error_message: i.errorMessage,
     last_connected_at: i.lastConnectedAt,
-    metadata: i.metadata,
+    // Resposta crua do provedor no provisionamento — carrega o token da
+    // instancia (Evolution em `hash.apikey`, UazAPI no corpo do init). Sem
+    // redigir, o segredo mascarado logo acima em `instance_api_key` saia
+    // inteiro por aqui.
+    metadata: redactDeep(i.metadata),
     channel_config: redactChannelConfig(i.channelConfig),
     // Atalho pro identificador do restaurante (fica dentro do channel_config)
     restaurant_id: (i.channelConfig as Record<string, unknown> | null)?.restaurantId ?? null,
@@ -421,7 +446,7 @@ export async function PUT(req: NextRequest) {
       )
     }
 
-    const { id, aiAgentId, ...updates } = validation.data
+    const { id, aiAgentId, instanceApiKey, adminToken, restaurantId, ...updates } = validation.data
 
     const existing = await prisma.inbox.findFirst({
       where: { id, companyId },
@@ -430,6 +455,28 @@ export async function PUT(req: NextRequest) {
 
     // Se aiAgentId foi enviado (mesmo null pra remover), valida ownership antes de aplicar
     const dataToUpdate: any = { ...updates }
+
+    // Segredos: so trocam quando vem valor NOVO de verdade. A tela recebe o
+    // valor mascarado (••••X5UA); se ela devolvesse isso ou vazio e a gente
+    // gravasse, o token real seria destruido por um salvamento qualquer.
+    const ehValorNovo = (v: string | undefined) =>
+      typeof v === 'string' && v.trim().length > 0 && v !== REDACTED && !v.startsWith('••••')
+
+    if (ehValorNovo(instanceApiKey)) dataToUpdate.instanceApiKey = instanceApiKey!.trim()
+    if (ehValorNovo(adminToken)) dataToUpdate.adminToken = adminToken!.trim()
+
+    // restaurantId mora dentro do Json channelConfig — precisa de merge, nao
+    // de substituicao: gravar o objeto inteiro apagaria serverApiKey e
+    // webhookUrl, que estao no mesmo Json e ninguem edita nesta tela.
+    if (restaurantId !== undefined) {
+      const cfgAtual = (existing.channelConfig as Record<string, unknown> | null) || {}
+      dataToUpdate.channelConfig = {
+        ...cfgAtual,
+        // Vazio = desvincular o restaurante, que e uma acao legitima aqui
+        // (diferente de segredo, onde vazio significa "nao mexi").
+        restaurantId: restaurantId.trim() || null,
+      }
+    }
     if (aiAgentId !== undefined) {
       if (aiAgentId === null) {
         dataToUpdate.aiAgentId = null

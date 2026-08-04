@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -183,7 +184,7 @@ export default function Clients() {
   const handleOpenConversation = async (clientId: string) => {
     setOpeningConversationId(clientId);
     try {
-      const res = await fetch(`/api/conversations/find-by-client?clientId=${clientId}`);
+      const res = await apiFetch(`/api/conversations/find-by-client?clientId=${clientId}`);
       if (!res.ok) throw new Error('Falha ao buscar conversa');
       const data = await res.json();
       if (!data?.id) {

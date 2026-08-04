@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState, useEffect } from 'react';
 import { toast } from '@/hooks/use-toast';
 
@@ -50,7 +51,7 @@ export function useClientHistory(clientId: string | null) {
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/client-history?clientId=${clientId}`);
+      const res = await apiFetch(`/api/client-history?clientId=${clientId}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch history');
       const data = await res.json();
       setHistory((data || []).map(mapHistoryItem));

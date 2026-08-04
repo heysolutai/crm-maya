@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,7 +27,7 @@ export function SettingsTab({ company }: SettingsTabProps) {
   const { data: reviewModule } = useQuery({
     queryKey: ['admin-review-module', company.id],
     queryFn: async () => {
-      const res = await fetch(`/api/admin/review-module?companyId=${company.id}`);
+      const res = await apiFetch(`/api/admin/review-module?companyId=${company.id}`);
       if (!res.ok) throw new Error('Falha ao carregar modulo de avaliacao');
       return res.json() as Promise<{ enabled: boolean }>;
     },
@@ -37,7 +38,7 @@ export function SettingsTab({ company }: SettingsTabProps) {
   const handleToggleReviewModule = async (checked: boolean) => {
     setIsTogglingReview(true);
     try {
-      const res = await fetch('/api/admin/review-module', {
+      const res = await apiFetch('/api/admin/review-module', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companyId: company.id, enabled: checked }),
@@ -63,7 +64,7 @@ export function SettingsTab({ company }: SettingsTabProps) {
   const handleTogglePromptEditing = async (checked: boolean) => {
     setIsUpdating(true);
     try {
-      const res = await fetch('/api/company-settings', {
+      const res = await apiFetch('/api/company-settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

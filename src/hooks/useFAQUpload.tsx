@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState, useCallback } from 'react';
 import { invokeFn } from '@/lib/api-functions';
 import { toast } from 'sonner';
@@ -63,7 +64,7 @@ export function useFAQUpload(companyId: string | undefined) {
       formData.append('file', file);
       formData.append('bucket', 'faq-uploads');
 
-      const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+      const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: formData });
       if (!uploadRes.ok) throw new Error('Erro no upload do arquivo');
 
       const uploadData = await uploadRes.json();

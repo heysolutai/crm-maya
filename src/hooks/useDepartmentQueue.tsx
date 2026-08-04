@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery } from "@tanstack/react-query";
 import { useEffectiveCompanyId } from "./useEffectiveCompanyId";
 
@@ -7,7 +8,7 @@ export function useDepartmentQueue() {
   const { data, isLoading } = useQuery({
     queryKey: ["department-queue", companyId],
     queryFn: async () => {
-      const res = await fetch(`/api/departments/queue?companyId=${companyId}`);
+      const res = await apiFetch(`/api/departments/queue?companyId=${companyId}`);
       if (!res.ok) return { queues: {}, totalWaiting: 0 };
       return res.json() as Promise<{ queues: Record<string, number>; totalWaiting: number }>;
     },

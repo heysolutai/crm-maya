@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { invokeFn } from '@/lib/api-functions';
 import { useAuth } from './useAuth';
@@ -111,7 +112,7 @@ export function useConversations(filters?: ConversationFilters) {
       if (filters?.departmentId) params.set('departmentId', filters.departmentId);
       if (filters?.inboxId) params.set('inboxId', filters.inboxId);
 
-      const res = await fetch(`/api/conversations?${params}`);
+      const res = await apiFetch(`/api/conversations?${params}`);
       if (!res.ok) throw new Error('Failed to fetch conversations');
       let results = await res.json();
 
@@ -137,7 +138,7 @@ export function useConversations(filters?: ConversationFilters) {
 
       if (conversationIds.length > 0) {
         try {
-          const unreadRes = await fetch(`/api/unread-messages?conversationIds=${conversationIds.join(',')}`);
+          const unreadRes = await apiFetch(`/api/unread-messages?conversationIds=${conversationIds.join(',')}`);
           if (unreadRes.ok) {
             const unreadData = await unreadRes.json();
             Object.assign(countMap, unreadData);
@@ -210,14 +211,14 @@ export function useConversations(filters?: ConversationFilters) {
     const params = new URLSearchParams({ conversationId, limit: String(limit) });
     if (cursor) params.set('cursor', cursor);
 
-    const res = await fetch(`/api/messages?${params}`);
+    const res = await apiFetch(`/api/messages?${params}`);
     if (!res.ok) throw new Error('Failed to fetch messages');
     return await res.json();
   };
 
   // Fetch internal notes anexadas a uma conversa (renderizadas inline como sticky notes)
   const fetchNotesForConversation = async (conversationId: string) => {
-    const res = await fetch(`/api/conversation-notes?conversationId=${conversationId}`);
+    const res = await apiFetch(`/api/conversation-notes?conversationId=${conversationId}`);
     if (!res.ok) return [];
     try {
       return await res.json();
@@ -590,7 +591,7 @@ export function useConversations(filters?: ConversationFilters) {
 
   const updateConversation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
-      const res = await fetch('/api/conversations', {
+      const res = await apiFetch('/api/conversations', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...updates }),
@@ -612,7 +613,7 @@ export function useConversations(filters?: ConversationFilters) {
 
   const transferConversation = useMutation({
     mutationFn: async ({ conversationId, userId }: { conversationId: string; userId: string }) => {
-      const res = await fetch('/api/conversations', {
+      const res = await apiFetch('/api/conversations', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -665,7 +666,7 @@ export function useConversations(filters?: ConversationFilters) {
 
   const pickupConversation = useMutation({
     mutationFn: async (conversationId: string) => {
-      const res = await fetch("/api/messaging/pickup-conversation", {
+      const res = await apiFetch("/api/messaging/pickup-conversation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversation_id: conversationId }),
@@ -687,7 +688,7 @@ export function useConversations(filters?: ConversationFilters) {
 
   const closeConversation = useMutation({
     mutationFn: async (conversationId: string) => {
-      const res = await fetch('/api/conversations', {
+      const res = await apiFetch('/api/conversations', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -716,7 +717,7 @@ export function useConversations(filters?: ConversationFilters) {
       const conversation = conversations?.find((c: any) => c.id === conversationId);
       const currentTags = conversation?.tags || [];
 
-      const res = await fetch('/api/conversations', {
+      const res = await apiFetch('/api/conversations', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -745,7 +746,7 @@ export function useConversations(filters?: ConversationFilters) {
       const conversation = conversations?.find((c: any) => c.id === conversationId);
       const currentTags = conversation?.tags || [];
 
-      const res = await fetch('/api/conversations', {
+      const res = await apiFetch('/api/conversations', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -771,7 +772,7 @@ export function useConversations(filters?: ConversationFilters) {
 
   const reopenConversation = useMutation({
     mutationFn: async (conversationId: string) => {
-      const res = await fetch('/api/conversations', {
+      const res = await apiFetch('/api/conversations', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -939,7 +940,7 @@ export function useConversations(filters?: ConversationFilters) {
   const deleteMessage = useMutation({
     mutationFn: async ({ messageId, conversationId }: { messageId: string; conversationId: string }) => {
       // Chama o endpoint que revoga no WhatsApp (via UazAPI /message/delete) e deleta do banco
-      const res = await fetch('/api/whatsapp/delete-message', {
+      const res = await apiFetch('/api/whatsapp/delete-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messageId }),
@@ -973,7 +974,7 @@ export function useConversations(filters?: ConversationFilters) {
   // mas manda a lista de ids e remove todas do estado local de uma vez.
   const deleteManyMessages = useMutation({
     mutationFn: async ({ messageIds, conversationId }: { messageIds: string[]; conversationId: string }) => {
-      const res = await fetch('/api/whatsapp/delete-messages', {
+      const res = await apiFetch('/api/whatsapp/delete-messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messageIds }),
@@ -1211,7 +1212,7 @@ export function useConversations(filters?: ConversationFilters) {
   // Toggle AI paused for client
   const toggleClientAIPaused = useMutation({
     mutationFn: async ({ clientId, currentValue }: { clientId: string; currentValue: boolean }) => {
-      const res = await fetch('/api/clients', {
+      const res = await apiFetch('/api/clients', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: clientId, aiPaused: !currentValue }),

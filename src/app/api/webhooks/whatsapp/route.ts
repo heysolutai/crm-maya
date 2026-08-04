@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'crypto';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
-import { phoneVariants, canonicalPhone } from '@/lib/api/utils';
+import { phoneVariants, canonicalPhone, restaurantIdDaInbox } from '@/lib/api/utils';
 import { enqueueInboundMessage, enqueueN8NWebhook, enqueueTranscription, enqueueMediaProcessing } from '@/lib/queue';
 import { uploadToB2, buildB2Key, MIME_TO_EXT, deleteMediaFromUrl } from '@/lib/storage';
 import { publishEvent } from '@/lib/realtime';
@@ -1551,7 +1551,7 @@ export async function POST(req: NextRequest) {
             department: { select: { id: true, name: true } },
             inboxId: true,
             inbox: {
-              select: { id: true, displayName: true, instanceName: true, channelType: true, phoneNumber: true, apiUrl: true, instanceApiKey: true, aiAgentId: true, aiAgent: { select: { id: true, name: true } } },
+              select: { id: true, displayName: true, instanceName: true, channelType: true, phoneNumber: true, apiUrl: true, instanceApiKey: true, channelConfig: true, aiAgentId: true, aiAgent: { select: { id: true, name: true } } },
             },
           },
         }),
@@ -1663,6 +1663,11 @@ export async function POST(req: NextRequest) {
         // responder pelo numero errado quando ha varias caixas de entrada.
         inbox_api_url: conversationData?.inbox?.apiUrl || null,
         inbox_instance_api_key: conversationData?.inbox?.instanceApiKey || null,
+        // Identificador do restaurante no sistema de reservas. Fica dentro do
+        // channelConfig da inbox, mas sobe pro topo do payload porque e chave
+        // de negocio: sem ele o fluxo nao tem como consultar mesa, horario
+        // nem criar reserva pro estabelecimento certo.
+        restaurant_id: restaurantIdDaInbox(conversationData?.inbox?.channelConfig),
         // AiAgent vinculado a inbox (quando aplicavel)
         ai_agent_id: conversationData?.inbox?.aiAgent?.id || null,
         ai_agent_name: conversationData?.inbox?.aiAgent?.name || null,

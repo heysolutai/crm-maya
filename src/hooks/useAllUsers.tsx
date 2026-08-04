@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { invokeFn } from '@/lib/api-functions';
 import { toast } from '@/hooks/use-toast';
@@ -19,7 +20,7 @@ export function useAllUsers() {
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['all-users'],
     queryFn: async () => {
-      const res = await fetch('/api/all-users');
+      const res = await apiFetch('/api/all-users');
       if (!res.ok) throw new Error('Failed to fetch all users');
       return await res.json() as SystemUser[];
     },

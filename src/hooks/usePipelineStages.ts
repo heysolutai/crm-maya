@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 
@@ -37,7 +38,7 @@ export function usePipelineStages(pipelineId: string | null) {
     queryFn: async () => {
       if (!pipelineId) return [];
 
-      const res = await fetch(`/api/pipeline-stages?pipelineId=${pipelineId}`);
+      const res = await apiFetch(`/api/pipeline-stages?pipelineId=${pipelineId}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch stages');
       const data = await res.json();
       return (data || []).map(mapStage) as PipelineStage[];
@@ -55,7 +56,7 @@ export function usePipelineStages(pipelineId: string | null) {
     }
 
     try {
-      const res = await fetch('/api/pipeline-stages', {
+      const res = await apiFetch('/api/pipeline-stages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -82,7 +83,7 @@ export function usePipelineStages(pipelineId: string | null) {
 
   const updateStage = async (id: string, data: Partial<PipelineStage>) => {
     try {
-      const res = await fetch('/api/pipeline-stages', {
+      const res = await apiFetch('/api/pipeline-stages', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...data }),
@@ -105,7 +106,7 @@ export function usePipelineStages(pipelineId: string | null) {
       const remaining = stages.filter(s => s.id !== id);
       const fallbackStageId = remaining.length > 0 ? remaining[0].id : '';
 
-      const res = await fetch(`/api/pipeline-stages?id=${id}&fallbackStageId=${fallbackStageId}`, {
+      const res = await apiFetch(`/api/pipeline-stages?id=${id}&fallbackStageId=${fallbackStageId}`, {
         method: 'DELETE',
       });
 
@@ -122,7 +123,7 @@ export function usePipelineStages(pipelineId: string | null) {
 
   const reorderStages = async (orderedIds: string[]) => {
     try {
-      const res = await fetch('/api/pipeline-stages', {
+      const res = await apiFetch('/api/pipeline-stages', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderedIds }),

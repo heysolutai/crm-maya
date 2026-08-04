@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { format, startOfDay, endOfDay } from 'date-fns';
@@ -78,7 +79,7 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
         prevTo,
       });
 
-      const res = await fetch(`/api/dashboard-metrics?${params}`);
+      const res = await apiFetch(`/api/dashboard-metrics?${params}`);
       if (!res.ok) throw new Error('Failed to fetch dashboard metrics');
       const raw = await res.json();
 

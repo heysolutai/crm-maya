@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState } from 'react';
 import { useAuth } from './useAuth';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
@@ -32,7 +33,7 @@ export function useSupportTickets() {
         formData.append('file', file);
         formData.append('bucket', 'support-tickets');
 
-        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+        const uploadRes = await apiFetch('/api/upload', { method: 'POST', body: formData });
         if (!uploadRes.ok) {
           const err = await uploadRes.json();
           throw new Error(err.error || 'Upload failed');
@@ -41,7 +42,7 @@ export function useSupportTickets() {
         screenshotPaths.push(uploadData.path || uploadData.url);
       }
 
-      const res = await fetch('/api/support-tickets', {
+      const res = await apiFetch('/api/support-tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -71,7 +72,7 @@ export function useSupportTickets() {
 
   const updateTicketStatus = async (ticketId: string, status: string, adminNotes?: string) => {
     try {
-      const res = await fetch('/api/support-tickets', {
+      const res = await apiFetch('/api/support-tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -22,6 +22,7 @@ import { FollowUpsSubTab } from '@/components/super-admin/company-details/ai-con
 import { ApiKeysTab } from '@/components/super-admin/company-details/ApiKeysTab';
 import { useEffectiveCompanyId } from '@/hooks/useEffectiveCompanyId';
 import { cn } from '@/lib/utils';
+import { apiFetch } from '@/lib/api/client';
 
 interface MenuItem {
   id: string;
@@ -530,7 +531,7 @@ function ConnectionsSection({
   const fetchRealKey = async (instanceId: string): Promise<string | null> => {
     if (realKeys[instanceId]) return realKeys[instanceId];
     try {
-      const res = await fetch(`/api/agents/${instanceId}/api-key`);
+      const res = await apiFetch(`/api/agents/${instanceId}/api-key`);
       if (!res.ok) return null;
       const data = await res.json();
       const key = data.instance_api_key as string | null;
@@ -573,7 +574,7 @@ function ConnectionsSection({
     if (!value) return;
     setSavingCatalogId(prev => ({ ...prev, [instanceId]: true }));
     try {
-      const res = await fetch("/api/whatsapp/settings", {
+      const res = await apiFetch("/api/whatsapp/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ instanceId, catalogBusinessId: value }),

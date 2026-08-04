@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
@@ -273,7 +274,7 @@ function ConnectionTab({ inbox }: { inbox: ReturnType<typeof useInboxes>['inboxe
     if (inbox.status !== 'connecting') return;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/agents/${inbox.id}/status?companyId=${companyId}`);
+        const res = await apiFetch(`/api/agents/${inbox.id}/status?companyId=${companyId}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data.status === 'connected' || data.status === 'disconnected') {
@@ -289,7 +290,7 @@ function ConnectionTab({ inbox }: { inbox: ReturnType<typeof useInboxes>['inboxe
   const handleGenerateQr = async () => {
     setQrLoading(true);
     try {
-      const res = await fetch(`/api/agents/${inbox.id}/qr?companyId=${companyId}`);
+      const res = await apiFetch(`/api/agents/${inbox.id}/qr?companyId=${companyId}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Falha ao gerar QR');
       setPairingCode(data.pairing_code || null);
@@ -304,7 +305,7 @@ function ConnectionTab({ inbox }: { inbox: ReturnType<typeof useInboxes>['inboxe
   const handleDisconnect = async () => {
     setDisconnecting(true);
     try {
-      const res = await fetch(`/api/agents/${inbox.id}/disconnect?companyId=${companyId}`, { method: 'POST' });
+      const res = await apiFetch(`/api/agents/${inbox.id}/disconnect?companyId=${companyId}`, { method: 'POST' });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Falha ao desconectar');

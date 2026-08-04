@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState, useEffect } from 'react';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from '@/hooks/use-toast';
@@ -25,7 +26,7 @@ export function useFunnelStages() {
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/funnel-stages?companyId=${companyId}`);
+      const res = await apiFetch(`/api/funnel-stages?companyId=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch stages');
       const data = await res.json();
       // Normalize Prisma camelCase to snake_case
@@ -57,7 +58,7 @@ export function useFunnelStages() {
     }
 
     try {
-      const res = await fetch('/api/funnel-stages', {
+      const res = await apiFetch('/api/funnel-stages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -82,7 +83,7 @@ export function useFunnelStages() {
 
   const updateStage = async (id: string, stageData: Partial<FunnelStage>) => {
     try {
-      const res = await fetch('/api/funnel-stages', {
+      const res = await apiFetch('/api/funnel-stages', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...stageData }),
@@ -103,7 +104,7 @@ export function useFunnelStages() {
 
   const deleteStage = async (id: string) => {
     try {
-      const res = await fetch(`/api/funnel-stages?id=${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/funnel-stages?id=${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Failed to delete stage');

@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { invokeFn } from '@/lib/api-functions';
 import { useToast } from './use-toast';
@@ -27,7 +28,7 @@ export function useCompanies() {
   const { data: companies, isLoading, error } = useQuery({
     queryKey: ['companies'],
     queryFn: async () => {
-      const res = await fetch('/api/companies');
+      const res = await apiFetch('/api/companies');
       if (!res.ok) throw new Error('Failed to fetch companies');
       const data = await res.json();
       return (data || []).map((c: any) => ({
@@ -67,7 +68,7 @@ export function useCompanies() {
 
   const updateCompany = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Company> }) => {
-      const res = await fetch('/api/companies', {
+      const res = await apiFetch('/api/companies', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...updates }),
@@ -90,7 +91,7 @@ export function useCompanies() {
 
   const deleteCompany = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/companies?id=${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/companies?id=${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Failed to delete company');

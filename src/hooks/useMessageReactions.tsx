@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { invokeFn } from "@/lib/api-functions";
 import { toast } from "@/hooks/use-toast";
@@ -21,7 +22,7 @@ export const useConversationReactions = (messageIds: string[]) => {
     queryFn: async () => {
       if (messageIds.length === 0) return {};
 
-      const res = await fetch(`/api/message-reactions?messageIds=${messageIds.join(',')}`);
+      const res = await apiFetch(`/api/message-reactions?messageIds=${messageIds.join(',')}`);
       if (!res.ok) throw new Error('Failed to fetch reactions');
       return await res.json();
     },

@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from '@/hooks/use-toast';
@@ -67,7 +68,7 @@ export function usePipelines() {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const res = await fetch(`/api/pipelines?companyId=${companyId}`);
+      const res = await apiFetch(`/api/pipelines?companyId=${companyId}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch pipelines');
       const data = await res.json();
 
@@ -92,7 +93,7 @@ export function usePipelines() {
     }
 
     try {
-      const res = await fetch('/api/pipelines', {
+      const res = await apiFetch('/api/pipelines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -120,7 +121,7 @@ export function usePipelines() {
   const updatePipeline = async (id: string, data: Partial<Pipeline>) => {
     try {
       const { department, pipeline_stages, ...updateData } = data as any;
-      const res = await fetch('/api/pipelines', {
+      const res = await apiFetch('/api/pipelines', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...updateData }),
@@ -145,7 +146,7 @@ export function usePipelines() {
         return false;
       }
 
-      const res = await fetch(`/api/pipelines?id=${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/pipelines?id=${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete pipeline');
 
       toast({ title: 'Pipeline removido', description: 'Pipeline desativado com sucesso!' });

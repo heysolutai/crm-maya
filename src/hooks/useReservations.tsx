@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from 'sonner';
@@ -31,7 +32,7 @@ export function useReservations() {
   const { data, isLoading } = useQuery<Reservation[]>({
     queryKey: ['reservations', companyId],
     queryFn: async () => {
-      const res = await fetch(`/api/reservations?companyId=${companyId}&limit=200`);
+      const res = await apiFetch(`/api/reservations?companyId=${companyId}&limit=200`);
       if (!res.ok) throw new Error('Falha ao buscar reservas');
       return res.json();
     },
@@ -40,7 +41,7 @@ export function useReservations() {
 
   const createMutation = useMutation({
     mutationFn: async (payload: CreateReservationData) => {
-      const res = await fetch(`/api/reservations?companyId=${companyId}`, {
+      const res = await apiFetch(`/api/reservations?companyId=${companyId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: 'manual', ...payload }),
@@ -57,7 +58,7 @@ export function useReservations() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & Partial<Reservation>) => {
-      const res = await fetch(`/api/reservations?companyId=${companyId}`, {
+      const res = await apiFetch(`/api/reservations?companyId=${companyId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...updates }),

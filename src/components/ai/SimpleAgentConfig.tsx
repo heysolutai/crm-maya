@@ -17,6 +17,7 @@ import {
   CAPABILITIES,
   DEFAULT_SIMPLE_FORM as DEFAULT_FORM,
   buildPromptCompleto,
+  normalizeSimpleForm,
   type SimpleForm,
 } from '@/lib/agentSimpleConfig';
 
@@ -37,12 +38,11 @@ export function SimpleAgentConfig({ companyId, agentId }: Props) {
 
   useEffect(() => {
     if (existingConfig?.id && !initedRef.current) {
-      const simple = (existingConfig.prompts as any)?.simple as Partial<SimpleForm> | undefined;
+      const salvo = normalizeSimpleForm((existingConfig.prompts as any)?.simple);
       setForm({
-        ...DEFAULT_FORM,
-        ...(simple || {}),
+        ...salvo,
         // Sem config simples ainda? Usa o nome do agente como nome do restaurante.
-        restaurantName: simple?.restaurantName || existingConfig.name || '',
+        restaurantName: salvo.restaurantName || existingConfig.name || '',
       });
       initedRef.current = true;
     }
@@ -173,6 +173,16 @@ export function SimpleAgentConfig({ companyId, agentId }: Props) {
         </div>
 
         <div className="space-y-2">
+          <Label htmlFor="address">Endereço</Label>
+          <Input
+            id="address"
+            placeholder="Ex: Rua das Flores, 120 — Setor Bueno, Goiânia"
+            value={form.address}
+            onChange={(e) => set({ address: e.target.value })}
+          />
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor="hours">Horário de funcionamento</Label>
           <Textarea
             id="hours"
@@ -180,6 +190,31 @@ export function SimpleAgentConfig({ companyId, agentId }: Props) {
             placeholder="Ex: Seg a sex 11h-15h e 18h-23h. Sáb e dom 12h-23h."
             value={form.hours}
             onChange={(e) => set({ hours: e.target.value })}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="reservation-hours">Horários para reserva</Label>
+          <Input
+            id="reservation-hours"
+            placeholder="Ex: 19h às 22h, de terça a domingo"
+            value={form.reservationHours}
+            onChange={(e) => set({ reservationHours: e.target.value })}
+          />
+          <p className="text-xs text-muted-foreground">
+            Preenchido, a IA fica proibida de oferecer reserva fora dessa janela. Em branco,
+            ela usa o horário de funcionamento como referência.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="prices">Preços</Label>
+          <Textarea
+            id="prices"
+            rows={2}
+            placeholder="Ex: Pratos de R$ 45 a R$ 90. Couvert R$ 18. Taxa de serviço 10%."
+            value={form.prices}
+            onChange={(e) => set({ prices: e.target.value })}
           />
         </div>
 

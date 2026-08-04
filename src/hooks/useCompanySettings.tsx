@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { useToast } from './use-toast';
@@ -12,7 +13,7 @@ export function useCompanySettings() {
     queryFn: async () => {
       if (!companyId) return null;
 
-      const res = await fetch(`/api/companies?id=${companyId}`);
+      const res = await apiFetch(`/api/companies?id=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch company');
       return await res.json();
     },
@@ -23,7 +24,7 @@ export function useCompanySettings() {
     mutationFn: async (updates: any) => {
       // Caso 1: update do JSON settings (lead_distribution, report_group, etc)
       if (updates && updates.settings && typeof updates.settings === 'object') {
-        const res = await fetch('/api/company/settings', {
+        const res = await apiFetch('/api/company/settings', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -58,7 +59,7 @@ export function useCompanySettings() {
       }
       if (!hasField) return { success: true };
 
-      const res = await fetch('/api/companies', {
+      const res = await apiFetch('/api/companies', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

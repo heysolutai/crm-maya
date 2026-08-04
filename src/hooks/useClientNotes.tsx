@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState, useEffect } from 'react';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from '@/hooks/use-toast';
@@ -42,7 +43,7 @@ export function useClientNotes(clientId: string | null) {
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/client-notes?clientId=${clientId}&companyId=${companyId}`);
+      const res = await apiFetch(`/api/client-notes?clientId=${clientId}&companyId=${companyId}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch notes');
       const data = await res.json();
       setNotes((data || []).map(mapNote));
@@ -69,7 +70,7 @@ export function useClientNotes(clientId: string | null) {
     }
 
     try {
-      const res = await fetch('/api/client-notes', {
+      const res = await apiFetch('/api/client-notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -100,7 +101,7 @@ export function useClientNotes(clientId: string | null) {
 
   const deleteNote = async (noteId: string) => {
     try {
-      const res = await fetch(`/api/client-notes?id=${noteId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/client-notes?id=${noteId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete note');
 
       toast({

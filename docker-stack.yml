@@ -1,0 +1,176 @@
+# ============================================================
+#  CRM Maya — Stack Docker Swarm + Traefik (valores inline)
+# ============================================================
+#  Deploy no Portainer:
+#    1) Garanta que a overlay externa 'network_swarm_public' existe (ver docs).
+#    2) Preencha os valores em x-app-env e nos campos marcados <<< TROQUE >>>.
+#    3) Stacks -> Add stack -> Web editor -> cole este arquivo -> Deploy.
+#
+#  ATENCAO DE SEGURANCA: depois de preencher, este arquivo contem SECRETS.
+#  Nao commite no git. (No Portainer ele fica salvo no proprio stack.)
+#
+#  Arquitetura:
+#    - app     -> web Next.js, exposto via Traefik (TLS Let's Encrypt).
+#                 SEM workers (WORKERS_IN_PROCESS=false). Roda as migrations.
+#    - worker  -> mesmo image, NAO exposto. Roda os workers BullMQ + crons.
+#    Postgres e Redis sao EXTERNOS (outra stack Swarm ou servico gerenciado).
+# ============================================================
+
+version: "3.8"
+
+# ============================================================
+#  ENV COMPARTILHADA entre app e worker — PREENCHA AQUI.
+#  Editando neste bloco, o valor vale pros DOIS services (importante pra
+#  DATABASE_URL/REDIS_URL/secrets ficarem sempre iguais nos dois).
+# ============================================================
+x-app-env: &app-env
+  NODE_ENV: "production"
+
+  # ----- Banco / Redis (EXTERNOS) -----
+  # Se Postgres/Redis estao no Swarm (mesma overlay), use o nome do service
+  # (postgres/redis). Se gerenciados, use o host publico real.
+  DATABASE_URL: "postgresql://USER:SENHA@postgres:5432/crm_wyarp"   # <<< TROQUE
+  REDIS_URL: "redis://redis:6379"                                    # <<< TROQUE
+  DB_POOL_MIN: "2"
+  DB_POOL_MAX: "10"
+
+  # ----- URLs publicas -----
+  NEXTAUTH_URL: "https://crm.seudominio.com.br"                      # <<< TROQUE
+  NEXT_PUBLIC_APP_URL: "https://crm.seudominio.com.br"              # <<< TROQUE
+  # Atras de reverse proxy — sem isso o NextAuth recusa o Host header
+  AUTH_TRUST_HOST: "true"
+
+  # ----- Secrets (openssl rand -base64 32 / openssl rand -hex 32) -----
+  NEXTAUTH_SECRET: "troque_openssl_rand_base64_32"                   # <<< TROQUE
+  INTERNAL_API_SECRET: "troque_openssl_rand_hex_32"                  # <<< TROQUE
+  CRON_SECRET: "troque_openssl_rand_hex_32"                          # <<< TROQUE
+  API_KEY_ENCRYPTION_SECRET: "troque_openssl_rand_hex_32"           # <<< TROQUE
+
+  # ----- Storage (Backblaze B2) — midia de mensagens -----
+  B2_KEY_ID: ""
+  B2_APP_KEY: ""
+  B2_BUCKET_NAME: "crm-media"
+  B2_BUCKET_REGION: "us-west-004"
+  B2_ENDPOINT: "https://s3.us-west-004.backblazeb2.com"
+  B2_PUBLIC_URL: "https://crm-media.s3.us-west-004.backblazeb2.com"
+
+  # ----- IA / OpenAI -----
+  DEFAULT_OPENAI_API_KEY: ""
+
+  # ----- WhatsApp (UAZapi) -----
+  UAZAPI_BASE_URL: "https://uazapi.heysolut.com.br"
+  WHATSAPP_ADMIN_TOKEN: ""
+
+  # ----- WhatsApp Cloud (Covercut / BSP) -----
+  COVERCUT_WEBHOOK_SECRET: ""
+
+  # ----- N8N / automacoes -----
+  N8N_AI_WEBHOOK_URL: ""
+  N8N_FAQ_UPLOAD_WEBHOOK_URL: ""
+  NEXT_PUBLIC_N8N_FAQ_WEBHOOK_URL: ""
+  KNOWLEDGE_WEBHOOK_URL: ""
+  EXTERNAL_WEBHOOK_URL: ""
+
+  # ----- Google OAuth (calendar/login) -----
+  GOOGLE_CLIENT_ID: ""
+  GOOGLE_CLIENT_SECRET: ""
+
+  # ----- Web Push (PWA) — DESLIGADO por ora -----
+  # Deixe vazio: Web Push nao esta em uso (plano e push via app nativo Flutter +
+  # FCM/APNs no futuro). Com a chave vazia, NADA e assado no build e a imagem
+  # fica 100% configuravel pela stack.
+  # (Se um dia ligar: NEXT_PUBLIC_VAPID_KEY e assada no bundle do navegador, entao
+  # precisa ser uma chave compartilhada por todas as instancias, definida no build
+  # E aqui na stack. Ver docs/deploy-swarm-traefik.md.)
+  NEXT_PUBLIC_VAPID_KEY: ""
+  VAPID_PRIVATE_KEY: ""
+  VAPID_SUBJECT: "mailto:admin@seudominio.com.br"
+
+  # ----- CORS -----
+  CORS_EXTRA_ORIGINS: ""
+
+services:
+  # ---------------------------------------------------------
+  # WEB — Next.js exposto via Traefik
+  # ---------------------------------------------------------
+  app:
+    image: heysolutitsolution/crm-maya:2026-07-13              # <<< TROQUE (imagem no seu registry)
+    environment:
+      <<: *app-env
+      # Web NAO sobe workers (o service 'worker' cuida disso)
+      WORKERS_IN_PROCESS: "false"
+      # Somente o web roda `prisma db push` no boot
+      RUN_MIGRATIONS: "true"
+    networks:
+      - network_swarm_public
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('net').connect(3000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: any
+        delay: 5s
+      update_config:
+        parallelism: 1
+        delay: 15s
+        order: start-first
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+      labels:
+        - "traefik.enable=true"
+        # Rede pela qual o Traefik alcanca este service
+        - "traefik.docker.network=network_swarm_public"
+        # --- Router HTTPS ---   (troque o dominio e, se preciso, o certresolver)
+        - "traefik.http.routers.crm.rule=Host(`crm.seudominio.com.br`)"      # <<< TROQUE
+        - "traefik.http.routers.crm.entrypoints=websecure"
+        - "traefik.http.routers.crm.tls=true"
+        - "traefik.http.routers.crm.tls.certresolver=letsencrypt"            # <<< TROQUE se seu resolver tiver outro nome
+        - "traefik.http.services.crm.loadbalancer.server.port=3000"
+        # --- Router HTTP -> redirect pra HTTPS ---
+        - "traefik.http.routers.crm-http.rule=Host(`crm.seudominio.com.br`)" # <<< TROQUE
+        - "traefik.http.routers.crm-http.entrypoints=web"
+        - "traefik.http.routers.crm-http.middlewares=crm-redirect-https"
+        - "traefik.http.middlewares.crm-redirect-https.redirectscheme.scheme=https"
+        - "traefik.http.middlewares.crm-redirect-https.redirectscheme.permanent=true"
+
+  # ---------------------------------------------------------
+  # WORKER — BullMQ + crons, processo dedicado (nao exposto)
+  # ---------------------------------------------------------
+  worker:
+    image: heysolutitsolution/crm-maya:2026-07-13              # <<< TROQUE (mesma imagem do app)
+    environment:
+      <<: *app-env
+      # Este service SOBE os workers (default do codigo)
+      WORKERS_IN_PROCESS: "true"
+      # Nao roda migrations (o web ja faz)
+      RUN_MIGRATIONS: "false"
+      # O worker de inbound re-invoca o webhook via HTTP -> alcanca o web
+      # pelo DNS interno da overlay (nome do service 'app', porta 3000)
+      INTERNAL_APP_URL: "http://app:3000"
+    networks:
+      - network_swarm_public
+    deploy:
+      # 1 replica: crons tem lock distribuido (Redis), mas manter 1 evita
+      # processamento duplicado dos workers de mensagem/midia.
+      replicas: 1
+      restart_policy:
+        condition: any
+        delay: 5s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        # 'stop-first': garante 1 unica instancia dos workers durante o deploy
+        order: stop-first
+
+networks:
+  # Rede overlay unica, ja existente, compartilhada por TUDO: Traefik alcanca o
+  # app por ela, o app alcanca Postgres/Redis (se estiverem no Swarm) e o worker
+  # alcanca o app (INTERNAL_APP_URL). external = nao e criada por este stack.
+  network_swarm_public:
+    external: true

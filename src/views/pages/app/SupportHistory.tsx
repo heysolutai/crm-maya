@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
@@ -121,7 +122,7 @@ export default function SupportHistory() {
     queryKey: ['support-tickets', effectiveCompanyId],
     queryFn: async () => {
       if (!effectiveCompanyId) return [];
-      const res = await fetch(`/api/support-tickets?companyId=${effectiveCompanyId}`);
+      const res = await apiFetch(`/api/support-tickets?companyId=${effectiveCompanyId}`);
       if (!res.ok) throw new Error('Failed to fetch tickets');
       return await res.json();
     },
@@ -397,7 +398,7 @@ function TicketCard({ ticket, effectiveCompanyId }: { ticket: any; effectiveComp
   const handleStatusChange = async (newStatus: string) => {
     setUpdating(true);
     try {
-      const res = await fetch('/api/support-tickets', {
+      const res = await apiFetch('/api/support-tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

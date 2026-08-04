@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { useToast } from './use-toast';
@@ -13,7 +14,10 @@ export interface Inbox {
   phone_number: string | null;
   instance_name: string;
   api_url: string | null;
+  /** Sempre MASCARADO (••••X5UA). O valor real só vem de /api/agents/[id]/api-key. */
   instance_api_key: string | null;
+  /** Sempre mascarado — não há endpoint que revele o token de admin. */
+  admin_token?: string | null;
   status: InboxStatus;
   is_active: boolean;
   qr_code: string | null;
@@ -22,6 +26,8 @@ export interface Inbox {
   metadata: Record<string, unknown> | null;
   channel_config: Record<string, unknown> | null;
   ai_agent_id: string | null;
+  /** Atalho pro channel_config.restaurantId, que a API já extrai. */
+  restaurant_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -35,7 +41,7 @@ export function useInboxes() {
     queryKey: ['inboxes', companyId],
     queryFn: async () => {
       if (!companyId) return [];
-      const res = await fetch(`/api/agents?companyId=${companyId}`);
+      const res = await apiFetch(`/api/agents?companyId=${companyId}`);
       if (!res.ok) throw new Error('Falha ao buscar caixas de entrada');
       const data = await res.json();
       // Normalize ai_agent_id (camelCase from Prisma)
@@ -62,7 +68,7 @@ export function useInboxes() {
       instanceToken?: string;
       restaurantId?: string;
     }) => {
-      const res = await fetch(`/api/agents?companyId=${companyId}`, {
+      const res = await apiFetch(`/api/agents?companyId=${companyId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -98,8 +104,20 @@ export function useInboxes() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: { id: string; displayName?: string; isActive?: boolean; aiAgentId?: string | null }) => {
-      const res = await fetch(`/api/agents?companyId=${companyId}`, {
+    mutationFn: async (data: {
+      id: string;
+      displayName?: string;
+      isActive?: boolean;
+      aiAgentId?: string | null;
+      phoneNumber?: string;
+      apiUrl?: string;
+      /** Token da instância. Vazio = não mexer (a tela recebe o mascarado). */
+      instanceApiKey?: string;
+      adminToken?: string;
+      /** Identificador do restaurante no sistema de reservas. */
+      restaurantId?: string;
+    }) => {
+      const res = await apiFetch(`/api/agents?companyId=${companyId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -119,7 +137,7 @@ export function useInboxes() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/agents?id=${id}&companyId=${companyId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/agents?id=${id}&companyId=${companyId}`, { method: 'DELETE' });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Falha ao remover');
       return json;
@@ -153,7 +171,7 @@ export function useInboxAiAgent(inboxId: string | undefined) {
     queryKey: ['inbox-ai-agent', inboxId],
     queryFn: async () => {
       if (!inboxId) return null;
-      const res = await fetch(`/api/ai-configurations?agentId=${inboxId}`);
+      const res = await apiFetch(`/api/ai-configurations?agentId=${inboxId}`);
       if (!res.ok) return null;
       const data = await res.json();
       const item = (Array.isArray(data) ? data : [])[0];

@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
@@ -13,7 +14,7 @@ export function useConversationNotes(conversationId?: string) {
     queryFn: async () => {
       if (!conversationId) return [];
 
-      const res = await fetch(`/api/conversation-notes?conversationId=${conversationId}`);
+      const res = await apiFetch(`/api/conversation-notes?conversationId=${conversationId}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch notes');
       const data = (await res.json()) || [];
       return (Array.isArray(data) ? data : []).map((n: any) => ({
@@ -32,7 +33,7 @@ export function useConversationNotes(conversationId?: string) {
     mutationFn: async ({ note }: { note: string }) => {
       if (!conversationId || !companyId || !user?.id) throw new Error('Missing data');
 
-      const res = await fetch('/api/conversation-notes', {
+      const res = await apiFetch('/api/conversation-notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -57,7 +58,7 @@ export function useConversationNotes(conversationId?: string) {
 
   const deleteNote = useMutation({
     mutationFn: async (noteId: string) => {
-      const res = await fetch(`/api/conversation-notes?id=${noteId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/conversation-notes?id=${noteId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete note');
     },
     onSuccess: () => {

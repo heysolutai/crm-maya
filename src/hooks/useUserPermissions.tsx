@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
 import type { ConversationAccess, ResourceAccess } from './useRolePermissions';
@@ -29,7 +30,7 @@ export function useUserPermissions(userId?: string) {
     queryFn: async () => {
       if (!targetUserId || !companyId) return DEFAULT_PERMISSIONS;
 
-      const res = await fetch(`/api/user-permissions?userId=${targetUserId}&companyId=${companyId}`);
+      const res = await apiFetch(`/api/user-permissions?userId=${targetUserId}&companyId=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch permissions');
       return await res.json();
     },

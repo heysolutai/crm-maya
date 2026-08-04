@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from 'sonner';
+import { apiFetch } from '@/lib/api/client';
 
 export type WhatsAppStatus = 'connected' | 'connecting' | 'disconnected' | 'error' | 'no_instance';
 
@@ -43,7 +44,7 @@ export function useWhatsAppStatus(): UseWhatsAppStatusResult {
     queryFn: async () => {
       if (!effectiveCompanyId) return null;
 
-      const res = await fetch(`/api/agents?companyId=${effectiveCompanyId}`);
+      const res = await apiFetch(`/api/agents?companyId=${effectiveCompanyId}`);
       if (!res.ok) return null;
       const agents = await res.json();
 
@@ -68,7 +69,7 @@ export function useWhatsAppStatus(): UseWhatsAppStatusResult {
     mutationFn: async () => {
       if (!instance?.id) return null;
 
-      const res = await fetch(`/api/agents/${instance.id}/status`);
+      const res = await apiFetch(`/api/agents/${instance.id}/status`);
       if (res.status === 404) {
         // Agente sumiu — invalida o cache pra refetch da lista
         queryClient.invalidateQueries({ queryKey: ['whatsapp-instance-status'] });

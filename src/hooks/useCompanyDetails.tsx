@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface CompanyUpdate {
@@ -19,7 +20,7 @@ export function useCompanyDetails(companyId: string | undefined) {
     queryFn: async () => {
       if (!companyId) return null;
 
-      const res = await fetch(`/api/companies?id=${companyId}`);
+      const res = await apiFetch(`/api/companies?id=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch company');
       return await res.json();
     },
@@ -31,7 +32,7 @@ export function useCompanyDetails(companyId: string | undefined) {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const res = await fetch(`/api/company-details?companyId=${companyId}`);
+      const res = await apiFetch(`/api/company-details?companyId=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch company users');
       const data = await res.json();
       return data.users || [];
@@ -44,7 +45,7 @@ export function useCompanyDetails(companyId: string | undefined) {
       if (!companyId) throw new Error('Company ID is required');
 
       if (updates.settings) {
-        const res = await fetch('/api/company/settings', {
+        const res = await apiFetch('/api/company/settings', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -61,7 +62,7 @@ export function useCompanyDetails(companyId: string | undefined) {
       }
 
       // For non-settings updates
-      const res = await fetch('/api/companies', {
+      const res = await apiFetch('/api/companies', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: companyId, ...updates }),

@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from './use-toast';
 import {
@@ -108,6 +109,14 @@ export function useAIConfigurations(
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  /** Query string com a empresa em contexto — vazia quando nao ha. */
+  const qs = (extra?: Record<string, string>) => {
+    const p = new URLSearchParams(extra);
+    if (companyId) p.set('companyId', companyId);
+    const s = p.toString();
+    return s ? `?${s}` : '';
+  };
+
   const { data: configurations, isLoading } = useQuery({
     queryKey: ['ai-configurations', companyId, agentId],
     queryFn: async () => {
@@ -117,7 +126,7 @@ export function useAIConfigurations(
       if (companyId) params.set('companyId', companyId);
       if (agentId) params.set('agentId', agentId);
 
-      const res = await fetch(`/api/ai-configurations?${params}`);
+      const res = await apiFetch(`/api/ai-configurations?${params}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch configurations');
       const data = await res.json();
       return (data || []).map(mapConfig) as AIConfiguration[];
@@ -136,7 +145,7 @@ export function useAIConfigurations(
       api_keys?: APIKeys;
       behavior_settings?: BehaviorSettings;
     }) => {
-      const res = await fetch('/api/ai-configurations', {
+      const res = await apiFetch(`/api/ai-configurations${qs()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
@@ -160,7 +169,12 @@ export function useAIConfigurations(
 
   const updateConfiguration = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<AIConfiguration> }) => {
-      const res = await fetch('/api/ai-configurations', {
+      // O ?companyId= NAO e enfeite: e como a personificacao chega no servidor.
+      // A sessao de um super-admin nao tem empresa, entao sem esse parametro o
+      // authenticate() devolve companyId=null e a rota responde "Empresa nao
+      // encontrada". O GET ja mandava; PUT/POST/DELETE nao, e por isso dava pra
+      // LER a config personificado mas nao SALVAR.
+      const res = await apiFetch(`/api/ai-configurations${qs()}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...updates }),
@@ -184,7 +198,7 @@ export function useAIConfigurations(
 
   const deleteConfiguration = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/ai-configurations?id=${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/ai-configurations${qs({ id })}`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete configuration');
     },
     onSuccess: () => {

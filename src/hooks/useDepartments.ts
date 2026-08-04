@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from '@/hooks/use-toast';
@@ -56,7 +57,7 @@ export function useDepartments() {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const res = await fetch(`/api/departments?companyId=${companyId}`);
+      const res = await apiFetch(`/api/departments?companyId=${companyId}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch departments');
       const data = await res.json();
       return (data || []).map(mapDepartment) as Department[];
@@ -74,7 +75,7 @@ export function useDepartments() {
     }
 
     try {
-      const res = await fetch('/api/departments', {
+      const res = await apiFetch('/api/departments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -99,7 +100,7 @@ export function useDepartments() {
 
   const updateDepartment = async (id: string, data: Partial<Department>) => {
     try {
-      const res = await fetch('/api/departments', {
+      const res = await apiFetch('/api/departments', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...data }),
@@ -118,7 +119,7 @@ export function useDepartments() {
 
   const deleteDepartment = async (id: string) => {
     try {
-      const res = await fetch(`/api/departments?id=${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/departments?id=${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete department');
 
       toast({ title: 'Departamento removido', description: 'Departamento desativado com sucesso!' });
@@ -132,7 +133,7 @@ export function useDepartments() {
 
   const addMember = async (departmentId: string, userId: string, role: string = 'member') => {
     try {
-      const res = await fetch('/api/departments/members', {
+      const res = await apiFetch('/api/departments/members', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ departmentId, userId, role }),
@@ -155,7 +156,7 @@ export function useDepartments() {
 
   const removeMember = async (departmentId: string, userId: string) => {
     try {
-      const res = await fetch(`/api/departments/members?departmentId=${departmentId}&userId=${userId}`, {
+      const res = await apiFetch(`/api/departments/members?departmentId=${departmentId}&userId=${userId}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to remove member');
@@ -171,7 +172,7 @@ export function useDepartments() {
 
   const updateMemberRole = async (departmentId: string, userId: string, role: string) => {
     try {
-      const res = await fetch('/api/departments/members', {
+      const res = await apiFetch('/api/departments/members', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ departmentId, userId, role }),

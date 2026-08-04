@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
@@ -10,12 +11,14 @@ export function useTeam() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: teamMembers, isLoading } = useQuery({
+  // Default `[]`: sem isso `data` e undefined ate a query resolver, e quem faz
+  // `teamMembers.length` no corpo do componente quebra na primeira renderizacao.
+  const { data: teamMembers = [], isLoading } = useQuery({
     queryKey: ['team', companyId],
     queryFn: async () => {
       if (!companyId) return [];
 
-      const res = await fetch(`/api/team?companyId=${companyId}`);
+      const res = await apiFetch(`/api/team?companyId=${companyId}`);
       if (!res.ok) throw new Error('Failed to fetch team');
       return await res.json();
     },
@@ -66,7 +69,7 @@ export function useTeam() {
         throw new Error('Você não pode alterar sua própria role');
       }
 
-      const res = await fetch(`/api/team?companyId=${companyId}`, {
+      const res = await apiFetch(`/api/team?companyId=${companyId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'updateRole', userId, companyId, role }),
@@ -95,7 +98,7 @@ export function useTeam() {
         throw new Error('Você não pode desativar seu próprio usuário');
       }
 
-      const res = await fetch(`/api/team?companyId=${companyId}`, {
+      const res = await apiFetch(`/api/team?companyId=${companyId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'toggleStatus', userId, companyId, isActive }),
@@ -124,7 +127,7 @@ export function useTeam() {
         throw new Error('Você não pode remover seu próprio usuário');
       }
 
-      const res = await fetch(`/api/team?companyId=${companyId}`, {
+      const res = await apiFetch(`/api/team?companyId=${companyId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'remove', userId, companyId }),

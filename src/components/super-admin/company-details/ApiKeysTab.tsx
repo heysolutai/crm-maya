@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,7 +48,7 @@ export function ApiKeysTab({ companyId }: ApiKeysTabProps) {
   const fetchRealKey = async (keyId: string): Promise<string | null> => {
     if (realKeys[keyId]) return realKeys[keyId];
     try {
-      const res = await fetch(`/api/api-keys/${keyId}?companyId=${companyId}`);
+      const res = await apiFetch(`/api/api-keys/${keyId}?companyId=${companyId}`);
       if (!res.ok) return null;
       const data = await res.json();
       const real = data.key as string | null;

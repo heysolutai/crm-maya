@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 
@@ -9,7 +10,7 @@ export function useSidebarCounts() {
     queryFn: async () => {
       if (!companyId) return { appointmentsToday: 0, pendingFollowUps: 0 };
 
-      const res = await fetch(`/api/sidebar-counts?companyId=${companyId}`);
+      const res = await apiFetch(`/api/sidebar-counts?companyId=${companyId}`);
       if (!res.ok) return { appointmentsToday: 0, pendingFollowUps: 0 };
       return await res.json();
     },

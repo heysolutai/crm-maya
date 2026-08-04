@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -48,7 +49,7 @@ export default function CompanySetup() {
     if (!id) return;
     setSaving(true);
     try {
-      const res = await fetch('/api/companies', {
+      const res = await apiFetch('/api/companies', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -73,7 +74,7 @@ export default function CompanySetup() {
     if (!id || !company) return;
     setSaving(true);
     try {
-      const res = await fetch('/api/company-settings', {
+      const res = await apiFetch('/api/company-settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

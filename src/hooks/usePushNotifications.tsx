@@ -1,5 +1,6 @@
 'use client';
 
+import { apiFetch } from '@/lib/api/client';
 import { useCallback, useEffect, useState } from 'react';
 
 type PermissionState = 'default' | 'granted' | 'denied' | 'unsupported';
@@ -85,7 +86,7 @@ export function usePushNotifications() {
       }
 
       const subJson = sub.toJSON();
-      const res = await fetch('/api/push/subscribe', {
+      const res = await apiFetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -119,7 +120,7 @@ export function usePushNotifications() {
         return { ok: true };
       }
 
-      await fetch('/api/push/unsubscribe', {
+      await apiFetch('/api/push/unsubscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ endpoint: sub.endpoint }),

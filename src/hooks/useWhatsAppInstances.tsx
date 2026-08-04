@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery } from '@tanstack/react-query';
 
 /**
@@ -12,7 +13,7 @@ export function useWhatsAppInstances(companyId: string | undefined) {
     queryFn: async () => {
       if (!companyId) return [];
 
-      const res = await fetch(`/api/agents?companyId=${companyId}`);
+      const res = await apiFetch(`/api/agents?companyId=${companyId}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch instances');
       const data = await res.json();
 

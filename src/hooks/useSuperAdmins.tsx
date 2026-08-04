@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,7 +19,7 @@ export function useSuperAdmins() {
   const { data: superAdmins, isLoading } = useQuery({
     queryKey: ['super-admins'],
     queryFn: async (): Promise<SuperAdmin[]> => {
-      const res = await fetch('/api/admin/super-admins');
+      const res = await apiFetch('/api/admin/super-admins');
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch super admins');
       return await res.json();
     },
@@ -26,7 +27,7 @@ export function useSuperAdmins() {
 
   const addSuperAdmin = useMutation({
     mutationFn: async (email: string) => {
-      const res = await fetch('/api/admin/super-admins', {
+      const res = await apiFetch('/api/admin/super-admins', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -62,7 +63,7 @@ export function useSuperAdmins() {
         throw new Error('Você não pode remover a si próprio.');
       }
 
-      const res = await fetch(`/api/admin/super-admins?userId=${userId}`, {
+      const res = await apiFetch(`/api/admin/super-admins?userId=${userId}`, {
         method: 'DELETE',
       });
 

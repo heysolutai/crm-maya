@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 
@@ -14,7 +15,7 @@ export function useOnboarding() {
   return useQuery<OnboardingStatus>({
     queryKey: ['onboarding-status', companyId],
     queryFn: async () => {
-      const res = await fetch(`/api/onboarding/status?companyId=${companyId}`);
+      const res = await apiFetch(`/api/onboarding/status?companyId=${companyId}`);
       if (!res.ok) throw new Error('Falha ao buscar status de onboarding');
       return res.json();
     },

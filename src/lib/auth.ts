@@ -5,6 +5,22 @@ import bcrypt from 'bcryptjs'
 import type { AppRole } from '@prisma/client'
 import { getClientIp, logSecurityEvent } from '@/lib/security-log'
 
+/**
+ * Tempo ocioso ate deslogar. Quem esta mexendo no sistema renova o token
+ * antes disso e nao percebe o limite; quem largou a aba cai.
+ */
+const INATIVIDADE_MAX = 60 * 60 // 1 hora
+
+/**
+ * Teto ABSOLUTO da sessao, contado do login. Vale mesmo com uso continuo.
+ *
+ * Sem ele, a renovacao por atividade tornaria a sessao eterna na pratica: um
+ * navegador aberto o dia inteiro (ou uma aba esquecida numa maquina
+ * compartilhada) seguiria autenticado indefinidamente. Passado esse tempo,
+ * precisa entrar de novo.
+ */
+const SESSAO_MAX = 3 * 60 * 60 // 3 horas
+
 declare module 'next-auth' {
   interface Session {
     user: {
@@ -117,8 +133,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   session: {
-    strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    strategy: 'jwt' as const,
+    /**
+     * Janela de INATIVIDADE, nao duracao da sessao.
+     *
+     * O token e reemitido a cada acesso a sessao (ver updateAge), entao quem
+     * esta usando o sistema nunca chega nesse limite — ele so vence pra quem
+     * largou a aba. Antes eram 30 dias, o que na pratica significava sessao
+     * eterna: dava pra sumir por dois meses e voltar logado.
+     */
+    maxAge: INATIVIDADE_MAX,
+    /**
+     * De quanto em quanto tempo o token pode ser renovado. Sem isso o padrao
+     * e 24h — ou seja, a renovacao nunca aconteceria dentro de uma janela de
+     * 1 hora e todo mundo cairia no meio do expediente.
+     */
+    updateAge: 5 * 60,
   },
   pages: {
     signIn: '/auth',
@@ -130,7 +160,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.role = (user as any).role ?? null
         token.companyId = (user as any).companyId ?? null
         token.checkedAt = Math.floor(Date.now() / 1000)
+        // Marca do login. E o que permite o teto absoluto — sem gravar aqui,
+        // a renovacao por atividade nao teria contra o que ser comparada.
+        token.loginAt = Math.floor(Date.now() / 1000)
         return token
+      }
+
+      // Teto absoluto: passou de SESSAO_MAX desde o login, cai — nao importa
+      // o quanto a pessoa esteja usando. Retornar null invalida o token e o
+      // middleware manda pro /auth.
+      const loginAt = (token.loginAt as number) || 0
+      if (loginAt && Math.floor(Date.now() / 1000) - loginAt > SESSAO_MAX) {
+        return null
       }
       // Revogacao: re-checa isActive + role no banco no maximo a cada 5 min.
       // Assim desativar/demitir/demover um usuario tem efeito em ate 5 min

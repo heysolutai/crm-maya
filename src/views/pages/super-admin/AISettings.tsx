@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -77,7 +78,7 @@ function AISettingsContent() {
     if (!id || !company) return;
     setCompletingSetup(true);
     try {
-      const res = await fetch('/api/company-settings', {
+      const res = await apiFetch('/api/company-settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState, useEffect, useCallback } from 'react';
 import type { QuotedMessage, Message } from '@/components/conversations/types';
 
@@ -8,7 +9,7 @@ export function useQuotedMessages(messages: Message[] | undefined) {
     if (quotedMessages[quotedMessageId]) return;
 
     try {
-      const res = await fetch(`/api/quoted-messages?uazMessageId=${encodeURIComponent(quotedMessageId)}`);
+      const res = await apiFetch(`/api/quoted-messages?uazMessageId=${encodeURIComponent(quotedMessageId)}`);
       if (!res.ok) return;
       const data = await res.json();
 

@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useQuery } from '@tanstack/react-query'
 
 /**
@@ -114,7 +115,7 @@ export function useReportOverview(from: Date, to: Date) {
     queryKey: ['report-overview', fromIso, toIso],
     queryFn: async () => {
       const params = new URLSearchParams({ from: fromIso, to: toIso })
-      const res = await fetch(`/api/reports/overview?${params}`)
+      const res = await apiFetch(`/api/reports/overview?${params}`)
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         throw new Error(err.error || 'Falha ao carregar relatório')

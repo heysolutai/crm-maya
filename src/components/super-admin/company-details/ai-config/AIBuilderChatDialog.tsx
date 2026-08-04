@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api/client';
 import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -87,7 +88,7 @@ export function AIBuilderChatDialog({ open, onOpenChange, companyId }: AIBuilder
   const { data: apiKey } = useQuery({
     queryKey: ['company-api-key', companyId],
     queryFn: async () => {
-      const res = await fetch(`/api/api-keys?companyId=${companyId}`);
+      const res = await apiFetch(`/api/api-keys?companyId=${companyId}`);
       if (!res.ok) return null;
       const keys = await res.json();
       const activeKey = Array.isArray(keys) ? keys.find((k: any) => k.isActive) : null;
@@ -99,7 +100,7 @@ export function AIBuilderChatDialog({ open, onOpenChange, companyId }: AIBuilder
   const { data: companyData } = useQuery({
     queryKey: ['company-builder-data', companyId],
     queryFn: async () => {
-      const res = await fetch(`/api/companies?id=${companyId}`);
+      const res = await apiFetch(`/api/companies?id=${companyId}`);
       if (!res.ok) return null;
       return await res.json();
     },
