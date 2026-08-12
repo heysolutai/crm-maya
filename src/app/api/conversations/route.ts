@@ -32,7 +32,7 @@ const updateConversationSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const { companyId, agentId } = await authenticate(req)
+    const { companyId, agentId, isSuperAdmin } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
 
     const status = req.nextUrl.searchParams.get('status')
@@ -57,17 +57,30 @@ export async function GET(req: NextRequest) {
     //   - demais usuarios so veem conversas das inboxes que sao MEMBROS
     //   - 0 inboxes selecionadas = nao ve NADA (mesmo sendo do time/department)
     //   - conversas legadas SEM inbox tambem ficam invisiveis (so admin/manager veem)
-    if (agentId) {
+    //
+    // O super admin entra pelo flag da sessao, NAO pelo user_roles. O papel
+    // dele e global (user_roles.company_id nulo), entao a busca abaixo por
+    // (userId, companyId) nao acha nada durante uma personificacao: caia como
+    // papel vazio, ia pro filtro de membership, nao tinha nenhuma, e a lista
+    // vinha VAZIA. Quem administra o sistema inteiro via zero conversa.
+    if (agentId && !isSuperAdmin) {
       const roleRow = await prisma.userRole.findFirst({
         where: { userId: agentId, companyId },
         select: { role: true },
       })
       const role = roleRow?.role || ''
+      // 'super_admin' segue na lista por seguranca: cobre o caso de a flag da
+      // sessao nao ter vindo mas existir a linha em user_roles.
       const isPrivileged = ['super_admin', 'company_admin', 'manager'].includes(role)
 
       if (!isPrivileged) {
         const memberships = await prisma.inboxMember.findMany({
-          where: { userId: agentId },
+          where: {
+            userId: agentId,
+            // Amarra ao tenant: membership remanescente de outra empresa nao
+            // deve entrar no calculo do escopo.
+            inbox: { companyId },
+          },
           select: { inboxId: true },
         })
         const memberInboxIds = memberships.map((m) => m.inboxId)
