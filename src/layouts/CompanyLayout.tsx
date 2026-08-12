@@ -78,6 +78,7 @@ import { PushNotificationsToggle } from '@/components/PushNotificationsToggle';
 import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
 import { cn } from '@/lib/utils';
 import { useBranding } from '@/hooks/useBranding';
+import { apiFetch } from '@/lib/api/client';
 
 interface NavItem {
   name: string;
@@ -170,7 +171,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
   const fetchCompanyName = async () => {
     if (!effectiveCompanyId) return;
     try {
-      const res = await fetch(`/api/companies?id=${effectiveCompanyId}`);
+      const res = await apiFetch(`/api/companies?id=${effectiveCompanyId}`);
       if (res.ok) {
         const data = await res.json();
         if (data?.name) setCompanyName(data.name);

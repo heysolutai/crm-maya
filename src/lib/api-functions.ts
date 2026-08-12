@@ -7,6 +7,8 @@
  *   const { data, error } = await invokeFn('send-message-text', payload)
  */
 
+import { apiFetch } from '@/lib/api/client'
+
 const routeMap: Record<string, string> = {
   // WhatsApp
   'send-message-text': '/api/whatsapp/send-text',
@@ -81,7 +83,12 @@ export async function invokeFn<T = any>(
       ...options?.headers,
     }
 
-    const response = await fetch(route, {
+    // apiFetch, nao fetch cru: quando um super admin esta personificando uma
+    // empresa, o companyId nao vem da sessao — vem do header de personificacao.
+    // Com fetch cru, `authenticate()` devolvia companyId nulo e toda rota daqui
+    // (enviar texto, midia, audio, reacao) respondia "Empresa nao identificada",
+    // enquanto a leitura das conversas funcionava porque ja usava apiFetch.
+    const response = await apiFetch(route, {
       method: 'POST',
       headers,
       body: body ? JSON.stringify(body) : undefined,
