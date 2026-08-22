@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Building2, Bot, Users, Shield, Lock, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Building2, Bot, Users, Shield, Lock, Settings, AlertTriangle } from 'lucide-react';
 import { useCompanyDetails } from '@/hooks/useCompanyDetails';
 import { BasicInfoTab } from '@/components/super-admin/company-details/BasicInfoTab';
+import { SettingsTab } from '@/components/super-admin/company-details/SettingsTab';
 import { TeamTab } from '@/components/super-admin/company-details/TeamTab';
 import { RolePermissionsConfig } from '@/components/settings/RolePermissionsConfig';
 import { AIPermissionsConfig } from '@/components/super-admin/company-details/AIPermissionsConfig';
@@ -16,6 +17,7 @@ const sections = [
   { key: 'team', label: 'Equipe', icon: Users },
   { key: 'permissions', label: 'Permissões de Usuários', icon: Shield },
   { key: 'ai-permissions', label: 'Permissões de IA', icon: Lock },
+  { key: 'settings', label: 'Configurações', icon: Settings },
 ] as const;
 
 type SectionKey = typeof sections[number]['key'];
@@ -85,6 +87,8 @@ export default function CompanyDetails() {
         return <RolePermissionsConfig companyId={id} />;
       case 'ai-permissions':
         return <AIPermissionsConfig companyId={id!} />;
+      case 'settings':
+        return <SettingsTab company={company} />;
       default:
         return null;
     }

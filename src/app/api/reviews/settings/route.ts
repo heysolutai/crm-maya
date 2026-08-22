@@ -13,6 +13,7 @@ import { handleApiError } from '@/lib/api/errors'
 // Nota: `enabled` (ativar o modulo) NAO entra aqui — quem controla e o
 // super-admin (/api/admin/review-module). A empresa so edita o conteudo.
 const updateSchema = z.object({
+  dispatchHour: z.number().int().min(0).max(23).optional(),
   googleUrl: z.string().url().max(2000).or(z.literal('')).nullable().optional(),
   tripadvisorUrl: z.string().url().max(2000).or(z.literal('')).nullable().optional(),
   prompt1: z.string().max(4000).nullable().optional(),
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
       settings ?? {
         companyId: auth.companyId,
         enabled: false,
+        dispatchHour: 9,
         googleUrl: '',
         tripadvisorUrl: '',
         prompt1: '',
@@ -70,6 +72,7 @@ export async function PUT(req: NextRequest) {
       typeof v === 'string' && v.trim() === '' ? null : v ?? undefined
 
     const data = {
+      dispatchHour: validation.data.dispatchHour,
       googleUrl: clean(validation.data.googleUrl),
       tripadvisorUrl: clean(validation.data.tripadvisorUrl),
       prompt1: clean(validation.data.prompt1),

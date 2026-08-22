@@ -9,8 +9,15 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Loader2, Save, Link2, Bot, MessageSquare, Power } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Link2, Bot, MessageSquare, Power, Clock, Send } from 'lucide-react';
 
 interface Props {
   onBack: () => void;
@@ -18,6 +25,7 @@ interface Props {
 
 interface FormState {
   enabled: boolean;
+  dispatchHour: number;
   googleUrl: string;
   tripadvisorUrl: string;
   prompt1: string;
@@ -27,6 +35,7 @@ interface FormState {
 
 const EMPTY: FormState = {
   enabled: true,
+  dispatchHour: 9,
   googleUrl: '',
   tripadvisorUrl: '',
   prompt1: '',
@@ -34,8 +43,12 @@ const EMPTY: FormState = {
   greeting: '',
 };
 
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
+
+const formatHour = (h: number) => `${String(h).padStart(2, '0')}:00`;
+
 export function ReviewSettingsPanel({ onBack }: Props) {
-  const { settings, isLoading, save, isSaving } = useReviewSettings();
+  const { settings, isLoading, save, isSaving, dispatchNow, isDispatching } = useReviewSettings();
   const [form, setForm] = useState<FormState>(EMPTY);
 
   // Popula o formulário quando os dados chegam.
@@ -43,6 +56,7 @@ export function ReviewSettingsPanel({ onBack }: Props) {
     if (settings) {
       setForm({
         enabled: settings.enabled ?? true,
+        dispatchHour: settings.dispatchHour ?? 9,
         googleUrl: settings.googleUrl ?? '',
         tripadvisorUrl: settings.tripadvisorUrl ?? '',
         prompt1: settings.prompt1 ?? '',
@@ -108,6 +122,55 @@ export function ReviewSettingsPanel({ onBack }: Props) {
               <Badge variant={form.enabled ? 'default' : 'secondary'}>
                 {form.enabled ? 'Ativo' : 'Inativo'}
               </Badge>
+            </CardContent>
+          </Card>
+
+          {/* Horário do disparo diário */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Clock className="h-4 w-4 text-primary" />
+                Horário do disparo
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Label htmlFor="dispatch-hour">Hora do envio diário das avaliações</Label>
+              <Select
+                value={String(form.dispatchHour)}
+                onValueChange={(v) => set({ dispatchHour: Number(v) })}
+              >
+                <SelectTrigger id="dispatch-hour" className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {HOURS.map((h) => (
+                    <SelectItem key={h} value={String(h)}>
+                      {formatHour(h)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Todos os dias nesse horário (fuso de Brasília) o sistema inicia a coleta de
+                avaliações dos clientes atendidos.
+              </p>
+              <div className="pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => dispatchNow()}
+                  disabled={isDispatching || !form.enabled}
+                >
+                  {isDispatching ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4 mr-2" />
+                  )}
+                  Disparar agora
+                </Button>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Inicia a coleta imediatamente, sem esperar o horário programado.
+                </p>
+              </div>
             </CardContent>
           </Card>
 

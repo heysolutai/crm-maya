@@ -4,6 +4,8 @@ import { toast } from 'sonner'
 
 export interface ReviewSettings {
   enabled: boolean
+  /** Hora do dia (0-23, BRT) em que a cron de avaliacao dispara pra empresa */
+  dispatchHour: number
   googleUrl: string | null
   tripadvisorUrl: string | null
   prompt1: string | null
@@ -46,10 +48,29 @@ export function useReviewSettings() {
     onError: (e: Error) => toast.error(e.message || 'Erro ao salvar configurações'),
   })
 
+  const dispatchNow = useMutation({
+    mutationFn: async () => {
+      const res = await apiFetch('/api/reviews/dispatch', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Falha ao disparar avaliação')
+      return data as { sent: number; skipped: number; failed: number }
+    },
+    onSuccess: (data) => {
+      toast.success(
+        data.sent === 1
+          ? 'Disparo enviado pro fluxo de avaliação'
+          : `Disparo enviado pra ${data.sent} canais`
+      )
+    },
+    onError: (e: Error) => toast.error(e.message || 'Erro ao disparar avaliação'),
+  })
+
   return {
     settings: query.data,
     isLoading: query.isLoading,
     save: save.mutate,
     isSaving: save.isPending,
+    dispatchNow: dispatchNow.mutate,
+    isDispatching: dispatchNow.isPending,
   }
 }

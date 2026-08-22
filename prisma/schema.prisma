@@ -281,6 +281,10 @@ model ReviewSettings {
   /// empresa nao ativa sozinha). Comeca desligado (opt-in). A cron diaria so
   /// dispara pro n8n quando este flag esta true (e o inbox tem restaurant_id).
   enabled        Boolean  @default(false)
+  /// Hora do dia (0-23, fuso America/Sao_Paulo) em que a cron dispara a
+  /// avaliacao desta empresa. A cron roda de hora em hora e so processa as
+  /// empresas cujo dispatchHour bate com a hora atual.
+  dispatchHour   Int      @default(9) @map("dispatch_hour")
   googleUrl      String?  @map("google_url")
   tripadvisorUrl String?  @map("tripadvisor_url")
   prompt1        String?

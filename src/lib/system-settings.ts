@@ -129,6 +129,13 @@ export const KNOWN_SETTINGS = [
     placeholder: 'https://n8n.exemplo.com/webhook/sync-kb',
   },
   {
+    key: 'n8n_review_webhook_url',
+    label: 'N8N - Webhook de Avaliacoes',
+    description: 'URL do N8N que recebe o disparo da coleta de avaliacoes (cron diaria e botao "Disparar agora"). Payload: { apikey, restaurant_id, company_id }.',
+    isSecret: false,
+    placeholder: 'https://n8n.exemplo.com/webhook/reviews',
+  },
+  {
     key: 'default_openai_api_key',
     label: 'OpenAI API Key (default)',
     description: 'Chave OpenAI usada quando a empresa nao tem chave propria configurada.',
