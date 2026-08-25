@@ -14,6 +14,16 @@ export interface Review {
   customerName: string | null
   source: string
   createdAt: string
+  client: {
+    fullName: string | null
+    firstName: string
+    lastName: string | null
+    phone: string | null
+  } | null
+  reservation: {
+    reservedFor: string | null
+    partySize: number | null
+  } | null
 }
 
 export interface ReviewsResponse {
@@ -36,6 +46,9 @@ interface UseReviewsParams {
   rating?: number | null
   sentiment?: SentimentFilter
   search?: string
+  /** Periodo da data da reserva, formato YYYY-MM-DD */
+  dateFrom?: string
+  dateTo?: string
 }
 
 export function useReviews({
@@ -44,16 +57,20 @@ export function useReviews({
   rating = null,
   sentiment = null,
   search = '',
+  dateFrom = '',
+  dateTo = '',
 }: UseReviewsParams = {}) {
   const queryClient = useQueryClient()
 
   const query = useQuery<ReviewsResponse>({
-    queryKey: ['reviews', page, limit, rating, sentiment, search],
+    queryKey: ['reviews', page, limit, rating, sentiment, search, dateFrom, dateTo],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) })
       if (rating) params.set('rating', String(rating))
       if (sentiment) params.set('sentiment', sentiment)
       if (search) params.set('search', search)
+      if (dateFrom) params.set('dateFrom', dateFrom)
+      if (dateTo) params.set('dateTo', dateTo)
 
       const res = await apiFetch(`/api/reviews?${params}`)
       if (!res.ok) {

@@ -235,6 +235,8 @@ model Reservation {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
 
+  reviews Review[]
+
   @@index([companyId, createdAt], map: "idx_reservations_company_created")
   @@index([companyId, source], map: "idx_reservations_company_source")
   @@index([companyId, type], map: "idx_reservations_company_type")
@@ -264,6 +266,9 @@ model Review {
   metadata       Json?    @default("{}")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  client      Client?      @relation(fields: [clientId], references: [id])
+  reservation Reservation? @relation(fields: [reservationId], references: [id])
 
   @@index([companyId, createdAt], map: "idx_reviews_company_created")
   @@index([companyId, rating], map: "idx_reviews_company_rating")
@@ -433,6 +438,7 @@ model Client {
   reminders      Reminder[]
   followUpJobs   FollowUpJob[]
   aiTokenUsage   AiTokenUsage[]
+  reviews        Review[]
 
   @@index([companyId], map: "idx_clients_company")
   @@index([assignedTo], map: "idx_clients_assigned")

@@ -28,7 +28,10 @@ import {
   ThumbsDown,
   Minus,
   Settings,
+  X,
+  Phone,
 } from 'lucide-react';
+import type { Review } from '@/hooks/useReviews';
 import { cn } from '@/lib/utils';
 
 const RATING_FILTERS = [5, 4, 3, 2, 1];
@@ -89,12 +92,23 @@ function formatDate(iso: string): string {
   });
 }
 
+/** Nome exibido: cadastro do cliente tem prioridade; senão o nome coletado na avaliação. */
+function clientName(r: Review): string | null {
+  if (r.client) {
+    return r.client.fullName || [r.client.firstName, r.client.lastName].filter(Boolean).join(' ');
+  }
+  return r.customerName;
+}
+
 export default function Reviews() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [ratingFilter, setRatingFilter] = useState<number | null>(null);
   const [sentimentFilter, setSentimentFilter] = useState<SentimentFilter>(null);
+  // Período da DATA DA RESERVA vinculada à avaliação (YYYY-MM-DD).
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   // Alterna entre a lista (default) e o painel de configurações.
   const [showSettings, setShowSettings] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: string | null }>({
@@ -107,6 +121,8 @@ export default function Reviews() {
     rating: ratingFilter,
     sentiment: sentimentFilter,
     search,
+    dateFrom,
+    dateTo,
   });
 
   const applySearch = () => {
@@ -182,7 +198,7 @@ export default function Reviews() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-2">
           <Input
-            placeholder="Buscar por nome ou comentário..."
+            placeholder="Buscar por nome, telefone ou comentário..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && applySearch()}
@@ -191,6 +207,45 @@ export default function Reviews() {
           <Button variant="outline" size="icon" onClick={applySearch}>
             <Search className="h-4 w-4" />
           </Button>
+        </div>
+
+        {/* Período da data da reserva */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm text-muted-foreground whitespace-nowrap">Reserva de</span>
+          <Input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => {
+              setDateFrom(e.target.value);
+              setPage(1);
+            }}
+            className="w-[150px]"
+          />
+          <span className="text-sm text-muted-foreground">até</span>
+          <Input
+            type="date"
+            value={dateTo}
+            onChange={(e) => {
+              setDateTo(e.target.value);
+              setPage(1);
+            }}
+            className="w-[150px]"
+          />
+          {(dateFrom || dateTo) && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground"
+              title="Limpar período"
+              onClick={() => {
+                setDateFrom('');
+                setDateTo('');
+                setPage(1);
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -246,8 +301,9 @@ export default function Reviews() {
               <TableRow>
                 <TableHead className="w-[130px]">Nota</TableHead>
                 <TableHead className="w-[120px]">Tipo</TableHead>
-                <TableHead className="w-[180px]">Cliente</TableHead>
+                <TableHead className="w-[200px]">Cliente</TableHead>
                 <TableHead>Comentário</TableHead>
+                <TableHead className="w-[140px]">Reserva</TableHead>
                 <TableHead className="w-[110px]">Origem</TableHead>
                 <TableHead className="w-[160px]">Data</TableHead>
                 <TableHead className="w-[60px]" />
@@ -257,7 +313,7 @@ export default function Reviews() {
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 7 }).map((__, j) => (
+                    {Array.from({ length: 8 }).map((__, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -266,11 +322,11 @@ export default function Reviews() {
                 ))
               ) : reviews.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center">
+                  <TableCell colSpan={8} className="h-32 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <MessageSquareQuote className="h-8 w-8 opacity-40" />
                       <p className="text-sm">
-                        {search || ratingFilter || sentimentFilter
+                        {search || ratingFilter || sentimentFilter || dateFrom || dateTo
                           ? 'Nenhuma avaliação encontrada com esses filtros.'
                           : 'Nenhuma avaliação registrada ainda.'}
                       </p>
@@ -289,8 +345,16 @@ export default function Reviews() {
                     <TableCell>
                       <SentimentBadge sentiment={r.sentiment} />
                     </TableCell>
-                    <TableCell className="font-medium">
-                      {r.customerName || <span className="text-muted-foreground">—</span>}
+                    <TableCell>
+                      <p className="font-medium">
+                        {clientName(r) || <span className="text-muted-foreground">—</span>}
+                      </p>
+                      {r.client?.phone && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <Phone className="h-3 w-3" />
+                          {r.client.phone}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell className="max-w-[420px]">
                       {r.comment ? (
@@ -298,6 +362,9 @@ export default function Reviews() {
                       ) : (
                         <span className="text-muted-foreground text-sm">Sem comentário</span>
                       )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                      {r.reservation?.reservedFor ? formatDate(r.reservation.reservedFor) : '—'}
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="font-normal">

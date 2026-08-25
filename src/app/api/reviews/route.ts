@@ -48,16 +48,40 @@ export async function GET(req: NextRequest) {
     const rating = searchParams.get('rating')
     const sentiment = searchParams.get('sentiment')
     const search = searchParams.get('search') || ''
+    // Periodo da DATA DA RESERVA (nao da avaliacao). Formato YYYY-MM-DD.
+    const dateFrom = searchParams.get('dateFrom')
+    const dateTo = searchParams.get('dateTo')
+
+    // Datas interpretadas no fuso de Brasilia (UTC-3, sem horario de verao).
+    const reservedForRange = {
+      ...(dateFrom ? { gte: new Date(`${dateFrom}T00:00:00-03:00`) } : {}),
+      ...(dateTo ? { lte: new Date(`${dateTo}T23:59:59.999-03:00`) } : {}),
+    }
 
     const where = {
       companyId,
       ...(rating ? { rating: parseInt(rating) } : {}),
       ...(sentiment ? { sentiment } : {}),
+      ...(dateFrom || dateTo
+        ? { reservation: { is: { reservedFor: reservedForRange } } }
+        : {}),
       ...(search
         ? {
             OR: [
               { customerName: { contains: search, mode: 'insensitive' as const } },
               { comment: { contains: search, mode: 'insensitive' as const } },
+              {
+                client: {
+                  is: {
+                    OR: [
+                      { fullName: { contains: search, mode: 'insensitive' as const } },
+                      { firstName: { contains: search, mode: 'insensitive' as const } },
+                      { lastName: { contains: search, mode: 'insensitive' as const } },
+                      { phone: { contains: search } },
+                    ],
+                  },
+                },
+              },
             ],
           }
         : {}),
@@ -69,6 +93,14 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
+        include: {
+          client: {
+            select: { fullName: true, firstName: true, lastName: true, phone: true },
+          },
+          reservation: {
+            select: { reservedFor: true, partySize: true },
+          },
+        },
       }),
       prisma.review.count({ where }),
       // Media geral da empresa (nao do filtro) — serve de referencia fixa

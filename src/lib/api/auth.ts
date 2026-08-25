@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { verifyApiKey } from './api-key-utils'
 import { AuthError } from './errors'
 import { IMPERSONATION_HEADER, isValidCompanyId } from './impersonation'
 import type { AuthResult } from './types'
@@ -64,22 +65,23 @@ export async function authenticate(req: Request): Promise<AuthResult> {
     }
   }
 
-  // Fallback to API key auth
+  // Fallback to API key auth. verifyApiKey resolve por prefixo + hash — a
+  // coluna `key` guarda o valor CRIPTOGRAFADO apos a migracao, entao lookup
+  // em texto puro deixaria de reconhecer keys validas (401 indevido).
   const apiKey = req.headers.get('x-api-key')
   if (apiKey) {
-    const keyData = await prisma.apiKey.findFirst({
-      where: { key: apiKey, isActive: true },
-      select: { id: true, companyId: true },
-    })
+    const keyData = await verifyApiKey(apiKey)
+    const expired = keyData?.expiresAt && new Date(keyData.expiresAt) < new Date()
 
-    if (!keyData) {
+    if (!keyData || !keyData.isActive || expired) {
       throw new AuthError('API key invalida ou inativa', 401, 'INVALID_API_KEY')
     }
 
-    await prisma.apiKey.update({
+    // Fire-and-forget: nao segura a resposta pra registrar o uso
+    prisma.apiKey.update({
       where: { id: keyData.id },
       data: { lastUsedAt: new Date() },
-    })
+    }).catch(() => {})
 
     return {
       agentId: null,
