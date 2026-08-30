@@ -507,6 +507,11 @@ model Conversation {
   stage             String?
   satisfactionScore Int?               @map("satisfaction_score")
   friendlyId        String?            @map("friendly_id")
+  /// URL de resume de um fluxo externo (n8n) aguardando a resposta do cliente
+  /// (ex: fluxo de avaliacao). Quando setada, a proxima mensagem INCOMING e
+  /// enviada pra ela (one-shot: o campo e limpo no envio) em vez do webhook
+  /// de IA padrao. O fluxo re-registra a URL a cada nova espera.
+  executionUrl      String?            @map("execution_url")
   metadata          Json?              @default("{}")
   departmentId      String?            @map("department_id") @db.Uuid
   inboxId           String?            @map("inbox_id") @db.Uuid

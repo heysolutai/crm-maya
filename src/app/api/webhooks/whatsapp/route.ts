@@ -1545,6 +1545,7 @@ export async function POST(req: NextRequest) {
             stage: true,
             status: true,
             friendlyId: true,
+            executionUrl: true,
             transferredTo: true,
             transferAgent: { select: { id: true, fullName: true } },
             departmentId: true,
@@ -1598,6 +1599,22 @@ export async function POST(req: NextRequest) {
 
       const n8nWebhookUrl =
         companyAiConfig?.n8nWebhookUrl || (await getSystemSetting('n8n_ai_webhook_url'));
+
+      // Desvio de fluxo externo (ex: avaliacao no n8n): se a conversa tem uma
+      // executionUrl registrada, a resposta do cliente vai pra ela em vez do
+      // webhook de IA padrao. ONE-SHOT: limpa o campo ja no encaminhamento —
+      // o fluxo re-registra via POST /api/conversations/execution-url a cada
+      // nova espera. So mensagens INCOMING resumem o fluxo.
+      let executionUrl: string | null = null;
+      if (payload.type === 'incoming' && conversationData?.executionUrl) {
+        executionUrl = conversationData.executionUrl;
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data: { executionUrl: null },
+        }).catch((err) => console.error('[N8N Webhook] Falha ao limpar executionUrl:', err));
+        console.log(`[N8N Webhook] 🔀 Desviando mensagem ${message.id} pra executionUrl do fluxo externo`);
+      }
+      const targetWebhookUrl = executionUrl || n8nWebhookUrl;
       const knowledgeName = companyAiConfig?.knowledge || null;
       const memoryKeyName = companyAiConfig?.memoryKey || null;
       const productsKnowledgeName = companyAiConfig?.productsKnowledge || null;
@@ -1711,7 +1728,7 @@ export async function POST(req: NextRequest) {
             instanceApiUrl: whatsappInstance.apiUrl || '',
             instanceApiKey: whatsappInstance.instanceApiKey || '',
             messageKey: mediaMessageId,
-            n8nWebhookUrl: n8nWebhookUrl || undefined,
+            n8nWebhookUrl: targetWebhookUrl || undefined,
             n8nPayload: webhookPayload,
           });
           console.log('[Audio Transcription] ✅ Queued transcription job for message', message.id);
@@ -1733,17 +1750,17 @@ export async function POST(req: NextRequest) {
             instanceApiUrl: whatsappInstance.apiUrl || '',
             instanceApiKey: whatsappInstance.instanceApiKey || '',
             messageKey: mediaMessageId,
-            n8nWebhookUrl: n8nWebhookUrl || undefined,
+            n8nWebhookUrl: targetWebhookUrl || undefined,
             n8nPayload: webhookPayload,
           });
           console.log('[Media Processing] ✅ Queued for message', message.id);
         } catch (queueError) {
           console.error('[Media Processing] Failed to queue:', queueError);
         }
-      } else if (n8nWebhookUrl) {
+      } else if (targetWebhookUrl) {
         try {
           await enqueueN8NWebhook({
-            webhookUrl: n8nWebhookUrl,
+            webhookUrl: targetWebhookUrl,
             payload: webhookPayload,
             companyId,
             conversationId,
@@ -1753,7 +1770,7 @@ export async function POST(req: NextRequest) {
         } catch (queueError) {
           console.error('[N8N Webhook] Failed to queue, falling back to sync:', queueError);
           try {
-            await fetch(n8nWebhookUrl, {
+            await fetch(targetWebhookUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(webhookPayload),
