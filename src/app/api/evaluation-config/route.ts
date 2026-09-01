@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
       tripadvisor_url: settings?.tripadvisorUrl ?? null,
       prompt_feedback: settings?.prompt1 ?? null,
       prompt_response_criteria: settings?.prompt2 ?? null,
+      prompt_final_response: settings?.promptFinal ?? null,
       greeting: settings?.greeting ?? null,
     })
   } catch (error) {

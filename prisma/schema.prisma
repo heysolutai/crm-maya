@@ -261,6 +261,13 @@ model Review {
   sentiment      String   @default("neutro")
   comment        String?
   customerName   String?  @map("customer_name")
+  /// Data/hora da reserva avaliada, informada pelo fluxo (n8n). Usada quando
+  /// a reserva nao existe como registro no CRM (reservationId vazio) — o
+  /// filtro por data da tela cobre os dois casos.
+  reservationDate DateTime? @map("reservation_date")
+  /// Codigo da reserva no sistema externo (ex: "F2IE8J9F" do Reserve Maya).
+  /// Nao confundir com reservationId, que e o UUID da reserva no CRM.
+  reservationCode String?  @map("reservation_code")
   /// Origem do registro: 'ai' | 'agent' | 'manual'
   source         String   @default("ai")
   metadata       Json?    @default("{}")
@@ -290,10 +297,17 @@ model ReviewSettings {
   /// avaliacao desta empresa. A cron roda de hora em hora e so processa as
   /// empresas cujo dispatchHour bate com a hora atual.
   dispatchHour   Int      @default(9) @map("dispatch_hour")
+  /// Inbox (conexao de WhatsApp) usada no disparo de avaliacao. Null = todas
+  /// as inboxes ativas com restaurant_id (comportamento padrao). Relevante
+  /// quando a empresa tem mais de uma conexao ativa.
+  inboxId        String?  @map("inbox_id") @db.Uuid
   googleUrl      String?  @map("google_url")
   tripadvisorUrl String?  @map("tripadvisor_url")
   prompt1        String?
   prompt2        String?
+  /// Prompt da resposta final ao cliente — instrucoes livres pra IA gerar a
+  /// mensagem de encerramento apos o feedback (agradecimento, link etc).
+  promptFinal    String?  @map("prompt_final")
   /// Saudacao inicial enviada ao pedir a avaliacao
   greeting       String?
   createdAt      DateTime @default(now()) @map("created_at")
@@ -512,6 +526,10 @@ model Conversation {
   /// enviada pra ela (one-shot: o campo e limpo no envio) em vez do webhook
   /// de IA padrao. O fluxo re-registra a URL a cada nova espera.
   executionUrl      String?            @map("execution_url")
+  /// Validade da executionUrl (TTL). Vencida, a URL e ignorada e limpa — a
+  /// mensagem segue pro fluxo de IA normal. Protege contra fluxo externo que
+  /// morreu sem limpar o registro.
+  executionUrlExpiresAt DateTime?      @map("execution_url_expires_at")
   metadata          Json?              @default("{}")
   departmentId      String?            @map("department_id") @db.Uuid
   inboxId           String?            @map("inbox_id") @db.Uuid

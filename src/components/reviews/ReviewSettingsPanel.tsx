@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useReviewSettings } from '@/hooks/useReviewSettings';
+import { useInboxes } from '@/hooks/useInboxes';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,20 +27,25 @@ interface Props {
 interface FormState {
   enabled: boolean;
   dispatchHour: number;
+  /** 'all' = todas as conexoes ativas (null na API) */
+  inboxId: string;
   googleUrl: string;
   tripadvisorUrl: string;
   prompt1: string;
   prompt2: string;
+  promptFinal: string;
   greeting: string;
 }
 
 const EMPTY: FormState = {
   enabled: true,
   dispatchHour: 9,
+  inboxId: 'all',
   googleUrl: '',
   tripadvisorUrl: '',
   prompt1: '',
   prompt2: '',
+  promptFinal: '',
   greeting: '',
 };
 
@@ -49,7 +55,10 @@ const formatHour = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
 export function ReviewSettingsPanel({ onBack }: Props) {
   const { settings, isLoading, save, isSaving, dispatchNow, isDispatching } = useReviewSettings();
+  const { inboxes } = useInboxes();
   const [form, setForm] = useState<FormState>(EMPTY);
+
+  const activeInboxes = (inboxes ?? []).filter((i) => i.is_active);
 
   // Popula o formulário quando os dados chegam.
   useEffect(() => {
@@ -57,10 +66,12 @@ export function ReviewSettingsPanel({ onBack }: Props) {
       setForm({
         enabled: settings.enabled ?? true,
         dispatchHour: settings.dispatchHour ?? 9,
+        inboxId: settings.inboxId ?? 'all',
         googleUrl: settings.googleUrl ?? '',
         tripadvisorUrl: settings.tripadvisorUrl ?? '',
         prompt1: settings.prompt1 ?? '',
         prompt2: settings.prompt2 ?? '',
+        promptFinal: settings.promptFinal ?? '',
         greeting: settings.greeting ?? '',
       });
     }
@@ -68,7 +79,8 @@ export function ReviewSettingsPanel({ onBack }: Props) {
 
   const set = (patch: Partial<FormState>) => setForm((p) => ({ ...p, ...patch }));
 
-  const handleSave = () => save(form);
+  const handleSave = () =>
+    save({ ...form, inboxId: form.inboxId === 'all' ? null : form.inboxId });
 
   return (
     <div className="space-y-6">
@@ -154,6 +166,33 @@ export function ReviewSettingsPanel({ onBack }: Props) {
                 Todos os dias nesse horário (fuso de Brasília) o sistema inicia a coleta de
                 avaliações dos clientes atendidos.
               </p>
+
+              {/* Conexão de WhatsApp usada no disparo */}
+              <div className="pt-2 space-y-2">
+                <Label htmlFor="dispatch-inbox">Conexão de WhatsApp do disparo</Label>
+                <Select
+                  value={form.inboxId}
+                  onValueChange={(v) => set({ inboxId: v })}
+                >
+                  <SelectTrigger id="dispatch-inbox" className="w-72">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as conexões ativas</SelectItem>
+                    {activeInboxes.map((inbox) => (
+                      <SelectItem key={inbox.id} value={inbox.id}>
+                        {inbox.display_name}
+                        {inbox.phone_number ? ` — ${inbox.phone_number}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Com mais de uma conexão ativa, escolha por qual número as avaliações são
+                  enviadas. "Todas" dispara por cada conexão que tenha restaurante vinculado.
+                </p>
+              </div>
+
               <div className="pt-2">
                 <Button
                   variant="outline"
@@ -236,6 +275,21 @@ export function ReviewSettingsPanel({ onBack }: Props) {
                   onChange={(e) => set({ prompt2: e.target.value })}
                   className="font-mono text-sm"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="prompt-final">Resposta final ao cliente</Label>
+                <Textarea
+                  id="prompt-final"
+                  rows={5}
+                  placeholder="Instruções para a IA gerar a mensagem final após o feedback — agradecimento, tom, link de avaliação, o que incluir ou evitar..."
+                  value={form.promptFinal}
+                  onChange={(e) => set({ promptFinal: e.target.value })}
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Texto livre: escreva como a IA deve encerrar a conversa depois que o cliente
+                  der o feedback.
+                </p>
               </div>
             </CardContent>
           </Card>

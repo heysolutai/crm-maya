@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   try {
     const settings = await prisma.reviewSettings.findUnique({
       where: { companyId: auth.companyId },
-      select: { enabled: true },
+      select: { enabled: true, inboxId: true },
     })
     if (!settings?.enabled) {
       return NextResponse.json(
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const result = await dispatchCompanyReviews(auth.companyId, webhookUrl)
+    const result = await dispatchCompanyReviews(auth.companyId, webhookUrl, settings.inboxId)
 
     if (result.sent === 0) {
       return NextResponse.json(

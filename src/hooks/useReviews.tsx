@@ -14,6 +14,10 @@ export interface Review {
   customerName: string | null
   source: string
   createdAt: string
+  /** Data da reserva informada direto pelo fluxo (sem reserva no CRM) */
+  reservationDate: string | null
+  /** Codigo da reserva no sistema externo (ex: "F2IE8J9F") */
+  reservationCode: string | null
   client: {
     fullName: string | null
     firstName: string

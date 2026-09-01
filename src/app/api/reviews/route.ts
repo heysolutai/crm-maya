@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
+import { phoneVariants } from '@/lib/api/utils'
 
 /**
  * Avaliacoes do cliente sobre o atendimento/experiencia.
@@ -22,17 +23,40 @@ function sentimentFromRating(rating: number): 'positivo' | 'neutro' | 'negativo'
 }
 
 const createSchema = z.object({
-  rating: z.number().int().min(1).max(5),
+  // coerce: o n8n manda body parameters como string ("5")
+  rating: z.coerce.number().int().min(1).max(5),
   // Opcional: se ausente, derivamos da nota. A IA pode mandar explicito quando
   // o texto contradiz a nota (ex: nota 4 com reclamacao seria 'negativo').
   sentiment: z.enum(['positivo', 'neutro', 'negativo']).optional(),
   comment: z.string().max(2000).optional().nullable(),
   customerName: z.string().max(255).optional().nullable(),
   source: z.enum(['ai', 'agent', 'manual']).optional().default('ai'),
+  /// Telefone do cliente — alternativa simples ao clientId: o CRM resolve o
+  /// cliente sozinho (mesmo match com/sem 9 usado no resto do sistema).
+  phone: z.string().min(5).max(30).optional().nullable(),
   clientId: z.string().uuid().optional().nullable(),
   conversationId: z.string().uuid().optional().nullable(),
   reservationId: z.string().uuid().optional().nullable(),
+  /// Codigo da reserva no sistema externo (ex: "F2IE8J9F") — texto livre,
+  /// diferente do reservationId (UUID do CRM).
+  reservation_code: z.string().max(60).optional().nullable(),
+  reservationCode: z.string().max(60).optional().nullable(),
+  /// Data da reserva avaliada: "YYYY-MM-DD" (+ reservation_time opcional
+  /// "HH:mm") ou ISO completo. Interpretada no fuso de Brasilia.
+  reservation_date: z.string().max(40).optional().nullable(),
+  reservationDate: z.string().max(40).optional().nullable(),
+  reservation_time: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
 })
+
+/** "YYYY-MM-DD" (+ "HH:mm") ou ISO → Date no fuso de Brasilia. Null se invalida. */
+function parseReservationDate(dateStr: string, time?: string | null): Date | null {
+  const s = dateStr.trim()
+  const isoDay = /^\d{4}-\d{2}-\d{2}$/
+  const parsed = isoDay.test(s)
+    ? new Date(`${s}T${time || '00:00'}:00-03:00`)
+    : new Date(s)
+  return isNaN(parsed.getTime()) ? null : parsed
+}
 
 export async function GET(req: NextRequest) {
   const auth = await authenticate(req)
@@ -63,13 +87,25 @@ export async function GET(req: NextRequest) {
       ...(rating ? { rating: parseInt(rating) } : {}),
       ...(sentiment ? { sentiment } : {}),
       ...(dateFrom || dateTo
-        ? { reservation: { is: { reservedFor: reservedForRange } } }
+        ? {
+            // Data da reserva: vale tanto a reserva vinculada (CRM) quanto a
+            // data informada direto pelo fluxo (reservationDate).
+            AND: [
+              {
+                OR: [
+                  { reservation: { is: { reservedFor: reservedForRange } } },
+                  { reservationDate: reservedForRange },
+                ],
+              },
+            ],
+          }
         : {}),
       ...(search
         ? {
             OR: [
               { customerName: { contains: search, mode: 'insensitive' as const } },
               { comment: { contains: search, mode: 'insensitive' as const } },
+              { reservationCode: { contains: search, mode: 'insensitive' as const } },
               {
                 client: {
                   is: {
@@ -153,6 +189,35 @@ export async function POST(req: NextRequest) {
     }
     const d = validation.data
 
+    // Data da reserva (string do fluxo → Date BRT)
+    const rawReservationDate = d.reservation_date ?? d.reservationDate
+    let reservationDate: Date | null = null
+    if (rawReservationDate) {
+      reservationDate = parseReservationDate(rawReservationDate, d.reservation_time)
+      if (!reservationDate) {
+        return NextResponse.json(
+          { error: 'reservation_date invalida (use YYYY-MM-DD ou ISO)' },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Telefone → cliente (quando clientId nao veio). Nao cria cliente novo:
+    // se nao achar, a avaliacao fica sem vinculo, sem erro.
+    let clientId = d.clientId ?? null
+    if (!clientId && d.phone) {
+      const variants = phoneVariants(d.phone)
+      const client = await prisma.client.findFirst({
+        where: {
+          companyId,
+          OR: [{ phone: { in: variants } }, { whatsappLid: { in: variants } }],
+        },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
+      })
+      if (client) clientId = client.id
+    }
+
     // IDOR: os IDs de referencia precisam pertencer a mesma empresa.
     if (d.clientId) {
       const client = await prisma.client.findFirst({
@@ -184,9 +249,11 @@ export async function POST(req: NextRequest) {
         comment: d.comment ?? null,
         customerName: d.customerName ?? null,
         source: d.source,
-        clientId: d.clientId ?? null,
+        clientId,
         conversationId: d.conversationId ?? null,
         reservationId: d.reservationId ?? null,
+        reservationDate,
+        reservationCode: (d.reservation_code ?? d.reservationCode)?.trim() || null,
       },
     })
 

@@ -17,6 +17,9 @@ const sendTextSchema = z.object({
   conversationId: z.string().uuid().optional(),
   message: z.string().min(1, 'Message is required'),
   phone: z.string().optional(),
+  /// Inbox (canal/agente) por onde enviar. Sem informar, usa a inbox
+  /// vinculada a conversa; sem vinculo, a primeira inbox ativa da empresa.
+  inboxId: z.string().uuid().optional(),
   fromAI: z.boolean().optional(),
   replyToMessageId: z.string().uuid().optional(),
   replyid: z.string().optional(),
@@ -75,10 +78,22 @@ export async function POST(req: NextRequest) {
 
     console.log('[send-message-text] Auth done:', Date.now() - t0, 'ms');
 
+    // Inbox explicita no body tem prioridade. IDOR: precisa ser da empresa.
+    let requestedInbox = null;
+    if (payload.inboxId) {
+      requestedInbox = await prisma.inbox.findFirst({
+        where: { id: payload.inboxId, companyId, isActive: true },
+      });
+      if (!requestedInbox) {
+        return apiError('Inbox não encontrada ou inativa.', 'INBOX_NOT_FOUND', 404);
+      }
+    }
+
     // Resolve a conversa antes pra descobrir qual agente envia (multi-canal).
+    // Conversa nova criada por telefone ja nasce vinculada a inbox pedida.
     const conversationId = payload.conversationId
       ? payload.conversationId
-      : await findOrCreateConversation(payload.phone || '', companyId);
+      : await findOrCreateConversation(payload.phone || '', companyId, requestedInbox?.id);
 
     // Busca a conversa pra saber qual agente esta vinculado
     const conversation = await prisma.conversation.findFirst({
@@ -87,10 +102,13 @@ export async function POST(req: NextRequest) {
     });
     if (!conversation) return apiError('Conversa não encontrada.', 'CONVERSATION_NOT_FOUND', 404);
 
-    // Se a conversa tem inbox vinculada e ela tem adapter, manda pelo adapter
-    if (conversation.inboxId) {
-      const agent = await prisma.inbox.findFirst({
-        where: { id: conversation.inboxId, companyId },
+    // Inbox de envio: a explicita do body > a vinculada a conversa
+    const sendInboxId = requestedInbox?.id || conversation.inboxId;
+
+    // Se a inbox de envio tem adapter, manda pelo adapter
+    if (sendInboxId) {
+      const agent = requestedInbox || await prisma.inbox.findFirst({
+        where: { id: sendInboxId, companyId },
       });
 
       if (agent && isChannelType(agent.channelType) && hasAdapter(agent.channelType as any)) {
@@ -144,8 +162,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Fallback: fluxo legado UazAPI (instancia unica por empresa, sem channel adapter)
-    const instance = await getWhatsAppInstance(companyId).catch(() => null);
+    // Fallback: fluxo legado UazAPI (sem channel adapter). Respeita a inbox
+    // explicita do body; sem ela, primeira instancia ativa da empresa.
+    const instance = requestedInbox
+      ? {
+          id: requestedInbox.id,
+          instance_name: requestedInbox.instanceName,
+          api_url: requestedInbox.apiUrl ?? '',
+          instance_api_key: requestedInbox.instanceApiKey ?? '',
+          company_id: requestedInbox.companyId,
+          is_active: requestedInbox.isActive,
+        }
+      : await getWhatsAppInstance(companyId).catch(() => null);
     if (!instance) return apiError('WhatsApp não configurado ou desconectado.', 'WHATSAPP_NOT_CONNECTED', 503);
 
     console.log('[send-message-text] Instance + Conv done:', Date.now() - t0, 'ms');

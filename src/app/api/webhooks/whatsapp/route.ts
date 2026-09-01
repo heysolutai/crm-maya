@@ -1546,6 +1546,7 @@ export async function POST(req: NextRequest) {
             status: true,
             friendlyId: true,
             executionUrl: true,
+            executionUrlExpiresAt: true,
             transferredTo: true,
             transferAgent: { select: { id: true, fullName: true } },
             departmentId: true,
@@ -1607,12 +1608,23 @@ export async function POST(req: NextRequest) {
       // nova espera. So mensagens INCOMING resumem o fluxo.
       let executionUrl: string | null = null;
       if (payload.type === 'incoming' && conversationData?.executionUrl) {
-        executionUrl = conversationData.executionUrl;
+        const urlExpired =
+          conversationData.executionUrlExpiresAt &&
+          conversationData.executionUrlExpiresAt < new Date();
+
+        // Vencida ou nao, o campo e limpo: valida = one-shot consumido;
+        // vencida = registro morto que nao pode engolir mensagens futuras.
         await prisma.conversation.update({
           where: { id: conversationId },
-          data: { executionUrl: null },
+          data: { executionUrl: null, executionUrlExpiresAt: null },
         }).catch((err) => console.error('[N8N Webhook] Falha ao limpar executionUrl:', err));
-        console.log(`[N8N Webhook] 🔀 Desviando mensagem ${message.id} pra executionUrl do fluxo externo`);
+
+        if (urlExpired) {
+          console.log(`[N8N Webhook] ⏰ executionUrl expirada na conversa ${conversationId} — mensagem segue pro fluxo normal`);
+        } else {
+          executionUrl = conversationData.executionUrl;
+          console.log(`[N8N Webhook] 🔀 Desviando mensagem ${message.id} pra executionUrl do fluxo externo`);
+        }
       }
       const targetWebhookUrl = executionUrl || n8nWebhookUrl;
       const knowledgeName = companyAiConfig?.knowledge || null;

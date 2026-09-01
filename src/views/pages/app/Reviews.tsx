@@ -363,8 +363,25 @@ export default function Reviews() {
                         <span className="text-muted-foreground text-sm">Sem comentário</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                      {r.reservation?.reservedFor ? formatDate(r.reservation.reservedFor) : '—'}
+                    <TableCell className="text-sm whitespace-nowrap">
+                      {(() => {
+                        const reserva = r.reservation?.reservedFor ?? r.reservationDate;
+                        if (!reserva && !r.reservationCode) {
+                          return <span className="text-muted-foreground">—</span>;
+                        }
+                        return (
+                          <>
+                            <p className="text-muted-foreground">
+                              {reserva ? formatDate(reserva) : '—'}
+                            </p>
+                            {r.reservationCode && (
+                              <p className="text-xs text-muted-foreground/70 font-mono mt-0.5">
+                                {r.reservationCode}
+                              </p>
+                            )}
+                          </>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="font-normal">

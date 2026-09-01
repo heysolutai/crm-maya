@@ -51,7 +51,7 @@ async function dispatchReviewCron() {
   // Empresas com o modulo ativo E cujo horario configurado e a hora atual.
   const activeSettings = await prisma.reviewSettings.findMany({
     where: { enabled: true, dispatchHour: currentHour },
-    select: { companyId: true },
+    select: { companyId: true, inboxId: true },
   })
   if (activeSettings.length === 0) {
     return { sent: 0, skipped: 0, failed: 0 }
@@ -61,8 +61,8 @@ async function dispatchReviewCron() {
   let skipped = 0
   let failed = 0
 
-  for (const { companyId } of activeSettings) {
-    const result = await dispatchCompanyReviews(companyId, webhookUrl)
+  for (const { companyId, inboxId } of activeSettings) {
+    const result = await dispatchCompanyReviews(companyId, webhookUrl, inboxId)
     sent += result.sent
     skipped += result.skipped
     failed += result.failed

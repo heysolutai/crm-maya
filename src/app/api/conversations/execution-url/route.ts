@@ -21,12 +21,19 @@ import { handleApiErrorCors } from '@/lib/api/errors'
  * Enviar execution_url: null limpa manualmente (ex: fim do fluxo).
  */
 
+// TTL default de 24h — cobre a janela de espera do fluxo de avaliacao.
+const DEFAULT_TTL_SECONDS = 24 * 60 * 60
+
 const bodySchema = z.object({
   conversation_id: z.string().uuid().optional(),
   conversationId: z.string().uuid().optional(),
   phone: z.string().min(5).max(30).optional(),
   execution_url: z.string().url().max(2000).nullable().optional(),
   executionUrl: z.string().url().max(2000).nullable().optional(),
+  /// Validade da URL em segundos (60s a 7 dias). Vencida, o CRM ignora e
+  /// limpa o registro — a conversa volta pro fluxo de IA normal sozinha.
+  /// coerce: o n8n manda body parameters como string ("86400").
+  ttl_seconds: z.coerce.number().int().min(60).max(7 * 24 * 60 * 60).optional(),
 })
 
 export async function OPTIONS(req: NextRequest) {
@@ -74,15 +81,21 @@ export async function POST(req: NextRequest) {
       return errorResponse('Informe conversation_id ou phone', 400)
     }
 
+    // TTL so faz sentido quando esta registrando uma URL; limpar zera os dois.
+    const executionUrlExpiresAt = executionUrl
+      ? new Date(Date.now() + (d.ttl_seconds ?? DEFAULT_TTL_SECONDS) * 1000)
+      : null
+
     await prisma.conversation.update({
       where: { id: conversationId },
-      data: { executionUrl },
+      data: { executionUrl, executionUrlExpiresAt },
     })
 
     return jsonResponse({
       success: true,
       conversation_id: conversationId,
       execution_url: executionUrl,
+      expires_at: executionUrlExpiresAt,
     })
   } catch (error) {
     return handleApiErrorCors(error, 'Erro ao registrar execution url')

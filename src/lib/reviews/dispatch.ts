@@ -24,15 +24,23 @@ export async function getReviewWebhookUrl(): Promise<string | null> {
 
 /**
  * Dispara UM POST pro n8n por inbox ativo da empresa que tenha restaurant_id
- * no channelConfig. O payload e { apikey, restaurant_id, company_id }; o resto
- * (quem avaliar, quando, o que enviar) fica por conta do fluxo do n8n.
+ * no channelConfig. O payload e { apikey, restaurant_id, company_id, inbox_id };
+ * o resto (quem avaliar, quando, o que enviar) fica por conta do fluxo do n8n.
+ *
+ * `onlyInboxId` (ReviewSettings.inboxId): limita o disparo a uma conexao
+ * especifica. Null/ausente = todas as inboxes ativas qualificadas.
  */
 export async function dispatchCompanyReviews(
   companyId: string,
-  webhookUrl: string
+  webhookUrl: string,
+  onlyInboxId?: string | null
 ): Promise<DispatchResult> {
   const inboxes = await prisma.inbox.findMany({
-    where: { isActive: true, companyId },
+    where: {
+      isActive: true,
+      companyId,
+      ...(onlyInboxId ? { id: onlyInboxId } : {}),
+    },
     select: { id: true, channelConfig: true },
   })
 
@@ -67,6 +75,9 @@ export async function dispatchCompanyReviews(
           apikey,
           restaurant_id: restaurantId,
           company_id: companyId,
+          // Inbox (canal) dona do restaurant_id — o fluxo devolve as mensagens
+          // por ela via inboxId no send-text, sem depender de fallback.
+          inbox_id: inbox.id,
         }),
         signal: AbortSignal.timeout(30_000),
       })

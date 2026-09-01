@@ -6,10 +6,14 @@ export interface ReviewSettings {
   enabled: boolean
   /** Hora do dia (0-23, BRT) em que a cron de avaliacao dispara pra empresa */
   dispatchHour: number
+  /** Inbox do disparo; null = todas as conexoes ativas */
+  inboxId: string | null
   googleUrl: string | null
   tripadvisorUrl: string | null
   prompt1: string | null
   prompt2: string | null
+  /** Prompt da resposta final ao cliente (texto livre da empresa) */
+  promptFinal: string | null
   greeting: string | null
 }
 
