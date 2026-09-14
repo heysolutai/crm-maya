@@ -8,7 +8,7 @@ import { isChannelType } from '@/lib/channels/types'
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const { id } = await params
     const agent = await prisma.inbox.findFirst({ where: { id, companyId } })

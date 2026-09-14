@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
-// Placeholder generico — o titulo real e setado em runtime pelo BrandingProvider
+// Placeholder generico: o titulo real e setado em runtime pelo BrandingProvider
 // (useBranding.tsx) usando systemName configurado no painel super-admin.
 const APP_NAME = "Reservemaya";
 const APP_DESCRIPTION = "IA que atende clientes e registra reservas no WhatsApp, 24h";

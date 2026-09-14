@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useReminders, Reminder } from '@/hooks/useReminders';
+import { DateInputBR } from '@/components/ui/date-input-br';
 
 interface ReminderManagerProps {
   conversationId: string;
@@ -141,9 +142,8 @@ export function ReminderManager({ conversationId, clientId, clientName }: Remind
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label htmlFor="date" className="text-xs">Data</Label>
-                    <Input
+                    <DateInputBR
                       id="date"
-                      type="date"
                       value={scheduledDate}
                       onChange={(e) => setScheduledDate(e.target.value)}
                       min={minDate}
@@ -256,7 +256,7 @@ function ReminderItem({
             </Badge>
             <span className="text-xs text-muted-foreground flex items-center gap-1">
               <Calendar className="h-3 w-3" />
-              {format(scheduledDate, "dd/MM 'às' HH:mm", { locale: ptBR })}
+              {format(scheduledDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
             </span>
           </div>
           <p className="text-sm truncate">{reminder.message_text}</p>

@@ -5,7 +5,7 @@ import {
 } from './impersonation'
 
 /**
- * Le a empresa personificada direto do sessionStorage.
+ * Le o restaurante personificado direto do sessionStorage.
  *
  * Nao usa o hook `useImpersonation` de proposito: assim o `apiFetch` funciona
  * dentro de queryFn/mutationFn do React Query, que rodam fora do ciclo de
@@ -25,7 +25,7 @@ function getImpersonatedCompanyId(): string | null {
   }
 }
 
-/** So injeta o header em chamadas pra propria origem — nunca pra terceiros. */
+/** So injeta o header em chamadas pra propria origem: nunca pra terceiros. */
 function isSameOrigin(input: RequestInfo | URL): boolean {
   try {
     const raw =
@@ -46,11 +46,11 @@ function isSameOrigin(input: RequestInfo | URL): boolean {
  * `fetch` das chamadas internas de API.
  *
  * Identico ao fetch nativo, com uma diferenca: quando ha personificacao ativa,
- * anexa o header de empresa efetiva. Use sempre que a rota chamada depender do
- * companyId — que na pratica e toda rota sob `/api/` que nao seja publica.
+ * anexa o header de restaurante efetivo. Use sempre que a rota chamada depender do
+ * companyId: que na pratica e toda rota sob `/api/` que nao seja publica.
  *
  * Sem isso, o super admin personificando bate na API com companyId nulo e a
- * rota responde 403 "Empresa nao encontrada".
+ * rota responde 403 "Restaurante nao encontrado".
  */
 export function apiFetch(
   input: RequestInfo | URL,

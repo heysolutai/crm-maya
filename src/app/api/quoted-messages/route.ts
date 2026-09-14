@@ -6,11 +6,11 @@ import { handleApiError } from '@/lib/api/errors'
 export async function GET(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const uazMessageId = req.nextUrl.searchParams.get('uazMessageId')
     if (!uazMessageId) return NextResponse.json({ error: 'Missing uazMessageId' }, { status: 400 })
 
-    // IDOR: garante que a mensagem pertence a uma conversa da empresa
+    // IDOR: garante que a mensagem pertence a uma conversa do restaurante
     const message = await prisma.message.findFirst({
       where: { uazMessageId, conversation: { companyId } },
       include: {

@@ -202,9 +202,9 @@ export function CompaniesTable({ companies, searchTerm, onSearchChange, totalCou
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
-        <h3 className="text-lg font-semibold mb-2">Nenhuma empresa encontrada</h3>
+        <h3 className="text-lg font-semibold mb-2">Nenhum restaurante encontrado</h3>
         <p className="text-sm text-muted-foreground">
-          Crie sua primeira empresa usando o botão acima
+          Crie seu primeiro restaurante usando o botão acima
         </p>
       </div>
     );
@@ -310,7 +310,7 @@ export function CompaniesTable({ companies, searchTerm, onSearchChange, totalCou
         <TableHeader>
           <TableRow className="border-border/30 hover:bg-transparent">
             <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort('name')}>
-              <span className="flex items-center">Empresa <SortIcon col="name" /></span>
+              <span className="flex items-center">Restaurante <SortIcon col="name" /></span>
             </TableHead>
             <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">IA Memory</TableHead>
             <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => handleSort('email')}>
@@ -386,7 +386,7 @@ export function CompaniesTable({ companies, searchTerm, onSearchChange, totalCou
                             </button>
                           </TooltipTrigger>
                           <TooltipContent>
-                            {ticket.label === 'OK' ? 'Sem tickets abertos' : 'Clique para ver os tickets desta empresa'}
+                            {ticket.label === 'OK' ? 'Sem tickets abertos' : 'Clique para ver os tickets deste restaurante'}
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -416,7 +416,7 @@ export function CompaniesTable({ companies, searchTerm, onSearchChange, totalCou
                       size="icon"
                       className="h-8 w-8 rounded-xl text-muted-foreground hover:text-primary"
                       onClick={() => handleImpersonate(company)}
-                      title="Acessar como empresa"
+                      title="Acessar como restaurante"
                     >
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
@@ -451,7 +451,7 @@ export function CompaniesTable({ companies, searchTerm, onSearchChange, totalCou
       {/* Footer with pagination */}
       <div className="px-6 py-3 border-t border-border/30 flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
-          Mostrando {paginatedCompanies.length} de {totalCount} empresas
+          Mostrando {paginatedCompanies.length} de {totalCount} restaurantes
         </p>
         <div className="flex items-center gap-2">
           <Button
@@ -478,9 +478,9 @@ export function CompaniesTable({ companies, searchTerm, onSearchChange, totalCou
       <AlertDialog open={!!companyToDelete} onOpenChange={() => setCompanyToDelete(null)}>
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir Empresa</AlertDialogTitle>
+            <AlertDialogTitle>Excluir Restaurante</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir a empresa <strong>{companyToDelete?.name}</strong>?
+              Tem certeza que deseja excluir o restaurante <strong>{companyToDelete?.name}</strong>?
               <br /><br />
               Esta ação é irreversível e irá excluir todos os dados relacionados.
             </AlertDialogDescription>
@@ -492,7 +492,7 @@ export function CompaniesTable({ companies, searchTerm, onSearchChange, totalCou
               disabled={isDeleting}
               className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isDeleting ? 'Excluindo...' : 'Excluir Empresa'}
+              {isDeleting ? 'Excluindo...' : 'Excluir Restaurante'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

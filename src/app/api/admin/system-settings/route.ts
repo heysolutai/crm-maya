@@ -24,7 +24,7 @@ function maskSecret(value: string | null | undefined, isSecret: boolean): string
 /**
  * GET /api/admin/system-settings
  *   Lista todas as settings conhecidas (com mascara em chaves marcadas como secret).
- *   Inclui chaves que ainda nao foram salvas no banco — retorna value: null.
+ *   Inclui chaves que ainda nao foram salvas no banco: retorna value: null.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -83,11 +83,11 @@ export async function PUT(req: NextRequest) {
 
     for (const item of validation.data.settings) {
       if (!knownKeys.has(item.key)) {
-        // Ignora chave desconhecida em silencio — evita sujeira na tabela
+        // Ignora chave desconhecida em silencio: evita sujeira na tabela
         continue
       }
       const meta = KNOWN_SETTINGS.find((s) => s.key === item.key)!
-      // Trim — null/undefined/vazio salva null pra acionar fallback de env
+      // Trim: null/undefined/vazio salva null pra acionar fallback de env
       const newValue = item.value && item.value.trim() !== '' ? item.value.trim() : null
 
       await prisma.systemConfig.upsert({

@@ -95,13 +95,13 @@ export default function Inboxes() {
     id: null,
   });
 
-  // Restaurante: so 2 canais — API Reservemaya (uazapi) e WhatsApp Cloud.
+  // Restaurante: so 2 canais: API Reservemaya (uazapi) e WhatsApp Cloud.
   const ALLOWED_CHANNELS: ChannelType[] = ['uazapi', 'whatsapp_cloud'];
   const channels = Object.values(CHANNEL_REGISTRY).filter((c) => ALLOWED_CHANNELS.includes(c.type));
 
   // Canais que precisam de URL + API key/admin token do servidor self-hosted.
   // UazAPI tambem entra: novas inboxes pegam admin token do form (nao mais do .env).
-  // uazapi (API Reservemaya) NAO precisa mais de config no form — URL + admin
+  // uazapi (API Reservemaya) NAO precisa mais de config no form: URL + admin
   // token vem do ambiente (.env/stack). So canais self-hosted legados pedem.
   const needsServerConfig =
     selectedChannel &&
@@ -109,7 +109,7 @@ export default function Inboxes() {
 
   const isNotificame = selectedChannel === 'notificame';
 
-  // Só a API Reservemaya (uazapi) implementa adopt() no backend — os outros
+  // Só a API Reservemaya (uazapi) implementa adopt() no backend: os outros
   // canais só sabem provisionar instância nova.
   const supportsInstanceMode = selectedChannel === 'uazapi';
 
@@ -147,7 +147,7 @@ export default function Inboxes() {
 
   const handleSelectChannel = (type: ChannelType) => {
     setSelectedChannel(type);
-    // Limpa inputs quando troca de canal — pra nao mandar credencial errada
+    // Limpa inputs quando troca de canal: pra nao mandar credencial errada
     setServerUrl('');
     setServerApiKey('');
     setNotificameChannelId('');
@@ -241,7 +241,7 @@ export default function Inboxes() {
                 : undefined,
             }
           : undefined,
-        // 1:1 — cada conexao cria seu proprio agente dedicado automaticamente
+        // 1:1: cada conexao cria seu proprio agente dedicado automaticamente
         // (backend ensureInboxAiAgent). Nao enviamos aiAgentId/createAiAgentNamed.
       },
       {
@@ -282,7 +282,7 @@ export default function Inboxes() {
         <EmptyState
           icon={InboxIcon}
           title="Conecte o WhatsApp do seu restaurante"
-          description="Conecte um número e deixe a IA atender os clientes e registrar reservas — 24h, sem perder mensagem."
+          description="Conecte um número e deixe a IA atender os clientes e registrar reservas: 24h, sem perder mensagem."
           actionLabel="Conectar WhatsApp"
           onAction={() => setDialogOpen(true)}
         />
@@ -536,7 +536,7 @@ export default function Inboxes() {
                       onChange={(e) => setServerApiKey(e.target.value)}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Header X-API-Token. Salvo na empresa após a primeira caixa.
+                      Header X-API-Token. Salvo no restaurante após a primeira caixa.
                     </p>
                   </div>
                 )}
@@ -616,7 +616,7 @@ export default function Inboxes() {
                     />
                     <p className="text-xs text-muted-foreground">
                       Usado como <code>from</code> no envio. Pegue em hub.notificame.com.br &gt; canal &gt; token.
-                      Instagram/Facebook não precisam — usam o próprio ID do canal.
+                      Instagram/Facebook não precisam: usam o próprio ID do canal.
                     </p>
                   </div>
                 )}
@@ -682,7 +682,7 @@ export default function Inboxes() {
                         onChange={(e) => setServerApiKey(e.target.value)}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Salvo na empresa após a primeira caixa — não precisa preencher de novo.
+                        Salvo no restaurante após a primeira caixa: não precisa preencher de novo.
                       </p>
                     </div>
                     {hasSavedCred && (
@@ -718,7 +718,7 @@ export default function Inboxes() {
               </div>
             )}
 
-            {/* 1:1 — cada conexao ja cria seu proprio Agente IA dedicado
+            {/* 1:1: cada conexao ja cria seu proprio Agente IA dedicado
                 (backend ensureInboxAiAgent). A config da IA fica na propria
                 conexao, na aba "Prompts". Por isso nao pedimos agente aqui. */}
             <div className="rounded-lg border border-dashed p-3 bg-muted/30 flex items-start gap-2">

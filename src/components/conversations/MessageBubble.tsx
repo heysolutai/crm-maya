@@ -13,7 +13,7 @@ import { SecureImage, SecureVideo, SecureAudioSource, SecureDocumentUrl } from '
 import { QuotedMessagePreview } from './QuotedMessagePreview';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatMessageTime, cn } from '@/lib/utils';
-import { renderTextWithLinks } from '@/lib/linkify';
+import { renderWhatsAppText } from '@/lib/whatsapp/formatar-texto';
 import { getInitials, type Message, type Client, type QuotedMessage } from './types';
 import type { Reaction } from '@/hooks/useMessageReactions';
 
@@ -39,6 +39,93 @@ interface MessageBubbleProps {
   isSelected?: boolean;
   onToggleSelect?: (messageId: string) => void;
   onEnterSelectionMode?: (messageId: string) => void;
+}
+
+const ROTULO_MIDIA: Record<string, string> = {
+  audio: 'Áudio',
+  ptt: 'Áudio',
+  image: 'Imagem',
+  video: 'Vídeo',
+  document: 'Documento',
+  sticker: 'Figurinha',
+};
+
+const LEGENDAS_AUTOMATICAS = [
+  '🖼️ Imagem', '🎥 Vídeo', '🎤 Áudio', '📄 Documento', '📎 Mídia',
+  '[Media]', '[Áudio]', '[Audio]', '[Audio - transcricao falhou]',
+];
+
+/**
+ * Tres estados, nao dois: enquanto o worker ainda tem tentativa,
+ * "recuperando..."; quando ele desiste (metadata.media_error), o motivo
+ * aparece com um botao de nova tentativa.
+ */
+function MidiaIndisponivel({ msg }: { msg: Message }) {
+  const [tentando, setTentando] = useState(false);
+  const [pedidoFeito, setPedidoFeito] = useState(false);
+
+  const meta = (msg.metadata || {}) as Record<string, unknown>;
+  const rotulo = ROTULO_MIDIA[msg.message_type || ''] || 'Mídia';
+  const erro = typeof meta.media_error === 'string' ? meta.media_error : null;
+  const temReferencia = !!msg.uaz_message_id;
+
+  const tentarDeNovo = async () => {
+    setTentando(true);
+    try {
+      const res = await fetch('/api/messages/repair-media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId: msg.id }),
+      });
+      if (!res.ok) throw new Error('falhou');
+      setPedidoFeito(true);
+    } catch {
+      setTentando(false);
+    }
+  };
+
+  const legenda = (msg.message_text || '').trim();
+  const mostrarLegenda = legenda && !LEGENDAS_AUTOMATICAS.includes(legenda);
+
+  return (
+    <div className="space-y-1 py-1">
+      <div className="flex items-center gap-2 text-[13px] italic text-muted-foreground">
+        <FileText className="h-4 w-4 shrink-0" />
+        <span>
+          {rotulo}{' '}
+          {erro && !pedidoFeito
+            ? 'não pôde ser baixado'
+            : temReferencia || pedidoFeito
+              ? 'indisponível, recuperando…'
+              : 'indisponível'}
+        </span>
+      </div>
+
+      {erro && !pedidoFeito && (
+        <div className="space-y-1">
+          <p className="text-[11.5px] leading-snug text-muted-foreground/80 break-words">{erro}</p>
+          {temReferencia && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 px-2 text-[11px]"
+              onClick={tentarDeNovo}
+              disabled={tentando}
+            >
+              {tentando && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+              Tentar de novo
+            </Button>
+          )}
+        </div>
+      )}
+
+      {mostrarLegenda && (
+        <p className="text-[14.2px] leading-[19px] whitespace-pre-wrap break-words">
+          {renderWhatsAppText(legenda)}
+        </p>
+      )}
+    </div>
+  );
 }
 
 export const MessageBubble = memo(function MessageBubble({
@@ -174,7 +261,7 @@ export const MessageBubble = memo(function MessageBubble({
                   onClick={() => onSetSelectedImage(msg.media_url || '')}
                 />
                 {msg.message_text && msg.message_text !== '[Media]' && (
-                  <p className="text-sm">{msg.message_text}</p>
+                  <p className="text-sm whitespace-pre-wrap break-words">{renderWhatsAppText(msg.message_text)}</p>
                 )}
               </div>
             ) : isAudioMessage ? (
@@ -227,7 +314,7 @@ export const MessageBubble = memo(function MessageBubble({
                   onClick={() => onSetSelectedImage(msg.media_url || '')}
                 />
                 {msg.message_text && msg.message_text !== '[Media]' && (
-                  <p className="text-sm">{msg.message_text}</p>
+                  <p className="text-sm whitespace-pre-wrap break-words">{renderWhatsAppText(msg.message_text)}</p>
                 )}
               </div>
             ) : msg.message_type === 'document' && msg.media_url ? (
@@ -290,14 +377,18 @@ export const MessageBubble = memo(function MessageBubble({
                 name={(msg.metadata as any)?.name}
                 isClient={isClient}
               />
+            ) : ['audio', 'ptt', 'image', 'video', 'document', 'sticker'].includes(msg.message_type || '') && !msg.media_url && !(msg as any)._optimistic ? (
+              // Midia cujo download/upload falhou no worker: sem isto a bolha
+              // vinha vazia (so o horario) e parecia que o CRM "comeu" a mensagem.
+              <MidiaIndisponivel msg={msg} />
             ) : (
               (() => {
-                const legacyLabels = ['🖼️ Imagem', '🎥 Vídeo', '🎤 Áudio', '📄 Documento', '📍 Localização', '📎 Mídia', '[Media]', '[Áudio]'];
+                const legacyLabels = ['🖼️ Imagem', '🎥 Vídeo', '🎤 Áudio', '📄 Documento', '📍 Localização', '📎 Mídia', '[Media]', '[Áudio]', '[Audio - transcricao falhou]'];
                 const text = msg.message_text || '';
                 if (!text || legacyLabels.includes(text.trim())) return null;
                 return (
                   <p className="text-[14.2px] leading-[19px] whitespace-pre-wrap break-words">
-                    {renderTextWithLinks(text)}
+                    {renderWhatsAppText(text)}
                   </p>
                 );
               })()

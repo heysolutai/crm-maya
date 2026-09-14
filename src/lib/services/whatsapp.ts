@@ -3,8 +3,10 @@
  *
  * Wraps UAZapi HTTP calls so routes only deal with business logic.
  * All functions call `${instanceApiUrl}/<endpoint>` with the header
- * `token: instanceApiKey` — the format used throughout the codebase.
+ * `token: instanceApiKey`: the format used throughout the codebase.
  */
+
+import { prepararTextoParaWhatsApp } from '@/lib/whatsapp/texto-whatsapp';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -86,7 +88,7 @@ export async function sendTextMessage(
     headers: uazHeaders(instanceApiKey),
     body: JSON.stringify({
       number: cleanPhone(phone),
-      text: message,
+      text: prepararTextoParaWhatsApp(message),
     }),
   });
 

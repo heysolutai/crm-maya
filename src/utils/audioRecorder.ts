@@ -4,7 +4,7 @@ export class AudioRecorderUtil {
   private stream: MediaStream | null = null;
 
   async startRecording(): Promise<MediaStream> {
-    // Guards de ambiente — falham cedo com mensagem clara em vez do
+    // Guards de ambiente: falham cedo com mensagem clara em vez do
     // catch generico abaixo esconder a causa real.
     if (typeof window !== 'undefined' && !window.isSecureContext) {
       throw new Error(

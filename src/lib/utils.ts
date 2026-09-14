@@ -23,14 +23,7 @@ export function formatMessageTime(date: Date | string | null | undefined): strin
     return format(parsedDate, 'HH:mm', { locale: ptBR });
   }
   
-  if (isYesterday(parsedDate)) {
-    return `Ontem ${format(parsedDate, 'HH:mm', { locale: ptBR })}`;
-  }
-  
-  if (isThisYear(parsedDate)) {
-    return format(parsedDate, "dd/MM 'às' HH:mm", { locale: ptBR });
-  }
-  
+  // Padrao da casa: qualquer data aparece completa, dd/MM/yyyy.
   return format(parsedDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
 }
 
@@ -49,20 +42,6 @@ export function formatRelativeTime(date: Date | string | null | undefined): stri
     if (diffHours < 24) return `Há ${diffHours}h`;
   }
   
-  if (isYesterday(msgDate)) {
-    return `Ontem às ${format(msgDate, 'HH:mm', { locale: ptBR })}`;
-  }
-  
-  const daysDiff = Math.floor((now.getTime() - msgDate.getTime()) / (1000 * 60 * 60 * 24));
-  if (daysDiff < 7) {
-    const dayName = format(msgDate, 'EEEE', { locale: ptBR });
-    const time = format(msgDate, 'HH:mm', { locale: ptBR });
-    return `${dayName} às ${time}`;
-  }
-  
-  if (isThisYear(msgDate)) {
-    return format(msgDate, "dd/MM 'às' HH:mm", { locale: ptBR });
-  }
-  
-  return format(msgDate, "dd/MM/yy 'às' HH:mm", { locale: ptBR });
+  // Padrao da casa: fora de hoje, a data aparece completa, dd/MM/yyyy.
+  return format(msgDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
 }

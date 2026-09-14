@@ -133,10 +133,10 @@ function AISettingsContent() {
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <Bot className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Empresa não encontrada</h2>
+          <h2 className="text-2xl font-bold mb-2">Restaurante não encontrado</h2>
           <Button onClick={() => router.push('/super-admin/companies')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Voltar para Empresas
+            Voltar para Restaurantes
           </Button>
         </div>
       </div>
@@ -177,15 +177,15 @@ function AISettingsContent() {
               aria-expanded={comboboxOpen}
               className="w-72 justify-between font-medium"
             >
-              {company?.name || 'Selecionar empresa...'}
+              {company?.name || 'Selecionar restaurante...'}
               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-72 p-0 z-50" align="end">
             <Command>
-              <CommandInput placeholder="Buscar empresa..." />
+              <CommandInput placeholder="Buscar restaurante..." />
               <CommandList>
-                <CommandEmpty>Nenhuma empresa encontrada.</CommandEmpty>
+                <CommandEmpty>Nenhum restaurante encontrado.</CommandEmpty>
                 <CommandGroup>
                   {companies?.map((c) => (
                     <CommandItem

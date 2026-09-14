@@ -77,7 +77,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
 
     // Reindexa com o conteudo novo. Se o FAQ foi desativado, o indexer remove
-    // do indice — assim a IA para de responder com conteudo desativado.
+    // do indice: assim a IA para de responder com conteudo desativado.
     await indexFaq(companyId, data);
 
     return apiSuccess(data);

@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
       })
       config = inbox?.aiAgent ?? null
     } else {
-      // Sem filtro: pega o primeiro agente IA da empresa (back-compat)
+      // Sem filtro: pega o primeiro agente IA do restaurante (back-compat)
       config = await prisma.aiAgent.findFirst({
         where: { companyId: keyData.companyId },
         select: { id: true, prompts: true },

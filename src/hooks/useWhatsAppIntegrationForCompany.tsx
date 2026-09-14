@@ -34,7 +34,7 @@ export function useWhatsAppIntegrationForCompany(companyId: string | undefined) 
   // No flow novo, criar inbox via super-admin nao e suportado por aqui.
   const connectMutation = useMutation({
     mutationFn: async () => {
-      console.warn('[useWhatsAppIntegrationForCompany] connectWhatsApp() esta deprecado — use useInboxes().createInbox()');
+      console.warn('[useWhatsAppIntegrationForCompany] connectWhatsApp() esta deprecado: use useInboxes().createInbox()');
       return { success: false, data: null } as any;
     },
     onError: (error: any) => {
@@ -104,7 +104,7 @@ export function useWhatsAppIntegrationForCompany(companyId: string | undefined) 
     onError: (error: any) => {
       const msg = error?.message || ''
       if (msg.includes('Instância não encontrada') || msg.includes('INSTANCE_NOT_FOUND')) {
-        return // silencioso — id stale, proximo refetch corrige
+        return // silencioso: id stale, proximo refetch corrige
       }
       console.warn('[whatsapp:update]', msg);
     },

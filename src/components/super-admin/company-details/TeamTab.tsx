@@ -84,7 +84,7 @@ export function TeamTab({ companyId }: TeamTabProps) {
         <div>
           <h3 className="text-lg font-semibold">Equipe</h3>
           <p className="text-sm text-muted-foreground">
-            Membros da empresa e suas funções
+            Membros do restaurante e suas funções
           </p>
         </div>
         <AddUserDialog onAddUser={addUser} isLoading={isAddingUser} />
@@ -96,7 +96,7 @@ export function TeamTab({ companyId }: TeamTabProps) {
             <Users className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">Nenhum usuário</h3>
             <p className="text-muted-foreground text-center">
-              Esta empresa ainda não possui usuários cadastrados
+              Este restaurante ainda não possui usuários cadastrados
             </p>
           </CardContent>
         </Card>

@@ -2,8 +2,8 @@
  * Acesso a configuracoes globais editaveis em runtime (super-admin).
  *
  * Ordem de resolucao:
- *   1. DB (system_settings) — editavel sem restart
- *   2. process.env (fallback legado — deprecated mas mantido)
+ *   1. DB (system_settings): editavel sem restart
+ *   2. process.env (fallback legado: deprecated mas mantido)
  *   3. defaultValue passado na chamada
  *
  * Cache em memoria com TTL de 60s, invalidado quando algum admin atualiza
@@ -72,7 +72,7 @@ export async function getSystemSetting(
 }
 
 /**
- * Variante que IGNORA o cache — sempre faz query no banco.
+ * Variante que IGNORA o cache: sempre faz query no banco.
  * Use em workers de baixa frequencia (transcricao, n8n) onde a key precisa
  * ser confiavel mesmo logo apos o admin atualizar pela UI (cluster mode
  * pode ter caches separados por processo).
@@ -99,7 +99,7 @@ export async function getSystemSettingFresh(
   return defaultValue;
 }
 
-/** Limpa cache — chamado pelo PUT depois de salvar */
+/** Limpa cache: chamado pelo PUT depois de salvar */
 export function invalidateSystemSettingsCache(): void {
   cache = {};
   cachedAt = 0;
@@ -124,7 +124,7 @@ export const KNOWN_SETTINGS = [
   {
     key: 'knowledge_webhook_url',
     label: 'N8N - Sincronia Knowledge Base',
-    description: 'URL do N8N que sincroniza FAQs da empresa pra base de conhecimento.',
+    description: 'URL do N8N que sincroniza FAQs do restaurante pra base de conhecimento.',
     isSecret: false,
     placeholder: 'https://n8n.exemplo.com/webhook/sync-kb',
   },
@@ -138,49 +138,49 @@ export const KNOWN_SETTINGS = [
   {
     key: 'default_openai_api_key',
     label: 'OpenAI API Key (default)',
-    description: 'Chave OpenAI usada quando a empresa nao tem chave propria configurada.',
+    description: 'Chave OpenAI usada quando o restaurante nao tem chave propria configurada.',
     isSecret: true,
     placeholder: 'sk-...',
   },
   // ===== Storage de midia/arquivos (Backblaze B2 / S3) =====
   {
     key: 'b2_endpoint',
-    label: 'Storage B2 — Endpoint',
+    label: 'Storage B2: Endpoint',
     description: 'Endpoint S3 do Backblaze B2. Ex: https://s3.us-west-004.backblazeb2.com',
     isSecret: false,
     placeholder: 'https://s3.us-west-004.backblazeb2.com',
   },
   {
     key: 'b2_bucket_name',
-    label: 'Storage B2 — Bucket',
+    label: 'Storage B2: Bucket',
     description: 'Nome do bucket onde midia e arquivos de FAQ sao guardados.',
     isSecret: false,
     placeholder: 'crm-media',
   },
   {
     key: 'b2_bucket_region',
-    label: 'Storage B2 — Regiao',
+    label: 'Storage B2: Regiao',
     description: 'Regiao do bucket. Ex: us-west-004',
     isSecret: false,
     placeholder: 'us-west-004',
   },
   {
     key: 'b2_key_id',
-    label: 'Storage B2 — Key ID',
+    label: 'Storage B2: Key ID',
     description: 'keyID da Application Key do B2 (comeca com 00...).',
     isSecret: true,
     placeholder: '005...',
   },
   {
     key: 'b2_app_key',
-    label: 'Storage B2 — App Key',
+    label: 'Storage B2: App Key',
     description: 'applicationKey (secreta) da Application Key do B2.',
     isSecret: true,
     placeholder: 'K005...',
   },
   {
     key: 'b2_public_url',
-    label: 'Storage B2 — URL publica',
+    label: 'Storage B2: URL publica',
     description: 'URL publica do bucket (ou CDN). O N8N baixa os arquivos por aqui. Ex: https://crm-media.s3.us-west-004.backblazeb2.com',
     isSecret: false,
     placeholder: 'https://crm-media.s3.us-west-004.backblazeb2.com',

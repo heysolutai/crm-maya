@@ -35,13 +35,13 @@ function mapCredential(c: any, options: { reveal?: boolean } = {}) {
  *   Lista credenciais salvas (token mascarado).
  *
  * GET /api/channel-credentials?channelType=uazapi&reveal=1
- *   Retorna credencial especifica. `reveal=1` retorna o token em plano —
+ *   Retorna credencial especifica. `reveal=1` retorna o token em plano -
  *   so usado pelo POST /api/agents internamente quando precisamos provisionar.
  */
 export async function GET(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const channelType = req.nextUrl.searchParams.get('channelType')
     const reveal = req.nextUrl.searchParams.get('reveal') === '1'
@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const body = await req.json()
     const validation = upsertSchema.safeParse(body)
@@ -98,13 +98,13 @@ export async function POST(req: NextRequest) {
 
 /**
  * DELETE /api/channel-credentials?channelType=uazapi
- *   Remove a credencial. Nao mexe nos agentes ja criados — eles continuam
+ *   Remove a credencial. Nao mexe nos agentes ja criados: eles continuam
  *   funcionando com o token que ja gravaram.
  */
 export async function DELETE(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const channelType = req.nextUrl.searchParams.get('channelType')
     if (!channelType) return NextResponse.json({ error: 'channelType obrigatorio' }, { status: 400 })

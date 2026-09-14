@@ -23,7 +23,7 @@ const updateDepartmentSchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const departments = await prisma.department.findMany({
       where: { companyId, isActive: true },
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const body = await req.json()
 
     const validation = createDepartmentSchema.safeParse(body)
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const body = await req.json()
 
     const validation = updateDepartmentSchema.safeParse(body)
@@ -102,7 +102,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 

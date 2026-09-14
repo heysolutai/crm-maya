@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
     if (!message) throw new Error('Message not found');
 
-    // Isolamento multi-tenant: a mensagem tem que pertencer a empresa do caller.
+    // Isolamento multi-tenant: a mensagem tem que pertencer o restaurante do caller.
     if (!isSuperAdmin && message.conversation.companyId !== authCompanyId) {
       return jsonResponse({ success: false, error: 'Nao encontrado' }, 404);
     }

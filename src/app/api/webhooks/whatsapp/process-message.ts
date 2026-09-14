@@ -1,5 +1,5 @@
 /**
- * Inbound message processor — called by the BullMQ inbound-message worker.
+ * Inbound message processor: called by the BullMQ inbound-message worker.
  *
  * This re-uses the same webhook handler logic but bypasses the HTTP layer.
  * The webhook route enqueues the raw payload → worker calls this function.
@@ -13,7 +13,7 @@ export async function processInboundMessageFromQueue(
   rawPayload: Record<string, unknown>
 ): Promise<void> {
   // O worker roda NO MESMO processo/container que o servidor HTTP, entao
-  // chamamos o proprio app via loopback interno — NUNCA via URL publica.
+  // chamamos o proprio app via loopback interno: NUNCA via URL publica.
   // Motivo: se NEXT_PUBLIC_APP_URL estiver errado (ex: apontando pro servidor
   // da UAZ), esse POST de processamento cai em outro host e retorna 404
   // ("Route POST:/api/errors/not-found not found") -> a mensagem chega no

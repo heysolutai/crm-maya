@@ -184,7 +184,7 @@ export async function POST(req: NextRequest) {
         const phone = jidToPhone(key.remoteJid)
 
         if (!phone) {
-          // Mensagem de grupo ou JID invalido — ignora por enquanto
+          // Mensagem de grupo ou JID invalido: ignora por enquanto
           break
         }
 
@@ -255,7 +255,7 @@ export async function POST(req: NextRequest) {
         // mensagem veio do cliente (nao eco do proprio agente), enfileira
         // pro N8N processar.
         if (!fromMe) {
-          // Resolve AiAgent vinculado a inbox (M:1 — Inbox.aiAgentId aponta pra ca)
+          // Resolve AiAgent vinculado a inbox (M:1: Inbox.aiAgentId aponta pra ca)
           const inboxWithAi = await prisma.inbox.findUnique({
             where: { id: agent.id },
             include: {
@@ -277,7 +277,7 @@ export async function POST(req: NextRequest) {
           const webhookUrl =
             aiConfig?.n8nWebhookUrl || (await getSystemSetting('n8n_ai_webhook_url'))
           if (webhookUrl) {
-            // Contrato unificado entre canais — N8N pode ler mesmos campos
+            // Contrato unificado entre canais: N8N pode ler mesmos campos
             // independente do canal (uazapi/evolution_baileys/etc).
             const n8nPayload = {
               type: 'incoming',
@@ -288,13 +288,13 @@ export async function POST(req: NextRequest) {
               inbox_instance_name: agent.instanceName,
               inbox_channel_type: agent.channelType,
               inbox_phone: agent.phoneNumber,
-              // Identificador do restaurante no sistema de reservas — sai igual
+              // Identificador do restaurante no sistema de reservas: sai igual
               // em todos os canais pro fluxo do n8n nao ter que tratar cada um.
               restaurant_id: restaurantIdDaInbox(agent.channelConfig),
               // AiAgent vinculado a inbox (quando aplicavel)
               ai_agent_id: aiConfig?.id || null,
               ai_agent_name: aiConfig?.name || null,
-              // Atendente humano — null aqui (Evolution nao tem fluxo de transferencia
+              // Atendente humano: null aqui (Evolution nao tem fluxo de transferencia
               // resolvido aqui ainda). Usar conversa para fonte de verdade se precisar.
               agent_id: null,
               nome_agente: null,
@@ -331,7 +331,7 @@ export async function POST(req: NextRequest) {
 
       case 'MESSAGES_UPDATE': {
         // Atualizacao de status (entregue / lido / falha) ou edicao do conteudo.
-        // Baileys / Evolution mandam diferentes formas — aceitamos varios formatos:
+        // Baileys / Evolution mandam diferentes formas: aceitamos varios formatos:
         //   - data.status: "DELIVERY_ACK" | "READ" | "PLAYED" | "PENDING" | ...
         //   - data.update?: { status: ... }   (alguns providers aninham)
         //   - data.key.id: id da mensagem no provider

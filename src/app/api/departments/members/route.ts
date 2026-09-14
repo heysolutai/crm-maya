@@ -5,7 +5,7 @@ import { handleApiError } from '@/lib/api/errors'
 
 /**
  * IDOR fix: garante que tanto o departamento quanto o usuario pertencem
- * a empresa autenticada antes de qualquer mutacao em DepartmentMember.
+ * o restaurante autenticado antes de qualquer mutacao em DepartmentMember.
  */
 async function verifyDepartmentAndUser(
   departmentId: string,
@@ -30,7 +30,7 @@ async function verifyDepartmentAndUser(
 export async function POST(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const body = await req.json()
     const { departmentId, userId, role = 'member' } = body
 
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const body = await req.json()
     const { departmentId, userId, role } = body
 
@@ -78,7 +78,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const departmentId = req.nextUrl.searchParams.get('departmentId')
     const userId = req.nextUrl.searchParams.get('userId')
 

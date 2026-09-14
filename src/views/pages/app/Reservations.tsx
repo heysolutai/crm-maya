@@ -17,6 +17,7 @@ import {
   CalendarCheck, Plus, Users, Clock, Loader2, UtensilsCrossed, CheckCircle2, XCircle, Ban,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { DateInputBR } from '@/components/ui/date-input-br';
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   confirmed: { label: 'Confirmada', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' },
@@ -84,7 +85,7 @@ export default function Reservations() {
             Reservas
           </h1>
           <p className="text-muted-foreground mt-1">
-            Reservas do seu restaurante — feitas pela IA ou manualmente.
+            Reservas do seu restaurante: feitas pela IA ou manualmente.
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -120,9 +121,9 @@ export default function Reservations() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="when">Data e hora</Label>
-                  <Input
+                  <DateInputBR
                     id="when"
-                    type="datetime-local"
+                    withTime
                     value={form.reservedFor || ''}
                     onChange={(e) => setForm({ ...form, reservedFor: e.target.value })}
                   />
@@ -177,7 +178,7 @@ export default function Reservations() {
         <EmptyState
           icon={UtensilsCrossed}
           title="Nenhuma reserva ainda"
-          description="Quando a IA registrar uma reserva pelo WhatsApp — ou você criar uma manual — ela aparece aqui."
+          description="Quando a IA registrar uma reserva pelo WhatsApp: ou você criar uma manual: ela aparece aqui."
           actionLabel="Nova reserva"
           onAction={() => setDialogOpen(true)}
         />
@@ -205,7 +206,7 @@ export default function Reservations() {
                     ) : null}
                     {r.reservedFor ? (
                       <span className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" /> {format(new Date(r.reservedFor), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                        <Clock className="h-3.5 w-3.5" /> {format(new Date(r.reservedFor), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                       </span>
                     ) : null}
                   </div>

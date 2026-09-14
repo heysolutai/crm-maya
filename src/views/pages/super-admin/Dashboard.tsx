@@ -14,7 +14,7 @@ export default function SuperAdminDashboard() {
       <div>
         <h1 className="text-3xl font-bold">Dashboard Global</h1>
         <p className="text-muted-foreground">
-          Visão geral de todas as empresas do sistema
+          Visão geral de todos os restaurantes do sistema
         </p>
       </div>
 
@@ -23,16 +23,16 @@ export default function SuperAdminDashboard() {
         <CardContent className="pt-6">
           <div className="flex items-start justify-between">
             <div className="space-y-2">
-              <h3 className="text-lg font-semibold">Crie sua primeira empresa</h3>
+              <h3 className="text-lg font-semibold">Crie seu primeiro restaurante</h3>
               <p className="text-sm text-muted-foreground max-w-2xl">
-                Como Super Admin, você pode criar empresas e se atribuir como administrador delas.
-                Após criar uma empresa, faça login novamente para acessá-la.
+                Como Super Admin, você pode criar restaurantes e se atribuir como administrador delas.
+                Após criar um restaurante, faça login novamente para acessá-la.
               </p>
             </div>
             <Link href="/super-admin/companies">
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
-                Criar Empresa
+                Criar Restaurante
               </Button>
             </Link>
           </div>
@@ -44,7 +44,7 @@ export default function SuperAdminDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Empresas Ativas
+              Restaurantes Ativos
             </CardTitle>
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -110,7 +110,7 @@ export default function SuperAdminDashboard() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Empresas por Plano</CardTitle>
+            <CardTitle>Restaurantes por Plano</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[300px] flex items-center justify-center text-muted-foreground">

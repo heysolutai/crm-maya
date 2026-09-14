@@ -18,7 +18,7 @@ export interface SimpleForm {
   verbosity: string
   /** Funcionamento da casa. Ex: "Seg a sex 11h-15h e 18h-23h". */
   hours: string
-  /** Endereco completo — a IA precisa dele pra informar como chegar. */
+  /** Endereco completo: a IA precisa dele pra informar como chegar. */
   address: string
   /**
    * Janela em que a IA pode oferecer e registrar reserva. Costuma ser MENOR
@@ -26,7 +26,7 @@ export interface SimpleForm {
    * e um campo proprio e nao derivado de `hours`.
    */
   reservationHours: string
-  /** Faixa de preco, couvert, taxa de servico — o que evita pergunta repetida. */
+  /** Faixa de preco, couvert, taxa de servico: o que evita pergunta repetida. */
   prices: string
   capabilities: string[]
   about: string
@@ -40,7 +40,7 @@ export const TONES = [
 
 export const VERBOSITY = [
   { value: 'objetivo', label: 'Fala pouco', hint: 'Respostas curtas e diretas', promptText: 'Seja objetivo: respostas curtas e diretas, sem rodeios.' },
-  { value: 'equilibrado', label: 'Equilibrado', hint: 'Nem curto nem longo', promptText: 'Mantenha as respostas equilibradas — claras e completas, sem alongar demais.' },
+  { value: 'equilibrado', label: 'Equilibrado', hint: 'Nem curto nem longo', promptText: 'Mantenha as respostas equilibradas: claras e completas, sem alongar demais.' },
   { value: 'detalhado', label: 'Fala muito', hint: 'Respostas completas e explicativas', promptText: 'Seja detalhado: explique bem, com contexto e exemplos quando ajudar.' },
 ] as const
 
@@ -48,7 +48,7 @@ export const CAPABILITIES = [
   { value: 'duvidas', label: 'Tirar dúvidas', promptText: 'Responder dúvidas gerais dos clientes sobre o restaurante.' },
   { value: 'cardapio', label: 'Informar cardápio e preços', promptText: 'Informar pratos, cardápio e preços quando o cliente perguntar.' },
   { value: 'reservas', label: 'Registrar reservas', promptText: 'Ajudar o cliente a reservar uma mesa, coletando nome, data, horário e número de pessoas, e confirmando antes de registrar.' },
-  { value: 'agendar', label: 'Agendar com as ferramentas', promptText: 'Usar as ferramentas (tools) disponíveis para consultar disponibilidade, criar e confirmar reservas/agendamentos diretamente no sistema. Sempre conclua a ação pelas ferramentas — nunca invente uma confirmação.' },
+  { value: 'agendar', label: 'Agendar com as ferramentas', promptText: 'Usar as ferramentas (tools) disponíveis para consultar disponibilidade, criar e confirmar reservas/agendamentos diretamente no sistema. Sempre conclua a ação pelas ferramentas: nunca invente uma confirmação.' },
   { value: 'localizacao', label: 'Informar endereço e como chegar', promptText: 'Informar o endereço, a localização e como chegar ao restaurante.' },
 ] as const
 
@@ -72,13 +72,13 @@ export const DEFAULT_SIMPLE_FORM: SimpleForm = {
  *
  * 1. Campo vazio NAO vira secao. Versoes antigas emitiam o cabecalho de
  *    qualquer jeito, e o prompt chegava no modelo cheio de "## ENDEREÇO"
- *    seguido de nada — pior ainda, com frases penduradas do tipo "Só ofereça
+ *    seguido de nada: pior ainda, com frases penduradas do tipo "Só ofereça
  *    reservas dentro destes horários:" sem horario nenhum depois. Isso nao e
  *    so feio: instrucao vazia confunde o modelo e gasta contexto a toa.
  *
  * 2. Os fatos da casa ficam JUNTOS, em linhas rotuladas, e nao espalhados em
  *    quatro cabecalhos de uma linha cada. Endereco, funcionamento, reservas e
- *    preco sao a mesma coisa pro modelo — dados do restaurante — e agrupados
+ *    preco sao a mesma coisa pro modelo: dados do restaurante: e agrupados
  *    ficam mais faceis de consultar do que picotados.
  */
 export function buildPromptCompleto(s: SimpleForm): string {
@@ -127,7 +127,7 @@ export function buildPromptCompleto(s: SimpleForm): string {
 /**
  * Le o `simple` gravado e devolve SO os campos que existem hoje.
  *
- * Registros antigos carregam lixo de versoes anteriores — `template` (com
+ * Registros antigos carregam lixo de versoes anteriores: `template` (com
  * placeholders {{tom}} que ninguem mais interpreta), `temperament`,
  * `serviceStyle`. Espalhar o objeto salvo direto no formulario faria esse
  * lixo ser regravado a cada salvamento, para sempre. Aqui ele fica de fora e

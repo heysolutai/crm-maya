@@ -1,4 +1,5 @@
 import type { QuotedMessage, Client } from './types';
+import { textoPlano } from '@/lib/whatsapp/texto-whatsapp';
 
 interface QuotedMessagePreviewProps {
   quotedMessage: QuotedMessage | undefined;
@@ -40,7 +41,7 @@ export function QuotedMessagePreview({
   } else if (quotedMessage.message_type === 'contact' || quotedMessage.message_type === 'vcard') {
     contentPreview = '👤 Contato';
   } else {
-    contentPreview = quotedMessage.message_text || '';
+    contentPreview = textoPlano(quotedMessage.message_text || '');
   }
   
   // Limitar preview a 50 caracteres

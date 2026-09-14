@@ -33,7 +33,7 @@ export async function OPTIONS(req: NextRequest) { return handleCors(req) || json
 
 export async function POST(req: NextRequest) {
   try {
-    // Bulk sync is a system-level operation — requires internal key, super_admin, or API key
+    // Bulk sync is a system-level operation: requires internal key, super_admin, or API key
     if (!isInternalRequest(req)) {
       const { agentId } = await authenticate(req);
 

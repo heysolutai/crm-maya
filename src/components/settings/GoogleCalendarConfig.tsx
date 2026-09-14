@@ -95,7 +95,7 @@ export function GoogleCalendarConfig() {
               <p className="text-sm text-muted-foreground mb-4">
                 Conecte sua conta Google para sincronizar agendamentos automaticamente.
                 <br />
-                Um calendário exclusivo será criado para sua empresa.
+                Um calendário exclusivo será criado para seu restaurante.
               </p>
             </div>
             <Button 

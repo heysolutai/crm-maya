@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 
 /**
  * Indicadores consolidados por periodo (tela de Relatorios).
- * Le da mesma API que o envio mensal automatico usa — assim o numero da tela
+ * Le da mesma API que o envio mensal automatico usa: assim o numero da tela
  * e o do relatorio enviado nunca divergem.
  */
 

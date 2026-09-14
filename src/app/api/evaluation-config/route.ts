@@ -7,7 +7,7 @@ import { handleCors, jsonResponse, unauthorizedResponse, errorResponse } from '@
  * Config do agente de avaliacao (evaluation config).
  *
  * Endpoint EXTERNO (autenticado por x-api-key, nao por sessao) pra o n8n / a IA
- * puxar as configuracoes do fluxo de avaliacao da empresa: links de avaliacao
+ * puxar as configuracoes do fluxo de avaliacao do restaurante: links de avaliacao
  * externa, os prompts e a saudacao inicial.
  *
  * Fonte: ReviewSettings (mesma tabela editada em /app/reviews > Configuracoes).
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       where: { companyId: auth.companyId },
     })
 
-    // Sem registro ainda? Devolve tudo null — o fluxo decide o que fazer.
+    // Sem registro ainda? Devolve tudo null: o fluxo decide o que fazer.
     // prompt_feedback = prompt 1; prompt_response_criteria = prompt 2.
     return jsonResponse({
       company_id: auth.companyId,

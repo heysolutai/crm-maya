@@ -6,7 +6,7 @@ import { handleApiError } from '@/lib/api/errors'
 export async function GET(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     // Users who have been seen in the last 2 minutes are considered online
     const cutoff = new Date(Date.now() - 2 * 60 * 1000)

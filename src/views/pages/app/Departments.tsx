@@ -395,7 +395,7 @@ export default function Departments() {
       <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Adicionar Membro — {selectedDept?.name}</DialogTitle>
+            <DialogTitle>Adicionar Membro: {selectedDept?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">

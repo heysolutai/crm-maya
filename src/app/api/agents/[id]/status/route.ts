@@ -9,7 +9,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const agent = await prisma.inbox.findFirst({ where: { id, companyId } })
     if (!agent) return NextResponse.json({ error: 'Agente nao encontrado' }, { status: 404 })

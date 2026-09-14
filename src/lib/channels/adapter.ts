@@ -2,7 +2,7 @@
  * Contrato comum para todos os canais (UazAPI, Evolution, Z-API, WA Cloud, Instagram).
  *
  * Cada canal implementa este adapter. As rotas de API e o webhook receiver
- * trabalham apenas com a interface — nunca falam com o provider direto.
+ * trabalham apenas com a interface: nunca falam com o provider direto.
  *
  * Convencoes:
  * - "agent" e a linha em whatsapp_instances. Contem credenciais e estado.
@@ -31,7 +31,7 @@ export interface ChannelAgent {
 
 /**
  * Inputs do usuario coletados no dialog de "Novo Agente". Cada canal pode
- * exigir campos diferentes — o adapter decide o que usar.
+ * exigir campos diferentes: o adapter decide o que usar.
  */
 export interface ProvisionInput {
   companyId: string;
@@ -40,7 +40,7 @@ export interface ProvisionInput {
   serverUrl?: string;
   /** Token global/admin do servidor (Evolution AUTHENTICATION_API_KEY, UazAPI admin) */
   serverApiKey?: string;
-  /** Numero de telefone esperado (opcional — alguns canais usam pra pairing code) */
+  /** Numero de telefone esperado (opcional: alguns canais usam pra pairing code) */
   phoneNumber?: string;
   /** URL publica que vai receber webhooks deste agente */
   webhookUrl: string;
@@ -49,12 +49,12 @@ export interface ProvisionInput {
 }
 
 /**
- * Inputs para ADOTAR uma instancia que JA EXISTE no provider — o usuario cola
+ * Inputs para ADOTAR uma instancia que JA EXISTE no provider: o usuario cola
  * o token dela em vez de criar uma nova.
  *
  * Diferenca chave pro provision: aqui nao criamos nada no provider. Precisamos
  * descobrir o `instanceName` real consultando o provider com o token, porque o
- * receiver de webhook resolve a inbox por esse nome — se gravarmos um nome
+ * receiver de webhook resolve a inbox por esse nome: se gravarmos um nome
  * inventado, as mensagens recebidas nunca casam com a inbox.
  */
 export interface AdoptInput {
@@ -82,7 +82,7 @@ export interface ProvisionResult {
   apiUrl: string;
   /** Config a ser persistida em channel_config (ex: serverApiKey criptografado) */
   channelConfig: Record<string, unknown>;
-  /** Metadata do provider (resposta crua do create — util pra debug) */
+  /** Metadata do provider (resposta crua do create: util pra debug) */
   metadata: Record<string, unknown>;
   /** QR code base64 ja disponivel? (alguns providers retornam logo no create) */
   qrCode?: string | null;
@@ -109,10 +109,20 @@ export interface SendTextInput {
   to: string;
   text: string;
   quotedMessageId?: string;
+  /**
+   * Preview de link. Antes esses campos so eram repassados no caminho legado
+   * (instancia unica); numa inbox com adapter eram descartados e o link ia
+   * sem preview mesmo com linkPreview=true no body.
+   */
+  linkPreview?: boolean;
+  linkPreviewTitle?: string;
+  linkPreviewDescription?: string;
+  linkPreviewImage?: string;
+  linkPreviewLarge?: boolean;
 }
 
 export interface SendTextResult {
-  /** ID da mensagem no provider — util pra dedup em webhook */
+  /** ID da mensagem no provider: util pra dedup em webhook */
   providerMessageId: string;
   status: 'sent' | 'pending' | 'failed';
   raw?: Record<string, unknown>;
@@ -134,7 +144,7 @@ export interface ChannelAdapter {
   /** Retorna QR atual (gera novo se necessario) */
   getQrCode(agent: ChannelAgent): Promise<QrResult>;
 
-  /** Polling de status — chamado pela UI durante "connecting" */
+  /** Polling de status: chamado pela UI durante "connecting" */
   getStatus(agent: ChannelAgent): Promise<StatusResult>;
 
   /** Logout da sessao (mantem instancia) */

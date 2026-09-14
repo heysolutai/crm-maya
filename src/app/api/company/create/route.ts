@@ -105,14 +105,14 @@ export async function POST(req: NextRequest) {
         data: { userId: ownerId, role: 'company_admin', companyId },
       });
     } catch (createCompanyError) {
-      console.error('Erro ao criar empresa:', createCompanyError);
+      console.error('Erro ao criar restaurante:', createCompanyError);
       if (isNewUser) {
         await prisma.user.delete({ where: { id: ownerId } });
       }
       return errorResponse('Erro interno do servidor', 500);
     }
 
-    // A empresa ja nasce com uma API key ativa (pronta pro N8N). Best-effort —
+    // O restaurante ja nasce com uma API key ativa (pronta pro N8N). Best-effort -
     // nao quebra o cadastro se falhar. Aparece na checklist de primeiros passos
     // e nas configuracoes pra o dono copiar.
     try {
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
         },
       });
     } catch (apiKeyError) {
-      console.error('Falha ao auto-criar API key da empresa:', apiKeyError);
+      console.error('Falha ao auto-criar API key do restaurante:', apiKeyError);
     }
 
     // Skip link generation (was supabase.auth.admin.generateLink)
@@ -143,8 +143,8 @@ export async function POST(req: NextRequest) {
         ownerId,
         ownerEmail,
         message: isNewUser
-          ? (ownerPassword ? 'Empresa criada com sucesso. Senha definida.' : 'Empresa criada com sucesso.')
-          : 'Empresa criada com sucesso. Usuário existente associado.',
+          ? (ownerPassword ? 'Restaurante criado com sucesso. Senha definida.' : 'Restaurante criado com sucesso.')
+          : 'Restaurante criado com sucesso. Usuário existente associado.',
       },
     });
   } catch (error) {

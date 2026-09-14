@@ -9,11 +9,11 @@ const schema = z.object({
   catalogBusinessId: z.string().min(1).max(50),
 });
 
-// PATCH /api/whatsapp/settings — salva configurações da instância WhatsApp
+// PATCH /api/whatsapp/settings: salva configurações da instância WhatsApp
 export async function PATCH(req: NextRequest) {
   const auth = await authenticate(req);
   if (!auth.companyId) {
-    return NextResponse.json({ error: "Empresa não encontrada" }, { status: 403 });
+    return NextResponse.json({ error: "Restaurante não encontrado" }, { status: 403 });
   }
 
   try {

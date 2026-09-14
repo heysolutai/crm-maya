@@ -25,8 +25,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }))
 
   // A sessao expira por INATIVIDADE (1h). Sem renovar do lado do navegador,
-  // quem fica so acompanhando as conversas — lendo a tela, sem clicar em nada
-  // — seria deslogado no meio do expediente, porque "olhar" nao gera
+  // quem fica so acompanhando as conversas: lendo a tela, sem clicar em nada
+  //: seria deslogado no meio do expediente, porque "olhar" nao gera
   // requisicao nenhuma.
   //
   // Entao renovamos a cada 5 min enquanto a aba estiver aberta. Isso NAO torna

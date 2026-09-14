@@ -6,11 +6,11 @@ import { handleApiError } from '@/lib/api/errors'
 export async function GET(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const clientId = req.nextUrl.searchParams.get('clientId')
     if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
 
-    // IDOR: garante que o cliente pertence a empresa
+    // IDOR: garante que o cliente pertence o restaurante
     const client = await prisma.client.findFirst({
       where: { id: clientId, companyId },
       select: { id: true },

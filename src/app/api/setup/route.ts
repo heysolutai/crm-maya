@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { handleApiError } from '@/lib/api/errors'
 
-// GET — Check if system needs setup (no users exist)
+// GET: Check if system needs setup (no users exist)
 export async function GET() {
   try {
     const userCount = await prisma.user.count()
@@ -15,7 +15,7 @@ export async function GET() {
   }
 }
 
-// POST — Create the first super admin + optional company
+// POST: Create the first super admin + optional company
 export async function POST(request: NextRequest) {
   try {
     // Block if users already exist

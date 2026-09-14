@@ -6,7 +6,7 @@ import { handleApiError } from '@/lib/api/errors'
 export async function GET(req: NextRequest) {
   const { companyId } = await authenticate(req);
   if (!companyId) {
-    return NextResponse.json({ error: "Empresa não encontrada" }, { status: 403 });
+    return NextResponse.json({ error: "Restaurante não encontrado" }, { status: 403 });
   }
 
   try {

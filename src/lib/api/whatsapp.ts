@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import type { WhatsAppInstance } from './types';
 import { getUAZMessageId } from './database';
+import { prepararTextoParaWhatsApp } from '@/lib/whatsapp/texto-whatsapp';
 
 export async function sendToWhatsApp(
   instance: WhatsAppInstance,
@@ -28,6 +29,8 @@ export async function sendToWhatsApp(
     console.log('[WhatsApp API] Calling:', url, '| Phone:', cleanPhone);
 
     const { phone, number, fromAI, conversationId, company_id, ...rest } = payload;
+    // Markdown da IA e "\n" literal nao existem pro WhatsApp; corrige aqui, no funil.
+    if (typeof rest.text === 'string') rest.text = prepararTextoParaWhatsApp(rest.text);
 
     const response = await fetch(url, {
       method: 'POST',

@@ -13,7 +13,7 @@ import { restaurantIdDaInbox } from '@/lib/api/utils'
  *   /api/webhooks/notificame?agentId={id}
  *
  * NotificaMe NAO assina o body (sem HMAC). Defesa:
- *  1. agentId vem na query — usado pra resolver o agente alvo
+ *  1. agentId vem na query: usado pra resolver o agente alvo
  *  2. subscriptionId do payload e validado contra channelConfig.subscriptionIds
  *
  * Eventos suportados:
@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
 
     // Defesa: se o agente tem subscriptionIds gravados, o subscriptionId do
     // evento DEVE coincidir com um deles. Se nao tem (ja existia 409), aceita
-    // — mas loga.
+    //: mas loga.
     if (knownSubIds.messages || knownSubIds.messageStatus) {
       const matches =
         eventSubId === knownSubIds.messages || eventSubId === knownSubIds.messageStatus
@@ -224,7 +224,7 @@ export async function POST(req: NextRequest) {
 
         // Roteamento pra IA
         if (!fromMe) {
-          // Resolve AiAgent vinculado a inbox (M:1 — Inbox.aiAgentId)
+          // Resolve AiAgent vinculado a inbox (M:1: Inbox.aiAgentId)
           const inboxWithAi = await prisma.inbox.findUnique({
             where: { id: agent.id },
             include: {
@@ -255,7 +255,7 @@ export async function POST(req: NextRequest) {
               inbox_instance_name: agent.instanceName,
               inbox_channel_type: agent.channelType,
               inbox_phone: agent.phoneNumber,
-              // Identificador do restaurante no sistema de reservas — sai igual
+              // Identificador do restaurante no sistema de reservas: sai igual
               // em todos os canais pro fluxo do n8n nao ter que tratar cada um.
               restaurant_id: restaurantIdDaInbox(agent.channelConfig),
               // AiAgent vinculado a inbox (quando aplicavel)

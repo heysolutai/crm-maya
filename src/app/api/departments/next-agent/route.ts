@@ -17,7 +17,7 @@ export async function OPTIONS(req: NextRequest) {
 // Query params:
 //   department_id  = opcional. Se informado, faz peek do round-robin do
 //                    departamento (so agentes online membros do depto).
-//                    Se omitido, faz peek do round-robin global da empresa.
+//                    Se omitido, faz peek do round-robin global do restaurante.
 //   include_schedule = "1" para incluir schedule do agente (se existir).
 //
 // Resposta:
@@ -32,7 +32,7 @@ export async function OPTIONS(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req);
-    if (!companyId) return errorResponse('Empresa nao encontrada', 403);
+    if (!companyId) return errorResponse('Restaurante nao encontrado', 403);
 
     const url = new URL(req.url);
     const departmentId = url.searchParams.get('department_id');
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
 
       agentIds = [...new Set(rolesData.map(r => r.userId))].sort();
     } else {
-      // Company-wide: todos ativos (ignora isOnline — comportamento do assignNextAgent)
+      // Company-wide: todos ativos (ignora isOnline: comportamento do assignNextAgent)
       const agents = await prisma.user.findMany({
         where: { companyId, isActive: true },
         select: { id: true },
@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
           total_candidates: 0,
           queue_order: [],
           mode,
-          message: 'Nenhum agente ativo na empresa.',
+          message: 'Nenhum agente ativo no restaurante.',
         });
       }
 

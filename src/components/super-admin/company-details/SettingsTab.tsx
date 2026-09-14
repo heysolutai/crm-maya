@@ -51,7 +51,7 @@ export function SettingsTab({ company }: SettingsTabProps) {
         title: checked ? 'Módulo de avaliações ativado' : 'Módulo de avaliações desativado',
         description: checked
           ? 'A cron diária passará a disparar este restaurante para o n8n'
-          : 'A empresa não entrará mais na cron de avaliações',
+          : 'O restaurante não entrará mais na cron de avaliações',
       });
     } catch (error) {
       console.error('Error updating review module:', error);
@@ -79,8 +79,8 @@ export function SettingsTab({ company }: SettingsTabProps) {
       toast({
         title: checked ? 'Edição de prompts habilitada' : 'Edição de prompts desabilitada',
         description: checked
-          ? 'A empresa agora pode editar seus próprios prompts'
-          : 'A empresa não pode mais editar prompts',
+          ? 'O restaurante agora pode editar seus próprios prompts'
+          : 'O restaurante não pode mais editar prompts',
       });
     } catch (error) {
       console.error('Error updating settings:', error);
@@ -98,7 +98,7 @@ export function SettingsTab({ company }: SettingsTabProps) {
       <div>
         <h3 className="text-lg font-semibold">Configurações Gerais</h3>
         <p className="text-sm text-muted-foreground">
-          Configurações da empresa e gerenciamento de conta
+          Configurações do restaurante e gerenciamento de conta
         </p>
       </div>
 
@@ -124,7 +124,7 @@ export function SettingsTab({ company }: SettingsTabProps) {
                 <div>
                   <p className="text-sm font-medium">Permitir Edição de Prompts</p>
                   <p className="text-xs text-muted-foreground">
-                    Permite que administradores da empresa editem os prompts da IA
+                    Permite que administradores do restaurante editem os prompts da IA
                   </p>
                 </div>
               </div>
@@ -154,9 +154,9 @@ export function SettingsTab({ company }: SettingsTabProps) {
 
             <div className="flex items-center justify-between py-2 border-b">
               <div>
-                <p className="text-sm font-medium">Ativar/Desativar Empresa</p>
+                <p className="text-sm font-medium">Ativar/Desativar Restaurante</p>
                 <p className="text-xs text-muted-foreground">
-                  Desativar empresa bloqueia acesso dos usuários
+                  Desativar restaurante bloqueia acesso dos usuários
                 </p>
               </div>
               <Badge variant={company.is_active ? 'default' : 'secondary'}>

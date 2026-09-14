@@ -7,7 +7,7 @@ import { handleApiError } from '@/lib/api/errors'
 export async function GET(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const clientId = req.nextUrl.searchParams.get('clientId')
     if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
 
@@ -37,7 +37,7 @@ const createClientNoteSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const { companyId, agentId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const body = await req.json()
     const validation = createClientNoteSchema.safeParse(body)
 
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 
     const { client_id, note } = validation.data
 
-    // IDOR: garantir que o cliente pertence a esta empresa
+    // IDOR: garantir que o cliente pertence a este restaurante
     const client = await prisma.client.findFirst({
       where: { id: client_id, companyId },
       select: { id: true },

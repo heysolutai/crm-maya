@@ -24,6 +24,10 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# ffmpeg: nota de voz chega em OGG/Opus, que Safari e iPhone nao tocam.
+# O worker converte pra MP3 antes de guardar; sem o binario, fica como veio.
+RUN apk add --no-cache ffmpeg
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 

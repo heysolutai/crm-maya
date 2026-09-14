@@ -7,13 +7,13 @@ import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors'
 import { handleApiErrorCors } from '@/lib/api/errors'
 
 /**
- * Registra (ou limpa) a executionUrl de uma conversa — a URL de resume de um
+ * Registra (ou limpa) a executionUrl de uma conversa: a URL de resume de um
  * fluxo externo do n8n que esta aguardando a resposta do cliente (ex: fluxo
  * de avaliacao, node "Wait").
  *
  * Endpoint EXTERNO (x-api-key). Aceita snake_case e camelCase pra facilitar
  * o consumo no n8n. Identifica a conversa por conversation_id OU phone
- * (por telefone, cria a conversa se ainda nao existir — mesmo comportamento
+ * (por telefone, cria a conversa se ainda nao existir: mesmo comportamento
  * do send-text).
  *
  * O desvio e ONE-SHOT: o webhook de entrada limpa o campo ao encaminhar a
@@ -21,7 +21,7 @@ import { handleApiErrorCors } from '@/lib/api/errors'
  * Enviar execution_url: null limpa manualmente (ex: fim do fluxo).
  */
 
-// TTL default de 24h — cobre a janela de espera do fluxo de avaliacao.
+// TTL default de 24h: cobre a janela de espera do fluxo de avaliacao.
 const DEFAULT_TTL_SECONDS = 24 * 60 * 60
 
 const bodySchema = z.object({
@@ -31,7 +31,7 @@ const bodySchema = z.object({
   execution_url: z.string().url().max(2000).nullable().optional(),
   executionUrl: z.string().url().max(2000).nullable().optional(),
   /// Validade da URL em segundos (60s a 7 dias). Vencida, o CRM ignora e
-  /// limpa o registro — a conversa volta pro fluxo de IA normal sozinha.
+  /// limpa o registro: a conversa volta pro fluxo de IA normal sozinha.
   /// coerce: o n8n manda body parameters como string ("86400").
   ttl_seconds: z.coerce.number().int().min(60).max(7 * 24 * 60 * 60).optional(),
 })
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await authenticate(req)
     if (!auth.companyId) {
-      return errorResponse('Empresa nao identificada', 403)
+      return errorResponse('Restaurante nao identificada', 403)
     }
     const companyId = auth.companyId
 
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
 
     let conversationId: string
     if (requestedId) {
-      // IDOR: a conversa precisa ser da empresa autenticada.
+      // IDOR: a conversa precisa ser do restaurante autenticado.
       const conv = await prisma.conversation.findFirst({
         where: { id: requestedId, companyId },
         select: { id: true },

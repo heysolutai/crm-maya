@@ -27,7 +27,7 @@ const updateTeamSchema = z.discriminatedUnion('action', [
 export async function GET(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const members = await prisma.user.findMany({
       where: {
@@ -87,7 +87,7 @@ export async function PUT(req: NextRequest) {
     }
     const targetCompanyId = validatedBody.companyId || companyId
 
-    // Apenas company_admin (ou super-admin) pode gerenciar a equipe — evita que
+    // Apenas company_admin (ou super-admin) pode gerenciar a equipe: evita que
     // qualquer membro (viewer/agent) se promova a admin ou remova o dono.
     const uid = auth.agentId
     const canManage = auth.isSuperAdmin || (!!uid && !!(await prisma.userRole.findFirst({

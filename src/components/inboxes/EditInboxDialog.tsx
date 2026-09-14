@@ -40,7 +40,7 @@ interface Props {
  *
  * Mostrar o campo vazio passaria a impressão de "não configurado", e a pessoa
  * preencheria de novo achando que faltava. Com a prévia ela vê que já existe e
- * só troca quando quiser — deixar como está não altera nada no servidor.
+ * só troca quando quiser: deixar como está não altera nada no servidor.
  */
 function CampoSecreto({
   label,
@@ -170,7 +170,7 @@ export function EditInboxDialog({ open, onOpenChange, inbox, onSalvar, salvando 
 
   if (!inbox) return null;
 
-  // Só o token da instância tem endpoint de revelação — o de admin não sai
+  // Só o token da instância tem endpoint de revelação: o de admin não sai
   // do servidor de jeito nenhum.
   const revelarToken = async (): Promise<string | null> => {
     try {
@@ -205,7 +205,7 @@ export function EditInboxDialog({ open, onOpenChange, inbox, onSalvar, salvando 
         <DialogHeader>
           <DialogTitle>Editar caixa de entrada</DialogTitle>
           <DialogDescription>
-            Trocar credencial não desconecta o número — os dados novos passam a valer no
+            Trocar credencial não desconecta o número: os dados novos passam a valer no
             próximo envio.
           </DialogDescription>
         </DialogHeader>

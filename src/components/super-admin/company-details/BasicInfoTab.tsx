@@ -46,14 +46,14 @@ export function BasicInfoTab({ company }: BasicInfoTabProps) {
             Informações Básicas
           </CardTitle>
           <CardDescription>
-            Gerencie as informações básicas da empresa
+            Gerencie as informações básicas do restaurante
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Nome da Empresa *</Label>
+                <Label htmlFor="name">Nome do Restaurante *</Label>
                 <Input
                   id="name"
                   value={formData.name}
@@ -147,7 +147,7 @@ export function BasicInfoTab({ company }: BasicInfoTabProps) {
           )}
 
           <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">ID da Empresa</span>
+            <span className="text-sm text-muted-foreground">ID do Restaurante</span>
             <code className="text-xs bg-muted px-2 py-1 rounded">{company.id}</code>
           </div>
         </CardContent>

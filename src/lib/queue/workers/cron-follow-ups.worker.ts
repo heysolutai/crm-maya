@@ -2,6 +2,7 @@ import { Worker, Queue } from 'bullmq'
 import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type CronTickJob } from '../queues'
 import { prisma } from '@/lib/db'
+import { prepararTextoParaWhatsApp } from '@/lib/whatsapp/texto-whatsapp'
 
 async function processFollowUps() {
   // Fetch pending follow-up jobs that are due
@@ -119,6 +120,20 @@ async function processFollowUps() {
         }
       }
 
+      // Texto vazio nao vira envio: o job nasce da etapa configurada, e uma
+      // etapa em branco mandaria mensagem vazia (ou falharia no provedor).
+      if (!job.messageText?.trim()) {
+        console.warn(`[Cron Follow-ups] Job ${job.id} sem texto: etapa ${job.stageOrder} esta vazia na configuracao`)
+        await prisma.followUpJob.update({
+          where: { id: job.id },
+          data: { status: 'failed', errorMessage: 'Etapa de follow-up sem texto' },
+        })
+        errors++
+        continue
+      }
+      // Mesma normalizacao de todo texto que sai (markdown, "\n" literal, travessao).
+      const texto = prepararTextoParaWhatsApp(job.messageText)
+
       // Send WhatsApp message
       const cleanPhone = client.phone.replace(/[^0-9]/g, '')
       const response = await fetch(`${instance.apiUrl}/send/text`, {
@@ -129,7 +144,7 @@ async function processFollowUps() {
         },
         body: JSON.stringify({
           number: cleanPhone,
-          text: job.messageText,
+          text: texto,
         }),
       })
 
@@ -147,7 +162,7 @@ async function processFollowUps() {
           data: {
             conversationId: job.conversationId,
             senderType: 'ai',
-            messageText: job.messageText,
+            messageText: texto,
             messageType: 'text',
             metadata: {
               follow_up_job_id: job.id,

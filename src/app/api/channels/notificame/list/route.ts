@@ -10,7 +10,7 @@ import { handleApiError } from '@/lib/api/errors'
  * pedir UUID do canal digitado.
  *
  * Recebe o token no body (nao na query/header) pra nao vazar em logs.
- * Exige usuario autenticado — qualquer admin de empresa pode validar
+ * Exige usuario autenticado: qualquer admin de restaurante pode validar
  * tokens; o token NotificaMe nao e persistido aqui.
  */
 
@@ -26,7 +26,7 @@ interface NotificameChannel {
   type?: string
   status?: string
   /**
-   * Token DO CANAL — usado como `from` no sendMessage de WhatsApp.
+   * Token DO CANAL: usado como `from` no sendMessage de WhatsApp.
    * Pode nao vir nessa listagem (depende de como o NotificaMe expoe).
    * Se nao vier, a UI pede manualmente.
    */
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
     if (!companyId) {
-      return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+      return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     }
 
     const body = await req.json()

@@ -5,7 +5,7 @@ import { jsonResponse, errorResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
 
 function verifyCronSecret(req: NextRequest): boolean {
-  // CLAUDE.md Rule 6: fail-closed — bloqueia se CRON_SECRET nao esta configurado
+  // CLAUDE.md Rule 6: fail-closed: bloqueia se CRON_SECRET nao esta configurado
   const expectedSecret = process.env.CRON_SECRET;
   if (!expectedSecret) return false;
   const cronSecret = req.headers.get('x-cron-secret');

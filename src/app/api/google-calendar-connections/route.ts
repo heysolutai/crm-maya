@@ -6,7 +6,7 @@ import { handleApiError } from '@/lib/api/errors'
 export async function GET(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const connection = await prisma.googleCalendarConnection.findFirst({
       where: { companyId },
@@ -20,12 +20,12 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const body = await req.json()
     const { id, ...updates } = body
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-    // IDOR: garantir que a conexao pertence a esta empresa
+    // IDOR: garantir que a conexao pertence a este restaurante
     const existing = await prisma.googleCalendarConnection.findFirst({
       where: { id, companyId },
       select: { id: true },

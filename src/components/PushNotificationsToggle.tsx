@@ -101,7 +101,7 @@ export function PushNotificationsToggle({
             {isSubscribed
               ? 'Recebendo alertas de novas mensagens'
               : permission === 'denied'
-                ? 'Bloqueadas — ative no navegador'
+                ? 'Bloqueadas: ative no navegador'
                 : 'Receba alertas mesmo com o app fechado'}
           </p>
         </div>

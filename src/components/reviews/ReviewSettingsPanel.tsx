@@ -110,7 +110,7 @@ export function ReviewSettingsPanel({ onBack }: Props) {
         </div>
       ) : (
         <>
-          {/* Status do módulo (read-only — quem ativa é o suporte/super-admin) */}
+          {/* Status do módulo (read-only: quem ativa é o suporte/super-admin) */}
           <Card>
             <CardContent className="flex items-center justify-between py-4">
               <div className="flex items-center gap-3">
@@ -126,8 +126,8 @@ export function ReviewSettingsPanel({ onBack }: Props) {
                   <p className="font-medium text-sm">Módulo de avaliações</p>
                   <p className="text-xs text-muted-foreground">
                     {form.enabled
-                      ? 'Ativo — a coleta diária de avaliações está habilitada.'
-                      : 'Inativo — fale com o suporte para ativar.'}
+                      ? 'Ativo: a coleta diária de avaliações está habilitada.'
+                      : 'Inativo: fale com o suporte para ativar.'}
                   </p>
                 </div>
               </div>
@@ -182,7 +182,7 @@ export function ReviewSettingsPanel({ onBack }: Props) {
                     {activeInboxes.map((inbox) => (
                       <SelectItem key={inbox.id} value={inbox.id}>
                         {inbox.display_name}
-                        {inbox.phone_number ? ` — ${inbox.phone_number}` : ''}
+                        {inbox.phone_number ? `: ${inbox.phone_number}` : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -281,7 +281,7 @@ export function ReviewSettingsPanel({ onBack }: Props) {
                 <Textarea
                   id="prompt-final"
                   rows={5}
-                  placeholder="Instruções para a IA gerar a mensagem final após o feedback — agradecimento, tom, link de avaliação, o que incluir ou evitar..."
+                  placeholder="Instruções para a IA gerar a mensagem final após o feedback: agradecimento, tom, link de avaliação, o que incluir ou evitar..."
                   value={form.promptFinal}
                   onChange={(e) => set({ promptFinal: e.target.value })}
                   className="font-mono text-sm"

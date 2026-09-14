@@ -3,8 +3,10 @@ import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type MediaProcessingJob, enqueueN8NWebhook } from '../queues'
 import { prisma } from '@/lib/db'
 import { uploadToB2, buildB2Key, MIME_TO_EXT } from '@/lib/storage'
+import { prepararAudioParaWeb } from '@/lib/audio-transcode'
+import { publishEvent } from '@/lib/realtime'
 
-// Download media via UazAPI /message/download endpoint (only reliable method — WhatsApp URLs are encrypted)
+// Download media via UazAPI /message/download endpoint (only reliable method: WhatsApp URLs are encrypted)
 async function downloadViaUazAPI(
   messageKey: string,
   apiKey: string,
@@ -24,7 +26,10 @@ async function downloadViaUazAPI(
         id: messageKey,
         return_base64: true,
         generate_mp3: false,
-        return_link: false,
+        // return_link TEM que ser true: a UAZapi nao devolve base64 de arquivo
+        // grande (documento, video); sem o link a resposta voltava vazia e a
+        // midia ficava sem arquivo pra sempre.
+        return_link: true,
         transcribe: false,
         download_quoted: false,
       }),
@@ -120,7 +125,7 @@ async function processMedia(job: Job<MediaProcessingJob>) {
 
   console.log(`[Media Worker] Processing ${mediaType} for message ${messageId}, key: ${messageKey}`)
 
-  // Download via UazAPI (only reliable method — WhatsApp URLs are encrypted)
+  // Download via UazAPI (only reliable method: WhatsApp URLs are encrypted)
   const mediaData = await downloadViaUazAPI(messageKey, instanceApiKey, instanceApiUrl)
 
   if (!mediaData || mediaData.buffer.length === 0) {
@@ -150,6 +155,17 @@ async function processMedia(job: Job<MediaProcessingJob>) {
     console.log(`[Media Worker] Final mimeType: ${mediaData.mimeType}`)
   }
 
+  // Nota de voz chega como OGG/Opus, que Safari e iPhone nao tocam. O que fica
+  // guardado pra tela e MP3; o original so importa pro WhatsApp, que ja o tem.
+  let mimeOriginal: string | undefined
+  if (mediaType === 'audio') {
+    const web = await prepararAudioParaWeb(mediaData.buffer, mediaData.mimeType)
+    if (web.erro) console.warn(`[Media Worker] audio ${messageId} segue sem conversao: ${web.erro}`)
+    mediaData.buffer = web.buffer
+    mediaData.mimeType = web.mime
+    mimeOriginal = web.mimeOriginal
+  }
+
   console.log(`[Media Worker] Ready to upload: ${mediaType}, ${mediaData.mimeType}, ${mediaData.buffer.length} bytes`)
 
   // Upload to local filesystem
@@ -161,30 +177,38 @@ async function processMedia(job: Job<MediaProcessingJob>) {
     throw new Error(`Failed to upload media to storage for message ${messageId}`)
   }
 
-  // Update message with storage path + enrich metadata for documents
+  // Metadata e sempre reescrito: uma tentativa anterior pode ter deixado o
+  // marcador de falha, que precisa sumir junto com o problema.
+  const existing = await prisma.message.findFirst({
+    where: { id: messageId, conversationId, conversation: { companyId } },
+    select: { metadata: true },
+  })
+  if (!existing) throw new Error(`mensagem ${messageId} nao pertence ao job`)
+  const prevMeta = (existing.metadata as Record<string, unknown> | null) || {}
+  const enriched: Record<string, unknown> = { ...prevMeta, mimeType: mediaData.mimeType }
   if (mediaType === 'document') {
-    const existing = await prisma.message.findUnique({
-      where: { id: messageId },
-      select: { metadata: true },
-    })
-    const prevMeta = (existing?.metadata as Record<string, unknown>) || {}
-    const enriched: Record<string, unknown> = { ...prevMeta }
     if (!enriched.docName && mediaData.fileName) enriched.docName = mediaData.fileName
     if (!enriched.fileSize) enriched.fileSize = mediaData.buffer.length
-    if (!enriched.mimeType) enriched.mimeType = mediaData.mimeType
-
-    await prisma.message.update({
-      where: { id: messageId },
-      data: { mediaUrl: storagePath, metadata: enriched as any },
-    })
-  } else {
-    await prisma.message.update({
-      where: { id: messageId },
-      data: { mediaUrl: storagePath },
-    })
   }
+  if (mimeOriginal) enriched.original_mime = mimeOriginal
+  delete enriched.media_error
+  delete enriched.media_failed_at
+  delete enriched.media_attempts
+
+  await prisma.message.update({
+    where: { id: messageId },
+    data: { mediaUrl: storagePath, metadata: enriched as object },
+  })
 
   console.log(`[Media Worker] Uploaded to: ${storagePath}`)
+
+  // Sem isto a bolha ficava em "recuperando..." ate recarregar a pagina.
+  await publishEvent(companyId, {
+    type: 'message:update',
+    conversationId,
+    messageId,
+    patch: { media_url: storagePath, metadata: enriched },
+  }).catch((e) => console.error('[Media Worker] publish falhou:', (e as Error).message))
 
   // Send N8N webhook with public URL (B2 URL já é pública)
   if (n8nWebhookUrl && n8nPayload) {
@@ -202,6 +226,40 @@ async function processMedia(job: Job<MediaProcessingJob>) {
   }
 
   return { messageId, storagePath }
+}
+
+/**
+ * Ultima tentativa falhou: grava o motivo na mensagem, senao a bolha diz
+ * "recuperando..." pra sempre e ninguem sabe por que.
+ */
+async function registrarFalhaTerminal(job: Job<MediaProcessingJob> | undefined, err: Error) {
+  if (!job) return
+  const maximo = job.opts?.attempts ?? 1
+  if (job.attemptsMade < maximo) return
+  const { messageId, conversationId, companyId } = job.data
+  if (!messageId || !companyId) return
+  try {
+    const atual = await prisma.message.findFirst({
+      where: { id: messageId, conversation: { companyId } },
+      select: { metadata: true, mediaUrl: true },
+    })
+    if (!atual || atual.mediaUrl) return
+    const metadata: Record<string, unknown> = {
+      ...((atual.metadata as Record<string, unknown> | null) || {}),
+      media_error: err.message.slice(0, 300),
+      media_failed_at: new Date().toISOString(),
+      media_attempts: job.attemptsMade,
+    }
+    await prisma.message.update({ where: { id: messageId }, data: { metadata: metadata as object } })
+    await publishEvent(companyId, {
+      type: 'message:update',
+      conversationId,
+      messageId,
+      patch: { metadata },
+    }).catch(() => {})
+  } catch (e) {
+    console.error('[Media Worker] nao consegui registrar a falha na mensagem:', (e as Error).message)
+  }
 }
 
 let worker: Worker<MediaProcessingJob> | null = null
@@ -224,6 +282,7 @@ export function startMediaProcessingWorker() {
 
   worker.on('failed', (job, err) => {
     console.error(`[Media Worker] Job ${job?.id} failed (attempt ${job?.attemptsMade}):`, err.message)
+    void registrarFalhaTerminal(job, err)
   })
 
   console.log('[Media Worker] Started')

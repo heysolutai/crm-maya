@@ -79,14 +79,14 @@ export function redactChannelConfig(cfg: unknown): unknown {
  * Redige segredos em profundidade, por NOME de campo.
  *
  * Serve pro `metadata` da Inbox, que guarda a resposta CRUA do provedor no
- * momento do provisionamento. Essa resposta contem o token da instancia — a
+ * momento do provisionamento. Essa resposta contem o token da instancia: a
  * Evolution devolve em `hash.apikey`, a UazAPI no corpo do init. Ou seja: a
  * mesma chave que a listagem mascara com cuidado em `instance_api_key` ia
  * inteira pro navegador dentro do metadata, anulando o mascaramento.
  *
  * Como o formato varia por provedor (e muda quando eles atualizam a API), a
  * redacao e por nome de campo em qualquer profundidade, e nao por caminho
- * conhecido — provedor novo ja nasce coberto.
+ * conhecido: provedor novo ja nasce coberto.
  */
 export function redactDeep(valor: unknown, profundidade = 0): unknown {
   // Guarda contra estrutura ciclica ou absurdamente aninhada.
@@ -103,7 +103,7 @@ export function redactDeep(valor: unknown, profundidade = 0): unknown {
     if (ehSecreto && typeof v === 'string' && v.length > 0) {
       out[chave] = REDACTED;
     } else if (ehSecreto && v && typeof v === 'object') {
-      // Ex: Evolution manda `hash: { apikey: "..." }` — o objeto inteiro cai.
+      // Ex: Evolution manda `hash: { apikey: "..." }`: o objeto inteiro cai.
       out[chave] = REDACTED;
     } else {
       out[chave] = redactDeep(v, profundidade + 1);

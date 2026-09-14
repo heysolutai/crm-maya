@@ -52,7 +52,7 @@ export function ClientsTab({ companyId }: ClientsTabProps) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Users className="h-5 w-5" />
-          Contatos da Empresa
+          Contatos do Restaurante
         </CardTitle>
         <CardDescription>
           Gerencie os contatos e controle o status da IA para cada cliente

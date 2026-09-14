@@ -84,7 +84,7 @@ export function PwaInstallPrompt() {
     // Android/Desktop Chrome: captura o evento
     const handler = (e: Event) => {
       e.preventDefault();
-      // Re-checa em tempo real — dismiss/install podem ter sido marcados depois do mount
+      // Re-checa em tempo real: dismiss/install podem ter sido marcados depois do mount
       if (shouldSuppress() || suppressedRef.current) return;
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setPlatform('chrome');

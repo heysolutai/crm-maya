@@ -3,7 +3,7 @@
  *
  * Diferente de UazAPI/Evolution, o NotificaMe e um agregador multi-canal:
  * voce configura o canal (WhatsApp Cloud, Instagram, Facebook, etc.) no painel
- * deles e fala com uma API unica. Nao tem QR code — autenticacao e por API
+ * deles e fala com uma API unica. Nao tem QR code: autenticacao e por API
  * token de conta + channelId + (no caso de WhatsApp) channelToken.
  *
  * Auth (header em TODAS as requests):
@@ -38,6 +38,7 @@ import type {
   SendTextResult,
 } from '../adapter';
 import { ChannelError, classifyHttpStatus, isNetworkError } from '../errors';
+import { prepararTextoParaWhatsApp } from '@/lib/whatsapp/texto-whatsapp';
 
 const NOTIFICAME_BASE_URL = 'https://api.notificame.com.br';
 const HTTP_CONFLICT = 409;
@@ -221,7 +222,7 @@ export const notificameAdapter: ChannelAdapter = {
       );
     }
 
-    // Valida token de conta — GET /v1/channels deve retornar 200
+    // Valida token de conta: GET /v1/channels deve retornar 200
     const validate = await notificameFetch(apiToken, 'GET', '/v1/channels');
     if (!validate.ok) {
       throwForStatus(validate.status, validate.data, 'Token NotificaMe invalido');
@@ -316,7 +317,7 @@ export const notificameAdapter: ChannelAdapter = {
     const body = {
       from,
       to,
-      contents: [{ type: 'text', text: input.text }],
+      contents: [{ type: 'text', text: prepararTextoParaWhatsApp(input.text) }],
     };
 
     const path = `/v1/channels/${channel}/messages`;

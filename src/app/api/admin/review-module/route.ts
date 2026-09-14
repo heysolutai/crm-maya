@@ -5,9 +5,9 @@ import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
 
 /**
- * Controle do MODULO DE AVALIACAO por empresa — restrito ao super-admin.
+ * Controle do MODULO DE AVALIACAO por restaurante: restrito ao super-admin.
  *
- * A empresa configura o conteudo (links/prompts/saudacao) em /api/reviews/settings,
+ * O restaurante configura o conteudo (links/prompts/saudacao) em /api/reviews/settings,
  * mas quem LIGA/DESLIGA o modulo (ReviewSettings.enabled), que habilita a cron
  * diaria pro n8n, e o super-admin.
  */
@@ -68,7 +68,7 @@ export async function PATCH(req: NextRequest) {
     }
     const { companyId, enabled } = validation.data
 
-    // Upsert: garante a linha mesmo se a empresa ainda nao configurou nada.
+    // Upsert: garante a linha mesmo se o restaurante ainda nao configurou nada.
     const settings = await prisma.reviewSettings.upsert({
       where: { companyId },
       create: { companyId, enabled },

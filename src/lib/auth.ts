@@ -63,7 +63,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const password = credentials.password as string
 
         // Anti brute-force: bloqueia apos muitas falhas recentes pro mesmo email
-        // (independente de IP — robusto contra spoof de x-forwarded-for).
+        // (independente de IP: robusto contra spoof de x-forwarded-for).
         try {
           const recentFails = await prisma.loginLog.count({
             where: {
@@ -110,7 +110,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const companyRole = companyRoles[0] || null
         const companyId = companyRole?.companyId ?? null
 
-        // Login OK: atualiza lastLogin + registra evento. Best-effort — uma
+        // Login OK: atualiza lastLogin + registra evento. Best-effort: uma
         // falha aqui NUNCA pode impedir o login.
         try {
           await prisma.user.update({
@@ -138,14 +138,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
      * Janela de INATIVIDADE, nao duracao da sessao.
      *
      * O token e reemitido a cada acesso a sessao (ver updateAge), entao quem
-     * esta usando o sistema nunca chega nesse limite — ele so vence pra quem
+     * esta usando o sistema nunca chega nesse limite: ele so vence pra quem
      * largou a aba. Antes eram 30 dias, o que na pratica significava sessao
      * eterna: dava pra sumir por dois meses e voltar logado.
      */
     maxAge: INATIVIDADE_MAX,
     /**
      * De quanto em quanto tempo o token pode ser renovado. Sem isso o padrao
-     * e 24h — ou seja, a renovacao nunca aconteceria dentro de uma janela de
+     * e 24h: ou seja, a renovacao nunca aconteceria dentro de uma janela de
      * 1 hora e todo mundo cairia no meio do expediente.
      */
     updateAge: 5 * 60,
@@ -160,13 +160,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.role = (user as any).role ?? null
         token.companyId = (user as any).companyId ?? null
         token.checkedAt = Math.floor(Date.now() / 1000)
-        // Marca do login. E o que permite o teto absoluto — sem gravar aqui,
+        // Marca do login. E o que permite o teto absoluto: sem gravar aqui,
         // a renovacao por atividade nao teria contra o que ser comparada.
         token.loginAt = Math.floor(Date.now() / 1000)
         return token
       }
 
-      // Teto absoluto: passou de SESSAO_MAX desde o login, cai — nao importa
+      // Teto absoluto: passou de SESSAO_MAX desde o login, cai: nao importa
       // o quanto a pessoa esteja usando. Retornar null invalida o token e o
       // middleware manda pro /auth.
       const loginAt = (token.loginAt as number) || 0

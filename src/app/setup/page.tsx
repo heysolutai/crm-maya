@@ -164,7 +164,7 @@ export default function SetupPage() {
                 <div className="flex items-start gap-3">
                   <Building2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-medium text-foreground">Criar Primeira Empresa</p>
+                    <p className="font-medium text-foreground">Criar Primeiro Restaurante</p>
                     <p>Com funil de vendas padrão já configurado</p>
                   </div>
                 </div>
@@ -239,7 +239,7 @@ export default function SetupPage() {
               )}
 
               <Button className="w-full" size="lg" onClick={handleCreateAdmin}>
-                Próximo: Empresa
+                Próximo: Restaurante
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             </CardContent>
@@ -253,12 +253,12 @@ export default function SetupPage() {
               <div className="mx-auto bg-primary/10 rounded-full p-4 mb-4 w-fit">
                 <Building2 className="h-8 w-8 text-primary" />
               </div>
-              <CardTitle className="text-xl">Primeira Empresa</CardTitle>
-              <CardDescription>Crie a empresa principal ou pule para depois</CardDescription>
+              <CardTitle className="text-xl">Primeiro Restaurante</CardTitle>
+              <CardDescription>Crie o restaurante principal ou pule para depois</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="companyName">Nome da Empresa</Label>
+                <Label htmlFor="companyName">Nome do Restaurante</Label>
                 <Input
                   id="companyName"
                   placeholder="Ex: Otica Exemplo"
@@ -267,11 +267,11 @@ export default function SetupPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="companyEmail">Email da Empresa</Label>
+                <Label htmlFor="companyEmail">Email do Restaurante</Label>
                 <Input
                   id="companyEmail"
                   type="email"
-                  placeholder="contato@empresa.com.br"
+                  placeholder="contato@restaurante.com.br"
                   value={companyData.companyEmail}
                   onChange={e => setCompanyData(d => ({ ...d, companyEmail: e.target.value }))}
                 />
@@ -331,7 +331,7 @@ export default function SetupPage() {
                 </div>
                 {result.company && (
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Empresa</span>
+                    <span className="text-muted-foreground">Restaurante</span>
                     <span className="font-medium">{result.company.name}</span>
                   </div>
                 )}

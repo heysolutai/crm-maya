@@ -5,13 +5,13 @@ import { handleApiError } from '@/lib/api/errors'
 import { dispatchCompanyReviews, getReviewWebhookUrl } from '@/lib/reviews/dispatch'
 
 /**
- * Disparo MANUAL da avaliacao pro n8n — mesmo fluxo da cron horaria, mas
- * apenas pra empresa autenticada e sob demanda (botao no painel).
+ * Disparo MANUAL da avaliacao pro n8n: mesmo fluxo da cron horaria, mas
+ * apenas pra restaurante autenticado e sob demanda (botao no painel).
  */
 export async function POST(req: NextRequest) {
   const auth = await authenticate(req)
   if (!auth.companyId) {
-    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
   }
 
   try {

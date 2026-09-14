@@ -5,12 +5,12 @@ import { handleApiError } from '@/lib/api/errors'
 
 /**
  * Status dos "Primeiros Passos" do restaurante (checklist do dashboard).
- * Detecta sozinho o que ja foi feito a partir dos dados da empresa.
+ * Detecta sozinho o que ja foi feito a partir dos dados do restaurante.
  */
 export async function GET(req: NextRequest) {
   const auth = await authenticate(req)
   if (!auth.companyId) {
-    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
   }
 
   try {

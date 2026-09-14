@@ -59,10 +59,10 @@ export function useCompanies() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
-      toast({ title: 'Empresa criada com sucesso!' });
+      toast({ title: 'Restaurante criado com sucesso!' });
     },
     onError: (error: any) => {
-      toast({ title: 'Erro ao criar empresa', description: getErrorMessage(error), variant: 'destructive' });
+      toast({ title: 'Erro ao criar restaurante', description: getErrorMessage(error), variant: 'destructive' });
     },
   });
 
@@ -82,10 +82,10 @@ export function useCompanies() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
-      toast({ title: 'Empresa atualizada com sucesso!' });
+      toast({ title: 'Restaurante atualizado com sucesso!' });
     },
     onError: (error: any) => {
-      toast({ title: 'Erro ao atualizar empresa', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar restaurante', description: error.message, variant: 'destructive' });
     },
   });
 
@@ -99,10 +99,10 @@ export function useCompanies() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
-      toast({ title: 'Empresa excluída com sucesso!' });
+      toast({ title: 'Restaurante excluído com sucesso!' });
     },
     onError: (error: any) => {
-      toast({ title: 'Erro ao excluir empresa', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao excluir restaurante', description: error.message, variant: 'destructive' });
     },
   });
 

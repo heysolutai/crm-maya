@@ -6,9 +6,9 @@ import { decryptApiKey } from '@/lib/api/api-key-utils'
 import { logSecurityEvent } from '@/lib/security-log'
 
 /**
- * Revela a API key REAL da empresa sob demanda.
+ * Revela a API key REAL do restaurante sob demanda.
  *
- * A listagem (/api/api-keys) devolve a chave MASCARADA (••••XXXX) — o valor
+ * A listagem (/api/api-keys) devolve a chave MASCARADA (••••XXXX): o valor
  * cheio so aparecia na criacao. Mas o dono precisa recuperar a chave pra usar
  * fora (n8n etc.) sem ter que gerar uma nova. Este endpoint devolve o valor
  * real, com:
@@ -22,7 +22,7 @@ export async function GET(
 ) {
   const { companyId, agentId: userId } = await authenticate(req)
   if (!companyId) {
-    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
   }
 
   try {

@@ -18,7 +18,7 @@ const AI_FEATURES = [
   { key: 'connections', label: 'Conexões', description: 'Gerenciar WhatsApp e Google Calendar' },
   { key: 'faq', label: 'FAQ / Base de Conhecimento', description: 'Gerenciar perguntas frequentes e base de conhecimento' },
   { key: 'integrations', label: 'Integrações (API Keys IA)', description: 'Configurar chaves de API dos provedores de IA (OpenAI, etc.)' },
-  { key: 'api_keys', label: 'API Keys da Empresa', description: 'Gerenciar chaves de API para integração externa' },
+  { key: 'api_keys', label: 'API Keys do Restaurante', description: 'Gerenciar chaves de API para integração externa' },
   { key: 'settings', label: 'Ajustes de IA', description: 'Configurar modelo, idioma, comportamento e webhooks' },
   { key: 'playground', label: 'Playground', description: 'Testar a IA em tempo real com simulação de chat' },
 ] as const;
@@ -127,7 +127,7 @@ export function AIPermissionsConfig({ companyId }: AIPermissionsConfigProps) {
           Permissões de IA
         </h2>
         <p className="text-muted-foreground mt-1">
-          Defina quais funcionalidades de IA o administrador da empresa terá acesso
+          Defina quais funcionalidades de IA o administrador do restaurante terá acesso
         </p>
       </div>
 

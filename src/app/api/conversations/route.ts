@@ -33,7 +33,7 @@ const updateConversationSchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     const { companyId, agentId, isSuperAdmin } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const status = req.nextUrl.searchParams.get('status')
     const aiHandled = req.nextUrl.searchParams.get('aiHandled')
@@ -52,8 +52,8 @@ export async function GET(req: NextRequest) {
     if (departmentId) where.departmentId = departmentId
     if (inboxId) where.inboxId = inboxId
 
-    // Visibilidade por membership de inbox (regra B — estrita):
-    //   - super_admin / company_admin / manager veem TUDO da empresa
+    // Visibilidade por membership de inbox (regra B: estrita):
+    //   - super_admin / company_admin / manager veem TUDO do restaurante
     //   - demais usuarios so veem conversas das inboxes que sao MEMBROS
     //   - 0 inboxes selecionadas = nao ve NADA (mesmo sendo do time/department)
     //   - conversas legadas SEM inbox tambem ficam invisiveis (so admin/manager veem)
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
         const memberships = await prisma.inboxMember.findMany({
           where: {
             userId: agentId,
-            // Amarra ao tenant: membership remanescente de outra empresa nao
+            // Amarra ao tenant: membership remanescente de outro restaurante nao
             // deve entrar no calculo do escopo.
             inbox: { companyId },
           },
@@ -129,7 +129,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const { companyId, agentId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const body = await req.json()
 
     const validation = createConversationSchema.safeParse(body)
@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
     const interest = data.interest?.trim() || null
     const source = data.source?.trim() || null
 
-    // Check if client exists — matching em todas as variações (com/sem 9)
+    // Check if client exists: matching em todas as variações (com/sem 9)
     let client = await prisma.client.findFirst({
       where: {
         companyId,
@@ -214,7 +214,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ id: existingConversation.id, existing: true })
     }
 
-    // Create new conversation — tratamos P2002 caso o partial unique index
+    // Create new conversation: tratamos P2002 caso o partial unique index
     // (idx_conversations_one_open_per_client) detecte conflito por race condition
     let conversation: { id: string }
     try {
@@ -268,7 +268,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const { companyId, agentId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const body = await req.json()
 
     const validation = updateConversationSchema.safeParse(body)
@@ -284,9 +284,18 @@ export async function PUT(req: NextRequest) {
     const existing = await prisma.conversation.findFirst({ where: { id, companyId } })
     if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
 
+    // endedAt e a data REAL de fechamento: o dashboard conta "finalizadas no
+    // periodo" por ele (updatedAt sobe em qualquer edicao). Reabrir limpa.
+    const statusChanged = updates.status !== undefined && updates.status !== existing.status
+    const endedAtPatch = !statusChanged
+      ? {}
+      : updates.status === 'closed'
+        ? { endedAt: new Date() }
+        : { endedAt: null }
+
     const conversation = await prisma.conversation.update({
       where: { id },
-      data: updates,
+      data: { ...updates, ...endedAtPatch },
     })
 
     await logAction({

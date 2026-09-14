@@ -36,7 +36,7 @@ import { useBranding } from '@/hooks/useBranding';
 
 const navigation = [
   { name: 'Dashboard', href: '/super-admin/dashboard', icon: LayoutDashboard },
-  { name: 'Empresas', href: '/super-admin/companies', icon: Building2 },
+  { name: 'Restaurantes', href: '/super-admin/companies', icon: Building2 },
   { name: 'Usuários', href: '/super-admin/users', icon: Users },
   { name: 'Super Admins', href: '/super-admin/admins', icon: Shield },
   { name: 'Custos de IA', href: '/super-admin/token-dashboard', icon: DollarSign },
@@ -164,7 +164,7 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
             <div className="relative w-48 md:w-80">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar empresas..."
+                placeholder="Buscar restaurantes..."
                 className="pl-9 h-9 rounded-xl bg-muted/50 border-border/30 text-sm"
               />
             </div>

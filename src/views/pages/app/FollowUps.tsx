@@ -63,6 +63,7 @@ import {
 import { StatCards, type StatItem } from '@/components/ui/stat-cards';
 import { TableSkeleton, CardListSkeleton } from '@/components/ui/table-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import { DateInputBR } from '@/components/ui/date-input-br';
 
 const statusConfig = {
   pending: { color: 'bg-amber-500', dot: 'bg-amber-500', label: 'Pendente', textColor: 'text-amber-700 dark:text-amber-400', bgLight: 'bg-amber-500/10' },
@@ -81,6 +82,7 @@ export default function FollowUps() {
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelAllOpen, setCancelAllOpen] = useState(false);
   const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
   const [newScheduledDate, setNewScheduledDate] = useState('');
 
@@ -90,7 +92,7 @@ export default function FollowUps() {
     clientSearch: clientSearch || undefined,
   };
 
-  const { jobs, isLoading, stats, cancelJob, rescheduleJob } = useFollowUpJobs(filters);
+  const { jobs, isLoading, stats, cancelJob, rescheduleJob, cancelAllPending } = useFollowUpJobs(filters);
   const { companies } = useCompanies();
 
   const selectedJobData = jobs?.find(j => j.id === selectedJob);
@@ -105,11 +107,19 @@ export default function FollowUps() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Follow-ups</h1>
-        <p className="text-muted-foreground">
-          Gerencie todos os jobs de follow-up automáticos
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold">Follow-ups</h1>
+          <p className="text-muted-foreground">
+            Gerencie todos os jobs de follow-up automáticos
+          </p>
+        </div>
+        {stats.pending > 0 && (
+          <Button variant="outline" className="text-destructive" onClick={() => setCancelAllOpen(true)}>
+            <Ban className="h-4 w-4 mr-2" />
+            Cancelar todos os pendentes ({stats.pending})
+          </Button>
+        )}
       </div>
 
       {/* Stat Cards */}
@@ -151,7 +161,7 @@ export default function FollowUps() {
         {isSuperAdmin && (
           <Select value={companyFilter || "all"} onValueChange={(v) => setCompanyFilter(v === "all" ? "" : v)}>
             <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Todas as empresas" />
+              <SelectValue placeholder="Todos os restaurantes" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
@@ -173,7 +183,7 @@ export default function FollowUps() {
             rows={8}
             headers={[
               'Cliente',
-              ...(isSuperAdmin ? ['Empresa'] : []),
+              ...(isSuperAdmin ? ['Restaurante'] : []),
               'Etapa',
               'Agendado Para',
               'Status',
@@ -197,7 +207,7 @@ export default function FollowUps() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Cliente</TableHead>
-                  {isSuperAdmin && <TableHead>Empresa</TableHead>}
+                  {isSuperAdmin && <TableHead>Restaurante</TableHead>}
                   <TableHead>Etapa</TableHead>
                   <TableHead>Agendado Para</TableHead>
                   <TableHead>Status</TableHead>
@@ -438,6 +448,29 @@ export default function FollowUps() {
         </DialogContent>
       </Dialog>
 
+      {/* Cancelar todos os pendentes: follow-up ligado sem querer gera um job
+          por conversa, e cancelar um a um nao e opcao. */}
+      <AlertDialog open={cancelAllOpen} onOpenChange={setCancelAllOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar todos os follow-ups pendentes</AlertDialogTitle>
+            <AlertDialogDescription>
+              {stats.pending} mensagem(ns) agendada(s) deixam de ser enviadas. Isso não desliga o
+              follow-up: pra não gerar novos, desative-o na configuração da IA.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { cancelAllPending.mutate(undefined); setCancelAllOpen(false); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Sim, cancelar todos
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Cancel Dialog */}
       <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <AlertDialogContent>
@@ -470,8 +503,8 @@ export default function FollowUps() {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium">Nova Data e Horário</label>
-              <Input
-                type="datetime-local"
+              <DateInputBR
+                withTime
                 value={newScheduledDate}
                 onChange={(e) => setNewScheduledDate(e.target.value)}
                 className="mt-2"

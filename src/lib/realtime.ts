@@ -16,7 +16,7 @@ function getPublisher(): IORedis {
       console.error('[Realtime] Publisher error:', err.message);
     });
     publisher.on('end', () => {
-      console.warn('[Realtime] Publisher connection ended — proxima publicacao reconecta');
+      console.warn('[Realtime] Publisher connection ended: proxima publicacao reconecta');
       publisher = null;
     });
     publisher.on('ready', () => {
@@ -67,7 +67,7 @@ export async function publishEvent(companyId: string, event: RealtimeEvent): Pro
     const result = await getPublisher().publish(channel, JSON.stringify(event));
     // Publish retorna numero de subscribers que receberam o evento. Logamos
     // sempre pra facilitar diagnostico quando o frontend nao atualiza em tempo real.
-    console.log(`[Realtime] publish ${event.type} em ${channel} — ${result} subscriber(s)`);
+    console.log(`[Realtime] publish ${event.type} em ${channel}: ${result} subscriber(s)`);
   } catch (err) {
     console.error('[Realtime] publish falhou:', event.type, err);
   }

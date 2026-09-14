@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 
 export interface ReviewSettings {
   enabled: boolean
-  /** Hora do dia (0-23, BRT) em que a cron de avaliacao dispara pra empresa */
+  /** Hora do dia (0-23, BRT) em que a cron de avaliacao dispara pra restaurante */
   dispatchHour: number
   /** Inbox do disparo; null = todas as conexoes ativas */
   inboxId: string | null
@@ -12,7 +12,7 @@ export interface ReviewSettings {
   tripadvisorUrl: string | null
   prompt1: string | null
   prompt2: string | null
-  /** Prompt da resposta final ao cliente (texto livre da empresa) */
+  /** Prompt da resposta final ao cliente (texto livre do restaurante) */
   promptFinal: string | null
   greeting: string | null
 }

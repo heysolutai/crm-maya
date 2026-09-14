@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
 
-/** GET user settings — usuario regular so le as proprias; super-admin pode ler qualquer */
+/** GET user settings: usuario regular so le as proprias; super-admin pode ler qualquer */
 export async function GET(req: NextRequest) {
   try {
     const { companyId, agentId, isSuperAdmin } = await authenticate(req)
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Super-admin: garantir que o usuario pertence a empresa autenticada
+    // Super-admin: garantir que o usuario pertence o restaurante autenticado
     const user = await prisma.user.findFirst({
       where: isSuperAdmin
         ? { id: requestedUserId }

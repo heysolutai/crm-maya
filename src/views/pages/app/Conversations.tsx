@@ -180,7 +180,7 @@ export default function Conversations() {
     notifyTypingDebounced,
   });
 
-  // Scroll management — scrollToMessage do hook usa querySelector (nao funciona
+  // Scroll management: scrollToMessage do hook usa querySelector (nao funciona
   // bem com virtualizacao). Definimos uma versao virtualizer-aware abaixo
   // (handleScrollToMessage).
   const {
@@ -448,7 +448,7 @@ export default function Conversations() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastTransferEvent]);
 
-  // Pre-calculado uma vez por render do array de mensagens — evita O(n) em CADA
+  // Pre-calculado uma vez por render do array de mensagens: evita O(n) em CADA
   // <MessageBubble>. Antes, isFirstInGroup(idx) era chamado 500x por re-render.
   const firstInGroupFlags = useMemo(() => {
     const flags = new Array(messages.length);

@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Super admin pode redefinir qualquer senha.
-    // Company admin pode redefinir senha de usuários da própria empresa.
+    // Company admin pode redefinir senha de usuários da próprio restaurante.
     const isSuperAdmin = await prisma.userRole.findFirst({
       where: { userId: agentId, role: 'super_admin' },
     });

@@ -53,7 +53,7 @@ export function CreateCompanyDialog() {
       <DialogTrigger asChild>
         <Button className="rounded-xl">
           <Plus className="h-4 w-4 mr-2" />
-          Nova Empresa
+          Novo Restaurante
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
@@ -61,21 +61,21 @@ export function CreateCompanyDialog() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
-              Criar Nova Empresa
+              Criar Novo Restaurante
             </DialogTitle>
           <DialogDescription>
-              Crie uma nova empresa e seu administrador.
+              Crie uma novo restaurante e seu administrador.
           </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="companyName">Nome da Empresa *</Label>
+              <Label htmlFor="companyName">Nome do Restaurante *</Label>
               <Input
                 id="companyName"
                 value={formData.companyName}
                 onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
-                placeholder="Ex: Minha Empresa Ltda"
+                placeholder="Ex: Meu Restaurante Ltda"
                 required
               />
             </div>
@@ -87,11 +87,11 @@ export function CreateCompanyDialog() {
                 type="email"
                 value={formData.ownerEmail}
                 onChange={(e) => setFormData(prev => ({ ...prev, ownerEmail: e.target.value }))}
-                placeholder="admin@empresa.com"
+                placeholder="admin@restaurante.com"
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Este será o email de login do administrador da empresa
+                Este será o email de login do administrador do restaurante
               </p>
             </div>
 
@@ -138,7 +138,7 @@ export function CreateCompanyDialog() {
               Cancelar
             </Button>
             <Button type="submit" disabled={isCreating}>
-              {isCreating ? 'Criando...' : 'Criar Empresa'}
+              {isCreating ? 'Criando...' : 'Criar Restaurante'}
             </Button>
           </DialogFooter>
         </form>

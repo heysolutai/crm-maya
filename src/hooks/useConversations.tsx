@@ -43,7 +43,7 @@ export function useConversations(filters?: ConversationFilters) {
 
   const pollingIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Ref "mirror" do state — permite que callbacks memoizados (useCallback com deps [])
+  // Ref "mirror" do state: permite que callbacks memoizados (useCallback com deps [])
   // leiam o estado mais recente sem recriar a funcao a cada render. Necessario
   // pra loadInitialMessages/loadOlderMessages nao invalidarem o effect do
   // useConversationScroll (que resetaria o scroll do usuario a cada render).
@@ -162,7 +162,7 @@ export function useConversations(filters?: ConversationFilters) {
         const transferred_user = conv.transferAgent
           ? { full_name: conv.transferAgent.fullName || conv.transferAgent.full_name || null }
           : (conv.transferred_user || null);
-        // Normalize inbox → agent (snake_case) — backend agora retorna `inbox`,
+        // Normalize inbox → agent (snake_case): backend agora retorna `inbox`,
         // mas mantemos `agent` no shape pra nao quebrar componentes existentes.
         const inboxRel = conv.inbox || conv.whatsappInstance;
         const agent = inboxRel
@@ -299,7 +299,7 @@ export function useConversations(filters?: ConversationFilters) {
     setRealtimeStatus('connecting');
     const es = new EventSource('/api/conversations/events');
 
-    // Helpers de fallback polling — so atua quando SSE esta offline.
+    // Helpers de fallback polling: so atua quando SSE esta offline.
     // Quando SSE conecta/reconecta, polling para. Economiza requests redundantes
     // no caso normal e cobre buracos durante reconnect/sleep.
     const startFallbackPolling = () => {
@@ -315,23 +315,74 @@ export function useConversations(filters?: ConversationFilters) {
       }
     };
 
+    // Recarrega o que a tela ja tem aberto. Usado quando houve um buraco no
+    // tempo real: reconexao do SSE ou aba que ficou em segundo plano (o
+    // navegador congela a conexao). Sem isto, mensagem que chegou no intervalo
+    // so aparecia ao recarregar a pagina.
+    const recarregarAbertas = async () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
+      const abertas = Object.entries(conversationMessagesRef.current)
+        .filter(([, st]) => st?.initialLoaded)
+        .map(([id]) => id)
+        .slice(-3);
+      for (const id of abertas) {
+        try {
+          const dados = (await fetchMessagesForConversation(id)).map(normalizeMessage);
+          setConversationMessages(prev => {
+            const st = prev[id];
+            if (!st) return prev;
+            const ids = new Set(st.messages.map((m: any) => m.id));
+            const novas = dados.filter((m: any) => !ids.has(m.id));
+            if (novas.length === 0) return prev;
+            const merged = [...st.messages.filter((m: any) => !m._optimistic), ...novas].sort((a: any, b: any) =>
+              new Date(a.createdAt || a.created_at || 0).getTime() - new Date(b.createdAt || b.created_at || 0).getTime()
+            );
+            return { ...prev, [id]: { ...st, messages: merged } };
+          });
+        } catch (e) {
+          console.warn('[SSE] recarga da conversa falhou:', e);
+        }
+      }
+    };
+
+    let jaConectou = false;
     es.addEventListener('open', () => {
       console.log('[SSE] conectado');
       setRealtimeStatus('connected');
       stopFallbackPolling();
+      // Reconexao (nao a primeira): pode ter perdido evento no intervalo.
+      if (jaConectou) void recarregarAbertas();
+      jaConectou = true;
     });
 
     es.addEventListener('connected', (evt: MessageEvent) => {
       console.log('[SSE] handshake:', evt.data);
     });
 
+    // Aba escondida por mais de 20s: o navegador pausa o EventSource sem
+    // avisar. Ao voltar, sincroniza.
+    let escondidaEm = 0;
+    const aoMudarVisibilidade = () => {
+      if (document.visibilityState === 'hidden') {
+        escondidaEm = Date.now();
+        return;
+      }
+      if (escondidaEm && Date.now() - escondidaEm > 20_000) void recarregarAbertas();
+      escondidaEm = 0;
+    };
+    document.addEventListener('visibilitychange', aoMudarVisibilidade);
+
     // Update surgical: muda APENAS a entrada do cache da conversa afetada.
     // Antes era invalidateQueries() que refetchava a lista inteira de 100+ conversas
-    // em cada mensagem que chegava — causava o "travado" no frontend.
+    // em cada mensagem que chegava: causava o "travado" no frontend.
+    // Devolve false quando a conversa nao esta em nenhuma lista carregada (e
+    // nova, ou estava fechada e reabriu): ai o caminho e refetch.
     const updateConversationInCache = (
       conversationId: string,
       patch: (conv: any) => any,
-    ) => {
+      opcoes?: { reordenar?: boolean },
+    ): boolean => {
+      let encontrou = false;
       queryClient.setQueriesData(
         { queryKey: ['conversations', companyId] },
         (oldData: any) => {
@@ -342,9 +393,18 @@ export function useConversations(filters?: ConversationFilters) {
             changed = true;
             return patch(c);
           });
-          return changed ? next : oldData;
+          if (!changed) return oldData;
+          encontrou = true;
+          // Mensagem nova sobe a conversa pro topo, como a lista vem do servidor.
+          if (opcoes?.reordenar) {
+            next.sort((a: any, b: any) =>
+              new Date(b.updatedAt || b.updated_at || 0).getTime() - new Date(a.updatedAt || a.updated_at || 0).getTime()
+            );
+          }
+          return next;
         },
       );
+      return encontrou;
     };
 
     es.addEventListener('message', (evt: MessageEvent) => {
@@ -362,7 +422,7 @@ export function useConversations(filters?: ConversationFilters) {
             return { ...prev, [data.conversationId]: { ...state, messages: merged } };
           });
           // Atualiza o preview da lista (ultima mensagem + updatedAt) sem refetch
-          updateConversationInCache(data.conversationId, (conv) => ({
+          const naLista = updateConversationInCache(data.conversationId, (conv) => ({
             ...conv,
             updatedAt: incoming.createdAt || incoming.created_at,
             last_message: {
@@ -375,7 +435,13 @@ export function useConversations(filters?: ConversationFilters) {
             unread_count: incoming.sender_type === 'client'
               ? (conv.unread_count || 0) + 1
               : conv.unread_count,
-          }));
+          }), { reordenar: true });
+          // Conversa que nao esta na lista (nova, ou reaberta): so o refetch
+          // traz ela. Antes o primeiro contato de um cliente nao aparecia ate
+          // recarregar.
+          if (!naLista) {
+            queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
+          }
           return;
         }
 
@@ -392,7 +458,7 @@ export function useConversations(filters?: ConversationFilters) {
             };
           });
           // Delete de mensagem nao afeta a lista normalmente (a preview pode ficar
-          // levemente stale ate o proximo evento — aceitavel)
+          // levemente stale ate o proximo evento: aceitavel)
           return;
         }
 
@@ -418,7 +484,7 @@ export function useConversations(filters?: ConversationFilters) {
               },
             };
           });
-          // Update de status (read, etc) — propaga unread_count se ficou 0
+          // Update de status (read, etc): propaga unread_count se ficou 0
           if (patch.readStatus === 'read' || patch.readAt) {
             updateConversationInCache(data.conversationId, (conv) => ({
               ...conv,
@@ -429,7 +495,7 @@ export function useConversations(filters?: ConversationFilters) {
         }
 
         if (data.type === 'conversation:update') {
-          // Mudancas estruturais da conversa (transferencia, status, tags) — aqui
+          // Mudancas estruturais da conversa (transferencia, status, tags): aqui
           // a invalidacao se justifica porque o conjunto de campos afetados varia.
           queryClient.invalidateQueries({ queryKey: ['conversations', companyId] });
           queryClient.invalidateQueries({ queryKey: ['department-queue', companyId] });

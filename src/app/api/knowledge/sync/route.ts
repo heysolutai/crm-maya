@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     // Webhook do n8n virou OPCIONAL: quem indexa a base vetorial agora e o
     // proprio CRM (syncCompanyFaqs). O webhook segue sendo disparado pra quem
-    // depende dele, mas best-effort — n8n fora do ar ou workflow inativo nao
+    // depende dele, mas best-effort: n8n fora do ar ou workflow inativo nao
     // pode mais derrubar a sincronizacao.
     const knowledgeWebhookUrl =
       (await getSystemSetting('knowledge_webhook_url')) ||
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     if (knowledgeWebhookUrl) {
       console.log('[Sync KB] Webhook URL:', knowledgeWebhookUrl.substring(0, 60) + '...');
     } else {
-      console.log('[Sync KB] Webhook do n8n nao configurado — seguindo so com a base vetorial');
+      console.log('[Sync KB] Webhook do n8n nao configurado: seguindo so com a base vetorial');
     }
 
     const body = await req.json();
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
       `${vectorResult.failed} falhas`
     );
 
-    // 2) Webhook do n8n — best-effort. Falha aqui NAO derruba o sync: a base
+    // 2) Webhook do n8n: best-effort. Falha aqui NAO derruba o sync: a base
     //    vetorial ja foi atualizada acima.
     let webhookOk = false;
     if (knowledgeWebhookUrl) {

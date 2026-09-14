@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 
-// Endpoint temporário de diagnóstico — REMOVER APÓS DEBUG
+// Endpoint temporário de diagnóstico: REMOVER APÓS DEBUG
 export async function GET(req: NextRequest) {
   try {
     const { companyId, isSuperAdmin } = await authenticate(req);

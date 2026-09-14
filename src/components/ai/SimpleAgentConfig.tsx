@@ -79,7 +79,7 @@ export function SimpleAgentConfig({ companyId, agentId }: Props) {
     );
   }
 
-  // Modo avançado — o editor de prompt completo de sempre.
+  // Modo avançado: o editor de prompt completo de sempre.
   if (advanced) {
     return (
       <div className="space-y-3">
@@ -102,7 +102,7 @@ export function SimpleAgentConfig({ companyId, agentId }: Props) {
           <div>
             <h3 className="text-base font-semibold">Configurar o agente de IA</h3>
             <p className="text-sm text-muted-foreground">
-              Preencha o básico — a gente monta o resto pra você.
+              Preencha o básico: a gente monta o resto pra você.
             </p>
           </div>
         </div>
@@ -176,7 +176,7 @@ export function SimpleAgentConfig({ companyId, agentId }: Props) {
           <Label htmlFor="address">Endereço</Label>
           <Input
             id="address"
-            placeholder="Ex: Rua das Flores, 120 — Setor Bueno, Goiânia"
+            placeholder="Ex: Rua das Flores, 120, Setor Bueno, Goiânia"
             value={form.address}
             onChange={(e) => set({ address: e.target.value })}
           />

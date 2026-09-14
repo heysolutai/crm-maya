@@ -74,7 +74,7 @@ const baseTabs = [
 ];
 
 // Abas da IA do agente DEDICADO desta conexão (1:1). Mesmas da antiga tela
-// de "Agente IA", agora embutidas aqui — conexão e agente sao a mesma coisa.
+// de "Agente IA", agora embutidas aqui: conexão e agente sao a mesma coisa.
 const aiFixedTabs = [
   { id: 'prompts', label: 'Prompts', icon: MessageSquareText, permKey: 'prompts' as AIPermissionKey },
   { id: 'faq', label: 'FAQ', icon: BookOpen, permKey: 'faq' as AIPermissionKey },
@@ -99,7 +99,7 @@ export default function InboxDetail({ inboxId }: Props) {
 
   const inbox = inboxes.find((a) => a.id === inboxId);
 
-  // Abas da conexao + abas de IA (estas gated pelas permissoes da empresa).
+  // Abas da conexao + abas de IA (estas gated pelas permissoes do restaurante).
   const tabs = useMemo(() => {
     const isSuperAdmin = role === 'super_admin';
     if (isSuperAdmin) return [...baseTabs, ...aiFixedTabs, ...aiRestrictedTabs];
@@ -256,7 +256,7 @@ function ConnectionTab({ inbox }: { inbox: ReturnType<typeof useInboxes>['inboxe
   const queryClient = useQueryClient();
   const { toast } = useToast();
   // Necessario pra super-admin personificado: as rotas /api/agents/[id]/* exigem
-  // ?companyId= pra resolver a empresa (senao retornam "Empresa nao encontrada").
+  // ?companyId= pra resolver o restaurante (senao retornam "Restaurante nao encontrado").
   const { effectiveCompanyId: companyId } = useEffectiveCompanyId();
   const channelMeta = CHANNEL_REGISTRY[inbox.channel_type];
   const isAvailable = channelMeta?.status === 'available';
@@ -269,7 +269,7 @@ function ConnectionTab({ inbox }: { inbox: ReturnType<typeof useInboxes>['inboxe
   const isConnected = inbox.status === 'connected';
   const isConnecting = inbox.status === 'connecting' && !!inbox.qr_code;
 
-  // Polling de status enquanto estiver "connecting" — checa a cada 4s
+  // Polling de status enquanto estiver "connecting": checa a cada 4s
   useEffect(() => {
     if (inbox.status !== 'connecting') return;
     const interval = setInterval(async () => {
@@ -281,7 +281,7 @@ function ConnectionTab({ inbox }: { inbox: ReturnType<typeof useInboxes>['inboxe
           queryClient.invalidateQueries({ queryKey: ['inboxes'] });
         }
       } catch {
-        /* silencioso — proximo tick tenta de novo */
+        /* silencioso: proximo tick tenta de novo */
       }
     }, 4000);
     return () => clearInterval(interval);
@@ -375,7 +375,7 @@ function ConnectionTab({ inbox }: { inbox: ReturnType<typeof useInboxes>['inboxe
                 {isConnected ? 'Canal ativo via API token' : 'Canal configurado via API token'}
               </p>
               <p className="text-sm text-muted-foreground">
-                Sem QR Code — autenticação via token na API NotificaMe. Status sincroniza automaticamente.
+                Sem QR Code: autenticação via token na API NotificaMe. Status sincroniza automaticamente.
               </p>
             </div>
             {inbox.channel_config &&
@@ -540,7 +540,7 @@ function MembersTab({ inboxId }: { inboxId: string }) {
           </div>
         ) : teamMembers.length === 0 ? (
           <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground text-sm">
-            Nenhum atendente cadastrado nesta empresa.
+            Nenhum atendente cadastrado neste restaurante.
           </div>
         ) : (
           <div className="space-y-1 max-h-[420px] overflow-y-auto -mx-1 px-1">

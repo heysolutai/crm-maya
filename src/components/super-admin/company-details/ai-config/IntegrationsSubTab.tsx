@@ -11,7 +11,7 @@ export function IntegrationsSubTab({ companyId }: IntegrationsSubTabProps) {
       <div>
         <h3 className="text-lg font-semibold">🔗 Integrações</h3>
         <p className="text-sm text-muted-foreground">
-          Conecte o WhatsApp e o Google Calendar à sua empresa
+          Conecte o WhatsApp e o Google Calendar à seu restaurante
         </p>
       </div>
 

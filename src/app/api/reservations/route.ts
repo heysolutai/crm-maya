@@ -24,7 +24,7 @@ const createSchema = z.object({
 export async function GET(req: NextRequest) {
   const auth = await authenticate(req)
   if (!auth.companyId) {
-    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
   }
 
   try {
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await authenticate(req)
   if (!auth.companyId) {
-    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
   }
 
   try {
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     }
     const d = validation.data
 
-    // IDOR: clientId / conversationId (se vierem) precisam ser da empresa.
+    // IDOR: clientId / conversationId (se vierem) precisam ser do restaurante.
     if (d.clientId) {
       const client = await prisma.client.findFirst({
         where: { id: d.clientId, companyId: auth.companyId },
@@ -112,7 +112,7 @@ const updateSchema = z.object({
 export async function PUT(req: NextRequest) {
   const auth = await authenticate(req)
   if (!auth.companyId) {
-    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
   }
 
   try {
@@ -126,7 +126,7 @@ export async function PUT(req: NextRequest) {
     }
     const { id, ...updates } = validation.data
 
-    // IDOR: a reserva tem que ser da empresa antes de atualizar.
+    // IDOR: a reserva tem que ser do restaurante antes de atualizar.
     const existing = await prisma.reservation.findFirst({
       where: { id, companyId: auth.companyId },
       select: { id: true },

@@ -32,7 +32,7 @@ export default function Companies() {
 
   const statsCards = [
     {
-      title: 'TOTAL EMPRESAS',
+      title: 'TOTAL RESTAURANTES',
       value: totalCompanies,
       subtitle: `+${totalCompanies > 0 ? Math.round((activeCount / totalCompanies) * 100) : 0}%`,
       subtitleColor: 'text-emerald-400',
@@ -62,9 +62,9 @@ export default function Companies() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Lista de Empresas</h1>
+          <h1 className="text-2xl font-bold">Lista de Restaurantes</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Gerencie e monitore todas as empresas cadastradas no ecossistema.
+            Gerencie e monitore todos os restaurantes cadastrados no ecossistema.
           </p>
         </div>
         <CreateCompanyDialog />

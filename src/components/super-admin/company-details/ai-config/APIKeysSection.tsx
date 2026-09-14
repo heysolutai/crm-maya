@@ -30,7 +30,7 @@ const LLM_PROVIDERS: { value: LLMProvider; label: string; icon: string; descript
 ];
 
 function isKeyFormatValid(provider: string, value: string | undefined): boolean {
-  // Chave configurada (redigida pelo servidor) — nao valida formato.
+  // Chave configurada (redigida pelo servidor): nao valida formato.
   if (!value || value.trim() === '' || value === REDACTED) return true;
   const validation = KEY_VALIDATIONS[provider];
   if (!validation) return true;
@@ -68,7 +68,7 @@ export function APIKeysSection({
     elevenlabs: isKeyFormatValid('elevenlabs', apiKeys.elevenlabs),
   }), [apiKeys]);
 
-  // Nunca mostra o sentinel de chave redigida no input — fica em branco.
+  // Nunca mostra o sentinel de chave redigida no input: fica em branco.
   const getKeyDisplay = (key: string | undefined) => (key && key !== REDACTED ? key : "");
 
   const filteredModels = AI_MODELS.filter(m => m.provider === activeProvider);
@@ -103,13 +103,13 @@ export function APIKeysSection({
       </div>
       {value === REDACTED && (
         <p className="text-xs text-emerald-600 dark:text-emerald-400">
-          ✓ Chave configurada — deixe em branco para manter, ou digite uma nova para trocar.
+          ✓ Chave configurada: deixe em branco para manter, ou digite uma nova para trocar.
         </p>
       )}
       {!validations[provider] && (
         <div className="flex items-center gap-1.5 text-destructive text-xs">
           <AlertTriangle className="h-3.5 w-3.5" />
-          <span>Chave inválida — {KEY_VALIDATIONS[provider]?.hint}</span>
+          <span>Chave inválida: {KEY_VALIDATIONS[provider]?.hint}</span>
         </div>
       )}
     </div>

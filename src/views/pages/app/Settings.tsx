@@ -4,6 +4,7 @@ import { useFunnelStages } from '@/hooks/useFunnelStages';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useToast } from '@/hooks/use-toast';
+import { DiagnosticoCard } from '@/components/settings/DiagnosticoCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,7 +41,7 @@ const menuGroups: MenuGroup[] = [
   {
     label: 'Geral',
     items: [
-      { id: 'company', label: 'Empresa', icon: Building2, description: 'Dados e configurações gerais' },
+      { id: 'company', label: 'Restaurante', icon: Building2, description: 'Dados e configurações gerais' },
       { id: 'permissions', label: 'Permissões', icon: Shield, description: 'Roles e assinaturas' },
     ],
   },
@@ -242,7 +243,12 @@ export default function Settings() {
   const renderSection = () => {
     switch (activeSection) {
       case 'company':
-        return <CompanySection companyForm={companyForm} setCompanyForm={setCompanyForm} handleCompanyUpdate={handleCompanyUpdate} company={company} updateCompany={updateCompany} />;
+        return (
+          <div className="space-y-6">
+            <CompanySection companyForm={companyForm} setCompanyForm={setCompanyForm} handleCompanyUpdate={handleCompanyUpdate} company={company} updateCompany={updateCompany} />
+            <DiagnosticoCard />
+          </div>
+        );
       case 'connections':
         return (
           <ConnectionsSection
@@ -313,7 +319,7 @@ export default function Settings() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-bold">Configurações</h1>
-        <p className="text-muted-foreground text-sm">Gerencie as configurações da sua empresa</p>
+        <p className="text-muted-foreground text-sm">Gerencie as configurações do seu restaurante</p>
       </div>
 
       {isMobile ? (
@@ -434,8 +440,8 @@ function CompanySection({ companyForm, setCompanyForm, handleCompanyUpdate, comp
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Dados da Empresa</CardTitle>
-          <CardDescription>Informações básicas da sua empresa</CardDescription>
+          <CardTitle>Dados do Restaurante</CardTitle>
+          <CardDescription>Informações básicas do seu restaurante</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

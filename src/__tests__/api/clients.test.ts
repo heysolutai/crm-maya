@@ -86,7 +86,7 @@ const updateClientSchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
-// Test suite – createClientSchema validation
+// Test suite: createClientSchema validation
 // ---------------------------------------------------------------------------
 
 describe('createClientSchema', () => {
@@ -147,7 +147,7 @@ describe('createClientSchema', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Test suite – updateClientSchema validation
+// Test suite: updateClientSchema validation
 // ---------------------------------------------------------------------------
 
 describe('updateClientSchema', () => {
@@ -183,7 +183,7 @@ describe('updateClientSchema', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Test suite – NextRequest helper
+// Test suite: NextRequest helper
 // ---------------------------------------------------------------------------
 
 describe('makeRequest helper', () => {

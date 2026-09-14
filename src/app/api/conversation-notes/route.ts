@@ -8,11 +8,11 @@ import { handleApiError } from '@/lib/api/errors'
 export async function GET(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const conversationId = req.nextUrl.searchParams.get('conversationId')
     if (!conversationId) return NextResponse.json({ error: 'Missing conversationId' }, { status: 400 })
 
-    // IDOR: garante que a conversa pertence a empresa autenticada
+    // IDOR: garante que a conversa pertence o restaurante autenticado
     const notes = await prisma.conversationNote.findMany({
       where: { conversationId, companyId },
       include: {
@@ -37,7 +37,7 @@ const createConversationNoteSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const { companyId, agentId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const body = await req.json()
     const validation = createConversationNoteSchema.safeParse(body)
 
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 
     const { conversation_id, note } = validation.data
 
-    // IDOR: garante que a conversa pertence a empresa autenticada antes de criar nota
+    // IDOR: garante que a conversa pertence o restaurante autenticado antes de criar nota
     const conversation = await prisma.conversation.findFirst({
       where: { id: conversation_id, companyId },
       select: { id: true },

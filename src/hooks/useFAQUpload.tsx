@@ -27,8 +27,8 @@ export function useFAQUpload(companyId: string | undefined) {
 
   const uploadFAQFile = async (file: File): Promise<UploadResult> => {
     if (!companyId) {
-      toast.error('Empresa não identificada');
-      return { success: false, error: 'Empresa não identificada' };
+      toast.error('Restaurante não identificada');
+      return { success: false, error: 'Restaurante não identificada' };
     }
 
     const maxSize = 10 * 1024 * 1024;
@@ -84,7 +84,7 @@ export function useFAQUpload(companyId: string | undefined) {
         'notify-faq-upload',
         {
           // /api/upload retorna a URL publica COMPLETA do B2. Mandamos ela direto
-          // pro N8N — prefixar window.location.origin gerava URL quebrada
+          // pro N8N: prefixar window.location.origin gerava URL quebrada
           // (https://app/https://b2/arquivo) e o N8N nao conseguia baixar o arquivo.
           // So prefixa se por acaso vier um caminho relativo (compatibilidade).
           fileUrl: fileUrl.startsWith('http') ? fileUrl : `${window.location.origin}${fileUrl}`,

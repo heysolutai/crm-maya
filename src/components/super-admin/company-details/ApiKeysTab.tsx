@@ -81,9 +81,9 @@ export function ApiKeysTab({ companyId }: ApiKeysTabProps) {
   };
 
   const formatDate = (dateString: string | null | undefined) => {
-    if (!dateString) return '—';
+    if (!dateString) return '-';
     const d = new Date(dateString);
-    if (isNaN(d.getTime())) return '—';
+    if (isNaN(d.getTime())) return '-';
     return format(d, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
   };
 
@@ -168,7 +168,7 @@ export function ApiKeysTab({ companyId }: ApiKeysTabProps) {
               <Key className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">Nenhuma API Key criada</h3>
               <p className="text-muted-foreground mb-4">
-                Crie uma API Key para permitir integrações externas com esta empresa
+                Crie uma API Key para permitir integrações externas com este restaurante
               </p>
             </div>
           ) : (

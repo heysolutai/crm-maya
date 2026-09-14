@@ -65,7 +65,7 @@ export default function AppAISettings() {
         <Bot className="h-12 w-12 text-muted-foreground mb-4" />
         <h2 className="text-xl font-semibold mb-2">Sem acesso às configurações de IA</h2>
         <p className="text-muted-foreground max-w-md">
-          Nenhuma permissão de IA foi habilitada para sua empresa. Entre em contato com o suporte para solicitar acesso.
+          Nenhuma permissão de IA foi habilitada para seu restaurante. Entre em contato com o suporte para solicitar acesso.
         </p>
       </div>
     );

@@ -1,5 +1,5 @@
 /**
- * Erros tipados de canal — permitem a UI distinguir entre:
+ * Erros tipados de canal: permitem a UI distinguir entre:
  *   - "credencial errada" (usuario corrige) vs
  *   - "servidor offline" (problema infra, retry depois) vs
  *   - "instancia nao existe" (recriar) etc.
@@ -9,20 +9,20 @@
  */
 
 export type ChannelErrorCode =
-  | 'INVALID_CREDENTIALS'      // 401/403 do provider — API key errada/expirada
-  | 'INSTANCE_NOT_FOUND'       // 404 — instancia nao existe mais no provider
-  | 'PROVIDER_UNREACHABLE'     // 5xx ou network error — servidor offline
+  | 'INVALID_CREDENTIALS'      // 401/403 do provider: API key errada/expirada
+  | 'INSTANCE_NOT_FOUND'       // 404: instancia nao existe mais no provider
+  | 'PROVIDER_UNREACHABLE'     // 5xx ou network error: servidor offline
   | 'NETWORK_ERROR'            // fetch falhou (DNS, TLS, timeout)
-  | 'BAD_REQUEST'              // 400 — payload invalido / regra de negocio
-  | 'CONFLICT'                 // 409 — instanceName ja em uso, etc
-  | 'RATE_LIMITED'             // 429 — provider limitando taxa
+  | 'BAD_REQUEST'              // 400: payload invalido / regra de negocio
+  | 'CONFLICT'                 // 409: instanceName ja em uso, etc
+  | 'RATE_LIMITED'             // 429: provider limitando taxa
   | 'UNKNOWN';                 // qualquer outro
 
 export class ChannelError extends Error {
   code: ChannelErrorCode;
   httpStatus: number;          // sugestao de status pra retornar ao cliente
   providerStatus?: number;     // status HTTP que o provider retornou
-  providerBody?: unknown;      // body do provider — pra log
+  providerBody?: unknown;      // body do provider: pra log
 
   constructor(
     message: string,

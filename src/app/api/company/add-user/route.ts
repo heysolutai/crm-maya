@@ -35,8 +35,8 @@ export async function POST(req: NextRequest) {
 
     const { company_id, email, full_name, phone, role } = validation.data;
 
-    // Super admin pode adicionar em qualquer empresa.
-    // Company admin pode adicionar APENAS na própria empresa.
+    // Super admin pode adicionar em qualquer restaurante.
+    // Company admin pode adicionar APENAS na próprio restaurante.
     const isSuperAdmin = await prisma.userRole.findFirst({
       where: { userId: agentId, role: 'super_admin' },
     });
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
         where: { userId: agentId, role: 'company_admin', companyId: company_id },
       });
       if (!isCompanyAdmin) {
-        return errorResponse('Você não tem permissão para adicionar usuários nesta empresa', 403);
+        return errorResponse('Você não tem permissão para adicionar usuários neste restaurante', 403);
       }
     }
 

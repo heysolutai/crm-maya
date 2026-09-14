@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
 
     console.log(`Notifying N8N about FAQ upload for company ${payload.companyId}`);
 
-    // Resolve o nome da base de conhecimento + a API key da empresa, igual ao
+    // Resolve o nome da base de conhecimento + a API key do restaurante, igual ao
     // webhook normal de mensagens. O N8N usa o `knowledge`/`memory_key` pra saber
     // ONDE inserir e a `api_key` pra autenticar a escrita na base.
     const [aiConfig, apiKeyRow] = await Promise.all([

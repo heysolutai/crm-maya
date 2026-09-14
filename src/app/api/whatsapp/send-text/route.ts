@@ -9,6 +9,7 @@ import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
 import { getAdapter, hasAdapter } from '@/lib/channels/registry';
 import { isChannelType } from '@/lib/channels/types';
+import { prepararTextoParaWhatsApp } from '@/lib/whatsapp/texto-whatsapp';
 
 const apiError = (message: string, errorCode: string, status: number, extra?: Record<string, unknown>) =>
   jsonResponse({ success: false, error: errorCode, message, ...extra }, status);
@@ -18,7 +19,7 @@ const sendTextSchema = z.object({
   message: z.string().min(1, 'Message is required'),
   phone: z.string().optional(),
   /// Inbox (canal/agente) por onde enviar. Sem informar, usa a inbox
-  /// vinculada a conversa; sem vinculo, a primeira inbox ativa da empresa.
+  /// vinculada a conversa; sem vinculo, a primeira inbox ativa do restaurante.
   inboxId: z.string().uuid().optional(),
   fromAI: z.boolean().optional(),
   replyToMessageId: z.string().uuid().optional(),
@@ -52,6 +53,9 @@ export async function POST(req: NextRequest) {
     }
 
     const payload = validation.data;
+    // IA/n8n mandam markdown e "\n" literal; normaliza antes de gravar, assim
+    // a tela e o WhatsApp mostram o mesmo texto.
+    if (typeof payload.message === 'string') payload.message = prepararTextoParaWhatsApp(payload.message);
 
     // Fetch phone from conversation if not provided
     let phone = payload.phone;
@@ -74,11 +78,11 @@ export async function POST(req: NextRequest) {
     const [authResult, replyid] = await Promise.all([authPromise, replyPromise]);
     const { agentId, companyId } = authResult;
 
-    if (!companyId) return apiError('Empresa não identificada.', 'COMPANY_NOT_FOUND', 400);
+    if (!companyId) return apiError('Restaurante não identificada.', 'COMPANY_NOT_FOUND', 400);
 
     console.log('[send-message-text] Auth done:', Date.now() - t0, 'ms');
 
-    // Inbox explicita no body tem prioridade. IDOR: precisa ser da empresa.
+    // Inbox explicita no body tem prioridade. IDOR: precisa ser do restaurante.
     let requestedInbox = null;
     if (payload.inboxId) {
       requestedInbox = await prisma.inbox.findFirst({
@@ -133,6 +137,11 @@ export async function POST(req: NextRequest) {
               to: payload.phone || '',
               text: payload.message,
               quotedMessageId: replyid || payload.replyid,
+              linkPreview: payload.linkPreview,
+              linkPreviewTitle: payload.linkPreviewTitle,
+              linkPreviewDescription: payload.linkPreviewDescription,
+              linkPreviewImage: payload.linkPreviewImage,
+              linkPreviewLarge: payload.linkPreviewLarge,
             }
           );
 
@@ -163,7 +172,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Fallback: fluxo legado UazAPI (sem channel adapter). Respeita a inbox
-    // explicita do body; sem ela, primeira instancia ativa da empresa.
+    // explicita do body; sem ela, primeira instancia ativa do restaurante.
     const instance = requestedInbox
       ? {
           id: requestedInbox.id,

@@ -21,7 +21,7 @@ export async function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await authenticate(req);
   if (!auth.companyId) {
-    return jsonResponse({ error: 'Empresa nao encontrada' }, 403);
+    return jsonResponse({ error: 'Restaurante nao encontrado' }, 403);
   }
   // Captura em const: o narrowing de string|null -> string persiste em closures
   // (ex: dentro do .map abaixo), o que nao acontece com a propriedade auth.companyId.
@@ -55,8 +55,8 @@ export async function POST(req: NextRequest) {
     const validIds = messages.map((m) => m.id);
     const conversationId = messages[0].conversationId;
 
-    // Revoke no WhatsApp (best-effort). Usa a inbox da conversa — nao a
-    // "primeira inbox ativa" — pra revogar pela instancia certa quando ha
+    // Revoke no WhatsApp (best-effort). Usa a inbox da conversa: nao a
+    // "primeira inbox ativa": pra revogar pela instancia certa quando ha
     // varias caixas de entrada.
     const conversation = await prisma.conversation.findFirst({
       where: { id: conversationId, companyId: auth.companyId },

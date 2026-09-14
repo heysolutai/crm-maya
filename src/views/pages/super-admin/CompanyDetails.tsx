@@ -37,7 +37,7 @@ export default function CompanyDetails() {
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
-          <p className="text-muted-foreground">Carregando empresa...</p>
+          <p className="text-muted-foreground">Carregando restaurante...</p>
         </div>
       </div>
     );
@@ -48,13 +48,13 @@ export default function CompanyDetails() {
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
           <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Empresa não encontrada</h2>
+          <h2 className="text-2xl font-bold mb-2">Restaurante não encontrado</h2>
           <p className="text-muted-foreground mb-4">
-            A empresa que você está procurando não existe ou foi removida
+            O restaurante que você está procurando não existe ou foi removida
           </p>
           <Button onClick={() => router.push('/super-admin/companies')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Voltar para Empresas
+            Voltar para Restaurantes
           </Button>
         </div>
       </div>
@@ -113,7 +113,7 @@ export default function CompanyDetails() {
               {company.name}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Gerencie todos os aspectos desta empresa
+              Gerencie todos os aspectos deste restaurante
             </p>
           </div>
         </div>
@@ -130,7 +130,7 @@ export default function CompanyDetails() {
           <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 shrink-0" />
           <div className="flex-1">
             <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-              O setup desta empresa não foi concluído.
+              O setup deste restaurante não foi concluído.
             </p>
             <p className="text-xs text-yellow-700 dark:text-yellow-300">
               Complete o setup nas Configurações de IA.

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     });
     if (!conversation) return jsonResponse({ success: false, error: 'Conversation not found' }, 404);
 
-    // Isolamento multi-tenant: a conversa tem que ser da empresa do caller.
+    // Isolamento multi-tenant: a conversa tem que ser do restaurante do caller.
     if (!isSuperAdmin && conversation.companyId !== authCompanyId) {
       return jsonResponse({ success: false, error: 'Nao encontrado' }, 404);
     }

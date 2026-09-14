@@ -28,9 +28,9 @@ const POLL_INTERVAL = 60000; // 60 seconds
  * Hook que mostra o status do WhatsApp na barra superior.
  *
  * Refatorado pra usar o novo flow multi-canal (/api/agents) em vez do
- * legado /api/whatsapp/connect (removido) — agora funciona pra UazAPI, Evolution, etc.
+ * legado /api/whatsapp/connect (removido): agora funciona pra UazAPI, Evolution, etc.
  *
- * Pega o PRIMEIRO inbox ativo da empresa pra exibir um status agregado.
+ * Pega o PRIMEIRO inbox ativo do restaurante pra exibir um status agregado.
  * Pra status detalhado por inbox, usar InboxDetail.
  */
 export function useWhatsAppStatus(): UseWhatsAppStatusResult {
@@ -64,19 +64,19 @@ export function useWhatsAppStatus(): UseWhatsAppStatusResult {
   });
 
   // Sync chama /api/agents/[id]/status (adapter usa endpoint do canal certo).
-  // Tolerante a 404 (agente removido) — apenas invalida e segue.
+  // Tolerante a 404 (agente removido): apenas invalida e segue.
   const syncMutation = useMutation({
     mutationFn: async () => {
       if (!instance?.id) return null;
 
       const res = await apiFetch(`/api/agents/${instance.id}/status`);
       if (res.status === 404) {
-        // Agente sumiu — invalida o cache pra refetch da lista
+        // Agente sumiu: invalida o cache pra refetch da lista
         queryClient.invalidateQueries({ queryKey: ['whatsapp-instance-status'] });
         return null;
       }
       if (!res.ok) {
-        // Erros transientes (rede/provider offline) sao silenciosos —
+        // Erros transientes (rede/provider offline) sao silenciosos -
         // proximo poll tenta de novo. Sem barulho no console.
         return null;
       }
@@ -90,7 +90,7 @@ export function useWhatsAppStatus(): UseWhatsAppStatusResult {
         queryClient.invalidateQueries({ queryKey: ['agents', effectiveCompanyId] });
       }
     },
-    // Sem onError ruidoso — sync falhar e normal quando provider esta offline
+    // Sem onError ruidoso: sync falhar e normal quando provider esta offline
   });
 
   const getStatus = useCallback((): WhatsAppStatus => {

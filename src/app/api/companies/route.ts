@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   try {
     const { isSuperAdmin, companyId: authCompanyId } = await authenticate(req)
 
-    // Single company lookup by ID — usuario regular so pode ler a propria empresa
+    // Single company lookup by ID: usuario regular so pode ler a proprio restaurante
     const singleId = req.nextUrl.searchParams.get('id')
     if (singleId) {
       if (!isSuperAdmin && singleId !== authCompanyId) {
@@ -75,7 +75,7 @@ export async function PUT(req: NextRequest) {
 
     const { id, ...updates } = validation.data
 
-    // Usuario regular so pode atualizar a propria empresa
+    // Usuario regular so pode atualizar a proprio restaurante
     if (!isSuperAdmin && id !== authCompanyId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -103,18 +103,18 @@ export async function DELETE(req: NextRequest) {
     // Confere que existe antes de apagar, pra devolver 404 em vez de um erro
     // de banco quando o id nao bate.
     const existing = await prisma.company.findUnique({ where: { id }, select: { id: true } })
-    if (!existing) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 404 })
+    if (!existing) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 404 })
 
     // Cascata pelo PROPRIO schema, nao por funcao SQL.
     //
-    // Antes isto chamava `SELECT delete_company_cascade(id)` — uma funcao que
+    // Antes isto chamava `SELECT delete_company_cascade(id)`: uma funcao que
     // existia no Supabase e que o `prisma db push` nunca cria, porque push so
     // sincroniza tabelas e colunas. Em qualquer Postgres proprio a exclusao
     // quebrava com "function delete_company_cascade(uuid) does not exist".
     //
     // Nao ha o que reimplementar: as 28 relacoes que apontam pra Company ja
     // sao `onDelete: Cascade` no schema (a unica excecao e User, que e
-    // SetNull de proposito — usuario sobrevive a empresa). O banco faz a
+    // SetNull de proposito: usuario sobrevive o restaurante). O banco faz a
     // cascata sozinho.
     await prisma.company.delete({ where: { id } })
     return NextResponse.json({ success: true })

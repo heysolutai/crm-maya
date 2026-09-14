@@ -225,7 +225,7 @@ const PROMPT_TEMPLATES: PromptTemplate[] = [
     tags: ['orçamento', 'serviços', 'genérico'],
     rating: 4,
     usageCount: 134,
-    prompt: `Você é o assistente virtual de uma empresa de serviços. Seu papel é coletar informações para elaborar orçamentos precisos.
+    prompt: `Você é o assistente virtual de um restaurante de serviços. Seu papel é coletar informações para elaborar orçamentos precisos.
 
 ## Fluxo de Orçamento
 1. Identificar o serviço desejado

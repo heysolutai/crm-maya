@@ -6,8 +6,8 @@
  *  - O tipo `vector` nao e suportado nativamente pelo Prisma.
  *  - Mantem o banco principal limpo: os vetores vivem em outra instancia.
  *
- * Modelo de dados: UMA TABELA POR EMPRESA, nomeada com o `knowledge_name`
- * (`know_<slug>`) — o MESMO identificador que ja vai no webhook do n8n e no
+ * Modelo de dados: UMA TABELA POR RESTAURANTE, nomeada com o `knowledge_name`
+ * (`know_<slug>`): o MESMO identificador que ja vai no webhook do n8n e no
  * campo `knowledge` do AiAgent. Assim o n8n usa o nome que ja recebe.
  *
  * As colunas seguem o padrao LangChain/n8n (Postgres Vector Store):
@@ -50,7 +50,7 @@ export const EMBEDDING_DIMENSIONS = 1536
 
 /**
  * Cria (se nao existir) a extensao, a tabela da base e os indices.
- * Idempotente — pode ser chamada a cada operacao sem custo relevante.
+ * Idempotente: pode ser chamada a cada operacao sem custo relevante.
  *
  * `knowledgeName` e validado (formato `know_[a-z0-9]+`) antes de virar
  * identificador SQL, ja que nome de tabela nao pode ser parametrizado.
@@ -71,13 +71,13 @@ export async function ensureFaqTable(knowledgeName: string): Promise<string> {
       )
     `)
 
-    // Indice de similaridade (cosseno) — acelera a busca semantica.
+    // Indice de similaridade (cosseno): acelera a busca semantica.
     await client.query(`
       CREATE INDEX IF NOT EXISTS "${table}_vector_idx"
       ON "${table}" USING hnsw (vector vector_cosine_ops)
     `)
 
-    // Indice no faq_id dentro do metadata — usado pra upsert/delete por FAQ.
+    // Indice no faq_id dentro do metadata: usado pra upsert/delete por FAQ.
     await client.query(`
       CREATE INDEX IF NOT EXISTS "${table}_faq_id_idx"
       ON "${table}" ((metadata->>'faq_id'))
@@ -107,7 +107,7 @@ export interface FaqVectorInput {
 
 /**
  * Insere/atualiza o vetor de UM FAQ.
- * Estrategia: apaga o registro anterior daquele faq_id e insere o novo — assim
+ * Estrategia: apaga o registro anterior daquele faq_id e insere o novo: assim
  * a edicao de um FAQ nao deixa vetor velho (que geraria resposta desatualizada).
  */
 export async function upsertFaqVector(input: FaqVectorInput): Promise<void> {
@@ -123,7 +123,7 @@ export async function upsertFaqVector(input: FaqVectorInput): Promise<void> {
   const client = await getVectorPool().connect()
   try {
     await client.query('BEGIN')
-    // Filtra tambem por company_id: duas empresas com nomes que normalizam pro
+    // Filtra tambem por company_id: dois restaurantes com nomes que normalizam pro
     // mesmo slug compartilhariam a tabela, e sem esse filtro uma apagaria o
     // vetor da outra.
     await client.query(
@@ -163,7 +163,7 @@ export async function deleteFaqVector(
       [faqId, companyId]
     )
   } catch (err) {
-    // Tabela pode nem existir ainda (empresa sem FAQ indexado) — nao e erro.
+    // Tabela pode nem existir ainda (restaurante sem FAQ indexado): nao e erro.
     const msg = (err as Error).message || ''
     if (!msg.includes('does not exist')) throw err
   }
@@ -172,7 +172,7 @@ export async function deleteFaqVector(
 /**
  * Lista o que ja esta indexado: faq_id -> updated_at gravado no metadata.
  *
- * Usado pela sincronizacao incremental — com isso decidimos quem precisa de
+ * Usado pela sincronizacao incremental: com isso decidimos quem precisa de
  * embedding novo (FAQ novo ou editado) e quem pode ser pulado. Sem isso, cada
  * sync re-embeddaria tudo e pagaria OpenAI a toa.
  */
@@ -203,7 +203,7 @@ export async function listIndexedFaqs(
 export interface FaqSearchResult {
   text: string
   metadata: Record<string, unknown>
-  /** 0..1 — quanto maior, mais similar. */
+  /** 0..1: quanto maior, mais similar. */
   score: number
 }
 
@@ -216,7 +216,7 @@ export async function searchFaq(
 ): Promise<FaqSearchResult[]> {
   const table = assertSafeKnowledgeName(knowledgeName)
   try {
-    // Filtro por company_id: isolamento multi-tenant mesmo que duas empresas
+    // Filtro por company_id: isolamento multi-tenant mesmo que dois restaurantes
     // caiam no mesmo slug de tabela.
     const res = await getVectorPool().query(
       `SELECT text, metadata, 1 - (vector <=> $1::vector) AS score
@@ -233,7 +233,7 @@ export async function searchFaq(
     }))
   } catch (err) {
     const msg = (err as Error).message || ''
-    // Empresa ainda sem tabela = sem FAQ indexado.
+    // Restaurante ainda sem tabela = sem FAQ indexado.
     if (msg.includes('does not exist')) return []
     throw err
   }

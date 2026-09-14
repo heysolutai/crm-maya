@@ -1,19 +1,19 @@
 /**
- * Nome da base de conhecimento da empresa: `know_<slug>`.
+ * Nome da base de conhecimento do restaurante: `know_<slug>`.
  *
  * Esse identificador e usado em TRES lugares e precisa ser sempre igual:
  *  1. payload do webhook do n8n (`knowledge_name`)
  *  2. campo `knowledge` do AiAgent
  *  3. nome da TABELA no Postgres vetorial
  *
- * Por isso a logica mora aqui e nao duplicada em cada rota — se os nomes
+ * Por isso a logica mora aqui e nao duplicada em cada rota: se os nomes
  * divergirem, o n8n consulta uma tabela e o CRM grava em outra.
  */
 import { prisma } from '@/lib/db'
 
 // Marcas de acento (combining diacritics) removidas apos o normalize('NFD').
 // Usamos o construtor RegExp com escape explicito em vez de literal pra que a
-// codificacao do arquivo nunca altere esse range — se ele mudar, o slug muda
+// codificacao do arquivo nunca altere esse range: se ele mudar, o slug muda
 // junto e o nome deixa de bater com o que o n8n conhece.
 const DIACRITICS = new RegExp('[\\u0300-\\u036f]', 'g')
 
@@ -30,16 +30,16 @@ export function buildKnowledgeName(companyName: string): string {
   return 'know_' + normalizeCompanyName(companyName)
 }
 
-/** Aceita apenas `know_` + letras/numeros — formato gerado por buildKnowledgeName. */
+/** Aceita apenas `know_` + letras/numeros: formato gerado por buildKnowledgeName. */
 const KNOWLEDGE_NAME_REGEX = /^know_[a-z0-9]+$/
 
 /**
  * Valida o nome antes de usar como identificador SQL.
  *
  * SEGURANCA: nome de tabela NAO pode ser parametrizado ($1) no Postgres, entao
- * ele entra por interpolacao. Como o nome deriva do nome da empresa (dado do
+ * ele entra por interpolacao. Como o nome deriva do nome do restaurante (dado do
  * usuario), validamos o formato final aqui. Qualquer coisa fora de
- * `know_[a-z0-9]+` e rejeitada — inclusive slug vazio (empresa so com simbolos).
+ * `know_[a-z0-9]+` e rejeitada: inclusive slug vazio (restaurante so com simbolos).
  */
 export function assertSafeKnowledgeName(name: string): string {
   if (!KNOWLEDGE_NAME_REGEX.test(name)) {
@@ -49,10 +49,10 @@ export function assertSafeKnowledgeName(name: string): string {
 }
 
 /**
- * Resolve o knowledge_name de uma empresa.
+ * Resolve o knowledge_name de um restaurante.
  *
  * Prioriza o valor ja gravado no AiAgent: e o nome que o n8n conhece. Se a
- * empresa for renomeada depois do sync, recalcular geraria um nome novo e os
+ * restaurante for renomeada depois do sync, recalcular geraria um nome novo e os
  * vetores antigos ficariam orfaos numa tabela que ninguem consulta.
  */
 export async function getKnowledgeName(companyId: string): Promise<string | null> {

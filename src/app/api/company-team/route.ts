@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   try {
     const { companyId: authCompanyId, isSuperAdmin } = await authenticate(req)
     const qsCompanyId = req.nextUrl.searchParams.get('companyId')
-    // Isolamento multi-tenant: so super-admin pode consultar outra empresa;
+    // Isolamento multi-tenant: so super-admin pode consultar outro restaurante;
     // usuario comum SEMPRE usa a propria (ignora ?companyId= adulterado).
     const companyId = isSuperAdmin ? (qsCompanyId || authCompanyId) : authCompanyId
     if (!companyId) return NextResponse.json({ error: 'Nao autorizado' }, { status: 403 })
@@ -93,7 +93,7 @@ export async function PUT(req: NextRequest) {
     }
     const targetCompanyId = validatedBody.companyId || companyId
 
-    // Apenas company_admin (ou super-admin) pode gerenciar a equipe — evita que
+    // Apenas company_admin (ou super-admin) pode gerenciar a equipe: evita que
     // qualquer membro (viewer/agent) se promova a admin ou remova o dono.
     const uid = auth.agentId
     const canManage = auth.isSuperAdmin || (!!uid && !!(await prisma.userRole.findFirst({

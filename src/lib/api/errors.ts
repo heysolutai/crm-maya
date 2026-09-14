@@ -20,7 +20,7 @@ export class AuthError extends Error {
 }
 
 /**
- * Erros de validacao de input — distinto do Zod errors mas pra casos
+ * Erros de validacao de input: distinto do Zod errors mas pra casos
  * onde queremos lancar erro manualmente com mensagem custom (ex: regra
  * de negocio violada antes da query).
  */
@@ -39,7 +39,7 @@ export class ApiError extends Error {
 }
 
 /**
- * Erro de "nao encontrado" — atalho pra 404 com mensagem padronizada.
+ * Erro de "nao encontrado": atalho pra 404 com mensagem padronizada.
  */
 export class NotFoundError extends ApiError {
   constructor(message = 'Recurso nao encontrado') {
@@ -84,7 +84,7 @@ function classifyError(error: unknown, contextLog: string): { body: Record<strin
     }
   }
 
-  // Fallback — 500 generico, mas log completo no servidor
+  // Fallback: 500 generico, mas log completo no servidor
   console.error(`[${contextLog}]`, error)
   return { body: { error: 'Erro interno do servidor', code: 'INTERNAL_ERROR' }, status: 500 }
 }
@@ -101,7 +101,7 @@ function classifyError(error: unknown, contextLog: string): { body: Record<strin
  *     return handleApiError(error, 'Erro ao buscar conversas')
  *   }
  *
- * O segundo argumento e o contexto pra log no servidor — nao vaza ao cliente.
+ * O segundo argumento e o contexto pra log no servidor: nao vaza ao cliente.
  */
 export function handleApiError(error: unknown, contextLog = 'API error'): NextResponse {
   const { body, status } = classifyError(error, contextLog)

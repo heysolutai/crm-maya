@@ -78,7 +78,7 @@ export default function AuthPage() {
     <div className="min-h-screen flex">
       {/* Left Side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-brand-surface">
-        {/* Glow focal central — destaque atras da logo, sem wash de cor uniforme */}
+        {/* Glow focal central: destaque atras da logo, sem wash de cor uniforme */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] bg-brand-primary/30 rounded-full blur-[120px]" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] h-[320px] bg-brand-light/20 rounded-full blur-[80px]" />
 
@@ -94,7 +94,7 @@ export default function AuthPage() {
 
             {branding.logoUrl ? (
               // A logo enviada e escura (arte preta com fundo transparente) e este
-              // painel tem fundo escuro — sem o filtro ela some. `brightness-0 invert`
+              // painel tem fundo escuro: sem o filtro ela some. `brightness-0 invert`
               // pinta de branco qualquer pixel opaco, preservando a transparencia.
               // Se um dia a logo enviada ja for clara, remover essas duas classes.
               <Image
@@ -125,7 +125,7 @@ export default function AuthPage() {
             {branding.loginDescription || 'Sua IA atende os clientes e registra reservas no WhatsApp, 24 horas por dia.'}
           </p>
 
-          {/* Features — bullets discretos, todos usam a cor primaria */}
+          {/* Features: bullets discretos, todos usam a cor primaria */}
           <div className="space-y-3 text-white/80">
             {features.map((feature) => (
               <div key={feature.label} className="flex items-center gap-3">

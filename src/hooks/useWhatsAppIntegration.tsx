@@ -102,7 +102,7 @@ export function useWhatsAppIntegration() {
   // Mantemos um stub que so loga warning pra nao quebrar quem ainda chama.
   const connectMutation = useMutation({
     mutationFn: async () => {
-      console.warn('[useWhatsAppIntegration] connectWhatsApp() esta deprecado — use useInboxes().createInbox()');
+      console.warn('[useWhatsAppIntegration] connectWhatsApp() esta deprecado: use useInboxes().createInbox()');
       return { success: false } as any;
     },
   });

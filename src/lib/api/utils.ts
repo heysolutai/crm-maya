@@ -3,7 +3,7 @@ export function cleanPhone(phone: string): string {
 }
 
 /**
- * Normaliza o nome da empresa para uso como sufixo em nomes de tabela
+ * Normaliza o nome do restaurante para uso como sufixo em nomes de tabela
  * de conhecimento da IA. Remove acentos, espaços, hifens e tudo que não
  * for alfanumérico, convertendo para lowercase.
  *
@@ -48,7 +48,7 @@ export function buildAgentMemoryKey(agentId: string, name: string | null | undef
  *     "5562991873663" → ["5562991873663", "556291873663", "62991873663", "6291873663"]
  *
  *   DDD 11 (≤ 28):
- *     "5511999887766" → ["5511999887766", "11999887766"]   (sem variações — só normaliza)
+ *     "5511999887766" → ["5511999887766", "11999887766"]   (sem variações: só normaliza)
  */
 export function phoneVariants(phone: string): string[] {
   const digits = cleanPhone(phone);
@@ -73,10 +73,10 @@ export function phoneVariants(phone: string): string[] {
     // Só gera variações "com/sem 9" para DDD > 28
     if (ddd > 28) {
       if (rest.length === 9 && rest[0] === '9') {
-        // Celular COM 9 — gera variação SEM 9
+        // Celular COM 9: gera variação SEM 9
         variantsCore.push(dddStr + rest.substring(1));
       } else if (rest.length === 8 && /^[6-9]/.test(rest)) {
-        // Celular SEM 9 — gera variação COM 9
+        // Celular SEM 9: gera variação COM 9
         variantsCore.push(dddStr + '9' + rest);
       }
     }
@@ -158,8 +158,8 @@ export function validateMediaPayload(payload: any): void {
  * fluxo teria que fazer uma chamada extra pro CRM so pra descobrir de qual
  * restaurante veio a mensagem.
  *
- * Centralizado aqui porque cada canal monta o proprio payload — uazapi,
- * evolution e notificame — e o campo tem que sair igual nos tres.
+ * Centralizado aqui porque cada canal monta o proprio payload: uazapi,
+ * evolution e notificame: e o campo tem que sair igual nos tres.
  */
 export function restaurantIdDaInbox(channelConfig: unknown): string | null {
   if (!channelConfig || typeof channelConfig !== 'object') return null;

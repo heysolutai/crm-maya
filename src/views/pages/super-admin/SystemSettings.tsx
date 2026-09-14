@@ -24,7 +24,7 @@ export default function SystemSettings() {
   const queryClient = useQueryClient();
   const [values, setValues] = useState<Record<string, string>>({});
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
-  // Tracks que campos secretos o user editou — pra nao mandar a mascara de volta
+  // Tracks que campos secretos o user editou: pra nao mandar a mascara de volta
   const [editedSecrets, setEditedSecrets] = useState<Record<string, boolean>>({});
 
   const { data: settings, isLoading } = useQuery<SystemSetting[]>({
@@ -124,7 +124,7 @@ export default function SystemSettings() {
           Configurações do Sistema
         </h1>
         <p className="text-muted-foreground mt-1">
-          URLs de webhook e chaves API globais. Editáveis em runtime — sem precisar reiniciar o servidor.
+          URLs de webhook e chaves API globais. Editáveis em runtime: sem precisar reiniciar o servidor.
         </p>
       </div>
 
@@ -209,7 +209,7 @@ export default function SystemSettings() {
           <p className="font-medium text-foreground">Ordem de resolução</p>
           <ol className="list-decimal list-inside space-y-1">
             <li>Valor configurado aqui (DB)</li>
-            <li>Variável de ambiente (legado — em breve descontinuado)</li>
+            <li>Variável de ambiente (legado: em breve descontinuado)</li>
             <li>Default no código</li>
           </ol>
           <p className="pt-2">

@@ -2,9 +2,9 @@
  * Indexacao de FAQ na base vetorial.
  *
  * Liga as pontas: pega o FAQ do banco principal, gera o embedding na OpenAI e
- * grava na tabela da empresa no Postgres vetorial.
+ * grava na tabela do restaurante no Postgres vetorial.
  *
- * IMPORTANTE — nunca lanca excecao pra fora: a indexacao e um efeito colateral
+ * IMPORTANTE: nunca lanca excecao pra fora: a indexacao e um efeito colateral
  * do CRUD de FAQ. Se a OpenAI ou o banco vetorial estiverem fora do ar, o FAQ
  * ainda tem que ser salvo normalmente. As falhas ficam no log.
  */
@@ -38,7 +38,7 @@ export async function indexFaq(
   try {
     if (!process.env.VECTOR_DATABASE_URL) {
       console.warn(
-        '[FaqIndexer] VECTOR_DATABASE_URL nao configurada — FAQ salvo, mas NAO indexado'
+        '[FaqIndexer] VECTOR_DATABASE_URL nao configurada: FAQ salvo, mas NAO indexado'
       )
       return false
     }
@@ -47,7 +47,7 @@ export async function indexFaq(
     // webhook do n8n. Sem ele nao ha onde gravar.
     const knowledgeName = await getKnowledgeName(companyId)
     if (!knowledgeName) {
-      console.warn('[FaqIndexer] knowledge_name nao resolvido — pulando indexacao')
+      console.warn('[FaqIndexer] knowledge_name nao resolvido: pulando indexacao')
       return false
     }
 
@@ -61,7 +61,7 @@ export async function indexFaq(
 
     const apiKey = await resolveOpenAiKey(companyId)
     if (!apiKey) {
-      console.warn('[FaqIndexer] Sem chave OpenAI (empresa nem global) — pulando indexacao')
+      console.warn('[FaqIndexer] Sem chave OpenAI (restaurante nem global): pulando indexacao')
       return false
     }
 
@@ -79,7 +79,7 @@ export async function indexFaq(
         answer: faq.answer || '',
         category: faq.category || null,
         keywords: faq.keywords || [],
-        // Marca de versao — a sincronizacao compara com o updatedAt do FAQ
+        // Marca de versao: a sincronizacao compara com o updatedAt do FAQ
         // pra decidir se precisa gerar embedding de novo.
         updated_at: faq.updatedAt ? new Date(faq.updatedAt).toISOString() : '',
       },
@@ -115,7 +115,7 @@ export interface FaqSyncResult {
   added: number
   /** FAQs que mudaram desde a ultima indexacao */
   updated: number
-  /** Ja estavam indexados e inalterados — nao gastaram embedding */
+  /** Ja estavam indexados e inalterados: nao gastaram embedding */
   skipped: number
   /** Vetores removidos (FAQ deletado ou desativado) */
   removed: number
@@ -123,7 +123,7 @@ export interface FaqSyncResult {
 }
 
 /**
- * Sincronizacao INCREMENTAL da base vetorial de uma empresa.
+ * Sincronizacao INCREMENTAL da base vetorial de um restaurante.
  *
  * So gera embedding do que mudou:
  *  - FAQ sem vetor          -> indexa (added)
@@ -141,13 +141,13 @@ export async function syncCompanyFaqs(
   const result: FaqSyncResult = { added: 0, updated: 0, skipped: 0, removed: 0, failed: 0 }
 
   if (!process.env.VECTOR_DATABASE_URL) {
-    console.warn('[FaqIndexer] VECTOR_DATABASE_URL nao configurada — sync vetorial pulado')
+    console.warn('[FaqIndexer] VECTOR_DATABASE_URL nao configurada: sync vetorial pulado')
     return result
   }
 
   const knowledgeName = await getKnowledgeName(companyId)
   if (!knowledgeName) {
-    console.warn('[FaqIndexer] knowledge_name nao resolvido — sync abortado')
+    console.warn('[FaqIndexer] knowledge_name nao resolvido: sync abortado')
     return result
   }
 

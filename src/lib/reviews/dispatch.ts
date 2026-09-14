@@ -13,7 +13,7 @@ export interface DispatchResult {
   failed: number
 }
 
-/** URL do webhook do n8n — system setting tem prioridade, com fallback pro env. */
+/** URL do webhook do n8n: system setting tem prioridade, com fallback pro env. */
 export async function getReviewWebhookUrl(): Promise<string | null> {
   return (
     (await getSystemSetting('n8n_review_webhook_url')) ||
@@ -23,7 +23,7 @@ export async function getReviewWebhookUrl(): Promise<string | null> {
 }
 
 /**
- * Dispara UM POST pro n8n por inbox ativo da empresa que tenha restaurant_id
+ * Dispara UM POST pro n8n por inbox ativo do restaurante que tenha restaurant_id
  * no channelConfig. O payload e { apikey, restaurant_id, company_id, inbox_id };
  * o resto (quem avaliar, quando, o que enviar) fica por conta do fluxo do n8n.
  *
@@ -62,7 +62,7 @@ export async function dispatchCompanyReviews(
       apikey = await getDecryptedApiKey(companyId)
     }
     if (!apikey) {
-      console.warn(`[Review Dispatch] Empresa ${companyId} sem API key ativa — pulando restaurante ${restaurantId}`)
+      console.warn(`[Review Dispatch] Restaurante ${companyId} sem API key ativa: pulando restaurante ${restaurantId}`)
       skipped++
       continue
     }
@@ -75,7 +75,7 @@ export async function dispatchCompanyReviews(
           apikey,
           restaurant_id: restaurantId,
           company_id: companyId,
-          // Inbox (canal) dona do restaurant_id — o fluxo devolve as mensagens
+          // Inbox (canal) dona do restaurant_id: o fluxo devolve as mensagens
           // por ela via inboxId no send-text, sem depender de fallback.
           inbox_id: inbox.id,
         }),

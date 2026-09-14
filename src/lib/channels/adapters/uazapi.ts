@@ -27,6 +27,7 @@ import type {
   SendTextResult,
 } from '../adapter';
 import { ChannelError, classifyHttpStatus, isNetworkError } from '../errors';
+import { prepararTextoParaWhatsApp } from '@/lib/whatsapp/texto-whatsapp';
 
 interface UazapiChannelConfig {
   serverApiKey?: string; // admintoken
@@ -46,7 +47,7 @@ function trimUrl(u: string): string {
   return u.replace(/\/+$/, '');
 }
 
-/** UazAPI usa headers diferentes pra admin vs instancia — abstraido aqui. */
+/** UazAPI usa headers diferentes pra admin vs instancia: abstraido aqui. */
 async function uazapiFetch(
   baseUrl: string,
   authMode: 'admin' | 'instance',
@@ -242,7 +243,7 @@ export const uazapiAdapter: ChannelAdapter = {
     const apiUrl = trimUrl(input.serverUrl);
 
     // 2) Configura webhook pra apontar pro nosso receiver
-    //    Erros silenciados — algumas versoes do UazAPI nao tem esse endpoint;
+    //    Erros silenciados: algumas versoes do UazAPI nao tem esse endpoint;
     //    o usuario pode configurar manualmente no painel se preciso.
     try {
       await uazapiFetch(apiUrl, 'instance', instanceToken, 'POST', '/webhook', {
@@ -451,9 +452,15 @@ export const uazapiAdapter: ChannelAdapter = {
 
     const body: Record<string, unknown> = {
       number: input.to.replace(/\D/g, ''),
-      text: input.text,
+      text: prepararTextoParaWhatsApp(input.text),
     };
     if (input.quotedMessageId) body.replyid = input.quotedMessageId;
+    // Mesmos nomes que a UAZapi usa em /send/text.
+    if (input.linkPreview !== undefined) body.linkPreview = input.linkPreview;
+    if (input.linkPreviewTitle) body.linkPreviewTitle = input.linkPreviewTitle;
+    if (input.linkPreviewDescription) body.linkPreviewDescription = input.linkPreviewDescription;
+    if (input.linkPreviewImage) body.linkPreviewImage = input.linkPreviewImage;
+    if (input.linkPreviewLarge !== undefined) body.linkPreviewLarge = input.linkPreviewLarge;
 
     const res = await uazapiFetch(agent.apiUrl, 'instance', token, 'POST', '/send/text', body);
 

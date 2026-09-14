@@ -393,7 +393,7 @@ export default function Products() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">
           <span className="text-sm text-muted-foreground">
-            {filteredProducts.length} produto(s) — Página {safePage} de {totalPages}
+            {filteredProducts.length} produto(s): Página {safePage} de {totalPages}
           </span>
           <div className="flex items-center gap-1">
             <Button variant="outline" size="icon" className="h-8 w-8" disabled={safePage <= 1} onClick={() => setCurrentPage(p => p - 1)}>

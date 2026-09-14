@@ -144,7 +144,7 @@ export default function AppearanceSettings() {
       <div>
         <h1 className="text-2xl font-bold">Aparência</h1>
         <p className="text-muted-foreground mt-1">
-          Personalize a identidade visual do sistema — logo, cores e nome.
+          Personalize a identidade visual do sistema: logo, cores e nome.
         </p>
       </div>
 

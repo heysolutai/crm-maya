@@ -2,9 +2,9 @@ import { NextRequest } from 'next/server';
 
 // Proxy de midia: streama arquivos do bucket B2 via nosso dominio.
 // Resolve dois problemas:
-//   1) Content-Type — alguns navegadores recusam reproduzir audio quando o
+//   1) Content-Type: alguns navegadores recusam reproduzir audio quando o
 //      upstream nao bate com o codec real (B2 as vezes retorna octet-stream).
-//   2) CORS / decodeAudioData — fetch direto pro B2 falha por CORS, fazendo
+//   2) CORS / decodeAudioData: fetch direto pro B2 falha por CORS, fazendo
 //      o waveform cair no fallback fake. Servindo pelo mesmo origem, nao ha
 //      preflight.
 //
@@ -17,7 +17,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Hostnames de armazenamento conhecidos. Match por sufixo do hostname e
-// case-insensitive — mais robusto que comparar prefixo de URL completa,
+// case-insensitive: mais robusto que comparar prefixo de URL completa,
 // que quebra em diferencas de caixa ou de path-style vs virtual-hosted.
 const TRUSTED_HOSTNAME_SUFFIXES = [
   'backblazeb2.com',
@@ -55,7 +55,7 @@ function isAllowedUpstream(url: string): boolean {
 }
 
 // Resolve Content-Type baseado na extensao do arquivo. Mais confiavel que o
-// que vem do upstream — o B2 as vezes serve arquivos com application/octet-stream
+// que vem do upstream: o B2 as vezes serve arquivos com application/octet-stream
 // quando o upload nao incluiu o ContentType correto, e o browser recusa
 // reproduzir audio/video sem MIME especifico.
 function resolveContentType(url: string, upstream: string | null): string {
@@ -75,7 +75,7 @@ function resolveContentType(url: string, upstream: string | null): string {
     m4a: 'audio/mp4',
     aac: 'audio/aac',
     wav: 'audio/wav',
-    webm: 'audio/webm', // pode ser video tambem — diferenciamos abaixo
+    webm: 'audio/webm', // pode ser video tambem: diferenciamos abaixo
     // video
     mp4: 'video/mp4',
     mov: 'video/quicktime',
@@ -121,7 +121,7 @@ async function handleProxy(req: NextRequest) {
   }
 
   const headers = new Headers();
-  // Repassa cabecalhos relevantes pra streaming/seek (exceto Content-Type — esse
+  // Repassa cabecalhos relevantes pra streaming/seek (exceto Content-Type: esse
   // a gente resolve via extensao da URL, mais confiavel que o upstream)
   const passthrough = ['content-length', 'content-range', 'accept-ranges', 'last-modified', 'etag'];
   for (const h of passthrough) {

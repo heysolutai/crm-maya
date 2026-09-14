@@ -15,11 +15,11 @@ const replaceMembersSchema = z.object({
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const { id: inboxId } = await params
 
-    // IDOR: garante que a inbox pertence a empresa
+    // IDOR: garante que a inbox pertence o restaurante
     const inbox = await prisma.inbox.findFirst({
       where: { id: inboxId, companyId },
       select: { id: true },
@@ -65,12 +65,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
  *   - Adiciona memberships que entraram
  *   - Mantem inalteradas as que ja existiam
  *
- *   Valida que todos os user_ids pertencem a mesma empresa (anti-IDOR).
+ *   Valida que todos os user_ids pertencem a mesmo restaurante (anti-IDOR).
  */
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const { id: inboxId } = await params
 
@@ -91,7 +91,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const incomingUserIds = [...new Set(validation.data.userIds)]
 
-    // IDOR: valida que todos os user_ids pertencem a esta empresa
+    // IDOR: valida que todos os user_ids pertencem a este restaurante
     if (incomingUserIds.length > 0) {
       const validUsers = await prisma.user.findMany({
         where: { id: { in: incomingUserIds }, companyId },
@@ -99,7 +99,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       })
       if (validUsers.length !== incomingUserIds.length) {
         return NextResponse.json(
-          { error: 'Um ou mais usuarios nao pertencem a esta empresa' },
+          { error: 'Um ou mais usuarios nao pertencem a este restaurante' },
           { status: 400 }
         )
       }
@@ -148,7 +148,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const { id: inboxId } = await params
     const userId = req.nextUrl.searchParams.get('userId')

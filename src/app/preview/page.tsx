@@ -31,7 +31,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 
 const mockClients = [
   { id: '1', first_name: 'Ana', last_name: 'Silva', email: 'ana@email.com', phone: '(11) 99999-1234', document_number: '123.456.789-00', is_active: true, created_at: '2026-03-15T10:00:00Z' },
-  { id: '2', first_name: 'Carlos', last_name: 'Oliveira', email: 'carlos@empresa.com', phone: '(21) 98888-5678', document_number: '987.654.321-00', is_active: true, created_at: '2026-03-10T08:00:00Z' },
+  { id: '2', first_name: 'Carlos', last_name: 'Oliveira', email: 'carlos@restaurante.com', phone: '(21) 98888-5678', document_number: '987.654.321-00', is_active: true, created_at: '2026-03-10T08:00:00Z' },
   { id: '3', first_name: 'Maria', last_name: 'Santos', email: 'maria@gmail.com', phone: '(31) 97777-9012', document_number: '', is_active: false, created_at: '2026-02-20T14:00:00Z' },
   { id: '4', first_name: 'Pedro', last_name: 'Costa', email: 'pedro@hotmail.com', phone: '(41) 96666-3456', document_number: '111.222.333-44', is_active: true, created_at: '2026-03-25T16:00:00Z' },
   { id: '5', first_name: 'Julia', last_name: 'Ferreira', email: 'julia@outlook.com', phone: '(51) 95555-7890', document_number: '', is_active: true, created_at: '2026-03-20T09:00:00Z' },
@@ -448,9 +448,9 @@ function DashboardPreview() {
           <div className="space-y-3">
             {[
               { icon: MessageSquare, text: 'Nova conversa iniciada por Ana Silva', time: 'há 5 min', color: 'text-blue-500' },
-              { icon: Calendar, text: 'Agendamento confirmado — Carlos Oliveira', time: 'há 12 min', color: 'text-purple-500' },
-              { icon: DollarSign, text: 'Venda fechada — R$ 1.250,00 (Lente Premium)', time: 'há 28 min', color: 'text-emerald-500' },
-              { icon: UserPlus, text: 'Novo lead via WhatsApp — Julia Ferreira', time: 'há 45 min', color: 'text-cyan-500' },
+              { icon: Calendar, text: 'Agendamento confirmado: Carlos Oliveira', time: 'há 12 min', color: 'text-purple-500' },
+              { icon: DollarSign, text: 'Venda fechada: R$ 1.250,00 (Lente Premium)', time: 'há 28 min', color: 'text-emerald-500' },
+              { icon: UserPlus, text: 'Novo lead via WhatsApp: Julia Ferreira', time: 'há 45 min', color: 'text-cyan-500' },
               { icon: Send, text: 'Follow-up enviado para Pedro Costa', time: 'há 1h', color: 'text-amber-500' },
             ].map((item, i) => (
               <div key={i} className="flex items-center gap-3 py-1.5">
@@ -624,7 +624,7 @@ function CRMPreview() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">CRM</h1>
-          <p className="text-muted-foreground">Pipeline de vendas — Kanban</p>
+          <p className="text-muted-foreground">Pipeline de vendas: Kanban</p>
         </div>
         <Button><Plus className="h-4 w-4 mr-2" />Novo Lead</Button>
       </div>
@@ -764,7 +764,7 @@ function RelatorioPreview() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Relatório</h1>
-          <p className="text-muted-foreground">Resumo de desempenho — Últimos 7 dias</p>
+          <p className="text-muted-foreground">Resumo de desempenho: Últimos 7 dias</p>
         </div>
         <div className="flex gap-1">
           {['Hoje', '7 dias', '15 dias', '30 dias'].map((label, i) => (
@@ -869,7 +869,7 @@ function RelatorioPreview() {
 function ConfiguracoesPreview() {
   const [activeTab, setActiveTab] = useState('company');
   const tabs = [
-    { id: 'company', label: 'Empresa', icon: Building2 },
+    { id: 'company', label: 'Restaurante', icon: Building2 },
     { id: 'permissions', label: 'Permissões', icon: Shield },
     { id: 'connections', label: 'Conexões', icon: Plug },
     { id: 'funnel', label: 'Funil', icon: Layers },
@@ -880,7 +880,7 @@ function ConfiguracoesPreview() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
-        <p className="text-muted-foreground">Gerencie as configurações da sua empresa</p>
+        <p className="text-muted-foreground">Gerencie as configurações da seu restaurante</p>
       </div>
 
       <div className="flex gap-6">
@@ -906,13 +906,13 @@ function ConfiguracoesPreview() {
           {activeTab === 'company' && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Dados da Empresa</CardTitle>
-                <CardDescription>Informações gerais da sua empresa</CardDescription>
+                <CardTitle className="text-base">Dados do Restaurante</CardTitle>
+                <CardDescription>Informações gerais da seu restaurante</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Nome da Empresa</label>
+                    <label className="text-sm font-medium">Nome do Restaurante</label>
                     <Input defaultValue="Ótica Exemplo" />
                   </div>
                   <div className="space-y-2">
@@ -1158,7 +1158,7 @@ function ClientsPreview() {
         </Table>
       </div>
       <div className="flex items-center justify-between pt-2">
-        <span className="text-sm text-muted-foreground">142 cliente(s) — Página 1 de 6</span>
+        <span className="text-sm text-muted-foreground">142 cliente(s): Página 1 de 6</span>
       </div>
     </div>
   );

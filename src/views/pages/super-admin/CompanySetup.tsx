@@ -14,7 +14,7 @@ import { WhatsAppConfigCard } from '@/components/super-admin/company-details/Wha
 import { ApiKeysTab } from '@/components/super-admin/company-details/ApiKeysTab';
 
 const steps = [
-  { key: 'info', label: 'Dados da Empresa', icon: Building2, description: 'Informações básicas' },
+  { key: 'info', label: 'Dados do Restaurante', icon: Building2, description: 'Informações básicas' },
   { key: 'whatsapp', label: 'WhatsApp', icon: Wifi, description: 'Conexão WhatsApp' },
   { key: 'api-keys', label: 'API Keys', icon: Key, description: 'Chaves de acesso' },
   { key: 'ai', label: 'Configurar IA', icon: Bot, description: 'Configuração básica' },
@@ -109,7 +109,7 @@ export default function CompanySetup() {
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
           <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Empresa não encontrada</h2>
+          <h2 className="text-2xl font-bold mb-2">Restaurante não encontrado</h2>
           <Button onClick={() => router.push('/super-admin/companies')}>Voltar</Button>
         </div>
       </div>
@@ -122,8 +122,8 @@ export default function CompanySetup() {
         return (
           <Card>
             <CardHeader>
-              <CardTitle>Dados da Empresa</CardTitle>
-              <CardDescription>Complete as informações básicas da empresa</CardDescription>
+              <CardTitle>Dados do Restaurante</CardTitle>
+              <CardDescription>Complete as informações básicas do restaurante</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -137,7 +137,7 @@ export default function CompanySetup() {
                     id="trade_name"
                     value={formData.trade_name}
                     onChange={(e) => setFormData(prev => ({ ...prev, trade_name: e.target.value }))}
-                    placeholder="Nome fantasia da empresa"
+                    placeholder="Nome fantasia do restaurante"
                   />
                 </div>
                 <div className="space-y-2">
@@ -173,7 +173,7 @@ export default function CompanySetup() {
           <Card>
             <CardHeader>
               <CardTitle>Conectar WhatsApp</CardTitle>
-              <CardDescription>Configure a instância do WhatsApp para esta empresa</CardDescription>
+              <CardDescription>Configure a instância do WhatsApp para este restaurante</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <WhatsAppConfigCard companyId={id!} />
@@ -227,7 +227,7 @@ export default function CompanySetup() {
           <Card>
             <CardHeader>
               <CardTitle>Configurar IA</CardTitle>
-              <CardDescription>Configure o comportamento da IA para esta empresa</CardDescription>
+              <CardDescription>Configure o comportamento da IA para este restaurante</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col items-center justify-center py-8">
@@ -270,7 +270,7 @@ export default function CompanySetup() {
           Setup: {company.name}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Complete as etapas abaixo para configurar a empresa
+          Complete as etapas abaixo para configurar o restaurante
         </p>
       </div>
 

@@ -46,14 +46,39 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
     const handleError = () => {
       const err = audio.error;
       const codes: Record<number, string> = {
-        1: 'Carregamento abortado',
-        2: 'Erro de rede',
-        3: 'Erro de decodificacao',
-        4: 'Formato nao suportado pelo navegador',
+        1: 'carregamento abortado',
+        2: 'erro de rede',
+        3: 'erro de decodificação',
+        4: 'formato não suportado pelo navegador',
       };
       const reason = err ? (codes[err.code] || `code ${err.code}`) : 'erro desconhecido';
       console.error('[AudioPlayer] media error:', reason, { src, mediaError: err });
-      setLoadError(reason);
+
+      // O navegador diz "formato nao suportado" (code 4) pra DUAS coisas
+      // diferentes: codec que ele nao toca, e resposta HTTP que nao e audio
+      // (401/403/404 do proxy). Sondar a URL separa os casos: sem isso a
+      // mensagem culpava o formato quando o arquivo simplesmente nao existia.
+      void (async () => {
+        try {
+          const res = await fetch(src, { method: 'HEAD', credentials: 'same-origin' });
+          if (!res.ok) {
+            setLoadError(`o servidor respondeu ${res.status}`);
+            return;
+          }
+          const ct = (res.headers.get('content-type') || '').split(';')[0].trim();
+          if (ct && !ct.startsWith('audio/')) {
+            setLoadError(`o servidor devolveu ${ct} em vez de áudio`);
+            return;
+          }
+          if (ct && audio.canPlayType(ct) === '') {
+            setLoadError(`seu navegador não reproduz ${ct}`);
+            return;
+          }
+          setLoadError(reason);
+        } catch {
+          setLoadError(reason);
+        }
+      })();
     };
 
     const handleLoadStart = () => setLoadError(null);
@@ -81,7 +106,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
   useEffect(() => {
     const SAMPLES = 48;
 
-    // Fallback determinístico baseado no src — garante barras visíveis mesmo se
+    // Fallback determinístico baseado no src: garante barras visíveis mesmo se
     // o decode falhar (CORS, formato não suportado, etc)
     const fakeWaveform = () => {
       let seed = 0;
@@ -141,7 +166,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
     canvas.height = rect.height * window.devicePixelRatio;
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
 
-    // Usa a cor de texto herdada do balao pai (text-current) pras barras — assim
+    // Usa a cor de texto herdada do balao pai (text-current) pras barras: assim
     // se adapta automaticamente ao modo claro/escuro e cor do bubble.
     const currentColor = getComputedStyle(canvas).color || 'rgb(0, 168, 132)';
     // Extrai r,g,b pra construir rgba com opacidade correta pras barras nao tocadas
@@ -239,7 +264,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src }) => {
     return (
       <div className="flex items-center gap-2 min-w-[240px] py-1">
         <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
-        <span className="text-xs flex-1 opacity-80">Audio indisponivel: {loadError}</span>
+        <span className="text-xs flex-1 opacity-80">Áudio indisponível: {loadError}</span>
         <a
           href={src}
           target="_blank"

@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!res.ok) {
         return { error: { message: data.error || 'Erro ao criar conta' } }
       }
-      // Loga automatico apos cadastrar — o dono cai direto no dashboard (checklist).
+      // Loga automatico apos cadastrar: o dono cai direto no dashboard (checklist).
       const signInResult = await nextAuthSignIn('credentials', { email, password, redirect: false })
       if (signInResult?.error) {
         return { error: { message: 'Conta criada! Faca login para entrar.' } }

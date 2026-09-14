@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { randomBytes } from 'crypto'
 
-// Self-signup de restaurante: cria usuario + empresa + role (company_admin) +
+// Self-signup de restaurante: cria usuario + restaurante + role (company_admin) +
 // API key, tudo de uma vez. O dono cai direto no dashboard com a checklist.
 const schema = z.object({
   email: z.string().email('Email invalido'),
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 2) Cria a empresa + vincula o dono como company_admin. Se falhar, desfaz o usuario.
+    // 2) Cria o restaurante + vincula o dono como company_admin. Se falhar, desfaz o usuario.
     try {
       const company = await prisma.company.create({
         data: { name: companyName.trim(), email },
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
         data: { userId: user.id, role: 'company_admin', companyId: company.id },
       })
 
-      // 3) API key da empresa ja nasce pronta (best-effort — nao quebra o cadastro).
+      // 3) API key do restaurante ja nasce pronta (best-effort: nao quebra o cadastro).
       try {
         await prisma.apiKey.create({
           data: {
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         console.error('[Signup] Falha ao auto-criar API key:', apiKeyError)
       }
     } catch (companyError) {
-      console.error('[Signup] Falha ao criar empresa, desfazendo usuario:', companyError)
+      console.error('[Signup] Falha ao criar restaurante, desfazendo usuario:', companyError)
       await prisma.user.delete({ where: { id: user.id } }).catch(() => {})
       return NextResponse.json({ error: 'Erro ao criar a conta' }, { status: 500 })
     }

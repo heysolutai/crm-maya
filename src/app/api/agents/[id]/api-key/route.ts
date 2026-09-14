@@ -18,7 +18,7 @@ export async function GET(
 ) {
   const { companyId } = await authenticate(req)
   if (!companyId) {
-    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
   }
 
   try {

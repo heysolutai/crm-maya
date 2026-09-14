@@ -228,7 +228,7 @@ function validateAndAdaptPayload(rawPayload: unknown): {
       messageType = 'location';
     }
 
-    // Extrair texto da mensagem (sem fallback de label — estilo WhatsApp: a mídia é o conteúdo)
+    // Extrair texto da mensagem (sem fallback de label: estilo WhatsApp: a mídia é o conteúdo)
     const messageText = uazPayload.message.text
       || (typeof uazPayload.message.content === 'string' ? uazPayload.message.content : '')
       || '';
@@ -487,7 +487,7 @@ async function downloadMediaFromWhatsApp(
 
     const result = await response.json();
 
-    // Nao logar o response completo — contem base64 do arquivo (pesado/sensivel).
+    // Nao logar o response completo: contem base64 do arquivo (pesado/sensivel).
     console.log('[Media Download] Response keys:', Object.keys(result));
 
     const base64Data = result.base64Data || result.base64 || result.data || result.file || result.content;
@@ -657,7 +657,7 @@ export async function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     // Seguranca OPT-IN: se WHATSAPP_WEBHOOK_SECRET estiver setado, exige ?token=
-    // igual (timing-safe). Sem o env, mantem compat (aceita como hoje) — assim
+    // igual (timing-safe). Sem o env, mantem compat (aceita como hoje): assim
     // ativa a protecao sem quebrar a integracao UAZapi ate reconfigurar a URL.
     const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET;
     if (webhookSecret) {
@@ -675,22 +675,22 @@ export async function POST(req: NextRequest) {
     const eventTypeLower = (eventType || '').toLowerCase();
     const instanceName: string | undefined = rawPayload?.instanceName;
 
-    // Eventos de sistema/baixo-valor — ignorados ou logados de forma curta
+    // Eventos de sistema/baixo-valor: ignorados ou logados de forma curta
     // Sao numerosos e poluem o log se entrarem no fluxo verbose normal.
     const systemEvents = ['connection', 'status', 'qrcode', 'presence', 'typing', 'connected', 'disconnected', 'connecting'];
     if (eventType && systemEvents.includes(eventTypeLower)) {
-      // 1 linha so — eventos sistema sao alta-frequencia e nao mudam estado da app
+      // 1 linha so: eventos sistema sao alta-frequencia e nao mudam estado da app
       return jsonResponse({ status: 'ignored', reason: 'system_event', event_type: eventType });
     }
 
     // Eventos que tem handler proprio mais abaixo mas nao precisam do log
     // verboso de mensagem (todos os campos de message vem `undefined` neles).
-    // Continuam sendo processados normalmente — so nao sujam o log.
+    // Continuam sendo processados normalmente: so nao sujam o log.
     const lowVerbosityEvents = ['messages_update', 'message_update'];
     const isLowVerbosity = lowVerbosityEvents.includes(eventTypeLower);
 
     // Log detalhado: somente pra eventos relevantes (mensagens recebidas/enviadas).
-    // Pra status updates, transcricoes, etc — log resumido de 1 linha.
+    // Pra status updates, transcricoes, etc: log resumido de 1 linha.
     if (isLowVerbosity || rawPayload.type === 'ReadReceipt' || rawPayload.type === 'TranscribedMessage') {
       const messageIds = rawPayload?.event?.MessageIDs || rawPayload?.message?.id || '';
       console.log(
@@ -1480,7 +1480,7 @@ export async function POST(req: NextRequest) {
       console.error('[Conversation Update] failed to bump updatedAt', bumpErr);
     }
 
-    // Publica evento realtime para clientes SSE conectados (awaited — fire-and-forget
+    // Publica evento realtime para clientes SSE conectados (awaited: fire-and-forget
     // pode ser cancelado pelo event loop antes do Redis confirmar o publish)
     await publishEvent(companyId, {
       type: 'message:new',
@@ -1559,9 +1559,9 @@ export async function POST(req: NextRequest) {
         }),
       ]);
 
-      // AI config agora e POR INBOX (Inbox.aiAgentId — M:1).
+      // AI config agora e POR INBOX (Inbox.aiAgentId: M:1).
       // Fallback: se a inbox nao tiver AiAgent vinculado, pega o primeiro
-      // da empresa pra nao quebrar fluxo antigo.
+      // do restaurante pra nao quebrar fluxo antigo.
       const aiConfigResult = convDataResult?.inbox?.aiAgentId
         ? await prisma.aiAgent.findFirst({
             where: { id: convDataResult.inbox.aiAgentId, companyId, isActive: true },
@@ -1603,7 +1603,7 @@ export async function POST(req: NextRequest) {
 
       // Desvio de fluxo externo (ex: avaliacao no n8n): se a conversa tem uma
       // executionUrl registrada, a resposta do cliente vai pra ela em vez do
-      // webhook de IA padrao. ONE-SHOT: limpa o campo ja no encaminhamento —
+      // webhook de IA padrao. ONE-SHOT: limpa o campo ja no encaminhamento -
       // o fluxo re-registra via POST /api/conversations/execution-url a cada
       // nova espera. So mensagens INCOMING resumem o fluxo.
       let executionUrl: string | null = null;
@@ -1620,7 +1620,7 @@ export async function POST(req: NextRequest) {
         }).catch((err) => console.error('[N8N Webhook] Falha ao limpar executionUrl:', err));
 
         if (urlExpired) {
-          console.log(`[N8N Webhook] ⏰ executionUrl expirada na conversa ${conversationId} — mensagem segue pro fluxo normal`);
+          console.log(`[N8N Webhook] ⏰ executionUrl expirada na conversa ${conversationId}: mensagem segue pro fluxo normal`);
         } else {
           executionUrl = conversationData.executionUrl;
           console.log(`[N8N Webhook] 🔀 Desviando mensagem ${message.id} pra executionUrl do fluxo externo`);
@@ -1688,7 +1688,7 @@ export async function POST(req: NextRequest) {
         inbox_phone: conversationData?.inbox?.phoneNumber || null,
         // Credenciais da instancia (UAZapi) da inbox que recebeu a mensagem.
         // O N8N usa pra responder pelo MESMO numero/instancia (send/text etc).
-        // Vem da inbox da conversa — nao da "primeira inbox ativa" — pra nao
+        // Vem da inbox da conversa: nao da "primeira inbox ativa": pra nao
         // responder pelo numero errado quando ha varias caixas de entrada.
         inbox_api_url: conversationData?.inbox?.apiUrl || null,
         inbox_instance_api_key: conversationData?.inbox?.instanceApiKey || null,
@@ -1730,7 +1730,7 @@ export async function POST(req: NextRequest) {
 
       // For audio messages: skip N8N, transcription worker sends it after transcription
       if (shouldQueueTranscription && whatsappInstance && mediaMessageId) {
-        console.log(`[N8N Webhook] ⏳ Skipping for audio message ${message.id} — will send after transcription`);
+        console.log(`[N8N Webhook] ⏳ Skipping for audio message ${message.id}: will send after transcription`);
         try {
           await enqueueTranscription({
             messageId: message.id,
@@ -1748,7 +1748,7 @@ export async function POST(req: NextRequest) {
           console.error('[Audio Transcription] Failed to queue transcription:', queueError);
         }
       } else if (shouldQueueMedia && whatsappInstance && mediaMessageId) {
-        console.log(`[N8N Webhook] ⏳ Skipping for media message ${message.id} — will send after S3 upload`);
+        console.log(`[N8N Webhook] ⏳ Skipping for media message ${message.id}: will send after S3 upload`);
         try {
           await enqueueMediaProcessing({
             messageId: message.id,
@@ -1819,13 +1819,20 @@ export async function POST(req: NextRequest) {
         select: { status: true },
       });
 
-      const shouldCreateFollowUps = !followUpClient?.aiPaused && followUpConv?.status !== 'closed';
+      // Conversa de avaliacao (ja tem review vinculada) nao recebe follow-up:
+      // o cliente respondeu a pesquisa; insistir depois disso e spam.
+      const conversaDeAvaliacao = await prisma.review.findFirst({
+        where: { conversationId, companyId },
+        select: { id: true },
+      });
+      const shouldCreateFollowUps =
+        !followUpClient?.aiPaused && followUpConv?.status !== 'closed' && !conversaDeAvaliacao;
 
       if (!shouldCreateFollowUps) {
-        console.log(`[Follow-up] Skipping follow-up creation: ai_paused=${followUpClient?.aiPaused}, conv_status=${followUpConv?.status}`);
+        console.log(`[Follow-up] Skipping follow-up creation: ai_paused=${followUpClient?.aiPaused}, conv_status=${followUpConv?.status}, avaliacao=${!!conversaDeAvaliacao}`);
       } else {
         // Resolve AiAgent vinculado a inbox da conversa atual (se houver),
-        // senao usa o primeiro AiAgent ativo da empresa (back-compat).
+        // senao usa o primeiro AiAgent ativo do restaurante (back-compat).
         const followUpConvData = await prisma.conversation.findUnique({
           where: { id: conversationId },
           select: { inbox: { select: { aiAgentId: true, id: true } } },

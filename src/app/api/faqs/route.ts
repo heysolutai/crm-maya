@@ -37,7 +37,7 @@ const updateFaqSchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const faqs = await prisma.companyFaq.findMany({
       where: { companyId },
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const body = await req.json()
 
     if (body.action === 'deleteMany') {
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         )
       }
-      // IDOR: deleta apenas FAQs da empresa autenticada
+      // IDOR: deleta apenas FAQs do restaurante autenticado
       await prisma.companyFaq.deleteMany({
         where: { id: { in: deleteValidation.data.ids }, companyId },
       })
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         )
       }
-      // IDOR: updateMany com filtro de companyId — nao mexe em FAQs de outras empresas
+      // IDOR: updateMany com filtro de companyId: nao mexe em FAQs de outros restaurantes
       for (let i = 0; i < reorderValidation.data.orderedIds.length; i++) {
         await prisma.companyFaq.updateMany({
           where: { id: reorderValidation.data.orderedIds[i], companyId },
@@ -113,9 +113,9 @@ export async function POST(req: NextRequest) {
 
     // Log de entrada: serve tambem como marcador de versao. Se esta linha nao
     // aparece no log do container, a imagem em execucao NAO tem este codigo.
-    console.log(`[FAQ] Criado ${faq.id} — iniciando indexacao vetorial`)
+    console.log(`[FAQ] Criado ${faq.id}: iniciando indexacao vetorial`)
 
-    // Indexa na base vetorial. Nunca lanca — se a OpenAI ou o banco vetorial
+    // Indexa na base vetorial. Nunca lanca: se a OpenAI ou o banco vetorial
     // falharem, o FAQ ja esta salvo e a falha fica no log.
     const indexed = await indexFaq(companyId, faq)
     console.log(`[FAQ] Indexacao de ${faq.id}: ${indexed ? 'OK' : 'PULADA (ver motivo acima)'}`)
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const body = await req.json()
 
@@ -160,7 +160,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })

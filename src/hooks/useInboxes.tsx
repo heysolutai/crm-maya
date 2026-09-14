@@ -16,7 +16,7 @@ export interface Inbox {
   api_url: string | null;
   /** Sempre MASCARADO (••••X5UA). O valor real só vem de /api/agents/[id]/api-key. */
   instance_api_key: string | null;
-  /** Sempre mascarado — não há endpoint que revele o token de admin. */
+  /** Sempre mascarado: não há endpoint que revele o token de admin. */
   admin_token?: string | null;
   status: InboxStatus;
   is_active: boolean;

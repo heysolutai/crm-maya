@@ -66,17 +66,17 @@ export function useCompanySettings() {
       });
       const result = await res.json();
       if (!res.ok) {
-        throw new Error(result.error || 'Erro ao atualizar empresa');
+        throw new Error(result.error || 'Erro ao atualizar restaurante');
       }
       return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company'] });
-      toast({ title: 'Empresa atualizada com sucesso' });
+      toast({ title: 'Restaurante atualizado com sucesso' });
     },
     onError: (error: any) => {
       toast({
-        title: 'Erro ao atualizar empresa',
+        title: 'Erro ao atualizar restaurante',
         description: error.message,
         variant: 'destructive',
       });

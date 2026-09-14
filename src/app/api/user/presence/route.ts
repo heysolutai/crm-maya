@@ -8,7 +8,7 @@ export async function OPTIONS(req: NextRequest) { return handleCors(req) || json
 
 export async function POST(req: NextRequest) {
   try {
-    // CRIT-8 fix: requer autenticacao e ignora user_id do body — sempre usa o user da sessao
+    // CRIT-8 fix: requer autenticacao e ignora user_id do body: sempre usa o user da sessao
     const { agentId } = await authenticate(req);
     if (!agentId) return unauthorizedResponse('Authentication required');
 

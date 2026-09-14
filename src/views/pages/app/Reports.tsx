@@ -9,10 +9,10 @@ import {
 } from '@/hooks/useReportOverview';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { DateInputBR } from '@/components/ui/date-input-br';
 import {
   BarChart3,
   Users,
@@ -96,8 +96,8 @@ export default function Reports() {
   const chartData = useMemo(
     () =>
       (data?.conversations.byDay || []).map((d) => ({
-        // dd/MM pro eixo ficar legivel
-        label: d.date.slice(8, 10) + '/' + d.date.slice(5, 7),
+        // dd/MM/yyyy: padrao da casa, mesmo no eixo
+        label: d.date.slice(8, 10) + '/' + d.date.slice(5, 7) + '/' + d.date.slice(0, 4),
         total: d.total,
       })),
     [data]
@@ -135,9 +135,8 @@ export default function Reports() {
           <div className="flex flex-wrap items-end gap-3 rounded-lg border border-dashed p-3">
             <div className="space-y-1">
               <Label htmlFor="from">De</Label>
-              <Input
+              <DateInputBR
                 id="from"
-                type="date"
                 value={customFrom}
                 max={customTo}
                 onChange={(e) => setCustomFrom(e.target.value)}
@@ -146,9 +145,8 @@ export default function Reports() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="to">Até</Label>
-              <Input
+              <DateInputBR
                 id="to"
-                type="date"
                 value={customTo}
                 min={customFrom}
                 onChange={(e) => setCustomTo(e.target.value)}

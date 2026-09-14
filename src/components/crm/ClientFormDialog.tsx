@@ -19,6 +19,7 @@ import {
 import { Client } from '@/hooks/useClients';
 import { FunnelStage } from '@/hooks/useFunnelStages';
 import { Loader2 } from 'lucide-react';
+import { DateInputBR } from '@/components/ui/date-input-br';
 
 // Accept a partial client type for flexibility with CRM cards
 type PartialClient = Partial<Client> & { id?: string; first_name?: string };
@@ -204,9 +205,8 @@ export function ClientFormDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="birth_date">Data de Nascimento</Label>
-              <Input
+              <DateInputBR
                 id="birth_date"
-                type="date"
                 value={formData.birth_date}
                 onChange={(e) => handleChange('birth_date', e.target.value)}
               />

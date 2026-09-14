@@ -42,7 +42,7 @@ export function useAiAgents() {
 
   const createMutation = useMutation({
     mutationFn: async (data: { name: string; isActive?: boolean }) => {
-      if (!companyId) throw new Error('Empresa não selecionada');
+      if (!companyId) throw new Error('Restaurante não selecionada');
       const res = await apiFetch(`/api/ai-configurations?companyId=${companyId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -70,7 +70,7 @@ export function useAiAgents() {
   const updateMutation = useMutation({
     mutationFn: async (data: { id: string; name?: string; isActive?: boolean }) => {
       // ?companyId= carrega a personificacao: a sessao do super-admin nao tem
-      // empresa, e sem isso a rota responde "Empresa nao encontrada".
+      // restaurante, e sem isso a rota responde "Restaurante nao encontrado".
       const res = await apiFetch(`/api/ai-configurations?companyId=${companyId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

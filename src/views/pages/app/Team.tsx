@@ -35,7 +35,7 @@ function getRoleInfo(role: string) {
 }
 
 // date-fns `format` lanca "Invalid time value" se a data for invalida. Um valor
-// inesperado em last_seen_at derrubaria a pagina — aqui devolvemos null e o
+// inesperado em last_seen_at derrubaria a pagina: aqui devolvemos null e o
 // caller mostra o fallback "Nunca acessou".
 function safeFormat(date: string | null | undefined, pattern: string): string | null {
   if (!date) return null;
@@ -160,7 +160,7 @@ export default function Team() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email *</Label>
-                <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="joao@empresa.com" />
+                <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="joao@restaurante.com" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Telefone</Label>
@@ -410,9 +410,9 @@ export default function Team() {
                         </DropdownMenu>
                       </div>
                     </div>
-                    {safeFormat(member.last_seen_at, "dd/MM 'às' HH:mm") && (
+                    {safeFormat(member.last_seen_at, "dd/MM/yyyy 'às' HH:mm") && (
                       <p className="text-[11px] text-muted-foreground mt-2">
-                        Último acesso: {safeFormat(member.last_seen_at, "dd/MM 'às' HH:mm")}
+                        Último acesso: {safeFormat(member.last_seen_at, "dd/MM/yyyy 'às' HH:mm")}
                       </p>
                     )}
                   </CardContent>

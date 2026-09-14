@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 // O cliente abre um EventSource('/api/conversations/events') e recebe:
 //   - event: connected  (handshake inicial)
 //   - event: ping       (heartbeat a cada 25s, evita timeout de proxies)
-//   - event: message    (JSON do RealtimeEvent — uma mensagem nova/update/delete)
+//   - event: message    (JSON do RealtimeEvent: uma mensagem nova/update/delete)
 export async function GET(req: NextRequest) {
   let companyId: string;
   try {
@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
         try { controller.close(); } catch { /* noop */ }
       };
 
-      // 1. Handshake imediato — sinaliza pro cliente que a conexao abriu
+      // 1. Handshake imediato: sinaliza pro cliente que a conexao abriu
       send(`event: connected\ndata: ${JSON.stringify({ companyId, clientId, ts: Date.now() })}\n\n`);
 
       // 2. Registra handlers do subscriber ANTES do subscribe, pra nao perder evento
@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
       });
 
       subscriber.on('end', () => {
-        console.warn(`${tag} subscriber desconectou — fechando stream`);
+        console.warn(`${tag} subscriber desconectou: fechando stream`);
         cleanup('subscriber_end');
       });
 
@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
         return;
       }
 
-      // 4. Heartbeat — proxies cortam conexoes idle em 30-60s, ping a cada 25s
+      // 4. Heartbeat: proxies cortam conexoes idle em 30-60s, ping a cada 25s
       heartbeat = setInterval(() => {
         send(`event: ping\ndata: ${Date.now()}\n\n`);
       }, 25_000);

@@ -59,7 +59,7 @@ export default function ApiDocs() {
         { id: 'ai', label: 'IA / Configuração', icon: Bot },
         { id: 'calendar', label: 'Google Calendar', icon: Calendar },
         { id: 'reports', label: 'Relatórios', icon: BarChart3 },
-        { id: 'company', label: 'Empresa / Usuários', icon: Users },
+        { id: 'company', label: 'Restaurante / Usuários', icon: Users },
         { id: 'admin', label: 'Admin', icon: Shield },
       ],
     },
@@ -67,11 +67,11 @@ export default function ApiDocs() {
 
   const errorCodes = [
     { code: 400, description: 'Dados inválidos no body ou query params' },
-    { code: 401, description: 'Não autenticado — Token ausente ou inválido' },
+    { code: 401, description: 'Não autenticado: Token ausente ou inválido' },
     { code: 403, description: 'Sem permissão para este recurso' },
     { code: 404, description: 'Recurso não encontrado' },
     { code: 422, description: 'Erro de validação nos dados enviados' },
-    { code: 429, description: 'Rate limit excedido — muitas requisições' },
+    { code: 429, description: 'Rate limit excedido: muitas requisições' },
     { code: 500, description: 'Erro interno do servidor' },
     { code: 503, description: 'Serviço indisponível ou não configurado' },
   ];
@@ -91,7 +91,7 @@ export default function ApiDocs() {
                   <span className="text-foreground">API</span>{' '}
                   <span className="text-red-400">Docs</span>
                 </h3>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Maya CRM — v2.0</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Maya CRM: v2.0</p>
               </div>
             </div>
 
@@ -288,7 +288,7 @@ Accept: application/json`}
                 errors={[
                   { code: 'UNAUTHORIZED', status: 401, message: 'Token inválido ou não fornecido' },
                   { code: 'MISSING_FIELDS', status: 400, message: 'phone ou conversationId e message são obrigatórios' },
-                  { code: 'INSTANCE_NOT_FOUND', status: 500, message: 'Instância WhatsApp não encontrada para a empresa' },
+                  { code: 'INSTANCE_NOT_FOUND', status: 500, message: 'Instância WhatsApp não encontrada para o restaurante' },
                 ]}
               />
 
@@ -475,7 +475,7 @@ Accept: application/json`}
 // Payload enviado pela UazAPI (exemplo):
 {
   "event": "messages.upsert",
-  "instance": "empresa-abc123",
+  "instance": "restaurante-abc123",
   "data": {
     "key": {
       "remoteJid": "5511999999999@s.whatsapp.net",
@@ -501,13 +501,13 @@ Accept: application/json`}
                 method="POST"
                 path="/api/messaging/transfer"
                 name="Transferir Conversa"
-                description="Transfere uma conversa em 3 modos: manual (para um agente específico), round-robin (global na empresa) ou department (round-robin apenas entre agentes ONLINE de um departamento — com fila automática se ninguém estiver online). Em todos os modos a IA é pausada automaticamente na conversa."
+                description="Transfere uma conversa em 3 modos: manual (para um agente específico), round-robin (global no restaurante) ou department (round-robin apenas entre agentes ONLINE de um departamento: com fila automática se ninguém estiver online). Em todos os modos a IA é pausada automaticamente na conversa."
                 authentication="bearer"
                 bodyParameters={[
                   { name: 'conversation_id', type: 'UUID', required: true, description: 'ID da conversa a transferir' },
                   { name: 'mode', type: 'enum', required: false, description: '"manual" (padrão), "round-robin" ou "department"' },
-                  { name: 'target_user_id', type: 'UUID', required: false, description: 'ID do agente destino — obrigatório no modo "manual"' },
-                  { name: 'department_id', type: 'UUID', required: false, description: 'ID do departamento — obrigatório no modo "department". Se nenhum agente estiver online, a conversa entra em fila (status="pending", transferred_to=null) aguardando um agente ficar online.' },
+                  { name: 'target_user_id', type: 'UUID', required: false, description: 'ID do agente destino: obrigatório no modo "manual"' },
+                  { name: 'department_id', type: 'UUID', required: false, description: 'ID do departamento: obrigatório no modo "department". Se nenhum agente estiver online, a conversa entra em fila (status="pending", transferred_to=null) aguardando um agente ficar online.' },
                   { name: 'note', type: 'string', required: false, description: 'Nota opcional (máx 3000 chars) registrada no histórico da conversa. Útil pra documentar o motivo da transferência. Funciona nos 3 modos.' },
                 ]}
                 exampleRequest={`// 1) Transferência manual para agente específico
@@ -520,7 +520,7 @@ curl -X POST "/api/messaging/transfer" \\
     "mode": "manual"
   }'
 
-// 2) Round-robin global (qualquer agente ativo da empresa)
+// 2) Round-robin global (qualquer agente ativo do restaurante)
 curl -X POST "/api/messaging/transfer" \\
   -H "Authorization: Bearer <token>" \\
   -H "Content-Type: application/json" \\
@@ -537,7 +537,7 @@ curl -X POST "/api/messaging/transfer" \\
     "conversation_id": "uuid-da-conversa",
     "department_id": "uuid-do-departamento",
     "mode": "department",
-    "note": "Cliente interessado em Ducati XDiavel — já tem orçamento aprovado"
+    "note": "Cliente interessado em Ducati XDiavel: já tem orçamento aprovado"
   }'`}
                 exampleResponse={`// ─── Modo manual ou round-robin ───
 {
@@ -546,7 +546,7 @@ curl -X POST "/api/messaging/transfer" \\
   "transferred_to": {
     "user_id": "uuid-do-agente",
     "full_name": "João Silva",
-    "email": "joao@empresa.com"
+    "email": "joao@restaurante.com"
   },
   "mode": "manual"
 }
@@ -560,7 +560,7 @@ curl -X POST "/api/messaging/transfer" \\
   "transferred_to": {
     "user_id": "uuid-do-vendedor",
     "full_name": "Maria Vendedora",
-    "email": "maria@empresa.com"
+    "email": "maria@restaurante.com"
   },
   "mode": "department"
 }
@@ -576,7 +576,7 @@ curl -X POST "/api/messaging/transfer" \\
 }`}
                 errors={[
                   { code: 'UNAUTHORIZED', status: 401, message: 'Token inválido' },
-                  { code: 'CONVERSATION_NOT_FOUND', status: 404, message: 'Conversa não encontrada ou não pertence à empresa' },
+                  { code: 'CONVERSATION_NOT_FOUND', status: 404, message: 'Conversa não encontrada ou não pertence ao restaurante' },
                   { code: 'MISSING_TARGET', status: 400, message: 'target_user_id obrigatório no modo "manual"' },
                   { code: 'MISSING_DEPARTMENT', status: 400, message: 'department_id obrigatório no modo "department"' },
                   { code: 'DEPARTMENT_NOT_FOUND', status: 404, message: 'Departamento não encontrado ou inativo' },
@@ -589,13 +589,13 @@ curl -X POST "/api/messaging/transfer" \\
                 method="GET"
                 path="/api/conversations"
                 name="Listar Conversas por Departamento"
-                description="Lista conversas de uma empresa, com filtro opcional por departamento. Útil para ver todas as conversas já direcionadas a um departamento específico após transferência."
+                description="Lista conversas de um restaurante, com filtro opcional por departamento. Útil para ver todas as conversas já direcionadas a um departamento específico após transferência."
                 authentication="bearer"
                 queryParameters={[
                   { name: 'departmentId', type: 'UUID', required: false, description: 'Filtra conversas direcionadas a este departamento' },
                   { name: 'status', type: 'enum', required: false, description: 'active, waiting, closed ou transferred' },
                   { name: 'assignedTo', type: 'UUID', required: false, description: 'Filtra por agente atribuído' },
-                  { name: 'companyId', type: 'UUID', required: false, description: 'Apenas super_admin em impersonation — usa o companyId da sessão por padrão' },
+                  { name: 'companyId', type: 'UUID', required: false, description: 'Apenas super_admin em impersonation: usa o companyId da sessão por padrão' },
                 ]}
                 exampleRequest={`// Listar todas as conversas do departamento de Suporte
 curl "/api/conversations?departmentId=dept-uuid-aqui" \\
@@ -667,10 +667,10 @@ curl "/api/conversations?assignedTo=<user-uuid>" \\
                 method="GET"
                 path="/api/departments"
                 name="Listar Departamentos"
-                description="Lista todos os departamentos ativos da empresa, com seus membros. Use o campo id do retorno para informar no departmentId ao transferir uma conversa ou no department_id do peek."
+                description="Lista todos os departamentos ativos do restaurante, com seus membros. Use o campo id do retorno para informar no departmentId ao transferir uma conversa ou no department_id do peek."
                 authentication="bearer"
                 queryParameters={[
-                  { name: 'companyId', type: 'UUID', required: false, description: 'Apenas super_admin em impersonation — usa o companyId da sessão por padrão' },
+                  { name: 'companyId', type: 'UUID', required: false, description: 'Apenas super_admin em impersonation: usa o companyId da sessão por padrão' },
                 ]}
                 exampleRequest={`curl "/api/departments" \\
   -H "Authorization: Bearer <token>"`}
@@ -712,8 +712,8 @@ curl "/api/conversations?assignedTo=<user-uuid>" \\
                 description="Consulta qual seria o próximo agente a receber um cliente no round-robin, SEM consumir o turno (não atualiza o estado). Útil para a IA verificar disponibilidade de agenda antes de efetivar a transferência. Espelha a mesma lógica de ordenação e papéis do endpoint de transferência."
                 authentication="bearer"
                 queryParameters={[
-                  { name: 'department_id', type: 'UUID', required: false, description: 'Se informado, faz peek do round-robin do departamento (apenas agentes online membros do depto). Se omitido, faz peek global da empresa (todos os agentes ativos, ignora online).' },
-                  { name: 'include_schedule', type: 'string', required: false, description: 'Use "1" para incluir a agenda (DoctorSchedule) do próximo agente na resposta — economiza uma chamada extra a /api/schedules.' },
+                  { name: 'department_id', type: 'UUID', required: false, description: 'Se informado, faz peek do round-robin do departamento (apenas agentes online membros do depto). Se omitido, faz peek global do restaurante (todos os agentes ativos, ignora online).' },
+                  { name: 'include_schedule', type: 'string', required: false, description: 'Use "1" para incluir a agenda (DoctorSchedule) do próximo agente na resposta: economiza uma chamada extra a /api/schedules.' },
                 ]}
                 exampleRequest={`// Peek do round-robin do departamento de vendas, já trazendo a agenda
 curl -X GET "/api/departments/next-agent?department_id=dept-vendas-uuid&include_schedule=1" \\
@@ -726,7 +726,7 @@ curl -X GET "/api/departments/next-agent" \\
   "next_agent": {
     "user_id": "agent-uuid",
     "full_name": "João Vendedor",
-    "email": "joao@empresa.com",
+    "email": "joao@restaurante.com",
     "is_online": true
   },
   "schedule": {
@@ -743,7 +743,7 @@ curl -X GET "/api/departments/next-agent" \\
   "message": "Proximo agente: João Vendedor (3 candidato(s))."
 }`}
                 errors={[
-                  { code: 'UNAUTHORIZED', status: 403, message: 'Empresa não encontrada' },
+                  { code: 'UNAUTHORIZED', status: 403, message: 'Restaurante não encontrado' },
                   { code: 'DEPARTMENT_NOT_FOUND', status: 404, message: 'Departamento não encontrado ou inativo' },
                 ]}
               />
@@ -764,7 +764,7 @@ curl -X GET "/api/departments/next-agent" \\
                 </h4>
                 <p className="text-sm text-muted-foreground">
                   Todos os endpoints de agendamentos usam <code className="bg-background px-2 py-1 rounded">x-api-key</code>.
-                  A API key identifica automaticamente a empresa.
+                  A API key identifica automaticamente o restaurante.
                 </p>
                 <div className="bg-background p-3 rounded font-mono text-xs mt-2">
                   x-api-key: <span className="text-primary">sua-api-key-aqui</span>
@@ -802,7 +802,7 @@ curl -X GET "/api/departments/next-agent" \\
                 method="GET"
                 path="/api/appointments"
                 name="Listar Agendamentos"
-                description="Lista agendamentos da empresa com filtros por status, cliente, data e responsável."
+                description="Lista agendamentos do restaurante com filtros por status, cliente, data e responsável."
                 authentication="api-key"
                 queryParameters={[
                   { name: 'status', type: 'enum', required: false, description: 'scheduled, confirmed, completed, cancelled, no_show' },
@@ -997,7 +997,7 @@ curl -X GET "/api/departments/next-agent" \\
                 method="GET"
                 path="/api/knowledge/faq"
                 name="Listar FAQs"
-                description="Lista todas as perguntas frequentes da empresa com filtros por categoria, status e busca textual."
+                description="Lista todas as perguntas frequentes do restaurante com filtros por categoria, status e busca textual."
                 authentication="api-key"
                 queryParameters={[
                   { name: 'category', type: 'string', required: false, description: 'Filtrar por categoria' },
@@ -1127,7 +1127,7 @@ curl -X POST "/api/knowledge/faq" \\
                 authentication="bearer"
                 bodyParameters={[
                   { name: 'fileUrl', type: 'string', required: true, description: 'URL do arquivo no Supabase Storage' },
-                  { name: 'companyId', type: 'UUID', required: true, description: 'ID da empresa' },
+                  { name: 'companyId', type: 'UUID', required: true, description: 'ID do restaurante' },
                   { name: 'fileName', type: 'string', required: true, description: 'Nome do arquivo' },
                   { name: 'fileType', type: 'string', required: false, description: 'MIME type (ex: application/pdf)' },
                   { name: 'fileSize', type: 'number', required: false, description: 'Tamanho em bytes' },
@@ -1137,7 +1137,7 @@ curl -X POST "/api/knowledge/faq" \\
   -H "Content-Type: application/json" \\
   -d '{
     "fileUrl": "https://storage.supabase.co/.../manual.pdf",
-    "companyId": "uuid-da-empresa",
+    "companyId": "uuid-da-restaurante",
     "fileName": "manual-produto.pdf",
     "fileType": "application/pdf",
     "fileSize": 204800
@@ -1161,13 +1161,13 @@ curl -X POST "/api/knowledge/faq" \\
                 description="Sincroniza todos os FAQs ativos do banco com a base de conhecimento no N8N. Usa env: KNOWLEDGE_WEBHOOK_URL."
                 authentication="bearer"
                 bodyParameters={[
-                  { name: 'company_id', type: 'UUID', required: true, description: 'ID da empresa' },
+                  { name: 'company_id', type: 'UUID', required: true, description: 'ID do restaurante' },
                 ]}
                 exampleRequest={`curl -X POST "/api/knowledge/sync" \\
   -H "Authorization: Bearer <token>" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "company_id": "uuid-da-empresa"
+    "company_id": "uuid-da-restaurante"
   }'`}
                 exampleResponse={`{
   "success": true,
@@ -1225,7 +1225,7 @@ curl -X POST "/api/knowledge/faq" \\
                 method="POST"
                 path="/api/ai/update-prompts"
                 name="Atualizar Prompts de IA"
-                description="Atualiza os prompts e configurações de comportamento da IA para a empresa."
+                description="Atualiza os prompts e configurações de comportamento da IA para o restaurante."
                 authentication="api-key"
                 bodyParameters={[
                   { name: 'configuration_id', type: 'UUID', required: false, description: 'ID da configuração (usa a ativa se não informado)' },
@@ -1358,7 +1358,7 @@ curl -X POST "/api/knowledge/faq" \\
                 method="POST"
                 path="/api/calendar/auth"
                 name="Iniciar OAuth Google"
-                description="Gera URL de autenticação OAuth do Google para conectar o Calendar da empresa."
+                description="Gera URL de autenticação OAuth do Google para conectar o Calendar do restaurante."
                 authentication="bearer"
                 exampleRequest={`curl -X POST "/api/calendar/auth" \\
   -H "Authorization: Bearer <token>"`}
@@ -1380,7 +1380,7 @@ curl -X POST "/api/knowledge/faq" \\
                 bodyParameters={[
                   { name: 'action', type: 'enum', required: true, description: 'create, update ou delete' },
                   { name: 'appointment_id', type: 'UUID', required: true, description: 'ID do agendamento' },
-                  { name: 'company_id', type: 'UUID', required: true, description: 'ID da empresa' },
+                  { name: 'company_id', type: 'UUID', required: true, description: 'ID do restaurante' },
                 ]}
                 exampleRequest={`curl -X POST "/api/calendar/sync" \\
   -H "Authorization: Bearer <token>" \\
@@ -1388,7 +1388,7 @@ curl -X POST "/api/knowledge/faq" \\
   -d '{
     "action": "create",
     "appointment_id": "uuid-do-agendamento",
-    "company_id": "uuid-da-empresa"
+    "company_id": "uuid-da-restaurante"
   }'`}
                 exampleResponse={`{
   "success": true,
@@ -1398,7 +1398,7 @@ curl -X POST "/api/knowledge/faq" \\
 }`}
                 errors={[
                   { code: 'UNAUTHORIZED', status: 401, message: 'Token inválido' },
-                  { code: 'NOT_CONNECTED', status: 400, message: 'Google Calendar não conectado para esta empresa' },
+                  { code: 'NOT_CONNECTED', status: 400, message: 'Google Calendar não conectado para este restaurante' },
                 ]}
               />
 
@@ -1406,7 +1406,7 @@ curl -X POST "/api/knowledge/faq" \\
                 method="POST"
                 path="/api/calendar/disconnect"
                 name="Desconectar Google Calendar"
-                description="Remove a integração do Google Calendar da empresa."
+                description="Remove a integração do Google Calendar do restaurante."
                 authentication="bearer"
                 exampleRequest={`curl -X POST "/api/calendar/disconnect" \\
   -H "Authorization: Bearer <token>"`}
@@ -1420,7 +1420,7 @@ curl -X POST "/api/knowledge/faq" \\
                 method="POST"
                 path="/api/calendar/bulk-sync"
                 name="Sincronização em Massa"
-                description="Sincroniza todos os agendamentos de todas as empresas conectadas ao Google Calendar. Requer super_admin ou chamada interna."
+                description="Sincroniza todos os agendamentos de todos os restaurantes conectados ao Google Calendar. Requer super_admin ou chamada interna."
                 authentication="bearer"
                 exampleRequest={`curl -X POST "/api/calendar/bulk-sync" \\
   -H "Authorization: Bearer <token-super-admin>"`}
@@ -1428,7 +1428,7 @@ curl -X POST "/api/knowledge/faq" \\
   "success": true,
   "results": [
     {
-      "company": "Empresa X",
+      "company": "Restaurante X",
       "status": "ok",
       "synced": 10,
       "errors": 0,
@@ -1455,10 +1455,10 @@ curl -X POST "/api/knowledge/faq" \\
                 method="POST"
                 path="/api/reports/daily"
                 name="Gerar Relatório Diário"
-                description="Gera relatório diário com métricas de atendimento, agendamentos e conversas da empresa."
+                description="Gera relatório diário com métricas de atendimento, agendamentos e conversas do restaurante."
                 authentication="bearer"
                 bodyParameters={[
-                  { name: 'company_id', type: 'UUID', required: true, description: 'ID da empresa' },
+                  { name: 'company_id', type: 'UUID', required: true, description: 'ID do restaurante' },
                   { name: 'report_date', type: 'YYYY-MM-DD', required: true, description: 'Data do relatório' },
                   { name: 'manual_entries', type: 'number', required: false, description: 'Entradas manuais' },
                   { name: 'manual_scheduled', type: 'number', required: false, description: 'Agendados manualmente' },
@@ -1469,7 +1469,7 @@ curl -X POST "/api/knowledge/faq" \\
   -H "Authorization: Bearer <token>" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "company_id": "uuid-da-empresa",
+    "company_id": "uuid-da-restaurante",
     "report_date": "2026-03-17"
   }'`}
                 exampleResponse={`{
@@ -1490,9 +1490,9 @@ curl -X POST "/api/knowledge/faq" \\
             {/* ==================== COMPANY & USERS ==================== */}
             <ApiSection
               id="company"
-              title="Empresa / Usuários"
+              title="Restaurante / Usuários"
               icon={Users}
-              description="Criação de empresas, adição de usuários e gerenciamento de senhas. Requer role super_admin."
+              description="Criação de restaurantes, adição de usuários e gerenciamento de senhas. Requer role super_admin."
             >
               <div className="mb-6 bg-amber-50 dark:bg-amber-950 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
                 <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-2">
@@ -1507,11 +1507,11 @@ curl -X POST "/api/knowledge/faq" \\
               <ApiEndpointCard
                 method="POST"
                 path="/api/company/create"
-                name="Criar Empresa"
-                description="Cria uma nova empresa e o usuário proprietário (company_admin). Gera senha aleatória se não informada."
+                name="Criar Restaurante"
+                description="Cria uma novo restaurante e o usuário proprietário (company_admin). Gera senha aleatória se não informada."
                 authentication="bearer"
                 bodyParameters={[
-                  { name: 'companyName', type: 'string', required: true, description: 'Nome da empresa' },
+                  { name: 'companyName', type: 'string', required: true, description: 'Nome do restaurante' },
                   { name: 'ownerEmail', type: 'string', required: true, description: 'Email do proprietário' },
                   { name: 'ownerFullName', type: 'string', required: false, description: 'Nome completo do proprietário' },
                   { name: 'ownerPassword', type: 'string', required: false, description: 'Senha (mín. 8 chars, gerada se não informada)' },
@@ -1520,8 +1520,8 @@ curl -X POST "/api/knowledge/faq" \\
   -H "Authorization: Bearer <token-super-admin>" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "companyName": "Empresa Nova",
-    "ownerEmail": "dono@empresa.com",
+    "companyName": "Restaurante Novo",
+    "ownerEmail": "dono@restaurante.com",
     "ownerFullName": "João Silva",
     "ownerPassword": "senhaSegura123"
   }'`}
@@ -1529,9 +1529,9 @@ curl -X POST "/api/knowledge/faq" \\
   "success": true,
   "data": {
     "companyId": "uuid",
-    "company": { "name": "Empresa Nova" },
+    "company": { "name": "Restaurante Novo" },
     "ownerId": "uuid",
-    "ownerEmail": "dono@empresa.com",
+    "ownerEmail": "dono@restaurante.com",
     "message": "Company created"
   }
 }`}
@@ -1545,10 +1545,10 @@ curl -X POST "/api/knowledge/faq" \\
                 method="POST"
                 path="/api/company/add-user"
                 name="Adicionar Usuário"
-                description="Cria um novo usuário para uma empresa existente com role específica."
+                description="Cria um novo usuário para um restaurante existente com role específica."
                 authentication="bearer"
                 bodyParameters={[
-                  { name: 'company_id', type: 'UUID', required: true, description: 'ID da empresa' },
+                  { name: 'company_id', type: 'UUID', required: true, description: 'ID do restaurante' },
                   { name: 'email', type: 'string', required: true, description: 'Email do usuário' },
                   { name: 'full_name', type: 'string', required: true, description: 'Nome completo' },
                   { name: 'phone', type: 'string', required: false, description: 'Telefone' },
@@ -1558,8 +1558,8 @@ curl -X POST "/api/knowledge/faq" \\
   -H "Authorization: Bearer <token-super-admin>" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "company_id": "uuid-da-empresa",
-    "email": "agente@empresa.com",
+    "company_id": "uuid-da-restaurante",
+    "email": "agente@restaurante.com",
     "full_name": "Maria Santos",
     "role": "agent"
   }'`}
@@ -1567,7 +1567,7 @@ curl -X POST "/api/knowledge/faq" \\
   "success": true,
   "user": {
     "id": "uuid",
-    "email": "agente@empresa.com",
+    "email": "agente@restaurante.com",
     "full_name": "Maria Santos",
     "company_id": "uuid",
     "user_roles": [{ "role": "agent" }]
@@ -1594,7 +1594,7 @@ curl -X POST "/api/knowledge/faq" \\
   -d '{ "userId": "uuid-do-usuario" }'`}
                 exampleResponse={`{
   "success": true,
-  "email": "usuario@empresa.com",
+  "email": "usuario@restaurante.com",
   "message": "Password reset email sent successfully"
 }`}
                 errors={[
@@ -1621,7 +1621,7 @@ curl -X POST "/api/knowledge/faq" \\
   }'`}
                 exampleResponse={`{
   "success": true,
-  "email": "usuario@empresa.com",
+  "email": "usuario@restaurante.com",
   "userName": "Maria Santos"
 }`}
                 errors={[

@@ -50,7 +50,7 @@ export interface LogActionParams {
  * The function swallows its own errors so audit failures never disrupt the
  * main business operation.
  *
- * @param params  Audit context — who did what to which record.
+ * @param params  Audit context: who did what to which record.
  * @param _tx     Reserved for future Prisma transaction propagation.
  */
 export async function logAction(
@@ -71,7 +71,7 @@ export async function logAction(
     // TODO: persist to AuditLog table via Prisma instead of console logging.
     console.log('[AUDIT]', JSON.stringify(entry))
   } catch (err) {
-    // Audit failures must never bubble up — log silently and move on.
+    // Audit failures must never bubble up: log silently and move on.
     console.warn('[AUDIT] Failed to log action:', err)
   }
 }

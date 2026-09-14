@@ -27,7 +27,7 @@ export function ProtectedRoute({ children, requireRole, requireCompany }: Protec
       return;
     }
 
-    // Super admin impersonando pode acessar rotas de empresa
+    // Super admin impersonando pode acessar rotas de restaurante
     if (isSuperAdmin && isImpersonating) return;
 
     // Check if role is required

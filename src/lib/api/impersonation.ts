@@ -1,13 +1,13 @@
 /**
- * Contrato de personificacao (super admin acessando dados de uma empresa).
+ * Contrato de personificacao (super admin acessando dados de um restaurante).
  *
- * A personificacao vive no client (sessionStorage) — o servidor nao tem como
- * descobrir sozinho qual empresa o super admin esta olhando. O canal oficial
+ * A personificacao vive no client (sessionStorage): o servidor nao tem como
+ * descobrir sozinho qual restaurante o super admin esta olhando. O canal oficial
  * pra transportar isso e o header abaixo, injetado automaticamente pelo
  * `apiFetch` e lido pelo `authenticate()`.
  *
  * O header so tem efeito pra quem e super admin. Usuario comum que mandar o
- * header e ignorado — o companyId dele sempre vem da sessao.
+ * header e ignorado: o companyId dele sempre vem da sessao.
  */
 export const IMPERSONATION_HEADER = 'x-impersonate-company'
 

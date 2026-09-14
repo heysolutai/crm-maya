@@ -5,7 +5,7 @@ import { auth } from '@/lib/auth'
 export const runtime = 'nodejs'
 
 // ─── Rate Limiting (in-memory, por IP) ──────────────────────
-// Limites generosos: super-admin que carrega multiplas empresas + dashboard
+// Limites generosos: super-admin que carrega multiplos restaurantes + dashboard
 // com polling de 10s em varios endpoints + SSE consome facil >300 req/min.
 // Configuravel via env pra ajustar sem rebuild.
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
@@ -15,7 +15,7 @@ const RATE_LIMIT_MAX_API = parseInt(process.env.RATE_LIMIT_MAX_API || '1500', 10
 const RATE_LIMIT_MAX_PAGE = parseInt(process.env.RATE_LIMIT_MAX_PAGE || '600', 10)
 
 function checkRateLimit(ip: string, isApi: boolean): boolean {
-  // IP "unknown" agrupa tudo num bucket so — desativa rate limit nesse caso
+  // IP "unknown" agrupa tudo num bucket so: desativa rate limit nesse caso
   // pra evitar punir todo mundo quando o proxy nao forwards o header direito.
   if (ip === 'unknown') return true
 
@@ -56,7 +56,7 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
 
 export async function middleware(request: NextRequest) {
   // x-real-ip e setado pelo nginx como IP unico do cliente (proxy_set_header X-Real-IP $remote_addr)
-  // x-forwarded-for pode ter cadeia (proxy1, proxy2, cliente) — pegamos o primeiro
+  // x-forwarded-for pode ter cadeia (proxy1, proxy2, cliente): pegamos o primeiro
   const ip =
     request.headers.get('x-real-ip')?.trim() ||
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||

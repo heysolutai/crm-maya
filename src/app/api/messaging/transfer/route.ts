@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       : null;
 
     // Helper: grava ConversationNote opcional com prefixo indicando a transferencia.
-    // Roda non-blocking — falha de auditoria nao quebra a transferencia.
+    // Roda non-blocking: falha de auditoria nao quebra a transferencia.
     const saveTransferNote = async (prefix: string) => {
       const trimmed = (note || '').trim();
       if (!trimmed) return;
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
 
     let assignedUserId: string | null = null;
 
-    // Mode: department — round-robin among online agents of a department
+    // Mode: department: round-robin among online agents of a department
     if (mode === 'department') {
       if (!departmentId) return badRequestResponse('department_id is required for department transfer');
 
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       assignedUserId = await assignNextAgentInDepartment(companyId || '', departmentId || '');
 
       if (!assignedUserId) {
-        // QUEUE: No online agents — put conversation in department queue
+        // QUEUE: No online agents: put conversation in department queue
         await prisma.conversation.update({
           where: { id: conversationId },
           data: {
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Agent found — assign and set department
+      // Agent found: assign and set department
       await prisma.conversation.update({
         where: { id: conversationId },
         data: {

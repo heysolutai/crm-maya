@@ -3,7 +3,7 @@
  * tem um channelType que determina qual adapter sera usado para conexao,
  * envio de mensagens e parsing de webhooks.
  *
- * Hoje so o adapter de uazapi esta implementado — os outros aparecem na UI
+ * Hoje so o adapter de uazapi esta implementado: os outros aparecem na UI
  * com label "Em breve" ate o codigo do canal ser entregue.
  */
 export const CHANNEL_TYPES = [
@@ -25,7 +25,7 @@ export interface ChannelMeta {
   label: string;
   description: string;
   status: ChannelStatus;
-  /** Tipo de fluxo de conexao — define qual UI/dialog renderizar */
+  /** Tipo de fluxo de conexao: define qual UI/dialog renderizar */
   connectionMode: 'qr' | 'oauth' | 'token';
 }
 
@@ -33,35 +33,35 @@ export const CHANNEL_REGISTRY: Record<ChannelType, ChannelMeta> = {
   uazapi: {
     type: 'uazapi',
     label: 'API Reservemaya',
-    description: 'WhatsApp via API Reservemaya — conexao por QR Code',
+    description: 'WhatsApp via API Reservemaya: conexao por QR Code',
     status: 'available',
     connectionMode: 'qr',
   },
   evolution_baileys: {
     type: 'evolution_baileys',
     label: 'Evolution Baileys',
-    description: 'WhatsApp via Evolution API (Baileys/Node) — QR Code',
+    description: 'WhatsApp via Evolution API (Baileys/Node): QR Code',
     status: 'available',
     connectionMode: 'qr',
   },
   evolution_go: {
     type: 'evolution_go',
     label: 'Evolution GO',
-    description: 'WhatsApp via Evolution API (Go) — QR Code',
+    description: 'WhatsApp via Evolution API (Go): QR Code',
     status: 'coming_soon',
     connectionMode: 'qr',
   },
   zapi: {
     type: 'zapi',
     label: 'Z-API',
-    description: 'WhatsApp via Z-API — QR Code',
+    description: 'WhatsApp via Z-API: QR Code',
     status: 'coming_soon',
     connectionMode: 'qr',
   },
   whatsapp_cloud: {
     type: 'whatsapp_cloud',
     label: 'WhatsApp Cloud',
-    description: 'WhatsApp Business Cloud API (Meta) — token oficial',
+    description: 'WhatsApp Business Cloud API (Meta): token oficial',
     status: 'coming_soon',
     connectionMode: 'oauth',
   },
@@ -75,7 +75,7 @@ export const CHANNEL_REGISTRY: Record<ChannelType, ChannelMeta> = {
   notificame: {
     type: 'notificame',
     label: 'NotificaMe Hub',
-    description: 'NotificaMe Hub — WhatsApp via API token (sem QR Code)',
+    description: 'NotificaMe Hub: WhatsApp via API token (sem QR Code)',
     status: 'available',
     connectionMode: 'token',
   },

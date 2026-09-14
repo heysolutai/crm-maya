@@ -93,7 +93,7 @@ export function FollowUpsSubTab({ companyId }: FollowUpsSubTabProps) {
                   Follow-ups Automáticos
                 </CardTitle>
                 <CardDescription>
-                  Ative apenas as etapas que desejar — até 10 janelas de follow-up disponíveis
+                  Ative apenas as etapas que desejar: até 10 janelas de follow-up disponíveis
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -121,7 +121,7 @@ export function FollowUpsSubTab({ companyId }: FollowUpsSubTabProps) {
                         <code className="bg-background px-3 py-1.5 rounded text-primary font-mono">
                           [company_name]
                         </code>
-                        <p className="text-xs text-muted-foreground">Nome da empresa</p>
+                        <p className="text-xs text-muted-foreground">Nome do restaurante</p>
                       </div>
                       <div className="space-y-1">
                         <code className="bg-background px-3 py-1.5 rounded text-primary font-mono">

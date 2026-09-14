@@ -55,7 +55,7 @@ function deriveColors(base: string): { light: string; dark: string } {
 /** Gera uma paleta harmoniosa (analogous palette) a partir de uma cor primaria.
  * Retorna 2 cores companheiras: uma com matiz deslocado +30 graus (mais claro)
  * e outra com -30 graus (mais escuro). Cobre o caso comum de usuario que so
- * troca a primaryColor — assim os gradientes da landing/auth ficam coerentes
+ * troca a primaryColor: assim os gradientes da landing/auth ficam coerentes
  * com a logo automaticamente, sem precisar ajustar 3 cores na mao.
  */
 function deriveAnalogousPalette(primary: string): { companion1: string; companion2: string } {
@@ -79,7 +79,7 @@ function applyBrandingCSS(branding: BrandingData) {
   // Hue base pro accent suave (mesma matiz, saturacao baixa)
   const baseHue = branding.primaryColor.split(' ')[0]
 
-  // Paleta analoga derivada da primaryColor — usada pra gradientes/hovers.
+  // Paleta analoga derivada da primaryColor: usada pra gradientes/hovers.
   // Se o admin tiver customizado secondary/accent explicitamente (valores
   // diferentes do default), respeita esses valores. Senao, deriva da primary.
   const isSecondaryDefault = branding.secondaryColor === defaultBranding.secondaryColor
@@ -110,12 +110,12 @@ function applyBrandingCSS(branding: BrandingData) {
   }
 
   // Companheiras analogas → brand-light / brand-deep (gradientes da auth)
-  // brand-light = var(--brand-light) — companheira mais clara
-  // brand-deep = var(--brand-deep)  — companheira mais escura
+  // brand-light = var(--brand-light): companheira mais clara
+  // brand-deep = var(--brand-deep) : companheira mais escura
   root.style.setProperty('--brand-light', secondary[mode])
   root.style.setProperty('--brand-deep', accent[mode])
 
-  // Background escuro da landing/auth — brand-surface = var(--brand-surface)
+  // Background escuro da landing/auth: brand-surface = var(--brand-surface)
   // Hue base + tonalidade escura: mood combina com a logo em vez do preto fixo.
   root.style.setProperty('--brand-surface', `${baseHue} 35% 6%`)
 
@@ -132,7 +132,7 @@ function applyBrandingCSS(branding: BrandingData) {
 
   // Update document title
   if (branding.systemName) {
-    const baseTitle = document.title.replace(/^[^|–-]*[|–-]\s*/, '')
+    const baseTitle = document.title.replace(/^[^|\u2013-]*[|\u2013-]\s*/, '')
     document.title = baseTitle || branding.systemName
   }
 }

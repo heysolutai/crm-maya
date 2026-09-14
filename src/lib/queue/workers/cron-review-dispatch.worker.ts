@@ -21,7 +21,7 @@ function currentHourInTz(date: Date): number {
 /**
  * Cron horaria que avisa o n8n sobre os restaurantes com avaliacao ativa.
  *
- * O tick roda de hora em hora, mas cada empresa e disparada UMA vez por dia,
+ * O tick roda de hora em hora, mas cada restaurante e disparada UMA vez por dia,
  * na hora que ela configurou (ReviewSettings.dispatchHour, fuso BRT).
  *
  * Pra cada restaurante que se qualifica, dispara UM POST pro n8n com:
@@ -31,24 +31,24 @@ function currentHourInTz(date: Date): number {
  *
  * Qualificacao (as tres condicoes):
  *   1. Modulo de avaliacao ativo (ReviewSettings.enabled = true)
- *   2. dispatchHour da empresa igual a hora atual (BRT)
+ *   2. dispatchHour do restaurante igual a hora atual (BRT)
  *   3. Inbox ativo com restaurant_id preenchido (channelConfig.restaurantId)
  */
 async function dispatchReviewCron() {
   const now = new Date()
   const currentHour = currentHourInTz(now)
   console.log(
-    `[Cron Review] Tick — ${now.toISOString()} (UTC) | ` +
+    `[Cron Review] Tick: ${now.toISOString()} (UTC) | ` +
     `${now.toLocaleString('pt-BR', { timeZone: DISPATCH_TZ })} (${DISPATCH_TZ}, hora ${currentHour})`
   )
 
   const webhookUrl = await getReviewWebhookUrl()
   if (!webhookUrl) {
-    console.log('[Cron Review] n8n_review_webhook_url nao configurado — pulando')
+    console.log('[Cron Review] n8n_review_webhook_url nao configurado: pulando')
     return { sent: 0, skipped: 0, failed: 0 }
   }
 
-  // Empresas com o modulo ativo E cujo horario configurado e a hora atual.
+  // Restaurantes com o modulo ativo E cujo horario configurado e a hora atual.
   const activeSettings = await prisma.reviewSettings.findMany({
     where: { enabled: true, dispatchHour: currentHour },
     select: { companyId: true, inboxId: true },
@@ -81,7 +81,7 @@ export function startReviewDispatchWorker() {
     connection: getRedisConnection(),
   })
 
-  // Tick de hora em hora (minuto 0). O filtro por empresa acontece dentro do
+  // Tick de hora em hora (minuto 0). O filtro por restaurante acontece dentro do
   // job, comparando ReviewSettings.dispatchHour com a hora atual no fuso.
   const pattern = process.env.REVIEW_DISPATCH_CRON || '0 * * * *'
   queue
@@ -90,7 +90,7 @@ export function startReviewDispatchWorker() {
       { pattern, tz: DISPATCH_TZ },
       { name: 'dispatch-reviews', data: { triggeredAt: new Date().toISOString() } }
     )
-    .then(() => console.log(`[Cron Review] Scheduler criado — pattern='${pattern}' tz='${DISPATCH_TZ}'`))
+    .then(() => console.log(`[Cron Review] Scheduler criado: pattern='${pattern}' tz='${DISPATCH_TZ}'`))
     .catch((err) => console.error('[Cron Review] Falha ao criar scheduler:', err.message))
 
   worker = new Worker<CronTickJob>(
@@ -103,7 +103,7 @@ export function startReviewDispatchWorker() {
     console.error(`[Cron Review] Job ${job?.id} falhou:`, err.message)
   })
 
-  console.log('[Cron Review] Worker iniciado (tick horario, horario por empresa)')
+  console.log('[Cron Review] Worker iniciado (tick horario, horario por restaurante)')
   return worker
 }
 

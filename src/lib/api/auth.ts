@@ -6,11 +6,11 @@ import { IMPERSONATION_HEADER, isValidCompanyId } from './impersonation'
 import type { AuthResult } from './types'
 
 /**
- * Empresa que um super admin esta personificando, se houver.
+ * Restaurante que um super admin esta personificando, se houver.
  *
  * Dois canais aceitos, nessa ordem:
- *   1. `?companyId=` — usado pelas rotas que ja montam a query com o id
- *   2. header `x-impersonate-company` — injetado automaticamente pelo `apiFetch`
+ *   1. `?companyId=`: usado pelas rotas que ja montam a query com o id
+ *   2. header `x-impersonate-company`: injetado automaticamente pelo `apiFetch`
  *
  * O header cobre as rotas cujo path nao tem onde encaixar o companyId
  * (ex: `/api/agents/[id]/members`), que antes respondiam 403 pro super admin.
@@ -52,7 +52,7 @@ export async function authenticate(req: Request): Promise<AuthResult> {
     const isSuperAdmin = session.user.isSuperAdmin ?? false
 
     // Super admin impersonation: accept companyId from query string or header.
-    // ONLY super admins can override — regular users always use their session companyId
+    // ONLY super admins can override: regular users always use their session companyId
     if (isSuperAdmin) {
       const override = getImpersonationOverride(req)
       if (override) companyId = override
@@ -65,7 +65,7 @@ export async function authenticate(req: Request): Promise<AuthResult> {
     }
   }
 
-  // Fallback to API key auth. verifyApiKey resolve por prefixo + hash — a
+  // Fallback to API key auth. verifyApiKey resolve por prefixo + hash: a
   // coluna `key` guarda o valor CRIPTOGRAFADO apos a migracao, entao lookup
   // em texto puro deixaria de reconhecer keys validas (401 indevido).
   const apiKey = req.headers.get('x-api-key')

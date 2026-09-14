@@ -5,10 +5,10 @@ import { useState, useEffect } from 'react';
  *
  * Estrategia: toda URL http(s) externa passa pelo /api/media/proxy. O proxy
  * tem whitelist server-side baseada em B2_PUBLIC_URL/B2_ENDPOINT (que sao
- * variaveis privadas, nao temos acesso no client) — entao ele aceita as URLs
+ * variaveis privadas, nao temos acesso no client): entao ele aceita as URLs
  * de armazenamento configuradas e rejeita o resto. Isso resolve dois problemas:
- *   1) CORS — playback de audio + decode da waveform via mesma origem
- *   2) Content-Type — proxy forca o MIME correto via extensao do arquivo
+ *   1) CORS: playback de audio + decode da waveform via mesma origem
+ *   2) Content-Type: proxy forca o MIME correto via extensao do arquivo
  */
 
 function isSameOriginPath(u: string): boolean {

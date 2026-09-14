@@ -2,6 +2,7 @@ import { Worker, Job } from 'bullmq'
 import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type OutboundMessageJob, type OutboundMediaJob } from '../queues'
 import { prisma } from '@/lib/db'
+import { prepararTextoParaWhatsApp } from '@/lib/whatsapp/texto-whatsapp'
 
 async function processOutboundMessage(job: Job<OutboundMessageJob>) {
   const {
@@ -24,7 +25,7 @@ async function processOutboundMessage(job: Job<OutboundMessageJob>) {
   // Build request body
   const body: Record<string, unknown> = {
     number: phone,
-    text: text,
+    text: prepararTextoParaWhatsApp(text),
   }
 
   if (replyToMessageId) {

@@ -17,7 +17,7 @@ export type SecurityEvent =
 /**
  * Registra um evento de seguranca (login / acesso sensivel) na tabela login_logs.
  *
- * Best-effort: NUNCA lanca nem bloqueia a request — uma falha de log nao pode
+ * Best-effort: NUNCA lanca nem bloqueia a request: uma falha de log nao pode
  * quebrar o login nem o endpoint. Por isso tudo fica dentro de try/catch.
  */
 export async function logSecurityEvent(params: {

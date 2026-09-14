@@ -69,7 +69,7 @@ export interface InboundMessageJob {
   receivedAt: string
 }
 
-// Cron job types (no payload — workers poll Supabase directly)
+// Cron job types (no payload: workers poll Supabase directly)
 export interface CronTickJob {
   triggeredAt: string
 }
@@ -153,7 +153,7 @@ export function getOutboundMediaQueue() {
 export async function enqueueInboundMessage(data: InboundMessageJob) {
   const queue = getInboundMessageQueue()
   return queue.add('process-inbound', data, {
-    priority: 0, // Highest priority — incoming messages
+    priority: 0, // Highest priority: incoming messages
   })
 }
 
@@ -176,6 +176,10 @@ export async function enqueueMediaProcessing(data: MediaProcessingJob) {
   const queue = getMediaQueue()
   return queue.add('process-media', data, {
     priority: 3,
+    // Provedor/B2 instaveis por instantes nao podem virar midia perdida:
+    // 5 tentativas com backoff exponencial (30s, 1m, 2m, 4m, 8m).
+    attempts: 5,
+    backoff: { type: 'exponential', delay: 30_000 },
   })
 }
 

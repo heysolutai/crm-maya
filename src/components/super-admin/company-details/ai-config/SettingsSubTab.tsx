@@ -88,7 +88,7 @@ export function SettingsSubTab({ companyId, agentId }: SettingsSubTabProps) {
                 placeholder="https://seu-n8n.com/webhook/..."
               />
               <p className="text-sm text-muted-foreground">
-                URL personalizada para receber mensagens desta empresa. Se não preenchido, usa o webhook global do sistema.
+                URL personalizada para receber mensagens deste restaurante. Se não preenchido, usa o webhook global do sistema.
               </p>
             </div>
           </div>

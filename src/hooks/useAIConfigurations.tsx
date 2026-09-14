@@ -42,7 +42,7 @@ export interface AIConfiguration {
   variables: any;
   created_at: string;
   updated_at: string;
-  /** @deprecated kept for backwards-compat — AiAgent no longer holds a single inbox FK (M:1 inverted). */
+  /** @deprecated kept for backwards-compat: AiAgent no longer holds a single inbox FK (M:1 inverted). */
   whatsapp_instance_id: string | null;
   follow_up_stages: FollowUpStage[];
   follow_up_enabled: boolean;
@@ -93,7 +93,7 @@ function mapConfig(item: any): AIConfiguration {
 
 /**
  * Hook agora aceita 2 modos:
- * - useAIConfigurations(companyId)            → modo legado, lista todas configs da empresa
+ * - useAIConfigurations(companyId)            → modo legado, lista todas configs do restaurante
  * - useAIConfigurations({ agentId })          → modo agente, retorna a config 1:1 do agente
  * - useAIConfigurations({ companyId, agentId })→ explicita ambos (idem ao agentId)
  *
@@ -109,7 +109,7 @@ export function useAIConfigurations(
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  /** Query string com a empresa em contexto — vazia quando nao ha. */
+  /** Query string com o restaurante em contexto: vazia quando nao ha. */
   const qs = (extra?: Record<string, string>) => {
     const p = new URLSearchParams(extra);
     if (companyId) p.set('companyId', companyId);
@@ -170,8 +170,8 @@ export function useAIConfigurations(
   const updateConfiguration = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<AIConfiguration> }) => {
       // O ?companyId= NAO e enfeite: e como a personificacao chega no servidor.
-      // A sessao de um super-admin nao tem empresa, entao sem esse parametro o
-      // authenticate() devolve companyId=null e a rota responde "Empresa nao
+      // A sessao de um super-admin nao tem restaurante, entao sem esse parametro o
+      // authenticate() devolve companyId=null e a rota responde "Restaurante nao
       // encontrada". O GET ja mandava; PUT/POST/DELETE nao, e por isso dava pra
       // LER a config personificado mas nao SALVAR.
       const res = await apiFetch(`/api/ai-configurations${qs()}`, {

@@ -5,7 +5,7 @@
  *
  * Auth do Evolution:
  * - Cada servidor Evolution tem um AUTHENTICATION_API_KEY global (admin).
- * - Apos criar uma instancia, o servidor retorna `hash.apikey` — uma key
+ * - Apos criar uma instancia, o servidor retorna `hash.apikey`: uma key
  *   especifica pra aquela instancia. Nas chamadas subsequentes (connect,
  *   sendText, etc), aceita tanto a global quanto a per-instance.
  *
@@ -27,6 +27,7 @@ import type {
   SendTextResult,
 } from '../adapter';
 import { ChannelError, classifyHttpStatus, isNetworkError } from '../errors';
+import { prepararTextoParaWhatsApp } from '@/lib/whatsapp/texto-whatsapp';
 
 interface EvolutionChannelConfig {
   serverApiKey?: string;
@@ -120,7 +121,7 @@ function throwForStatus(
   const message = extractError(data, fallback);
   let code = classifyHttpStatus(status);
 
-  // Refinamentos: Evolution retorna 400 quando instanceName ja existe — preferimos CONFLICT
+  // Refinamentos: Evolution retorna 400 quando instanceName ja existe: preferimos CONFLICT
   if (code === 'BAD_REQUEST' && hint?.conflictMatcher && hint.conflictMatcher(message)) {
     code = 'CONFLICT';
   }
@@ -204,7 +205,7 @@ export const evolutionBaileysAdapter: ChannelAdapter = {
 
     if (!res.ok) {
       throwForStatus(res.status, res.data, `Falha ao criar instancia (${res.status})`, {
-        // Evolution responde 400 com mensagem "instance already in use" — isso e CONFLICT, nao BAD_REQUEST
+        // Evolution responde 400 com mensagem "instance already in use": isso e CONFLICT, nao BAD_REQUEST
         conflictMatcher: (msg) =>
           /already.*(use|exist)|already.*registered|instanceName.*exist/i.test(msg),
       });
@@ -246,7 +247,7 @@ export const evolutionBaileysAdapter: ChannelAdapter = {
       throwForStatus(res.status, res.data, `Falha ao gerar QR (${res.status})`);
     }
 
-    // Resposta: { pairingCode, code, count } — `code` pode ser base64 ou string
+    // Resposta: { pairingCode, code, count }: `code` pode ser base64 ou string
     const code = res.data?.base64 || res.data?.code || null;
     const pairingCode = res.data?.pairingCode || null;
 
@@ -290,7 +291,7 @@ export const evolutionBaileysAdapter: ChannelAdapter = {
     const key = getServerKey(agent);
     if (!key) return;
 
-    // Erros aqui sao silenciados — se o provider ja nao tem a sessao
+    // Erros aqui sao silenciados: se o provider ja nao tem a sessao
     // (404) ou esta offline, o estado local "desconectado" e suficiente.
     try {
       await evolutionFetch(
@@ -333,12 +334,14 @@ export const evolutionBaileysAdapter: ChannelAdapter = {
 
     const body: Record<string, unknown> = {
       number: input.to.replace(/\D/g, ''),
-      text: input.text,
+      text: prepararTextoParaWhatsApp(input.text),
     };
 
     if (input.quotedMessageId) {
       body.quoted = { key: { id: input.quotedMessageId } };
     }
+    // Evolution so tem liga/desliga do preview (nao aceita titulo/imagem).
+    if (input.linkPreview !== undefined) body.linkPreview = input.linkPreview;
 
     const res = await evolutionFetch(
       agent.apiUrl,

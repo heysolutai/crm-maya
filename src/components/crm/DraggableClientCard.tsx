@@ -230,7 +230,7 @@ const DraggableClientCard = memo(({
                   <Calendar className="h-3 w-3 text-blue-500" />
                 </div>
                 <span className="text-muted-foreground">
-                  {format(new Date(client.next_appointment), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                  {format(new Date(client.next_appointment), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                 </span>
               </div>
             )}

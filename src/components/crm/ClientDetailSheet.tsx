@@ -219,7 +219,7 @@ export function ClientDetailSheet({ clientId, isOpen, onClose }: ClientDetailShe
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-blue-500" />
                       <span>
-                        Próximo agendamento: {format(new Date((client as any).next_appointment), "dd/MM 'às' HH:mm")}
+                        Próximo agendamento: {format(new Date((client as any).next_appointment), "dd/MM/yyyy 'às' HH:mm")}
                       </span>
                     </div>
                   )}

@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ReviewSettingsPanel } from '@/components/reviews/ReviewSettingsPanel';
+import { TopTemasCard } from '@/components/reviews/TopTemasCard';
 import {
   Star,
   Search,
@@ -33,6 +34,7 @@ import {
 } from 'lucide-react';
 import type { Review } from '@/hooks/useReviews';
 import { cn } from '@/lib/utils';
+import { DateInputBR } from '@/components/ui/date-input-br';
 
 const RATING_FILTERS = [5, 4, 3, 2, 1];
 
@@ -67,7 +69,7 @@ const SENTIMENTS = [
 
 function SentimentBadge({ sentiment }: { sentiment: string }) {
   const meta = SENTIMENTS.find((s) => s.key === sentiment);
-  if (!meta) return <span className="text-muted-foreground text-sm">—</span>;
+  if (!meta) return <span className="text-muted-foreground text-sm">-</span>;
   const Icon = meta.icon;
   return (
     <span
@@ -111,6 +113,15 @@ export default function Reviews() {
   const [dateTo, setDateTo] = useState('');
   // Alterna entre a lista (default) e o painel de configurações.
   const [showSettings, setShowSettings] = useState(false);
+  // Comentario longo: a celula corta em 2 linhas e um botao abre o texto inteiro.
+  const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
+  const alternarExpandido = (id: string) =>
+    setExpandidos((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: string | null }>({
     open: false,
     id: null,
@@ -135,7 +146,7 @@ export default function Reviews() {
     setPage(1);
   };
 
-  // Tela de configurações — substitui a lista quando aberta.
+  // Tela de configurações: substitui a lista quando aberta.
   if (showSettings) {
     return <ReviewSettingsPanel onBack={() => setShowSettings(false)} />;
   }
@@ -167,7 +178,7 @@ export default function Reviews() {
                   <p className="text-xs text-muted-foreground">Média geral</p>
                   <div className="flex items-center gap-2">
                     <span className="text-2xl font-bold tabular-nums">
-                      {summary.average?.toFixed(1) ?? '—'}
+                      {summary.average?.toFixed(1) ?? '-'}
                     </span>
                     {summary.average != null && <Stars rating={Math.round(summary.average)} />}
                   </div>
@@ -194,6 +205,8 @@ export default function Reviews() {
         </div>
       </div>
 
+      <TopTemasCard />
+
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-2">
@@ -212,8 +225,7 @@ export default function Reviews() {
         {/* Período da data da reserva */}
         <div className="flex items-center gap-1.5">
           <span className="text-sm text-muted-foreground whitespace-nowrap">Reserva de</span>
-          <Input
-            type="date"
+          <DateInputBR
             value={dateFrom}
             onChange={(e) => {
               setDateFrom(e.target.value);
@@ -222,8 +234,7 @@ export default function Reviews() {
             className="w-[150px]"
           />
           <span className="text-sm text-muted-foreground">até</span>
-          <Input
-            type="date"
+          <DateInputBR
             value={dateTo}
             onChange={(e) => {
               setDateTo(e.target.value);
@@ -347,7 +358,7 @@ export default function Reviews() {
                     </TableCell>
                     <TableCell>
                       <p className="font-medium">
-                        {clientName(r) || <span className="text-muted-foreground">—</span>}
+                        {clientName(r) || <span className="text-muted-foreground">-</span>}
                       </p>
                       {r.client?.phone && (
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
@@ -358,7 +369,25 @@ export default function Reviews() {
                     </TableCell>
                     <TableCell className="max-w-[420px]">
                       {r.comment ? (
-                        <span className="line-clamp-2 text-sm">{r.comment}</span>
+                        <div className="space-y-1">
+                          <span
+                            className={cn(
+                              'block text-sm whitespace-pre-wrap break-words',
+                              !expandidos.has(r.id) && 'line-clamp-2'
+                            )}
+                          >
+                            {r.comment}
+                          </span>
+                          {(r.comment.length > 120 || r.comment.includes('\n')) && (
+                            <button
+                              type="button"
+                              className="text-xs text-primary hover:underline"
+                              onClick={() => alternarExpandido(r.id)}
+                            >
+                              {expandidos.has(r.id) ? 'Ver menos' : 'Ver feedback completo'}
+                            </button>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-muted-foreground text-sm">Sem comentário</span>
                       )}
@@ -367,12 +396,12 @@ export default function Reviews() {
                       {(() => {
                         const reserva = r.reservation?.reservedFor ?? r.reservationDate;
                         if (!reserva && !r.reservationCode) {
-                          return <span className="text-muted-foreground">—</span>;
+                          return <span className="text-muted-foreground">-</span>;
                         }
                         return (
                           <>
                             <p className="text-muted-foreground">
-                              {reserva ? formatDate(reserva) : '—'}
+                              {reserva ? formatDate(reserva) : '-'}
                             </p>
                             {r.reservationCode && (
                               <p className="text-xs text-muted-foreground/70 font-mono mt-0.5">

@@ -120,6 +120,31 @@ export function useFollowUpJobs(filters?: Filters) {
     },
   });
 
+  // Cancela todos os pendentes do restaurante (ou de uma etapa). Existe porque
+  // follow-up ligado sem querer gera um job por conversa.
+  const cancelAllPending = useMutation({
+    mutationFn: async (stageOrder?: number) => {
+      const res = await apiFetch('/api/follow-up-jobs/cancel-pending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(stageOrder ? { stageOrder } : {}),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Falha ao cancelar pendentes');
+      return (await res.json()) as { cancelados: number };
+    },
+    onSuccess: (r) => {
+      queryClient.invalidateQueries({ queryKey: ['follow-up-jobs'] });
+      toast({ title: `${r.cancelados} follow-up(s) pendente(s) cancelado(s)` });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Erro ao cancelar pendentes',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   const rescheduleJob = useMutation({
     mutationFn: async ({ jobId, newDate }: { jobId: string; newDate: string }) => {
       const res = await apiFetch('/api/follow-up-jobs', {
@@ -168,5 +193,6 @@ export function useFollowUpJobs(filters?: Filters) {
     isCancelling: cancelJob.isPending,
     rescheduleJob: rescheduleJob.mutate,
     isRescheduling: rescheduleJob.isPending,
+    cancelAllPending,
   };
 }

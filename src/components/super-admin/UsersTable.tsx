@@ -66,7 +66,7 @@ export function UsersTable({ users, onSetPassword, isSettingPassword }: UsersTab
           <TableHeader>
             <TableRow>
               <TableHead>Usuário</TableHead>
-              <TableHead>Empresa</TableHead>
+              <TableHead>Restaurante</TableHead>
               <TableHead>Roles</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[70px]">Ações</TableHead>
@@ -99,7 +99,7 @@ export function UsersTable({ users, onSetPassword, isSettingPassword }: UsersTab
                     {user.company_name ? (
                       <Badge variant="outline">{user.company_name}</Badge>
                     ) : (
-                      <span className="text-muted-foreground text-sm">Sem empresa</span>
+                      <span className="text-muted-foreground text-sm">Sem restaurante</span>
                     )}
                   </TableCell>
                   <TableCell>

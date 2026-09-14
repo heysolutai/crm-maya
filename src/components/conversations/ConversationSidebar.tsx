@@ -11,6 +11,7 @@ import { ConversationFilters } from '@/components/conversations/ConversationFilt
 import { ConversationListSkeleton } from '@/components/ui/skeleton-list';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { getInitials, type Conversation, type LastMessage, type TeamMember } from './types';
+import { textoPlano } from '@/lib/whatsapp/texto-whatsapp';
 
 function getMessagePreview(msg: LastMessage | null | undefined): { icon?: React.ReactNode; text: string } {
   if (!msg) return { text: '' };
@@ -33,7 +34,7 @@ function getMessagePreview(msg: LastMessage | null | undefined): { icon?: React.
     case 'vcard':
       return { text: `${prefix}Contato` };
     default:
-      return { text: `${prefix}${msg.text || ''}` };
+      return { text: `${prefix}${textoPlano(msg.text || '')}` };
   }
 }
 
@@ -224,7 +225,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
         )}
       </div>
 
-      {/* Secção de Canais — filtra a lista por agente */}
+      {/* Secção de Canais: filtra a lista por agente */}
       {agents.length > 0 && (
         <div className="px-4 py-3 border-b border-border">
           <div className="flex items-center justify-between mb-2">

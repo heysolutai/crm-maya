@@ -13,7 +13,7 @@ import { phoneVariants } from '@/lib/api/utils'
 
 /**
  * Deriva o sentimento a partir da nota.
- * Usado quando a IA nao manda 'sentiment' explicito — assim o campo nunca
+ * Usado quando a IA nao manda 'sentiment' explicito: assim o campo nunca
  * fica vazio nem contradiz a nota por omissao.
  */
 function sentimentFromRating(rating: number): 'positivo' | 'neutro' | 'negativo' {
@@ -31,13 +31,13 @@ const createSchema = z.object({
   comment: z.string().max(2000).optional().nullable(),
   customerName: z.string().max(255).optional().nullable(),
   source: z.enum(['ai', 'agent', 'manual']).optional().default('ai'),
-  /// Telefone do cliente — alternativa simples ao clientId: o CRM resolve o
+  /// Telefone do cliente: alternativa simples ao clientId: o CRM resolve o
   /// cliente sozinho (mesmo match com/sem 9 usado no resto do sistema).
   phone: z.string().min(5).max(30).optional().nullable(),
   clientId: z.string().uuid().optional().nullable(),
   conversationId: z.string().uuid().optional().nullable(),
   reservationId: z.string().uuid().optional().nullable(),
-  /// Codigo da reserva no sistema externo (ex: "F2IE8J9F") — texto livre,
+  /// Codigo da reserva no sistema externo (ex: "F2IE8J9F"): texto livre,
   /// diferente do reservationId (UUID do CRM).
   reservation_code: z.string().max(60).optional().nullable(),
   reservationCode: z.string().max(60).optional().nullable(),
@@ -61,7 +61,7 @@ function parseReservationDate(dateStr: string, time?: string | null): Date | nul
 export async function GET(req: NextRequest) {
   const auth = await authenticate(req)
   if (!auth.companyId) {
-    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
   }
   const companyId = auth.companyId
 
@@ -139,13 +139,13 @@ export async function GET(req: NextRequest) {
         },
       }),
       prisma.review.count({ where }),
-      // Media geral da empresa (nao do filtro) — serve de referencia fixa
+      // Media geral do restaurante (nao do filtro): serve de referencia fixa
       prisma.review.aggregate({
         where: { companyId },
         _avg: { rating: true },
         _count: { _all: true },
       }),
-      // Quantas positivas/neutras/negativas no total da empresa
+      // Quantas positivas/neutras/negativas no total do restaurante
       prisma.review.groupBy({
         by: ['sentiment'],
         where: { companyId },
@@ -174,7 +174,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await authenticate(req)
   if (!auth.companyId) {
-    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
   }
   const companyId = auth.companyId
 
@@ -218,7 +218,7 @@ export async function POST(req: NextRequest) {
       if (client) clientId = client.id
     }
 
-    // IDOR: os IDs de referencia precisam pertencer a mesma empresa.
+    // IDOR: os IDs de referencia precisam pertencer a mesmo restaurante.
     if (d.clientId) {
       const client = await prisma.client.findFirst({
         where: { id: d.clientId, companyId },
@@ -266,14 +266,14 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const auth = await authenticate(req)
   if (!auth.companyId) {
-    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
   }
 
   try {
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'ID obrigatorio' }, { status: 400 })
 
-    // IDOR: so remove se a avaliacao for da empresa autenticada
+    // IDOR: so remove se a avaliacao for do restaurante autenticado
     const existing = await prisma.review.findFirst({
       where: { id, companyId: auth.companyId },
       select: { id: true },

@@ -18,7 +18,7 @@ export async function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = await authenticate(req);
   if (!auth.companyId) {
-    return jsonResponse({ error: 'Empresa nao encontrada' }, 403);
+    return jsonResponse({ error: 'Restaurante nao encontrado' }, 403);
   }
 
   try {

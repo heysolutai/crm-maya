@@ -13,7 +13,7 @@ import { z } from 'zod'
 
 /**
  * Garante que a inbox recem-criada tem um AiAgent DEDICADO (1:1).
- * Cada instancia conectada = seu proprio agente, nunca compartilhado — no
+ * Cada instancia conectada = seu proprio agente, nunca compartilhado: no
  * produto restaurante "conexao" e "agente" sao a mesma coisa. Por isso sempre
  * cria um agente novo (em branco) e vincula a esta inbox.
  */
@@ -62,14 +62,14 @@ const createAgentSchema = z.object({
   phoneNumber: z.string().optional(),
   // Campos extras especificos do canal (ex: NotificaMe usa channelId + senderUserId)
   extra: z.record(z.string(), z.any()).optional(),
-  // Vinculacao de AiAgent (M:1) — escolha do usuario no dialog de criacao
+  // Vinculacao de AiAgent (M:1): escolha do usuario no dialog de criacao
   aiAgentId: z.string().uuid().optional(),         // reutilizar agente existente
   createAiAgentNamed: z.string().min(1).optional(), // criar novo agente com esse nome
   // Como obter a instancia no provider:
   //   'create'   -> provisiona uma instancia nova (default, comportamento antigo)
   //   'existing' -> adota uma instancia que ja existe, usando o token dela
   mode: z.enum(['create', 'existing']).optional(),
-  /** Token DA INSTANCIA existente — obrigatorio quando mode = 'existing'. */
+  /** Token DA INSTANCIA existente: obrigatorio quando mode = 'existing'. */
   instanceToken: z.string().min(1).optional(),
   /** Identificador do restaurante no sistema de reservas. */
   restaurantId: z.string().max(120).optional(),
@@ -80,7 +80,7 @@ const createAgentSchema = z.object({
  *
  * TUDO que se define na criacao precisa ser editavel aqui: token expira, o
  * servidor muda de endereco, o restaurante e recadastrado. Sem isso o unico
- * caminho seria remover a inbox e criar de novo — perdendo as conversas
+ * caminho seria remover a inbox e criar de novo: perdendo as conversas
  * vinculadas a ela.
  *
  * Campos ausentes nao sao tocados. Nos segredos, string vazia tambem nao
@@ -96,9 +96,9 @@ const updateAgentSchema = z.object({
   phoneNumber: z.string().max(30).optional(),
   /** URL do servidor do provedor (ex: https://sua.uazapi.com). */
   apiUrl: z.string().url().optional(),
-  /** Token DA INSTANCIA — o que autentica os envios (UazAPI, Evolution). */
+  /** Token DA INSTANCIA: o que autentica os envios (UazAPI, Evolution). */
   instanceApiKey: z.string().optional(),
-  /** Token de ADMIN do servidor — cria/remove instancias. */
+  /** Token de ADMIN do servidor: cria/remove instancias. */
   adminToken: z.string().optional(),
   /** Identificador do restaurante no sistema de reservas (vive no channelConfig). */
   restaurantId: z.string().max(120).optional(),
@@ -113,7 +113,7 @@ function mapAgent(i: any) {
     phone_number: i.phoneNumber,
     instance_name: i.instanceName,
     api_url: i.apiUrl,
-    // Segredos mascarados — nunca vao em texto puro pro cliente (vazamento).
+    // Segredos mascarados: nunca vao em texto puro pro cliente (vazamento).
     instance_api_key: maskKey(i.instanceApiKey),
     admin_token: maskKey(i.adminToken),
     status: i.status,
@@ -121,7 +121,7 @@ function mapAgent(i: any) {
     qr_code: i.qrCode,
     error_message: i.errorMessage,
     last_connected_at: i.lastConnectedAt,
-    // Resposta crua do provedor no provisionamento — carrega o token da
+    // Resposta crua do provedor no provisionamento: carrega o token da
     // instancia (Evolution em `hash.apikey`, UazAPI no corpo do init). Sem
     // redigir, o segredo mascarado logo acima em `instance_api_key` saia
     // inteiro por aqui.
@@ -166,7 +166,7 @@ function publicWebhookUrl(req: NextRequest, channelType: string, agentId: string
 export async function GET(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const agents = await prisma.inbox.findMany({
       where: { companyId },
@@ -182,7 +182,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const body = await req.json()
     const validation = createAgentSchema.safeParse(body)
@@ -253,14 +253,14 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // NotificaMe usa URL fixa — preenche aqui pra a upsert de channelCredential
+    // NotificaMe usa URL fixa: preenche aqui pra a upsert de channelCredential
     // funcionar e pra UI nao precisar coletar.
     if (channelType === 'notificame' && !serverUrl) {
       serverUrl = 'https://api.notificame.com.br'
     }
 
     // Resolucao de credenciais: se o form nao mandou, busca a credencial
-    // salva pra (empresa, canal). Se mandou, salva/atualiza pra reuso futuro.
+    // salva pra (restaurante, canal). Se mandou, salva/atualiza pra reuso futuro.
     if (hasAdapter(channelType)) {
       if (!serverUrl || !serverApiKey) {
         const saved = await prisma.channelCredential.findUnique({
@@ -271,7 +271,7 @@ export async function POST(req: NextRequest) {
           serverApiKey = serverApiKey || saved.serverApiKey
         }
         // UAZAPI (API Reservemaya): URL + admin token vem do AMBIENTE (.env/stack),
-        // nao do form. Fallback final pra config global — usuario nao digita nada.
+        // nao do form. Fallback final pra config global: usuario nao digita nada.
         if (channelType === 'uazapi') {
           serverUrl = serverUrl || process.env.UAZAPI_BASE_URL || ''
           serverApiKey = serverApiKey || process.env.WHATSAPP_ADMIN_TOKEN || ''
@@ -334,7 +334,7 @@ export async function POST(req: NextRequest) {
               extra,
             })
 
-        // restaurantId entra no channelConfig (JSON ja existente) — evita
+        // restaurantId entra no channelConfig (JSON ja existente): evita
         // migration so pra guardar um identificador do sistema de reservas.
         const channelConfig = {
           ...result.channelConfig,
@@ -435,7 +435,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const body = await req.json()
     const validation = updateAgentSchema.safeParse(body)
@@ -465,7 +465,7 @@ export async function PUT(req: NextRequest) {
     if (ehValorNovo(instanceApiKey)) dataToUpdate.instanceApiKey = instanceApiKey!.trim()
     if (ehValorNovo(adminToken)) dataToUpdate.adminToken = adminToken!.trim()
 
-    // restaurantId mora dentro do Json channelConfig — precisa de merge, nao
+    // restaurantId mora dentro do Json channelConfig: precisa de merge, nao
     // de substituicao: gravar o objeto inteiro apagaria serverApiKey e
     // webhookUrl, que estao no mesmo Json e ninguem edita nesta tela.
     if (restaurantId !== undefined) {
@@ -506,7 +506,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'ID obrigatorio' }, { status: 400 })

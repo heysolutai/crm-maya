@@ -15,7 +15,7 @@ interface Step {
   cta: string;
 }
 
-// A API key é criada automaticamente na criação da empresa — por isso não vira
+// A API key é criada automaticamente na criação do restaurante: por isso não vira
 // passo aqui. O dono só precisa destes 3 pra IA começar a atender.
 const STEPS: Step[] = [
   {
@@ -30,7 +30,7 @@ const STEPS: Step[] = [
     key: 'agentConfigured',
     icon: Bot,
     title: 'Configure o agente de IA',
-    desc: 'Defina como a IA fala com seus clientes — tom, horário e o que ela pode fazer.',
+    desc: 'Defina como a IA fala com seus clientes: tom, horário e o que ela pode fazer.',
     href: '/app/inboxes',
     cta: 'Configurar',
   },

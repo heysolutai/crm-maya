@@ -80,7 +80,7 @@ Confirme o agendamento e envie lembrete.`,
     key: 'regras',
     label: 'Regras de Negócio',
     icon: BookOpen,
-    description: 'Regras que o agente DEVE seguir. Limites, restrições, políticas da empresa.',
+    description: 'Regras que o agente DEVE seguir. Limites, restrições, políticas do restaurante.',
     placeholder: `Exemplo:
 - NUNCA invente informações sobre produtos
 - Desconto máximo permitido: 10%
@@ -189,7 +189,7 @@ export default function AIBuilder() {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Webhook N8N não configurado para esta empresa. Configure o campo <strong>n8n_webhook_url</strong> nas configurações de IA.
+            Webhook N8N não configurado para este restaurante. Configure o campo <strong>n8n_webhook_url</strong> nas configurações de IA.
           </AlertDescription>
         </Alert>
       )}
@@ -203,7 +203,7 @@ export default function AIBuilder() {
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
-              <Label>Nome da empresa *</Label>
+              <Label>Nome do restaurante *</Label>
               <Input placeholder="Ex: Ótica Premium" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
             </div>
             <div className="space-y-2">

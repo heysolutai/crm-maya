@@ -110,3 +110,34 @@ export function useReviews({
     isDeleting: deleteReview.isPending,
   }
 }
+
+// ─── Top 5 elogios e reclamacoes por periodo ───────────────────────────────
+
+export type PeriodoTemas = 'dia' | 'semana' | 'mes'
+
+export interface TemaAvaliacao {
+  tema: string
+  total: number
+  exemplos: string[]
+}
+
+export interface TemasResponse {
+  periodo: PeriodoTemas
+  desde: string
+  totalAvaliacoes: number
+  totalComComentario: number
+  elogios: TemaAvaliacao[]
+  reclamacoes: TemaAvaliacao[]
+}
+
+export function useReviewTemas(periodo: PeriodoTemas) {
+  return useQuery<TemasResponse>({
+    queryKey: ['review-temas', periodo],
+    queryFn: async () => {
+      const res = await apiFetch(`/api/reviews/temas?periodo=${periodo}`)
+      if (!res.ok) throw new Error('Falha ao carregar temas das avaliacoes')
+      return res.json()
+    },
+    staleTime: 60_000,
+  })
+}

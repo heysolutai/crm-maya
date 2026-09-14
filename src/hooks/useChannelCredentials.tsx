@@ -70,7 +70,7 @@ export function useChannelCredentials() {
   const hasCredentialFor = (channelType: ChannelType): boolean =>
     !!(data || []).find((c) => c.channel_type === channelType);
 
-  /** Retorna a credencial salva (com token mascarado) — pra exibir no UI */
+  /** Retorna a credencial salva (com token mascarado): pra exibir no UI */
   const credentialFor = (channelType: ChannelType): ChannelCredential | undefined =>
     (data || []).find((c) => c.channel_type === channelType);
 

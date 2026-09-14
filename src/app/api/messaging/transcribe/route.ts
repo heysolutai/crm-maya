@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
 
     console.log('[Transcription] Calling UAZapi for message:', message.uazMessageId);
 
-    // Pede base64 + transcricao na mesma chamada — se transcricao falhar,
+    // Pede base64 + transcricao na mesma chamada: se transcricao falhar,
     // ainda temos o buffer pra mandar pro Whisper.
     const response = await fetch(`${instance.apiUrl}/message/download`, {
       method: 'POST',

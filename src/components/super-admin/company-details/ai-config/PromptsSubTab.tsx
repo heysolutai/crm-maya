@@ -6,10 +6,10 @@ interface PromptsSubTabProps {
 }
 
 /**
- * Prompts da empresa no painel administrativo.
+ * Prompts do restaurante no painel administrativo.
  *
  * Aqui so existia o editor de texto puro (AIPromptsEditor). Os dados que
- * ALIMENTAM o prompt — nome do restaurante, endereco, horarios, precos —
+ * ALIMENTAM o prompt: nome do restaurante, endereco, horarios, precos -
  * moravam exclusivamente em /app/inboxes/[id], que e outra tela. Resultado:
  * dava pra reescrever o prompt inteiro por aqui, mas nao pra corrigir o nome
  * do restaurante que aparece nele.

@@ -1,7 +1,7 @@
 /**
  * Geracao de embeddings via OpenAI, usada pela base vetorial do FAQ.
  *
- * Modelo: text-embedding-3-small (1536 dimensoes) — mais barato e mais preciso
+ * Modelo: text-embedding-3-small (1536 dimensoes): mais barato e mais preciso
  * que o ada-002, com a MESMA dimensao. Se um dia trocar de modelo, os vetores
  * existentes precisam ser regerados: nao se pode misturar modelos diferentes
  * no mesmo indice, senao a busca por similaridade fica sem sentido.
@@ -13,7 +13,7 @@ import { EMBEDDING_DIMENSIONS } from '@/lib/vector-db'
 export const EMBEDDING_MODEL = 'text-embedding-3-small'
 
 /**
- * Resolve a chave da OpenAI: prioridade para a chave da empresa (aiAgent),
+ * Resolve a chave da OpenAI: prioridade para a chave do restaurante (aiAgent),
  * com fallback para a global. Mesma logica do worker de transcricao.
  */
 export async function resolveOpenAiKey(companyId: string): Promise<string | null> {
@@ -39,7 +39,7 @@ export async function resolveOpenAiKey(companyId: string): Promise<string | null
 
 /**
  * Gera o embedding de um texto. Retorna null se nao houver chave configurada
- * (a indexacao e opcional — o FAQ continua funcionando sem busca semantica).
+ * (a indexacao e opcional: o FAQ continua funcionando sem busca semantica).
  */
 export async function generateEmbedding(
   text: string,

@@ -29,7 +29,7 @@ export function AIPromptsEditor({
 }: AIPromptsEditorProps) {
   const { toast } = useToast();
   // Quando agentId esta presente, escopa a config a esse agente (1:1).
-  // Sem agentId, cai no modo legado (por empresa, primeiro registro).
+  // Sem agentId, cai no modo legado (por restaurante, primeiro registro).
   const { configurations, createConfiguration, updateConfiguration, isCreating, isUpdating } = useAIConfigurations(
     agentId ? { companyId, agentId } : companyId
   );
@@ -126,7 +126,7 @@ export function AIPromptsEditor({
         <CardContent className="py-8 text-center">
           <Bot className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <p className="text-muted-foreground">
-            Nenhuma configuração de IA encontrada para esta empresa.
+            Nenhuma configuração de IA encontrada para este restaurante.
           </p>
           <p className="text-sm text-muted-foreground mt-2">
             Entre em contato com o suporte para configurar.
@@ -229,7 +229,7 @@ ETAPA 3 - Fechamento: Confirmar interesse e agendar
                     <code className="bg-background px-3 py-1.5 rounded text-primary font-mono text-sm">
                       [company_name]
                     </code>
-                    <p className="text-xs text-muted-foreground">Nome da empresa</p>
+                    <p className="text-xs text-muted-foreground">Nome do restaurante</p>
                   </div>
                   {variant === 'full' && (
                     <>

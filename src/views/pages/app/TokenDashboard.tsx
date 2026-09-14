@@ -163,10 +163,10 @@ export default function TokenDashboard() {
         </Card>
       </div>
 
-      {/* Análise por Empresa */}
+      {/* Análise por Restaurante */}
       <Card>
         <CardHeader>
-          <CardTitle>Custos por Empresa</CardTitle>
+          <CardTitle>Custos por Restaurante</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">

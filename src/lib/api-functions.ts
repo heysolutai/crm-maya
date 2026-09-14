@@ -84,9 +84,9 @@ export async function invokeFn<T = any>(
     }
 
     // apiFetch, nao fetch cru: quando um super admin esta personificando uma
-    // empresa, o companyId nao vem da sessao — vem do header de personificacao.
+    // restaurante, o companyId nao vem da sessao: vem do header de personificacao.
     // Com fetch cru, `authenticate()` devolvia companyId nulo e toda rota daqui
-    // (enviar texto, midia, audio, reacao) respondia "Empresa nao identificada",
+    // (enviar texto, midia, audio, reacao) respondia "Restaurante nao identificada",
     // enquanto a leitura das conversas funcionava porque ja usava apiFetch.
     const response = await apiFetch(route, {
       method: 'POST',

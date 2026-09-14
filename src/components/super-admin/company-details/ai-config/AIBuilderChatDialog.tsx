@@ -54,14 +54,14 @@ interface ChatMessage {
 }
 
 const QUESTIONS = [
-  { key: 'company_name', question: 'Olá! 👋 Vou te ajudar a criar seu agente de IA. Para começar, qual é o **nome da empresa**?', required: true },
+  { key: 'company_name', question: 'Olá! 👋 Vou te ajudar a criar seu agente de IA. Para começar, qual é o **nome do restaurante**?', required: true },
   { key: 'agent_name', question: 'Ótimo! E qual será o **nome do agente** (ex: Ana, Pedro, Mia)?', required: true },
-  { key: 'segment', question: 'Qual é o **segmento** da empresa? (ex: Ótica, Clínica, Loja de roupas)', required: false },
-  { key: 'endereco', question: 'Qual é o **endereço** da empresa? (ex: Rua das Flores, 123 - Centro, São Paulo)', required: false },
+  { key: 'segment', question: 'Qual é o **segmento** do restaurante? (ex: Ótica, Clínica, Loja de roupas)', required: false },
+  { key: 'endereco', question: 'Qual é o **endereço** do restaurante? (ex: Rua das Flores, 123 - Centro, São Paulo)', required: false },
   { key: 'papel', question: 'Agora vamos definir a **persona** do agente. Como ele deve se comportar? Descreva a personalidade, tom de voz e como ele se apresenta.\n\n_Exemplo: "Você é a Ana, assistente simpática e objetiva. Use linguagem casual mas profissional."_', required: true },
   { key: 'objetivo', question: 'Qual é o **objetivo principal** do agente? O que ele deve buscar em cada conversa?\n\n_Exemplo: "Converter leads em vendas, entender a necessidade antes de oferecer produtos."_', required: true },
   { key: 'funcao', question: 'Quais **funções** o agente pode executar? Liste as ações que ele pode realizar.\n\n_Exemplo: "Responder dúvidas, agendar consultas, enviar catálogo, transferir para humano."_', required: false },
-  { key: 'funil', question: 'Descreva o **funil de atendimento** — as etapas que o agente segue do início ao fechamento.\n\n_Exemplo:\nEtapa 1: Boas-vindas\nEtapa 2: Qualificação\nEtapa 3: Apresentação\nEtapa 4: Fechamento_', required: true },
+  { key: 'funil', question: 'Descreva o **funil de atendimento**: as etapas que o agente segue do início ao fechamento.\n\n_Exemplo:\nEtapa 1: Boas-vindas\nEtapa 2: Qualificação\nEtapa 3: Apresentação\nEtapa 4: Fechamento_', required: true },
   { key: 'regras', question: 'Quais são as **regras de negócio** que o agente deve seguir? Limites, restrições, políticas.\n\n_Exemplo: "Nunca inventar informações. Desconto máximo: 10%. Pagamento: PIX, cartão até 10x."_', required: true },
   { key: 'hours', question: 'Agora vamos configurar os **horários de funcionamento**. Ajuste os horários abaixo:', required: false, type: 'hours' as const },
   { key: 'boas_vindas', question: 'Por último, qual será a **mensagem de boas-vindas** que o agente envia para novos clientes?\n\n_Exemplo: "Olá! 👋 Sou a Ana, assistente virtual da Ótica Premium! Como posso te ajudar?"_', required: true },
@@ -196,7 +196,7 @@ export function AIBuilderChatDialog({ open, onOpenChange, companyId }: AIBuilder
       const nextQ = QUESTIONS[nextIndex];
       addBotMessage(nextQ.question, nextQ.type);
     } else {
-      // All questions done — show summary
+      // All questions done: show summary
       setIsComplete(true);
       addBotMessage('✅ Perfeito! Aqui está o resumo do seu agente. Revise e clique em **Enviar** para gerar!', 'summary');
     }
@@ -238,7 +238,7 @@ export function AIBuilderChatDialog({ open, onOpenChange, companyId }: AIBuilder
 
   const handleSubmit = async () => {
     if (!apiKey) {
-      toast.error('Nenhuma API key ativa encontrada para esta empresa.');
+      toast.error('Nenhuma API key ativa encontrada para este restaurante.');
       return;
     }
 
@@ -303,7 +303,7 @@ export function AIBuilderChatDialog({ open, onOpenChange, companyId }: AIBuilder
   const renderSummary = () => (
     <div className="rounded-lg border bg-muted/30 p-3 space-y-2 text-sm mt-2">
       {[
-        { label: 'Empresa', value: answers.company_name },
+        { label: 'Restaurante', value: answers.company_name },
         { label: 'Agente', value: answers.agent_name },
         { label: 'Segmento', value: answers.segment },
         { label: 'Endereço', value: answers.endereco },
@@ -335,7 +335,7 @@ export function AIBuilderChatDialog({ open, onOpenChange, companyId }: AIBuilder
             <h3 className="font-semibold text-sm">Assistente de Criação de Agente</h3>
             <p className="text-xs text-muted-foreground">
               {isComplete
-                ? 'Resumo pronto — revise e envie!'
+                ? 'Resumo pronto: revise e envie!'
                 : `Pergunta ${currentQuestionIndex + 1} de ${QUESTIONS.length}`}
             </p>
           </div>
@@ -471,7 +471,7 @@ export function AIBuilderChatDialog({ open, onOpenChange, companyId }: AIBuilder
           )}
           {!apiKey && (
             <p className="text-xs text-destructive mt-2 text-center">
-              ⚠️ Nenhuma API key ativa — crie uma na aba "API Keys" antes de enviar.
+              ⚠️ Nenhuma API key ativa: crie uma na aba "API Keys" antes de enviar.
             </p>
           )}
         </div>

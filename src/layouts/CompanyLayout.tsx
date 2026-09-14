@@ -524,7 +524,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                 <DropdownMenuSeparator />
                 <div className="px-3 py-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Empresa</span>
+                    <span className="text-xs text-muted-foreground">Restaurante</span>
                     <span className="text-xs font-medium truncate max-w-[140px]">{effectiveCompanyName}</span>
                   </div>
                   <div className="flex items-center justify-between mt-1">

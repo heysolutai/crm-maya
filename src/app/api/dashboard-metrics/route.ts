@@ -114,7 +114,49 @@ export async function GET(req: NextRequest) {
       }),
     ])
 
+    // Metricas da aba "Tempo Real": estado ATUAL das conversas (nao do
+    // periodo), finalizadas no periodo com comparativo, e volume de mensagens
+    // por remetente no periodo. Tudo agregado no banco: nada de lista.
+    const periodRange = { gte: new Date(from), lte: new Date(to) }
+    const prevRange = prevFrom && prevTo ? { gte: new Date(prevFrom), lte: new Date(prevTo) } : null
+    // "Finalizada no periodo" = endedAt no periodo. Conversas fechadas por
+    // caminhos que nao gravam endedAt (importacao de historico) caem no
+    // fallback por updatedAt. NUNCA so updatedAt: qualquer edicao numa
+    // conversa antiga (etiqueta, resumo) a faria contar como fechada hoje.
+    const closedIn = (range: { gte: Date; lte: Date }) => ({
+      companyId,
+      status: 'closed' as const,
+      OR: [{ endedAt: range }, { endedAt: null, updatedAt: range }],
+    })
+    const [statusNow, statusInPeriod, closedInPeriod, prevConversationsCount, prevClosedCount, messagesBySender] =
+      await Promise.all([
+        prisma.conversation.groupBy({
+          by: ['status'],
+          where: { companyId, status: { in: ['active', 'pending'] } },
+          _count: { _all: true },
+        }),
+        prisma.conversation.groupBy({
+          by: ['status'],
+          where: { companyId, createdAt: periodRange },
+          _count: { _all: true },
+        }),
+        prisma.conversation.count({ where: closedIn(periodRange) }),
+        prevRange ? prisma.conversation.count({ where: { companyId, createdAt: prevRange } }) : 0,
+        prevRange ? prisma.conversation.count({ where: closedIn(prevRange) }) : 0,
+        prisma.message.groupBy({
+          by: ['senderType'],
+          where: { conversation: { companyId }, createdAt: periodRange },
+          _count: { _all: true },
+        }),
+      ])
+
     return NextResponse.json({
+      statusNow: Object.fromEntries(statusNow.map((s) => [s.status, s._count._all])),
+      statusInPeriod: Object.fromEntries(statusInPeriod.map((s) => [s.status, s._count._all])),
+      closedInPeriod,
+      prevConversationsCount,
+      prevClosedCount,
+      messagesBySender: Object.fromEntries(messagesBySender.map((m) => [m.senderType, m._count._all])),
       newClientsCount,
       conversations,
       appointments,

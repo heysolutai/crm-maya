@@ -86,7 +86,7 @@ export async function findOrCreateConversation(
         select: { id: true, inboxId: true },
       });
     } else if (inboxId && !conversation.inboxId) {
-      // Conversa pre-existia sem inbox vinculada — vincula a inbox que
+      // Conversa pre-existia sem inbox vinculada: vincula a inbox que
       // recebeu a mensagem agora (situacao tipica do backfill).
       await tx.conversation.update({
         where: { id: conversation.id },
@@ -143,7 +143,7 @@ export async function saveMessage(
     });
   }
 
-  // Push realtime pra qualquer browser conectado ao SSE da empresa:
+  // Push realtime pra qualquer browser conectado ao SSE do restaurante:
   // agentes/IA vendo a conversa aberta recebem a mensagem imediatamente,
   // em vez de esperar o echo do webhook (segundos depois) ou o polling de 10s.
   // Falha de publish nao quebra a operacao principal.
@@ -153,7 +153,7 @@ export async function saveMessage(
       select: { companyId: true },
     });
     if (!conv?.companyId) {
-      console.warn('[saveMessage] conversation sem companyId — publish skipped:', conversationId);
+      console.warn('[saveMessage] conversation sem companyId: publish skipped:', conversationId);
     } else {
       console.log(`[saveMessage] publishing message:new id=${message.id} conv=${conversationId} company=${conv.companyId}`);
       await publishEvent(conv.companyId, {
@@ -364,7 +364,7 @@ export async function assignNextAgentInDepartment(
  * Round-robin de atendentes membros de uma inbox especifica.
  * Espelha assignNextAgentInDepartment, mas pega membros da `inbox_members`
  * em vez de `department_members`. Usado pela IA quando transfere uma conversa
- * pra humano — escolhe o proximo na fila dentro da inbox da conversa.
+ * pra humano: escolhe o proximo na fila dentro da inbox da conversa.
  *
  * Filtros aplicados:
  *   - User precisa ser membro da inbox (`inbox_members`)
@@ -374,7 +374,7 @@ export async function assignNextAgentInDepartment(
  * Estado persistido em `lead_distribution_state` com `inbox_id` (nao
  * `department_id`), pra cada inbox ter seu cursor proprio de round-robin.
  *
- * Retorna null quando nao ha ninguem disponivel — caller decide o fallback
+ * Retorna null quando nao ha ninguem disponivel: caller decide o fallback
  * (manter na fila, alertar manager, etc).
  */
 export async function assignNextAgentInInbox(

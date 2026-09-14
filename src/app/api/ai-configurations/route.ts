@@ -15,9 +15,9 @@ import { extractChoices } from '@/lib/agentSimpleConfig'
  * Normaliza o campo `prompts` do agente pra resposta: consolida os esquemas
  * antigos (n8n / legado) num unico `prompt_completo` e descarta as chaves
  * espalhadas repetidas. Preserva apenas `simple` (snapshot do formulario do
- * modo simples — usado pra restaurar o estado dos botoes).
+ * modo simples: usado pra restaurar o estado dos botoes).
  *
- * Nao altera o banco — so o formato do retorno. Assim o front sempre recebe o
+ * Nao altera o banco: so o formato do retorno. Assim o front sempre recebe o
  * prompt no lugar certo, sem duplicidade.
  */
 function normalizePrompts(raw: any): Record<string, unknown> {
@@ -44,6 +44,26 @@ const mapAgent = (a: any, revealKeys = false) => ({
   choices: extractChoices(a?.prompts),
 })
 
+/**
+ * Etapa de follow-up. Antes era z.any(): qualquer coisa gravada aqui (inclusive
+ * a resposta conversacional de um modelo, vinda de um fluxo do n8n) virava
+ * mensagem enviada ao cliente 24h depois, sem ninguem ver. Agora a etapa
+ * precisa ter a forma certa e a mensagem precisa parecer mensagem.
+ */
+const followUpStageSchema = z.object({
+  order: z.coerce.number().int().min(1).max(50),
+  delay_hours: z.coerce.number().int().min(1).max(24 * 365),
+  message: z
+    .string()
+    .trim()
+    .min(1, 'Mensagem da etapa vazia')
+    .max(1000, 'Mensagem da etapa acima de 1000 caracteres')
+    .refine((m) => !/^(perfeito|certo|ok|entendi|claro)\b.*(pedido|bloco|prompt|instru[cç])/i.test(m), {
+      message: 'Isso parece resposta de um modelo de IA, nao uma mensagem pro cliente',
+    }),
+  enabled: z.boolean().optional().default(true),
+})
+
 const createAiConfigurationSchema = z.object({
   company_id: z.string().uuid('Invalid company_id format').optional(),
   name: z.string().min(1, 'Name is required'),
@@ -51,7 +71,7 @@ const createAiConfigurationSchema = z.object({
   is_active: z.boolean().optional().default(true),
   // Inbox a vincular ao agente IA recem-criado (opcional; agora M:1).
   whatsapp_instance_id: z.string().uuid('Invalid whatsapp_instance_id format').optional(),
-  follow_up_stages: z.array(z.any()).optional(),
+  follow_up_stages: z.array(followUpStageSchema).max(50).optional(),
   follow_up_enabled: z.boolean().optional().default(false),
   api_keys: z.record(z.string(), z.any()).optional(),
   behavior_settings: z.record(z.string(), z.any()).optional(),
@@ -64,7 +84,7 @@ const updateAiConfigurationSchema = z.object({
   prompts: z.record(z.string(), z.any()).optional(),
   is_active: z.boolean().optional(),
   whatsapp_instance_id: z.string().uuid('Invalid whatsapp_instance_id format').optional().nullable(),
-  follow_up_stages: z.array(z.any()).optional(),
+  follow_up_stages: z.array(followUpStageSchema).max(50).optional(),
   follow_up_enabled: z.boolean().optional(),
   api_keys: z.record(z.string(), z.any()).optional(),
   behavior_settings: z.record(z.string(), z.any()).optional(),
@@ -95,7 +115,7 @@ const updateAiConfigurationSchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     const { companyId, agentId: userId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     // Auth por x-api-key nao tem userId (sessao tem). So o chamador via API key
     // (n8n) recebe as apiKeys em texto puro; o navegador recebe mascarado.
@@ -105,23 +125,23 @@ export async function GET(req: NextRequest) {
     await logSecurityEvent({ event: 'access_ai_config', userId, companyId, req })
 
     // Modo agente. O param `agentId` esta sobrecarregado e pode ser:
-    //  (a) id de um AiAgent — tela de detalhe do agente. Agente e SEPARADO do
-    //      inbox (uma empresa tem N agentes; cada inbox escolhe qual usar), entao
+    //  (a) id de um AiAgent: tela de detalhe do agente. Agente e SEPARADO do
+    //      inbox (um restaurante tem N agentes; cada inbox escolhe qual usar), entao
     //      buscamos o AiAgent direto pelo id.
-    //  (b) id de uma Inbox — useInboxAiAgent, que retorna o agente vinculado
+    //  (b) id de uma Inbox: useInboxAiAgent, que retorna o agente vinculado
     //      aquela inbox (inbox.aiAgentId). Modelo legado de resolucao.
     // IDs de tabelas diferentes nunca colidem (UUID), entao tentamos como
     // AiAgent primeiro e so caimos pra resolucao via inbox se nao achar.
     const agentId = req.nextUrl.searchParams.get('agentId')
 
     if (agentId) {
-      // (a) IDOR-safe: agente direto da empresa
+      // (a) IDOR-safe: agente direto do restaurante
       const directAgent = await prisma.aiAgent.findFirst({
         where: { id: agentId, companyId },
       })
       if (directAgent) return NextResponse.json([mapAgent(directAgent, revealKeys)])
 
-      // (b) Fallback: agentId era na verdade um inboxId — resolve o agente vinculado
+      // (b) Fallback: agentId era na verdade um inboxId: resolve o agente vinculado
       const inbox = await prisma.inbox.findFirst({
         where: { id: agentId, companyId },
         select: { aiAgentId: true },
@@ -148,7 +168,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const { companyId, agentId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const body = await req.json()
     const validation = createAiConfigurationSchema.safeParse(body)
 
@@ -178,7 +198,7 @@ export async function POST(req: NextRequest) {
     }
 
     // UUID gerado ANTES do create pra montar a memoryKey ja na criacao
-    // (formato <prefixo>_<nome> — sempre existe a partir daqui).
+    // (formato <prefixo>_<nome>: sempre existe a partir daqui).
     const aiAgentId = randomUUID()
     const config = await prisma.aiAgent.create({
       data: {
@@ -187,8 +207,9 @@ export async function POST(req: NextRequest) {
         name: validatedData.name,
         prompts: (validatedData.prompts || {}) as Prisma.InputJsonValue,
         isActive: validatedData.is_active,
-        followUpStages: (validatedData.follow_up_stages || []) as Prisma.InputJsonValue,
-        followUpEnabled: validatedData.follow_up_enabled,
+        // Criado por chave de API: follow-up nasce desligado, sem etapas.
+        followUpStages: (agentId ? validatedData.follow_up_stages || [] : []) as Prisma.InputJsonValue,
+        followUpEnabled: agentId ? validatedData.follow_up_enabled : false,
         apiKeys: (validatedData.api_keys || {}) as Prisma.InputJsonValue,
         behaviorSettings: (validatedData.behavior_settings || {}) as Prisma.InputJsonValue,
         createdBy: agentId || validatedData.created_by,
@@ -198,7 +219,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // Vincula o agente IA recem-criado ao inbox (M:1 — sobrescreve se ja tinha)
+    // Vincula o agente IA recem-criado ao inbox (M:1: sobrescreve se ja tinha)
     if (inboxToLink) {
       await prisma.inbox.update({
         where: { id: inboxToLink.id },
@@ -214,8 +235,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    const { companyId, agentId } = await authenticate(req)
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const body = await req.json()
     const validation = updateAiConfigurationSchema.safeParse(body)
 
@@ -243,7 +264,21 @@ export async function PUT(req: NextRequest) {
     }
     if (updates.is_active !== undefined) data.isActive = updates.is_active
     if (updates.name !== undefined) data.name = updates.name
-    // whatsapp_instance_id agora e gerenciado no Inbox.aiAgentId — body legado e no-op aqui.
+    // whatsapp_instance_id agora e gerenciado no Inbox.aiAgentId: body legado e no-op aqui.
+    //
+    // Follow-up so liga/muda por uma pessoa logada. Chamada por chave de API
+    // (n8n, integracao) nao tem usuario (agentId vazio) e passou a ligar
+    // follow-up e gravar etapas sem ninguem pedir: o cliente recebia mensagem
+    // automatica que o dono nunca configurou. Aqui isso e recusado, nao ignorado
+    // em silencio: quem chamou precisa saber.
+    const mexeEmFollowUp = updates.follow_up_stages !== undefined || updates.follow_up_enabled !== undefined
+    if (mexeEmFollowUp && !agentId) {
+      console.warn(`[ai-configurations] chamada por API key tentou alterar follow-up do agente ${id} (company ${companyId}): recusado`)
+      return NextResponse.json(
+        { error: 'Follow-up so pode ser ativado ou alterado por um usuario logado, nao por chave de API' },
+        { status: 403 }
+      )
+    }
     if (updates.follow_up_stages !== undefined) data.followUpStages = updates.follow_up_stages
     if (updates.follow_up_enabled !== undefined) data.followUpEnabled = updates.follow_up_enabled
     // Mescla: chaves que voltaram redigidas (REDACTED) preservam o valor original.
@@ -270,7 +305,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 

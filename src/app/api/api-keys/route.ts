@@ -19,16 +19,16 @@ const updateApiKeySchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     const { companyId, agentId: userId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
-    // Auditoria: registra quem (userId/IP) listou as API keys da empresa.
+    // Auditoria: registra quem (userId/IP) listou as API keys do restaurante.
     await logSecurityEvent({ event: 'access_api_keys', userId, companyId, req })
 
     const keys = await prisma.apiKey.findMany({
       where: { companyId },
       orderBy: { createdAt: 'desc' },
     })
-    // Mascara a chave — o valor cheio so e mostrado uma vez, na criacao (POST).
+    // Mascara a chave: o valor cheio so e mostrado uma vez, na criacao (POST).
     return NextResponse.json(keys.map((k) => ({ ...k, key: maskKey(k.key) })))
   } catch (error) {
     return handleApiError(error, 'Erro')
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const { companyId, agentId } = await authenticate(req)
-    if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const body = await req.json()
     const validation = createApiKeySchema.safeParse(body)

@@ -7,7 +7,7 @@ import { getSystemSettingFresh } from '@/lib/system-settings'
  * GET /api/admin/system-settings/test-openai
  *
  * Testa a key OpenAI armazenada em system_config validando ela contra
- * a API real (chama /v1/models — endpoint barato e rapido).
+ * a API real (chama /v1/models: endpoint barato e rapido).
  * Util pra confirmar que a key salva pelo super-admin esta valida sem
  * precisar enviar audio pra transcrever.
  */
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
         last_chars: lastChars,
         length,
         has_whitespace: hasWhitespace,
-        message: 'Key valida — autenticada pela OpenAI',
+        message: 'Key valida: autenticada pela OpenAI',
       })
     }
 

@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const companyId = isSuperAdmin ? (qsCompanyId || authCompanyId) : authCompanyId
 
     if (!companyId && !isSuperAdmin) {
-      return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+      return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     }
 
     // Super admin: fetch ticket counts grouped by company (for CompaniesTable)
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === 'updateStatus') {
-      if (!companyId) return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+      if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
       const existing = await prisma.supportTicket.findFirst({ where: { id: body.ticketId, companyId } })
       if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })

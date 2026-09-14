@@ -45,7 +45,7 @@ async function checkWhatsAppStatus() {
       let errorMessage: string | null = null
 
       if (!response.ok) {
-        // 401/403 means token is invalid — mark disconnected
+        // 401/403 means token is invalid: mark disconnected
         if (response.status === 401 || response.status === 403) {
           newStatus = 'disconnected'
           errorMessage = 'Authentication failed'
@@ -100,7 +100,7 @@ async function checkWhatsAppStatus() {
       )
 
       // IMPORTANT: Timeout/network errors do NOT mark as disconnected.
-      // The instance may still be connected — only the status check failed.
+      // The instance may still be connected: only the status check failed.
       // Only mark disconnected after 3 consecutive failures.
       errors++
     }

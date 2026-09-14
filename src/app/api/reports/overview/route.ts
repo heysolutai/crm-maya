@@ -8,7 +8,7 @@ import { z } from 'zod'
 /**
  * Indicadores consolidados por periodo.
  *
- * Usado pela tela de Relatorios e pelo envio mensal automatico — os dois leem
+ * Usado pela tela de Relatorios e pelo envio mensal automatico: os dois leem
  * daqui pra que o numero da tela e o do e-mail nunca divirjam.
  *
  * Todas as queries filtram por companyId (isolamento multi-tenant).
@@ -33,7 +33,7 @@ const PAID_FILTER: Prisma.ClientWhereInput = {
 export async function GET(req: NextRequest) {
   const auth = await authenticate(req)
   if (!auth.companyId) {
-    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
   }
   const companyId = auth.companyId
 
@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
       // Reservas criadas no periodo
       prisma.reservation.count({ where: { companyId, createdAt: range } }),
 
-      // Reservas feitas pela IA (source='ai') — o resto e humano
+      // Reservas feitas pela IA (source='ai'): o resto e humano
       prisma.reservation.count({ where: { companyId, createdAt: range, source: 'ai' } }),
 
       // Conversas que foram pra atendimento humano
@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
       }),
 
       // Conversas por dia. Precisa de SQL raw: o Prisma nao agrupa por
-      // date_trunc. Parametrizado ($1..$3) — sem concatenacao de string.
+      // date_trunc. Parametrizado ($1..$3): sem concatenacao de string.
       prisma.$queryRaw<Array<{ day: Date; total: bigint }>>`
         SELECT date_trunc('day', created_at) AS day, count(*) AS total
         FROM conversations

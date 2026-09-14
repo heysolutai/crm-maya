@@ -41,7 +41,7 @@ export async function respondToChannelError(
         },
       }).catch(() => {});
     } else if (opts.agentId && (error.code === 'PROVIDER_UNREACHABLE' || error.code === 'NETWORK_ERROR')) {
-      // Server offline — nao marca como `error` permanente, so loga a ultima
+      // Server offline: nao marca como `error` permanente, so loga a ultima
       // mensagem pra UI exibir. Status fica como esta.
       await prisma.inbox.update({
         where: { id: opts.agentId },
@@ -55,7 +55,7 @@ export async function respondToChannelError(
     );
   }
 
-  // Erro nao tipado — log completo no servidor, mensagem generica ao cliente
+  // Erro nao tipado: log completo no servidor, mensagem generica ao cliente
   console.error(`[${opts.contextLog}]`, error);
   return NextResponse.json(
     { error: opts.fallbackMessage || 'Erro interno do servidor', code: 'INTERNAL_ERROR' },

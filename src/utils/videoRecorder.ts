@@ -8,7 +8,7 @@ export class VideoRecorderUtil {
   private resolvedMimeType: string = 'video/webm';
 
   async startRecording(facingMode: 'user' | 'environment' = 'user'): Promise<MediaStream> {
-    // Guards de ambiente — falham cedo com mensagem clara.
+    // Guards de ambiente: falham cedo com mensagem clara.
     if (typeof window !== 'undefined' && !window.isSecureContext) {
       throw new Error(
         'Acesso a camera requer HTTPS. O navegador bloqueia em conexoes nao seguras. Configure SSL ou acesse via localhost.'

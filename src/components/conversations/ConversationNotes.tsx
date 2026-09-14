@@ -17,6 +17,7 @@ import {
 import { useConversationNotes } from '@/hooks/useConversationNotes';
 import { useReminders, Reminder } from '@/hooks/useReminders';
 import { Badge } from '@/components/ui/badge';
+import { DateInputBR } from '@/components/ui/date-input-br';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -179,7 +180,7 @@ export function ConversationNotes({ conversationId, clientId, clientName, open, 
                                   {(() => {
                                     if (!note.created_at) return '';
                                     const d = new Date(note.created_at);
-                                    return isNaN(d.getTime()) ? '' : format(d, "dd/MM 'às' HH:mm", { locale: ptBR });
+                                    return isNaN(d.getTime()) ? '' : format(d, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
                                   })()}
                                 </p>
                               </div>
@@ -232,9 +233,8 @@ export function ConversationNotes({ conversationId, clientId, clientName, open, 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <Label htmlFor="date" className="text-xs">Data</Label>
-                      <Input
+                      <DateInputBR
                         id="date"
-                        type="date"
                         value={scheduledDate}
                         onChange={(e) => setScheduledDate(e.target.value)}
                         min={minDate}
@@ -337,8 +337,8 @@ function ReminderItem({
   const status = statusConfig[reminder.status] || statusConfig.pending;
   const scheduledDate = reminder.scheduled_for ? new Date(reminder.scheduled_for) : null;
   const scheduledLabel = scheduledDate && !isNaN(scheduledDate.getTime())
-    ? format(scheduledDate, "dd/MM 'às' HH:mm", { locale: ptBR })
-    : '—';
+    ? format(scheduledDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+    : '-';
 
   return (
     <div className="p-3 rounded-lg border bg-card">

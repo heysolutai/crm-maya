@@ -83,7 +83,7 @@ export async function authenticateApiKey(req: Request) {
     });
 
     if (!company) {
-      return { error: apiError('Empresa nao encontrada.', 'COMPANY_NOT_FOUND', 404) };
+      return { error: apiError('Restaurante nao encontrado.', 'COMPANY_NOT_FOUND', 404) };
     }
 
     await prisma.apiKey.update({
@@ -113,7 +113,7 @@ export async function authenticateApiKey(req: Request) {
       }
 
       if (!effectiveCompanyId) {
-        return { error: apiError('Empresa nao encontrada na sessao.', 'NO_COMPANY', 403) };
+        return { error: apiError('Restaurante nao encontrado na sessao.', 'NO_COMPANY', 403) };
       }
 
       const company = await prisma.company.findUnique({
@@ -122,7 +122,7 @@ export async function authenticateApiKey(req: Request) {
       });
 
       if (!company) {
-        return { error: apiError('Empresa nao encontrada.', 'COMPANY_NOT_FOUND', 404) };
+        return { error: apiError('Restaurante nao encontrado.', 'COMPANY_NOT_FOUND', 404) };
       }
 
       return { company, settings: (company.settings || {}) as CompanySettings };

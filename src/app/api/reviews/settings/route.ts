@@ -5,13 +5,13 @@ import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
 
 /**
- * Configuracoes do fluxo de avaliacao da empresa (1:1).
+ * Configuracoes do fluxo de avaliacao do restaurante (1:1).
  * Links externos (Google/TripAdvisor), prompts que a IA usa pra pedir a
  * avaliacao e a saudacao inicial.
  */
 
-// Nota: `enabled` (ativar o modulo) NAO entra aqui — quem controla e o
-// super-admin (/api/admin/review-module). A empresa so edita o conteudo.
+// Nota: `enabled` (ativar o modulo) NAO entra aqui: quem controla e o
+// super-admin (/api/admin/review-module). O restaurante so edita o conteudo.
 const updateSchema = z.object({
   dispatchHour: z.number().int().min(0).max(23).optional(),
   // Inbox do disparo. Null = todas as conexoes ativas.
@@ -27,7 +27,7 @@ const updateSchema = z.object({
 export async function GET(req: NextRequest) {
   const auth = await authenticate(req)
   if (!auth.companyId) {
-    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
   }
 
   try {
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const auth = await authenticate(req)
   if (!auth.companyId) {
-    return NextResponse.json({ error: 'Empresa nao encontrada' }, { status: 403 })
+    return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
   }
   const companyId = auth.companyId
 
@@ -72,7 +72,7 @@ export async function PUT(req: NextRequest) {
       )
     }
 
-    // IDOR: inbox escolhida precisa ser da empresa (e ativa).
+    // IDOR: inbox escolhida precisa ser do restaurante (e ativa).
     if (validation.data.inboxId) {
       const inbox = await prisma.inbox.findFirst({
         where: { id: validation.data.inboxId, companyId, isActive: true },
