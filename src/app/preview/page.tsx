@@ -880,7 +880,7 @@ function ConfiguracoesPreview() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
-        <p className="text-muted-foreground">Gerencie as configurações da seu restaurante</p>
+        <p className="text-muted-foreground">Gerencie as configurações do seu restaurante</p>
       </div>
 
       <div className="flex gap-6">
@@ -907,7 +907,7 @@ function ConfiguracoesPreview() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Dados do Restaurante</CardTitle>
-                <CardDescription>Informações gerais da seu restaurante</CardDescription>
+                <CardDescription>Informações gerais do seu restaurante</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">

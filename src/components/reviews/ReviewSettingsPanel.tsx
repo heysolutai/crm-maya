@@ -35,6 +35,7 @@ interface FormState {
   prompt2: string;
   promptFinal: string;
   greeting: string;
+  agruparSegundos: number;
 }
 
 const EMPTY: FormState = {
@@ -47,6 +48,7 @@ const EMPTY: FormState = {
   prompt2: '',
   promptFinal: '',
   greeting: '',
+  agruparSegundos: 10,
 };
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
@@ -73,6 +75,7 @@ export function ReviewSettingsPanel({ onBack }: Props) {
         prompt2: settings.prompt2 ?? '',
         promptFinal: settings.promptFinal ?? '',
         greeting: settings.greeting ?? '',
+        agruparSegundos: settings.agruparSegundos ?? 10,
       });
     }
   }, [settings]);
@@ -166,6 +169,30 @@ export function ReviewSettingsPanel({ onBack }: Props) {
                 Todos os dias nesse horário (fuso de Brasília) o sistema inicia a coleta de
                 avaliações dos clientes atendidos.
               </p>
+
+              {/* Espera pra juntar mensagem picada: o cliente costuma responder
+                  em varias mensagens curtas, e sem isso a IA responde a cada
+                  pedaco solto. */}
+              <div className="pt-2 space-y-2">
+                <Label htmlFor="agrupar-segundos">Esperar antes de responder (segundos)</Label>
+                <Input
+                  id="agrupar-segundos"
+                  type="number"
+                  min={0}
+                  max={120}
+                  className="w-40"
+                  value={form.agruparSegundos}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    set({ agruparSegundos: Number.isFinite(n) ? Math.min(120, Math.max(0, n)) : 0 });
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  O cliente costuma escrever em várias mensagens curtas. A IA espera esse tempo
+                  desde a última mensagem e responde a tudo de uma vez. Cada mensagem nova
+                  reinicia a contagem. Use 0 para responder imediatamente a cada mensagem.
+                </p>
+              </div>
 
               {/* Conexão de WhatsApp usada no disparo */}
               <div className="pt-2 space-y-2">

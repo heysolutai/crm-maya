@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
 import { phoneVariants, canonicalPhone, restaurantIdDaInbox } from '@/lib/api/utils';
-import { enqueueInboundMessage, enqueueN8NWebhook, enqueueTranscription, enqueueMediaProcessing } from '@/lib/queue';
+import { enqueueInboundMessage, enqueueN8NWebhook, N8N_DEBOUNCE_MS, enqueueTranscription, enqueueMediaProcessing } from '@/lib/queue';
 import { uploadToB2, buildB2Key, MIME_TO_EXT, deleteMediaFromUrl } from '@/lib/storage';
 import { publishEvent } from '@/lib/realtime';
 import { sendPushToCompany } from '@/lib/push';
@@ -1771,13 +1771,22 @@ export async function POST(req: NextRequest) {
         }
       } else if (targetWebhookUrl) {
         try {
+          // Mensagem de TEXTO do cliente espera um instante antes de ir pro
+          // fluxo: se vierem outras em seguida, todas seguem juntas numa
+          // chamada so. O tempo vem das Configuracoes de avaliacao do
+          // restaurante; N8N_DEBOUNCE_MS e so o padrao de quem nunca ajustou.
+          const ajuste = await prisma.reviewSettings.findUnique({
+            where: { companyId },
+            select: { agruparSegundos: true },
+          }).catch(() => null);
+          const esperaMs = (ajuste?.agruparSegundos ?? Math.round(N8N_DEBOUNCE_MS / 1000)) * 1000;
           await enqueueN8NWebhook({
             webhookUrl: targetWebhookUrl,
             payload: webhookPayload,
             companyId,
             conversationId,
             messageId: message.id,
-          });
+          }, { debounceMs: payload.type === 'incoming' ? esperaMs : 0 });
           console.log(`[N8N Webhook] ✅ Queued for message ${message.id} (ai_status: ${aiStatus})`);
         } catch (queueError) {
           console.error('[N8N Webhook] Failed to queue, falling back to sync:', queueError);

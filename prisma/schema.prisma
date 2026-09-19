@@ -310,6 +310,11 @@ model ReviewSettings {
   promptFinal    String?  @map("prompt_final")
   /// Saudacao inicial enviada ao pedir a avaliacao
   greeting       String?
+  /// Segundos de espera antes de mandar a mensagem do cliente pro fluxo do n8n.
+  /// Cliente escreve picado ("Nao", "sei", "te", "dizer"); sem espera a IA
+  /// responde a cada pedaco. Cada mensagem nova reinicia a contagem e todas
+  /// seguem juntas. 0 desliga o agrupamento.
+  agruparSegundos Int     @default(10) @map("agrupar_segundos")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
 

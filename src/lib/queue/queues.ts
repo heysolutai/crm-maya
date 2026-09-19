@@ -157,11 +157,45 @@ export async function enqueueInboundMessage(data: InboundMessageJob) {
   })
 }
 
-export async function enqueueN8NWebhook(data: N8NWebhookJob) {
+/**
+ * Espera antes de chamar o N8N, pra juntar mensagem picada.
+ *
+ * Cliente costuma escrever em varias mensagens curtas ("Nao", "sei", "te",
+ * "dizer"). Chamando o fluxo a cada uma, a IA responde a pedacos soltos e o
+ * atendimento fica sem sentido. Com a espera, cada mensagem nova REINICIA a
+ * contagem e o fluxo e chamado uma vez so, com o texto inteiro.
+ *
+ * Zero desliga o agrupamento. Ajustavel por ambiente sem rebuild.
+ */
+export const N8N_DEBOUNCE_MS = Math.max(
+  0,
+  parseInt(process.env.N8N_DEBOUNCE_MS || '10000', 10) || 0
+)
+
+export async function enqueueN8NWebhook(
+  data: N8NWebhookJob,
+  opts?: { debounceMs?: number }
+) {
   const queue = getN8NQueue()
-  return queue.add('webhook-call', data, {
-    priority: 1, // High priority
-  })
+  const espera = opts?.debounceMs ?? 0
+
+  if (espera <= 0) {
+    return queue.add('webhook-call', data, { priority: 1 })
+  }
+
+  // Um job por CONVERSA. O anterior ainda esperando e removido pra contagem
+  // recomecar: e isso que faz a espera valer do ULTIMO pedaco, nao do primeiro.
+  const jobId = `n8n-conv-${data.conversationId}`
+  const anterior = await queue.getJob(jobId)
+  if (anterior) {
+    const estado = await anterior.getState().catch(() => 'unknown')
+    // Em andamento ou concluido nao se mexe: so o que ainda nao comecou.
+    if (estado === 'delayed' || estado === 'waiting' || estado === 'prioritized') {
+      await anterior.remove().catch(() => {})
+    }
+  }
+
+  return queue.add('webhook-call', data, { priority: 1, delay: espera, jobId })
 }
 
 export async function enqueueTranscription(data: TranscriptionJob) {

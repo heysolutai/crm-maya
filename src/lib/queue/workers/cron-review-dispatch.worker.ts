@@ -21,7 +21,7 @@ function currentHourInTz(date: Date): number {
 /**
  * Cron horaria que avisa o n8n sobre os restaurantes com avaliacao ativa.
  *
- * O tick roda de hora em hora, mas cada restaurante e disparada UMA vez por dia,
+ * O tick roda de hora em hora, mas cada restaurante e disparado UMA vez por dia,
  * na hora que ela configurou (ReviewSettings.dispatchHour, fuso BRT).
  *
  * Pra cada restaurante que se qualifica, dispara UM POST pro n8n com:

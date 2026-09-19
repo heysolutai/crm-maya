@@ -10,6 +10,7 @@ export {
   QUEUE_NAMES,
   enqueueInboundMessage,
   enqueueN8NWebhook,
+  N8N_DEBOUNCE_MS,
   enqueueTranscription,
   enqueueMediaProcessing,
   enqueueOutboundMessage,

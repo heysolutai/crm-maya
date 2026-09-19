@@ -57,12 +57,22 @@ const followUpStageSchema = z.object({
     .string()
     .trim()
     .min(1, 'Mensagem da etapa vazia')
-    .max(1000, 'Mensagem da etapa acima de 1000 caracteres')
-    .refine((m) => !/^(perfeito|certo|ok|entendi|claro)\b.*(pedido|bloco|prompt|instru[cç])/i.test(m), {
-      message: 'Isso parece resposta de um modelo de IA, nao uma mensagem pro cliente',
-    }),
+    .max(1000, 'Mensagem da etapa acima de 1000 caracteres'),
   enabled: z.boolean().optional().default(true),
 })
+
+/**
+ * "Invalid request data" sozinho nao diz nada a quem esta na tela: o motivo
+ * fica so no `details`, que o toast nao mostra. Aqui o campo e o motivo entram
+ * na propria mensagem.
+ */
+function erroDeValidacao(erro: z.ZodError): string {
+  const porCampo = erro.flatten().fieldErrors as Record<string, string[] | undefined>
+  const campos = Object.entries(porCampo)
+    .map(([campo, msgs]) => `${campo}: ${(msgs || []).join(', ')}`)
+    .filter(Boolean)
+  return campos.length ? `Dados invalidos. ${campos.join(' | ')}` : 'Dados invalidos'
+}
 
 const createAiConfigurationSchema = z.object({
   company_id: z.string().uuid('Invalid company_id format').optional(),
@@ -173,7 +183,7 @@ export async function POST(req: NextRequest) {
     const validation = createAiConfigurationSchema.safeParse(body)
 
     if (!validation.success) {
-      return NextResponse.json({ error: 'Invalid request data', details: validation.error.flatten().fieldErrors }, { status: 400 })
+      return NextResponse.json({ error: erroDeValidacao(validation.error), details: validation.error.flatten().fieldErrors }, { status: 400 })
     }
 
     const validatedData = validation.data
@@ -241,7 +251,7 @@ export async function PUT(req: NextRequest) {
     const validation = updateAiConfigurationSchema.safeParse(body)
 
     if (!validation.success) {
-      return NextResponse.json({ error: 'Invalid request data', details: validation.error.flatten().fieldErrors }, { status: 400 })
+      return NextResponse.json({ error: erroDeValidacao(validation.error), details: validation.error.flatten().fieldErrors }, { status: 400 })
     }
 
     const validatedData = validation.data

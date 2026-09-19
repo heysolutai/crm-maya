@@ -3,15 +3,84 @@ import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type N8NWebhookJob } from '../queues'
 import { prisma } from '@/lib/db'
 
+/**
+ * Junta as mensagens do cliente que ainda nao foram pro fluxo.
+ *
+ * Com a espera do agrupamento, quando este job roda pode haver varias
+ * mensagens curtas acumuladas na conversa. Mandar so a ultima faria a IA
+ * responder a um pedaco ("Comece?") sem o resto. Aqui elas viram um texto so,
+ * na ordem em que chegaram.
+ *
+ * Cada mensagem enviada recebe uma marca, pra nao ir duas vezes se outro job
+ * rodar depois.
+ */
+async function juntarMensagensPendentes(
+  companyId: string,
+  conversationId: string,
+  messageId: string
+): Promise<{ texto: string | null; ids: string[] }> {
+  const candidatas = await prisma.message.findMany({
+    where: {
+      conversationId,
+      conversation: { companyId },
+      senderType: 'client',
+      messageText: { not: null },
+    },
+    orderBy: { createdAt: 'asc' },
+    take: 30,
+    select: { id: true, messageText: true, metadata: true },
+  })
+
+  const pendentes = candidatas.filter((m) => {
+    const meta = (m.metadata || {}) as Record<string, unknown>
+    return !meta.n8n_enviado_em && (m.messageText || '').trim().length > 0
+  })
+
+  // Nada acumulado (ou so a propria mensagem): segue com o payload original.
+  if (pendentes.length <= 1) {
+    return { texto: null, ids: pendentes.map((m) => m.id) }
+  }
+
+  console.log(
+    `[N8N Worker] juntando ${pendentes.length} mensagens da conversa ${conversationId} ` +
+    `(disparo pela mensagem ${messageId})`
+  )
+  return {
+    texto: pendentes.map((m) => (m.messageText || '').trim()).join('\n'),
+    ids: pendentes.map((m) => m.id),
+  }
+}
+
+/** Marca o que ja foi pro fluxo, pra nao repetir no proximo job. */
+async function marcarComoEnviadas(ids: string[]): Promise<void> {
+  const agora = new Date().toISOString()
+  for (const id of ids) {
+    const atual = await prisma.message.findUnique({ where: { id }, select: { metadata: true } })
+    if (!atual) continue
+    await prisma.message.update({
+      where: { id },
+      data: {
+        metadata: {
+          ...((atual.metadata as Record<string, unknown> | null) || {}),
+          n8n_enviado_em: agora,
+        } as object,
+      },
+    }).catch(() => {})
+  }
+}
+
 async function processN8NWebhook(job: Job<N8NWebhookJob>) {
   const { webhookUrl, payload, companyId, conversationId, messageId } = job.data
 
   console.log(`[N8N Worker] Processing job ${job.id} for message ${messageId}`)
 
+  const { texto, ids } = await juntarMensagensPendentes(companyId, conversationId, messageId)
+  const corpo = texto ? { ...payload, conteudo: texto, mensagens_agrupadas: ids.length } : payload
+
   const response = await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(corpo),
   })
 
   if (!response.ok) {
@@ -20,6 +89,9 @@ async function processN8NWebhook(job: Job<N8NWebhookJob>) {
   }
 
   console.log(`[N8N Worker] Successfully sent to N8N (status: ${response.status}) for message ${messageId}`)
+
+  // So marca depois do envio dar certo: se falhar, o retry leva tudo de novo.
+  if (ids.length > 0) await marcarComoEnviadas(ids)
 
   // Send typing indicator if AI is active (5s delay)
   const aiStatus = payload.ai_status as string

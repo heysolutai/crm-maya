@@ -22,6 +22,8 @@ const updateSchema = z.object({
   prompt2: z.string().max(4000).nullable().optional(),
   promptFinal: z.string().max(4000).nullable().optional(),
   greeting: z.string().max(2000).nullable().optional(),
+  // Espera pra juntar mensagem picada do cliente antes de chamar o fluxo.
+  agruparSegundos: z.number().int().min(0).max(120).optional(),
 })
 
 export async function GET(req: NextRequest) {
@@ -48,6 +50,7 @@ export async function GET(req: NextRequest) {
         prompt2: '',
         promptFinal: '',
         greeting: '',
+        agruparSegundos: 10,
       }
     )
   } catch (error) {
@@ -96,6 +99,7 @@ export async function PUT(req: NextRequest) {
       prompt2: clean(validation.data.prompt2),
       promptFinal: clean(validation.data.promptFinal),
       greeting: clean(validation.data.greeting),
+      agruparSegundos: validation.data.agruparSegundos,
     }
 
     // Upsert por companyId (1:1). IDOR-safe: a chave e sempre a company do auth.
