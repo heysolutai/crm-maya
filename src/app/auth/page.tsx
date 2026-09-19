@@ -262,12 +262,12 @@ export default function AuthPage() {
 
             {isLogin && (
               <div className="flex justify-end">
-                <button
-                  type="button"
+                <Link
+                  href="/auth/forgot-password"
                   className="text-sm text-brand-primary hover:text-brand-light transition-colors"
                 >
                   Esqueceu a senha?
-                </button>
+                </Link>
               </div>
             )}
 

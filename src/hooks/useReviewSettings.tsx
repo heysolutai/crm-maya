@@ -17,6 +17,10 @@ export interface ReviewSettings {
   greeting: string | null
   /** Segundos de espera pra juntar mensagens picadas antes de chamar o fluxo. */
   agruparSegundos: number
+  /** Manda o resumo da semana por e-mail, toda segunda de manha. */
+  relatorioSemanal: boolean
+  /** Quem recebe o resumo. Vazio = e-mail cadastrado do restaurante. */
+  relatorioEmails: string[]
 }
 
 export function useReviewSettings() {

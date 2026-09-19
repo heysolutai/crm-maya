@@ -12,7 +12,13 @@ export type SecurityEvent =
   | 'login_failed'
   | 'login_locked'
   | 'access_ai_config'
-  | 'access_api_keys';
+  | 'access_api_keys'
+  /** Pedido de "esqueci minha senha" (mesmo quando o e-mail nao existe). */
+  | 'password_reset_requested'
+  /** Senha trocada pelo link do e-mail. */
+  | 'password_reset_completed'
+  /** Convite de acesso enviado por e-mail. */
+  | 'invite_sent';
 
 /**
  * Registra um evento de seguranca (login / acesso sensivel) na tabela login_logs.

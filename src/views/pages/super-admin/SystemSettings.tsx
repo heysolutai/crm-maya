@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save, Settings as SettingsIcon, Eye, EyeOff, CheckCircle2, XCircle, Zap } from 'lucide-react';
+import { EmailDiagnosticoCard } from '@/components/super-admin/EmailDiagnosticoCard';
 
 interface SystemSetting {
   key: string;
@@ -203,6 +204,9 @@ export default function SystemSettings() {
           )}
         </CardContent>
       </Card>
+
+      {/* SMTP vem do ambiente, nao do banco: aqui so status e teste. */}
+      <EmailDiagnosticoCard />
 
       <Card className="border-dashed">
         <CardContent className="pt-6 text-sm text-muted-foreground space-y-2">

@@ -4,6 +4,13 @@ import { QUEUE_NAMES, type N8NWebhookJob } from '../queues'
 import { prisma } from '@/lib/db'
 
 /**
+ * So agrupa mensagem recente. A marca `n8n_enviado_em` nao existe em nada que
+ * foi gravado antes desse recurso, entao sem uma janela a primeira execucao
+ * depois do deploy juntaria o historico inteiro da conversa num texto so.
+ */
+const JANELA_AGRUPAMENTO_MS = 5 * 60 * 1000
+
+/**
  * Junta as mensagens do cliente que ainda nao foram pro fluxo.
  *
  * Com a espera do agrupamento, quando este job roda pode haver varias
@@ -19,22 +26,31 @@ async function juntarMensagensPendentes(
   conversationId: string,
   messageId: string
 ): Promise<{ texto: string | null; ids: string[] }> {
+  // Da mais NOVA pra mais velha: com `asc` + `take`, uma conversa longa
+  // devolvia as 30 primeiras (ja enviadas ha tempo) e o agrupamento parava
+  // de funcionar justamente em quem mais conversa.
   const candidatas = await prisma.message.findMany({
     where: {
       conversationId,
       conversation: { companyId },
       senderType: 'client',
       messageText: { not: null },
+      createdAt: { gte: new Date(Date.now() - JANELA_AGRUPAMENTO_MS) },
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
     take: 30,
     select: { id: true, messageText: true, metadata: true },
   })
 
-  const pendentes = candidatas.filter((m) => {
+  // Anda do fim pro comeco e para na primeira ja enviada: o que interessa e a
+  // ponta pendente da conversa, nao qualquer buraco no meio do historico.
+  const pendentes: { id: string; texto: string }[] = []
+  for (const m of candidatas) {
     const meta = (m.metadata || {}) as Record<string, unknown>
-    return !meta.n8n_enviado_em && (m.messageText || '').trim().length > 0
-  })
+    if (meta.n8n_enviado_em) break
+    const texto = (m.messageText || '').trim()
+    if (texto.length > 0) pendentes.unshift({ id: m.id, texto })
+  }
 
   // Nada acumulado (ou so a propria mensagem): segue com o payload original.
   if (pendentes.length <= 1) {
@@ -46,35 +62,57 @@ async function juntarMensagensPendentes(
     `(disparo pela mensagem ${messageId})`
   )
   return {
-    texto: pendentes.map((m) => (m.messageText || '').trim()).join('\n'),
+    texto: pendentes.map((m) => m.texto).join('\n'),
     ids: pendentes.map((m) => m.id),
   }
 }
 
-/** Marca o que ja foi pro fluxo, pra nao repetir no proximo job. */
+/**
+ * Marca o que ja foi pro fluxo, pra nao repetir no proximo job.
+ *
+ * Um UPDATE so, com merge de jsonb no proprio banco: ler e reescrever o
+ * metadata em duas idas perderia o que outro worker gravou no meio do caminho.
+ */
 async function marcarComoEnviadas(ids: string[]): Promise<void> {
   const agora = new Date().toISOString()
-  for (const id of ids) {
-    const atual = await prisma.message.findUnique({ where: { id }, select: { metadata: true } })
-    if (!atual) continue
-    await prisma.message.update({
-      where: { id },
-      data: {
-        metadata: {
-          ...((atual.metadata as Record<string, unknown> | null) || {}),
-          n8n_enviado_em: agora,
-        } as object,
-      },
-    }).catch(() => {})
-  }
+  await prisma.$executeRaw`
+    UPDATE messages
+    SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('n8n_enviado_em', ${agora}::text)
+    WHERE id = ANY(${ids}::uuid[])
+  `.catch((e: unknown) => {
+    console.error('[N8N Worker] Falha ao marcar mensagens como enviadas:', e)
+  })
 }
 
 async function processN8NWebhook(job: Job<N8NWebhookJob>) {
-  const { webhookUrl, payload, companyId, conversationId, messageId } = job.data
+  const { webhookUrl, payload, companyId, conversationId, messageId, agrupar } = job.data
 
   console.log(`[N8N Worker] Processing job ${job.id} for message ${messageId}`)
 
-  const { texto, ids } = await juntarMensagensPendentes(companyId, conversationId, messageId)
+  // Agrupar so vale pra mensagem de cliente que passou pela espera. Sem essa
+  // porta, o payload de uma mensagem ENVIADA pelo atendente tambem teria o
+  // `conteudo` trocado pelo texto do cliente que estivesse pendente.
+  let texto: string | null = null
+  let ids: string[] = []
+
+  if (agrupar) {
+    // Outro job pode ter levado essa mensagem enquanto este esperava. Se ja
+    // foi, nao ha o que mandar de novo.
+    const propria = await prisma.message.findFirst({
+      where: { id: messageId, conversation: { companyId } },
+      select: { metadata: true },
+    })
+    const meta = (propria?.metadata || {}) as Record<string, unknown>
+    if (meta.n8n_enviado_em) {
+      console.log(`[N8N Worker] Mensagem ${messageId} ja foi pro fluxo; nada a fazer`)
+      return { skipped: true }
+    }
+
+    const agrupadas = await juntarMensagensPendentes(companyId, conversationId, messageId)
+    texto = agrupadas.texto
+    ids = agrupadas.ids
+  }
+
   const corpo = texto ? { ...payload, conteudo: texto, mensagens_agrupadas: ids.length } : payload
 
   const response = await fetch(webhookUrl, {

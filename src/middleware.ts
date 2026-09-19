@@ -85,7 +85,12 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname === '/super-admin/auth'
   const isPublicPage =
     request.nextUrl.pathname === '/privacy' ||
-    request.nextUrl.pathname === '/terms'
+    request.nextUrl.pathname === '/terms' ||
+    // Recuperar senha e aceitar convite: quem chega aqui, por definicao, ainda
+    // nao consegue entrar. Ficam fora de `isAuthPage` de proposito, senao quem
+    // ja esta logado seria expulso do link antes de conseguir trocar a senha.
+    request.nextUrl.pathname === '/auth/forgot-password' ||
+    request.nextUrl.pathname === '/auth/reset-password'
 
   // Setup page is always accessible
   if (isSetupPage) {

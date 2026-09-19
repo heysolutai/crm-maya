@@ -11,6 +11,8 @@ export interface N8NWebhookJob {
   companyId: string
   conversationId: string
   messageId: string
+  /** Job passou pela espera de agrupamento: so ai o worker pode juntar mensagens. */
+  agrupar?: boolean
 }
 
 export interface TranscriptionJob {
@@ -69,6 +71,15 @@ export interface InboundMessageJob {
   receivedAt: string
 }
 
+export interface EmailJob {
+  para: string | string[]
+  assunto: string
+  html: string
+  texto: string
+  /** So pra log: 'recuperacao' | 'convite' | 'relatorio' | 'teste'. */
+  tipo?: string
+}
+
 // Cron job types (no payload: workers poll Supabase directly)
 export interface CronTickJob {
   triggeredAt: string
@@ -85,7 +96,9 @@ export const QUEUE_NAMES = {
   MEDIA_PROCESSING: 'media-processing',
   OUTBOUND_MESSAGE: 'outbound-message',
   OUTBOUND_MEDIA: 'outbound-media',
+  EMAIL: 'email',
   CRON_REMINDERS: 'cron-reminders',
+  CRON_REVIEW_REPORT: 'cron-review-report',
   CRON_FOLLOW_UPS: 'cron-follow-ups',
   CRON_WHATSAPP_STATUS: 'cron-whatsapp-status',
   CRON_CLEANUP_PRESENCE: 'cron-cleanup-presence',
@@ -146,6 +159,10 @@ export function getOutboundMediaQueue() {
   return getOrCreateQueue<OutboundMediaJob>(QUEUE_NAMES.OUTBOUND_MEDIA)
 }
 
+export function getEmailQueue() {
+  return getOrCreateQueue<EmailJob>(QUEUE_NAMES.EMAIL)
+}
+
 // ============================================================
 // Helper to add jobs with proper defaults per queue
 // ============================================================
@@ -183,19 +200,43 @@ export async function enqueueN8NWebhook(
     return queue.add('webhook-call', data, { priority: 1 })
   }
 
-  // Um job por CONVERSA. O anterior ainda esperando e removido pra contagem
-  // recomecar: e isso que faz a espera valer do ULTIMO pedaco, nao do primeiro.
-  const jobId = `n8n-conv-${data.conversationId}`
-  const anterior = await queue.getJob(jobId)
-  if (anterior) {
-    const estado = await anterior.getState().catch(() => 'unknown')
-    // Em andamento ou concluido nao se mexe: so o que ainda nao comecou.
-    if (estado === 'delayed' || estado === 'waiting' || estado === 'prioritized') {
+  // Ponteiro no Redis com o job que ainda esta esperando nesta conversa.
+  //
+  // Nao da pra usar um jobId fixo por conversa: o BullMQ guarda o job
+  // concluido (removeOnComplete) e IGNORA EM SILENCIO qualquer add com um
+  // jobId que ja existe. A conversa ficaria sem resposta ate o job velho
+  // sumir sozinho. Entao cada espera ganha um id proprio, e o ponteiro diz
+  // qual cancelar quando chega mensagem nova.
+  const redis = getRedisConnection()
+  const ponteiro = `n8n:debounce:${data.conversationId}`
+
+  const anteriorId = await redis.get(ponteiro).catch(() => null)
+  if (anteriorId) {
+    const anterior = await queue.getJob(anteriorId).catch(() => null)
+    const estado = anterior ? await anterior.getState().catch(() => 'unknown') : null
+    // Em andamento nao se mexe: ja esta indo pro fluxo, e o job novo cuida do
+    // que sobrar. So o que ainda nao comecou e removido, pra contagem
+    // recomecar do ULTIMO pedaco e nao do primeiro.
+    if (anterior && (estado === 'delayed' || estado === 'waiting' || estado === 'prioritized')) {
       await anterior.remove().catch(() => {})
     }
   }
 
-  return queue.add('webhook-call', data, { priority: 1, delay: espera, jobId })
+  // Sufixo aleatorio junto do tempo: duas mensagens no mesmo milissegundo
+  // gerariam o mesmo id, e a segunda seria engolida pelo BullMQ.
+  const jobId = `n8n-conv-${data.conversationId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const job = await queue.add(
+    'webhook-call',
+    // So quem esperou pode juntar mensagem. Sem essa marca o worker
+    // reescreveria tambem o payload de mensagem enviada pelo atendente.
+    { ...data, agrupar: true },
+    { priority: 1, delay: espera, jobId }
+  )
+
+  // TTL com folga sobre a espera: o ponteiro so serve pra cancelar enquanto o
+  // job esta parado; depois disso pode sumir.
+  await redis.set(ponteiro, jobId, 'PX', espera + 60_000).catch(() => {})
+  return job
 }
 
 export async function enqueueTranscription(data: TranscriptionJob) {
@@ -228,5 +269,22 @@ export async function enqueueOutboundMedia(data: OutboundMediaJob) {
   const queue = getOutboundMediaQueue()
   return queue.add('send-media', data, {
     priority: 2,
+  })
+}
+
+/**
+ * Poe um e-mail na fila.
+ *
+ * Nunca mande e-mail direto no meio de uma rota: servidor SMTP demora e cai, e
+ * a pessoa ficaria esperando o "Enviar" da tela por causa disso. Aqui a rota
+ * responde na hora e a fila cuida do resto, com mais tentativas que as outras
+ * filas porque recusa temporaria (greylisting, limite por minuto) e comum.
+ */
+export async function enqueueEmail(data: EmailJob) {
+  const queue = getEmailQueue()
+  return queue.add('send-email', data, {
+    priority: 3,
+    attempts: 5,
+    backoff: { type: 'exponential', delay: 5000 }, // 5s → 10s → 20s → 40s
   })
 }

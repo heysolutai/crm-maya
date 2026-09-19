@@ -24,6 +24,9 @@ const updateSchema = z.object({
   greeting: z.string().max(2000).nullable().optional(),
   // Espera pra juntar mensagem picada do cliente antes de chamar o fluxo.
   agruparSegundos: z.number().int().min(0).max(120).optional(),
+  // Resumo semanal das avaliacoes por e-mail.
+  relatorioSemanal: z.boolean().optional(),
+  relatorioEmails: z.array(z.string().email('E-mail invalido')).max(10).optional(),
 })
 
 export async function GET(req: NextRequest) {
@@ -51,6 +54,8 @@ export async function GET(req: NextRequest) {
         promptFinal: '',
         greeting: '',
         agruparSegundos: 10,
+        relatorioSemanal: false,
+        relatorioEmails: [],
       }
     )
   } catch (error) {
@@ -100,6 +105,12 @@ export async function PUT(req: NextRequest) {
       promptFinal: clean(validation.data.promptFinal),
       greeting: clean(validation.data.greeting),
       agruparSegundos: validation.data.agruparSegundos,
+      relatorioSemanal: validation.data.relatorioSemanal,
+      // Normaliza pra minusculo e sem repetidos: a mesma pessoa nao precisa
+      // receber o relatorio duas vezes por causa de maiuscula.
+      relatorioEmails: validation.data.relatorioEmails
+        ? Array.from(new Set(validation.data.relatorioEmails.map((e) => e.trim().toLowerCase())))
+        : undefined,
     }
 
     // Upsert por companyId (1:1). IDOR-safe: a chave e sempre a company do auth.

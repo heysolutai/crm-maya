@@ -54,6 +54,14 @@ enum AppointmentStatus {
   no_show
 }
 
+/// Pra que serve o token de uso unico enviado por e-mail.
+enum AuthTokenType {
+  /// "Esqueci minha senha": o proprio usuario pediu.
+  password_reset
+  /// Convite de acesso: o admin cadastrou a pessoa e ela define a senha.
+  invite
+}
+
 // ─── Core ───────────────────────────────────────────
 
 model Plan {
@@ -187,6 +195,7 @@ model User {
   departmentMemberships  DepartmentMember[]
   inboxMemberships       InboxMember[]
   doctorSchedules        DoctorSchedule[]
+  authTokens             AuthToken[]
 
   @@index([companyId], map: "idx_users_company")
   @@index([email], map: "idx_users_email")
@@ -211,6 +220,28 @@ model LoginLog {
   @@index([companyId, createdAt], map: "idx_login_logs_company_created")
   @@index([createdAt], map: "idx_login_logs_created")
   @@map("login_logs")
+}
+
+/// Token de uso unico mandado por e-mail (recuperar senha e convite).
+///
+/// Guardamos o SHA-256 do token, nunca o token em si: quem ler a tabela nao
+/// consegue entrar na conta de ninguem, do mesmo jeito que a senha e hash.
+/// O token cru so existe no link do e-mail.
+model AuthToken {
+  id        String        @id @default(uuid()) @db.Uuid
+  userId    String        @map("user_id") @db.Uuid
+  tokenHash String        @unique @map("token_hash")
+  type      AuthTokenType
+  expiresAt DateTime      @map("expires_at")
+  /// Preenchido no primeiro uso. Token usado nao vale de novo.
+  usedAt    DateTime?     @map("used_at")
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type], map: "idx_auth_tokens_user_type")
+  @@index([expiresAt], map: "idx_auth_tokens_expires")
+  @@map("auth_tokens")
 }
 
 /// Reservas atribuidas (produto restaurante). O sistema de reservas e EXTERNO;
@@ -315,6 +346,11 @@ model ReviewSettings {
   /// responde a cada pedaco. Cada mensagem nova reinicia a contagem e todas
   /// seguem juntas. 0 desliga o agrupamento.
   agruparSegundos Int     @default(10) @map("agrupar_segundos")
+  /// Manda por e-mail, toda segunda de manha, o resumo das avaliacoes da
+  /// semana. Comeca desligado: ninguem recebe e-mail sem pedir.
+  relatorioSemanal Boolean @default(false) @map("relatorio_semanal")
+  /// Quem recebe o relatorio. Vazio = cai no e-mail cadastrado do restaurante.
+  relatorioEmails  String[] @default([]) @map("relatorio_emails")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
 

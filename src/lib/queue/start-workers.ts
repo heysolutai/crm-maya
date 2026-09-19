@@ -8,6 +8,8 @@ import { startFollowUpsWorker } from './workers/cron-follow-ups.worker'
 import { startWhatsAppStatusWorker } from './workers/cron-whatsapp-status.worker'
 import { startCleanupPresenceWorker } from './workers/cron-cleanup-presence.worker'
 import { startReviewDispatchWorker } from './workers/cron-review-dispatch.worker'
+import { startReviewReportWorker } from './workers/cron-review-report.worker'
+import { startEmailWorker } from './workers/email.worker'
 
 let workersStarted = false
 
@@ -48,12 +50,16 @@ export function startAllWorkers() {
   startMediaProcessingWorker()
   startOutboundMessageWorker()
 
+  // E-mail (recuperar senha, convite, relatorio)
+  startEmailWorker()
+
   // Cron workers (replace Edge Functions + pg_cron)
   startRemindersWorker()
   startFollowUpsWorker()
   startWhatsAppStatusWorker()
   startCleanupPresenceWorker()
   startReviewDispatchWorker()
+  startReviewReportWorker()
 
   workersStarted = true
   console.log('[Queue] All workers started successfully (including cron jobs)')

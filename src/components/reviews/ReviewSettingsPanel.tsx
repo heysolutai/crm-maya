@@ -17,8 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Loader2, Save, Link2, Bot, MessageSquare, Power, Clock, Send } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Link2, Bot, MessageSquare, Power, Clock, Send, Mail } from 'lucide-react';
 
 interface Props {
   onBack: () => void;
@@ -36,6 +38,9 @@ interface FormState {
   promptFinal: string;
   greeting: string;
   agruparSegundos: number;
+  relatorioSemanal: boolean;
+  /** Texto livre: um e-mail por linha ou separados por virgula. */
+  relatorioEmails: string;
 }
 
 const EMPTY: FormState = {
@@ -49,11 +54,23 @@ const EMPTY: FormState = {
   promptFinal: '',
   greeting: '',
   agruparSegundos: 10,
+  relatorioSemanal: false,
+  relatorioEmails: '',
 };
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 const formatHour = (h: number) => `${String(h).padStart(2, '0')}:00`;
+
+/** Quebra o campo de texto em e-mails, aceitando virgula, ponto-e-virgula ou quebra de linha. */
+function separarEmails(texto: string): string[] {
+  return texto
+    .split(/[,;\n]/)
+    .map((e) => e.trim())
+    .filter(Boolean);
+}
+
+const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function ReviewSettingsPanel({ onBack }: Props) {
   const { settings, isLoading, save, isSaving, dispatchNow, isDispatching } = useReviewSettings();
@@ -76,14 +93,33 @@ export function ReviewSettingsPanel({ onBack }: Props) {
         promptFinal: settings.promptFinal ?? '',
         greeting: settings.greeting ?? '',
         agruparSegundos: settings.agruparSegundos ?? 10,
+        relatorioSemanal: settings.relatorioSemanal ?? false,
+        relatorioEmails: (settings.relatorioEmails ?? []).join('\n'),
       });
     }
   }, [settings]);
 
   const set = (patch: Partial<FormState>) => setForm((p) => ({ ...p, ...patch }));
 
-  const handleSave = () =>
-    save({ ...form, inboxId: form.inboxId === 'all' ? null : form.inboxId });
+  const emailsDoRelatorio = separarEmails(form.relatorioEmails);
+  const emailsInvalidos = emailsDoRelatorio.filter((e) => !EMAIL_VALIDO.test(e));
+
+  const handleSave = () => {
+    // A API recusa e-mail malformado; avisar aqui evita perder o resto do
+    // formulario por causa de uma virgula fora do lugar.
+    if (emailsInvalidos.length > 0) {
+      toast.error('Confira os e-mails do relatório', {
+        description: `Não parece um endereço válido: ${emailsInvalidos[0]}`,
+      });
+      return;
+    }
+
+    save({
+      ...form,
+      inboxId: form.inboxId === 'all' ? null : form.inboxId,
+      relatorioEmails: emailsDoRelatorio,
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -237,6 +273,54 @@ export function ReviewSettingsPanel({ onBack }: Props) {
                   Inicia a coleta imediatamente, sem esperar o horário programado.
                 </p>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Resumo semanal por e-mail */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Mail className="h-4 w-4 text-primary" />
+                Resumo semanal por e-mail
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <Label htmlFor="relatorio-semanal">Receber o resumo toda segunda-feira</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Nota média da semana, total de avaliações e os assuntos mais elogiados e mais
+                    reclamados. Enviado às 8h (fuso de Brasília).
+                  </p>
+                </div>
+                <Switch
+                  id="relatorio-semanal"
+                  checked={form.relatorioSemanal}
+                  onCheckedChange={(v) => set({ relatorioSemanal: v })}
+                />
+              </div>
+
+              {form.relatorioSemanal && (
+                <div className="space-y-2">
+                  <Label htmlFor="relatorio-emails">Quem recebe</Label>
+                  <Textarea
+                    id="relatorio-emails"
+                    rows={3}
+                    placeholder={'gerente@restaurante.com.br\ndono@restaurante.com.br'}
+                    value={form.relatorioEmails}
+                    onChange={(e) => set({ relatorioEmails: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Um e-mail por linha (ou separados por vírgula), até 10 endereços. Se deixar em
+                    branco, o resumo vai para o e-mail cadastrado do restaurante.
+                  </p>
+                  {emailsInvalidos.length > 0 && (
+                    <p className="text-xs text-destructive">
+                      Endereço inválido: {emailsInvalidos.join(', ')}
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 

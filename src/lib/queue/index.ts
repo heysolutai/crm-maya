@@ -15,6 +15,8 @@ export {
   enqueueMediaProcessing,
   enqueueOutboundMessage,
   enqueueOutboundMedia,
+  enqueueEmail,
+  type EmailJob,
   type InboundMessageJob,
   type N8NWebhookJob,
   type TranscriptionJob,

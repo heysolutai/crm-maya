@@ -5,6 +5,11 @@ import bcrypt from 'bcryptjs';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, notFoundResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
+import { criarAuthToken, VALIDADE_CONVITE_DIAS } from '@/lib/auth-tokens';
+import { emailConvite } from '@/lib/email/templates';
+import { emailConfigurado, urlDaAplicacao } from '@/lib/email/config';
+import { enqueueEmail } from '@/lib/queue';
+import { logSecurityEvent } from '@/lib/security-log';
 
 const addUserSchema = z.object({
   company_id: z.string().uuid('Invalid company_id format'),
@@ -99,7 +104,50 @@ export async function POST(req: NextRequest) {
       return errorResponse('Falha ao atribuir role');
     }
 
-    // Skip link generation (was supabase.auth.admin.generateLink)
+    // Convite por e-mail: a pessoa define a propria senha pelo link. A senha
+    // aleatoria criada acima existe so pra conta nunca ficar com hash vazio;
+    // ninguem a conhece, nem quem cadastrou.
+    //
+    // Best-effort de proposito: SMTP fora do ar nao pode desfazer um usuario
+    // que ja foi criado com a role certa. A resposta diz se o convite saiu, e
+    // quem cadastrou pode reenviar depois.
+    let conviteEnviado = false;
+    if (emailConfigurado()) {
+      try {
+        const token = await criarAuthToken(
+          newUser.id,
+          'invite',
+          VALIDADE_CONVITE_DIAS * 24 * 60 * 60 * 1000
+        );
+        const montado = emailConvite({
+          nome: full_name,
+          restaurante: company.name,
+          link: `${urlDaAplicacao()}/auth/reset-password?token=${encodeURIComponent(token)}`,
+          validadeDias: VALIDADE_CONVITE_DIAS,
+        });
+
+        await enqueueEmail({
+          para: newUser.email,
+          assunto: montado.assunto,
+          html: montado.html,
+          texto: montado.texto,
+          tipo: 'convite',
+        });
+
+        conviteEnviado = true;
+        await logSecurityEvent({
+          event: 'invite_sent',
+          userId: newUser.id,
+          email: newUser.email,
+          companyId: company_id,
+          req,
+        });
+      } catch (conviteError) {
+        console.error('[Add User] Falha ao enviar convite por e-mail:', conviteError);
+      }
+    } else {
+      console.warn('[Add User] SMTP nao configurado: convite nao enviado para', newUser.email);
+    }
 
     const createdUser = await prisma.user.findUnique({
       where: { id: newUser.id },
@@ -108,6 +156,7 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse({
       success: true,
+      conviteEnviado,
       user: createdUser || {
         id: newUser.id,
         email,
