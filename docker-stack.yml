@@ -57,6 +57,18 @@ x-app-env: &app-env
   # ----- IA / OpenAI -----
   DEFAULT_OPENAI_API_KEY: ""
 
+  # ----- E-mail (SMTP) -----
+  # Sem isto NAO saem: recuperacao de senha, convite de usuario e o resumo
+  # semanal de avaliacoes. Um SMTP so pra plataforma inteira.
+  # Porta 587 = STARTTLS; 465 = TLS direto (SMTP_SECURE so pra contrariar isso).
+  # Status e envio de teste em: Super admin > Configuracoes do Sistema.
+  SMTP_HOST: ""                                                      # <<< TROQUE
+  SMTP_PORT: "587"
+  SMTP_USER: ""                                                      # <<< TROQUE
+  SMTP_PASS: ""                                                      # <<< TROQUE
+  SMTP_FROM: ""                                                      # <<< TROQUE (sem isto, cai no SMTP_USER)
+  SMTP_FROM_NAME: "Maya"
+
   # ----- WhatsApp (UAZapi) -----
   UAZAPI_BASE_URL: "https://uazapi.heysolut.com.br"
   WHATSAPP_ADMIN_TOKEN: ""
@@ -94,7 +106,7 @@ services:
   # WEB — Next.js exposto via Traefik
   # ---------------------------------------------------------
   app:
-    image: heysolutitsolution/crm-maya:2026-07-13              # <<< TROQUE (imagem no seu registry)
+    image: heysolutitsolution/crm-restaurants:v1.24             # <<< TROQUE a cada release
     environment:
       <<: *app-env
       # Web NAO sobe workers (o service 'worker' cuida disso)
@@ -143,7 +155,7 @@ services:
   # WORKER — BullMQ + crons, processo dedicado (nao exposto)
   # ---------------------------------------------------------
   worker:
-    image: heysolutitsolution/crm-maya:2026-07-13              # <<< TROQUE (mesma imagem do app)
+    image: heysolutitsolution/crm-restaurants:v1.24             # <<< TROQUE (mesma imagem do app)
     environment:
       <<: *app-env
       # Este service SOBE os workers (default do codigo)

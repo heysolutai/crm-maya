@@ -6,8 +6,8 @@
 #      e um certresolver chamado `letsencryptresolver` (ajuste o nome se
 #      o seu for outro).
 #   2) Imagem já buildada e publicada num registry (ver README abaixo):
-#        docker build -t ghcr.io/SEU_USUARIO/crm-maya:restaurante .
-#        docker push   ghcr.io/SEU_USUARIO/crm-maya:restaurante
+#        docker build -t ghcr.io/SEU_USUARIO/crm-restaurants:v1.24 .
+#        docker push   ghcr.io/SEU_USUARIO/crm-restaurants:v1.24
 #   3) DNS do domínio apontando pro servidor.
 #
 #  Deploy:  docker stack deploy -c deploy/stack.swarm.yml crm-rest
@@ -20,7 +20,7 @@ version: '3.8'
 
 services:
   crm:
-    image: heysolutitsolution/crm-maya:restaurante   # Docker Hub
+    image: heysolutitsolution/crm-restaurants:v1.24  # Docker Hub
     environment:
       # ----- Banco / Redis (apontam pros serviços abaixo) -----
       DATABASE_URL: "postgresql://crm:${DB_PASSWORD}@crm_db:5432/crm_restaurante"
