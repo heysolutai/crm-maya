@@ -257,6 +257,20 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // Avaliacao registrada = fluxo encerrado. Qualquer follow-up ainda
+    // agendado pra essa conversa morre aqui: o cliente ja respondeu a
+    // pesquisa, e cobrar resposta 24h depois e spam. Sem isto, jobs criados
+    // ANTES desta correcao continuariam disparando.
+    if (d.conversationId) {
+      const { count } = await prisma.followUpJob.updateMany({
+        where: { conversationId: d.conversationId, companyId, status: 'pending' },
+        data: { status: 'cancelled' },
+      })
+      if (count > 0) {
+        console.log(`[Reviews] ${count} follow-up(s) cancelado(s) na conversa ${d.conversationId}`)
+      }
+    }
+
     return NextResponse.json(review, { status: 201 })
   } catch (error) {
     return handleApiError(error, 'Erro ao criar avaliacao')

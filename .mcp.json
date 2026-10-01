@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "maya-crm": {
+      "command": "node",
+      "args": ["mcp/server.mjs"],
+      "env": {
+        "MAYA_API_URL": "${MAYA_API_URL}",
+        "MAYA_API_KEY": "${MAYA_API_KEY}"
+      }
+    }
+  }
+}

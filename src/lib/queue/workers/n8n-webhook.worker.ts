@@ -2,6 +2,7 @@ import { Worker, Job } from 'bullmq'
 import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type N8NWebhookJob } from '../queues'
 import { prisma } from '@/lib/db'
+import { consumirResumeUrl } from '@/lib/conversations/resume-url'
 
 /**
  * So agrupa mensagem recente. A marca `n8n_enviado_em` nao existe em nada que
@@ -85,7 +86,7 @@ async function marcarComoEnviadas(ids: string[]): Promise<void> {
 }
 
 async function processN8NWebhook(job: Job<N8NWebhookJob>) {
-  const { webhookUrl, payload, companyId, conversationId, messageId, agrupar } = job.data
+  const { webhookUrl, payload, companyId, conversationId, messageId, agrupar, resolverResumeUrl } = job.data
 
   console.log(`[N8N Worker] Processing job ${job.id} for message ${messageId}`)
 
@@ -115,7 +116,23 @@ async function processN8NWebhook(job: Job<N8NWebhookJob>) {
 
   const corpo = texto ? { ...payload, conteudo: texto, mensagens_agrupadas: ids.length } : payload
 
-  const response = await fetch(webhookUrl, {
+  // Destino so agora: a conversa pode estar esperando um resume de fluxo
+  // externo (avaliacao no n8n). Consumir a url aqui, e nao no enfileiramento,
+  // e o que faz o debounce conviver com o fluxo: job cancelado nao queima a
+  // url, e quem de fato envia e quem resume o fluxo.
+  const urlFluxo = resolverResumeUrl ? await consumirResumeUrl(conversationId) : null
+  const destino = urlFluxo || webhookUrl
+
+  if (!destino) {
+    console.warn(`[N8N Worker] Sem destino pra mensagem ${messageId}: nada enviado`)
+    return { skipped: true }
+  }
+
+  if (urlFluxo) {
+    console.log(`[N8N Worker] 🔀 Mensagem ${messageId} desviada pra resumeUrl do fluxo externo`)
+  }
+
+  const response = await fetch(destino, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(corpo),

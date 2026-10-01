@@ -5,3 +5,7 @@ npm-debug.log
 .next
 .git
 .env*.local
+
+# MCP: ferramenta de desenvolvimento, nao entra na imagem
+mcp
+chrome-devtools-mcp

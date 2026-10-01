@@ -15,6 +15,7 @@ import { useConversationScroll } from '@/hooks/useConversationScroll';
 import { useCreateConversation } from '@/hooks/useCreateConversation';
 import { useMessageInput } from '@/hooks/useMessageInput';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useInboxes } from '@/hooks/useInboxes';
 import { useDepartmentQueue } from '@/hooks/useDepartmentQueue';
 import { usePresenceContext } from '@/hooks/usePresence';
@@ -33,6 +34,7 @@ import { TypingIndicator } from '@/components/conversations/TypingIndicator';
 import { TagManager } from '@/components/conversations/TagManager';
 import { ImageModal } from '@/components/conversations/ImageModal';
 import { ConversationNotes } from '@/components/conversations/ConversationNotes';
+import { ConversationInfoPanel } from '@/components/conversations/ConversationInfoPanel';
 import { TransferDialog } from '@/components/conversations/dialogs/TransferDialog';
 import { EditClientDialog } from '@/components/conversations/dialogs/EditClientDialog';
 import { CloseConversationDialog } from '@/components/conversations/dialogs/CloseConversationDialog';
@@ -124,6 +126,7 @@ export default function Conversations() {
   const { uploadMedia, isUploading } = useMediaUpload();
   const { teamMembers } = useTeam();
   const { departments } = useDepartments();
+  const { canEditCRM } = useUserPermissions();
   const { inboxes } = useInboxes();
   const { queues: queueCounts } = useDepartmentQueue();
   const { onlineUserIds } = usePresenceContext();
@@ -561,7 +564,9 @@ export default function Conversations() {
         selectedConversation ? "flex" : "hidden md:flex"
       )}>
         {selectedConv ? (
-          <>
+          /* Linha: coluna da conversa + painel de contexto a direita */
+          <div className="flex-1 flex min-h-0 min-w-0">
+            <div className="flex-1 flex flex-col min-h-0 min-w-0">
             <ConversationHeader
               conversation={selectedConv}
               isTogglingAIPaused={isTogglingAIPaused}
@@ -719,7 +724,31 @@ export default function Conversations() {
               isSendingMedia={isSendingMedia}
               onFileSelect={setSelectedFile}
             />
-          </>
+            </div>
+
+            {/* Painel de contexto — some no mobile, onde nao ha largura */}
+            <ConversationInfoPanel
+              conversation={selectedConv}
+              onOpenTagManager={() => setTagManagerOpen(true)}
+              onAssignToMe={() => pickupConversation(selectedConv.id)}
+              onTransfer={() => setTransferDialogOpen(true)}
+              onEditContact={() => setEditClientOpen(true)}
+              teamMembers={(teamMembers as TeamMember[]) || []}
+              departments={(departments || []).map((d: any) => ({
+                id: d.id,
+                name: d.name,
+                color: d.color,
+              }))}
+              onSelectAgent={(userId) =>
+                transferConversation({ conversationId: selectedConv.id, userId })
+              }
+              onSelectDepartment={(departmentId) =>
+                transferToDepartment({ conversationId: selectedConv.id, departmentId })
+              }
+              podeEditarContato={canEditCRM}
+              className="hidden lg:flex"
+            />
+          </div>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground">
             <div className="text-center">

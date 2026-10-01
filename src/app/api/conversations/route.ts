@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
       where,
       include: {
         client: {
-          select: { id: true, firstName: true, lastName: true, phone: true, email: true, avatarUrl: true, aiPaused: true },
+          select: { id: true, firstName: true, lastName: true, phone: true, whatsappLid: true, email: true, avatarUrl: true, aiPaused: true },
         },
         transferAgent: { select: { fullName: true } },
         department: { select: { id: true, name: true, color: true } },

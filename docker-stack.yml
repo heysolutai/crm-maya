@@ -106,7 +106,7 @@ services:
   # WEB — Next.js exposto via Traefik
   # ---------------------------------------------------------
   app:
-    image: heysolutitsolution/crm-restaurants:v1.24             # <<< TROQUE a cada release
+    image: heysolutitsolution/crm-restaurants:v1.30             # <<< TROQUE a cada release
     environment:
       <<: *app-env
       # Web NAO sobe workers (o service 'worker' cuida disso)
@@ -155,7 +155,7 @@ services:
   # WORKER — BullMQ + crons, processo dedicado (nao exposto)
   # ---------------------------------------------------------
   worker:
-    image: heysolutitsolution/crm-restaurants:v1.24             # <<< TROQUE (mesma imagem do app)
+    image: heysolutitsolution/crm-restaurants:v1.30             # <<< TROQUE (mesma imagem do app)
     environment:
       <<: *app-env
       # Este service SOBE os workers (default do codigo)
@@ -179,6 +179,49 @@ services:
         delay: 10s
         # 'stop-first': garante 1 unica instancia dos workers durante o deploy
         order: stop-first
+
+  # ---------------------------------------------------------
+  # MCP — leitura de conversas e funil pelo claude.ai
+  # ---------------------------------------------------------
+  # OPCIONAL: remova este service inteiro se nao for usar.
+  #
+  # Imagem propria (nao e a do CRM): so precisa do Node. Ele NAO fala com o
+  # banco — chama a API do CRM por `x-api-key`, entao o isolamento por
+  # restaurante continua valendo onde ja e testado.
+  #
+  # ATENCAO: fica exposto na internet e da acesso de LEITURA as conversas.
+  # Quem tem a URL e o MCP_TOKEN le tudo. Gere o token com
+  # `openssl rand -hex 32` e trate como senha.
+  mcp:
+    image: heysolutitsolution/crm-restaurants-mcp:v1.0        # <<< TROQUE a cada release
+    environment:
+      # Pelo DNS interno da overlay: nao precisa sair e voltar pela internet.
+      MAYA_API_URL: "http://app:3000"
+      MAYA_API_KEY: ""                                        # <<< TROQUE (chave de API do restaurante)
+      MCP_TOKEN: ""                                           # <<< TROQUE (openssl rand -hex 32)
+      MCP_PORT: "8080"
+    networks:
+      - network_swarm_public
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:8080/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      # Sem sessao no transporte, entao escala horizontal sem sticky session.
+      replicas: 1
+      restart_policy:
+        condition: any
+        delay: 5s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=network_swarm_public"
+        - "traefik.http.routers.crmmcp.rule=Host(`mcp.seudominio.com.br`)"    # <<< TROQUE
+        - "traefik.http.routers.crmmcp.entrypoints=websecure"
+        - "traefik.http.routers.crmmcp.tls=true"
+        - "traefik.http.routers.crmmcp.tls.certresolver=letsencrypt"          # <<< TROQUE se o resolver tiver outro nome
+        - "traefik.http.services.crmmcp.loadbalancer.server.port=8080"
 
 networks:
   # Rede overlay unica, ja existente, compartilhada por TUDO: Traefik alcanca o

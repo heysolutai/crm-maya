@@ -562,15 +562,21 @@ model Conversation {
   stage             String?
   satisfactionScore Int?               @map("satisfaction_score")
   friendlyId        String?            @map("friendly_id")
-  /// URL de resume de um fluxo externo (n8n) aguardando a resposta do cliente
-  /// (ex: fluxo de avaliacao). Quando setada, a proxima mensagem INCOMING e
-  /// enviada pra ela (one-shot: o campo e limpo no envio) em vez do webhook
-  /// de IA padrao. O fluxo re-registra a URL a cada nova espera.
+  /// URL de RESUME do fluxo externo (n8n) aguardando a resposta do cliente —
+  /// o `webhook-waiting` do node Wait (ex: fluxo de avaliacao). Quando setada,
+  /// a proxima mensagem INCOMING e enviada pra ela em vez do webhook de IA
+  /// padrao. ONE-SHOT: quem envia consome. O fluxo re-registra a cada espera.
+  resumeUrl         String?            @map("resume_url")
+  /// Validade da resumeUrl (TTL). NAO e limpa junto com a URL: enquanto nao
+  /// vence, a conversa segue sendo considerada "sob fluxo externo" — e isso
+  /// que mantem o follow-up fora da conversa de avaliacao.
+  resumeUrlExpiresAt DateTime?         @map("resume_url_expires_at")
+  /// Link pra ABRIR a execucao no n8n (ex: https://n8n.host/workflow/<id>/executions/<id>).
+  ///
+  /// Nao e chamada pelo sistema: serve pra pessoa clicar e ver o que aconteceu
+  /// quando o fluxo trava no Wait ou da erro. Nunca e limpa — e justamente
+  /// quando a resumeUrl e consumida que esse ponteiro faz falta.
   executionUrl      String?            @map("execution_url")
-  /// Validade da executionUrl (TTL). Vencida, a URL e ignorada e limpa — a
-  /// mensagem segue pro fluxo de IA normal. Protege contra fluxo externo que
-  /// morreu sem limpar o registro.
-  executionUrlExpiresAt DateTime?      @map("execution_url_expires_at")
   metadata          Json?              @default("{}")
   departmentId      String?            @map("department_id") @db.Uuid
   inboxId           String?            @map("inbox_id") @db.Uuid
@@ -596,6 +602,9 @@ model Conversation {
   @@index([status], map: "idx_conversations_status")
   @@index([channel], map: "idx_conversations_channel")
   @@index([createdAt], map: "idx_conversations_created")
+  /// Achar rapido as conversas que estao (ou estiveram) sob fluxo externo:
+  /// rastreio de execucao no n8n e limpeza de follow-up.
+  @@index([companyId, resumeUrlExpiresAt], map: "idx_conversations_resume_expires")
   @@index([departmentId], map: "idx_conversations_department")
   @@index([inboxId], map: "idx_conversations_inbox")
   @@map("conversations")

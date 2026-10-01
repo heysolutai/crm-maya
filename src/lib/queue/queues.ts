@@ -13,6 +13,13 @@ export interface N8NWebhookJob {
   messageId: string
   /** Job passou pela espera de agrupamento: so ai o worker pode juntar mensagens. */
   agrupar?: boolean
+  /**
+   * A conversa tinha uma resumeUrl de fluxo externo quando a mensagem
+   * chegou. O worker tenta consumi-la NA HORA DO ENVIO e, se conseguir, manda
+   * pra ela em vez do `webhookUrl`. Consumir so no envio e o que evita o
+   * debounce queimar a url num job que depois e cancelado.
+   */
+  resolverResumeUrl?: boolean
 }
 
 export interface TranscriptionJob {

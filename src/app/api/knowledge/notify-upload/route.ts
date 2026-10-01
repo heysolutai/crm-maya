@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse, unauthorizedResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
 import { getSystemSetting } from '@/lib/system-settings'
+import { getDecryptedApiKey } from '@/lib/api/api-key-utils'
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
 
@@ -45,15 +46,13 @@ export async function POST(req: NextRequest) {
     // Resolve o nome da base de conhecimento + a API key do restaurante, igual ao
     // webhook normal de mensagens. O N8N usa o `knowledge`/`memory_key` pra saber
     // ONDE inserir e a `api_key` pra autenticar a escrita na base.
-    const [aiConfig, apiKeyRow] = await Promise.all([
+    const [aiConfig, apiKey] = await Promise.all([
       prisma.aiAgent.findFirst({
         where: { companyId: payload.companyId, isActive: true },
         select: { knowledge: true, memoryKey: true },
       }),
-      prisma.apiKey.findFirst({
-        where: { companyId: payload.companyId, isActive: true },
-        select: { key: true },
-      }),
+      // `apiKey.key` guarda a chave CRIPTOGRAFADA: o N8N precisa da real.
+      getDecryptedApiKey(payload.companyId),
     ]);
 
     const n8nResponse = await fetch(webhookUrl, {
@@ -67,7 +66,7 @@ export async function POST(req: NextRequest) {
         fileSize: payload.fileSize || 0,
         knowledge: aiConfig?.knowledge || null,
         memory_key: aiConfig?.memoryKey || null,
-        api_key: apiKeyRow?.key || null,
+        api_key: apiKey,
         timestamp: new Date().toISOString(),
       }),
     });

@@ -154,6 +154,7 @@ export function useConversations(filters?: ConversationFilters) {
           first_name: conv.client.firstName || conv.client.first_name || '',
           last_name: conv.client.lastName || conv.client.last_name || null,
           phone: conv.client.phone || null,
+          whatsapp_lid: conv.client.whatsappLid || conv.client.whatsapp_lid || null,
           email: conv.client.email || null,
           avatar_url: conv.client.avatarUrl || conv.client.avatar_url || null,
           ai_paused: conv.client.aiPaused ?? conv.client.ai_paused ?? false,
@@ -178,6 +179,11 @@ export function useConversations(filters?: ConversationFilters) {
           client,
           agent,
           started_at: conv.startedAt || conv.started_at,
+          // Fluxo externo (n8n): o painel usa pra apontar a execucao e dizer
+          // se a conversa ainda esta na janela de espera do fluxo.
+          resume_url: conv.resumeUrl ?? conv.resume_url ?? null,
+          resume_url_expires_at: conv.resumeUrlExpiresAt ?? conv.resume_url_expires_at ?? null,
+          execution_url: conv.executionUrl ?? conv.execution_url ?? null,
           transferred_user,
           unread_count: countMap[conv.id] || 0,
           last_message: lastMsg ? {

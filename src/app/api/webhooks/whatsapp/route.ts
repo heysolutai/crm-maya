@@ -5,12 +5,14 @@ import { z } from 'zod';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
 import { phoneVariants, canonicalPhone, restaurantIdDaInbox } from '@/lib/api/utils';
 import { enqueueInboundMessage, enqueueN8NWebhook, N8N_DEBOUNCE_MS, enqueueTranscription, enqueueMediaProcessing } from '@/lib/queue';
+import { consumirResumeUrl, emFluxoExterno } from '@/lib/conversations/resume-url';
 import { uploadToB2, buildB2Key, MIME_TO_EXT, deleteMediaFromUrl } from '@/lib/storage';
 import { publishEvent } from '@/lib/realtime';
 import { sendPushToCompany } from '@/lib/push';
 import { pauseClientAIByConversation } from '@/lib/api/database';
 import { handleApiErrorCors } from '@/lib/api/errors'
 import { getSystemSetting } from '@/lib/system-settings'
+import { getDecryptedApiKey } from '@/lib/api/api-key-utils'
 
 // Schema de validação para o payload da UAZapi
 const UAZapiPayloadSchema = z.object({
@@ -1531,10 +1533,9 @@ export async function POST(req: NextRequest) {
           where: { id: clientId },
           select: { firstName: true, lastName: true, aiPaused: true },
         }),
-        prisma.apiKey.findFirst({
-          where: { companyId, isActive: true },
-          select: { key: true },
-        }),
+        // `apiKey.key` guarda a chave CRIPTOGRAFADA (iv:dados:tag): o n8n
+        // precisa da chave real pra chamar a API de volta.
+        getDecryptedApiKey(companyId),
         prisma.company.findUnique({
           where: { id: companyId },
           select: { name: true, settings: true },
@@ -1545,8 +1546,8 @@ export async function POST(req: NextRequest) {
             stage: true,
             status: true,
             friendlyId: true,
-            executionUrl: true,
-            executionUrlExpiresAt: true,
+            resumeUrl: true,
+            resumeUrlExpiresAt: true,
             transferredTo: true,
             transferAgent: { select: { id: true, fullName: true } },
             departmentId: true,
@@ -1602,31 +1603,18 @@ export async function POST(req: NextRequest) {
         companyAiConfig?.n8nWebhookUrl || (await getSystemSetting('n8n_ai_webhook_url'));
 
       // Desvio de fluxo externo (ex: avaliacao no n8n): se a conversa tem uma
-      // executionUrl registrada, a resposta do cliente vai pra ela em vez do
-      // webhook de IA padrao. ONE-SHOT: limpa o campo ja no encaminhamento -
-      // o fluxo re-registra via POST /api/conversations/execution-url a cada
-      // nova espera. So mensagens INCOMING resumem o fluxo.
-      let executionUrl: string | null = null;
-      if (payload.type === 'incoming' && conversationData?.executionUrl) {
-        const urlExpired =
-          conversationData.executionUrlExpiresAt &&
-          conversationData.executionUrlExpiresAt < new Date();
-
-        // Vencida ou nao, o campo e limpo: valida = one-shot consumido;
-        // vencida = registro morto que nao pode engolir mensagens futuras.
-        await prisma.conversation.update({
-          where: { id: conversationId },
-          data: { executionUrl: null, executionUrlExpiresAt: null },
-        }).catch((err) => console.error('[N8N Webhook] Falha ao limpar executionUrl:', err));
-
-        if (urlExpired) {
-          console.log(`[N8N Webhook] ⏰ executionUrl expirada na conversa ${conversationId}: mensagem segue pro fluxo normal`);
-        } else {
-          executionUrl = conversationData.executionUrl;
-          console.log(`[N8N Webhook] 🔀 Desviando mensagem ${message.id} pra executionUrl do fluxo externo`);
-        }
-      }
-      const targetWebhookUrl = executionUrl || n8nWebhookUrl;
+      // resumeUrl registrada, a resposta do cliente vai pra ela em vez do
+      // webhook de IA padrao. ONE-SHOT: gasta, some. O fluxo re-registra via
+      // POST /api/conversations/execution-url a cada nova espera. So mensagens
+      // INCOMING resumem o fluxo.
+      //
+      // A url NAO e consumida aqui pro caminho de TEXTO: com o debounce, o job
+      // desta mensagem pode ser cancelado pela mensagem seguinte, e a url teria
+      // sido queimada por um envio que nunca aconteceu. Quem consome e quem
+      // envia (ver `consumirExecutionUrl` no worker). Audio e midia continuam
+      // consumindo aqui: os jobs deles nao sao cancelaveis.
+      const podeDesviarPraFluxo = payload.type === 'incoming' && !!conversationData?.resumeUrl;
+      const targetWebhookUrl = n8nWebhookUrl;
       const knowledgeName = companyAiConfig?.knowledge || null;
       const memoryKeyName = companyAiConfig?.memoryKey || null;
       const productsKnowledgeName = companyAiConfig?.productsKnowledge || null;
@@ -1723,7 +1711,7 @@ export async function POST(req: NextRequest) {
         knowledge: knowledgeName,
         memory_key: memoryKeyName,
         products_knowledge: productsKnowledgeName,
-        api_key: companyApiKey?.key || null,
+        api_key: companyApiKey,
         message_id: message.id,
         timestamp: new Date().toISOString(),
       };
@@ -1732,6 +1720,12 @@ export async function POST(req: NextRequest) {
       if (shouldQueueTranscription && whatsappInstance && mediaMessageId) {
         console.log(`[N8N Webhook] ⏳ Skipping for audio message ${message.id}: will send after transcription`);
         try {
+          // Audio nao passa pelo debounce: o job nao e cancelavel, entao da pra
+          // gastar a url do fluxo aqui mesmo.
+          const urlFluxo = podeDesviarPraFluxo ? await consumirResumeUrl(conversationId) : null;
+          if (urlFluxo) {
+            console.log(`[N8N Webhook] 🔀 Desviando audio ${message.id} pra resumeUrl do fluxo externo`);
+          }
           await enqueueTranscription({
             messageId: message.id,
             conversationId,
@@ -1740,7 +1734,7 @@ export async function POST(req: NextRequest) {
             instanceApiUrl: whatsappInstance.apiUrl || '',
             instanceApiKey: whatsappInstance.instanceApiKey || '',
             messageKey: mediaMessageId,
-            n8nWebhookUrl: targetWebhookUrl || undefined,
+            n8nWebhookUrl: urlFluxo || targetWebhookUrl || undefined,
             n8nPayload: webhookPayload,
           });
           console.log('[Audio Transcription] ✅ Queued transcription job for message', message.id);
@@ -1750,6 +1744,11 @@ export async function POST(req: NextRequest) {
       } else if (shouldQueueMedia && whatsappInstance && mediaMessageId) {
         console.log(`[N8N Webhook] ⏳ Skipping for media message ${message.id}: will send after S3 upload`);
         try {
+          // Idem audio: job nao cancelavel, consome a url do fluxo aqui.
+          const urlFluxo = podeDesviarPraFluxo ? await consumirResumeUrl(conversationId) : null;
+          if (urlFluxo) {
+            console.log(`[N8N Webhook] 🔀 Desviando midia ${message.id} pra resumeUrl do fluxo externo`);
+          }
           await enqueueMediaProcessing({
             messageId: message.id,
             conversationId,
@@ -1762,14 +1761,14 @@ export async function POST(req: NextRequest) {
             instanceApiUrl: whatsappInstance.apiUrl || '',
             instanceApiKey: whatsappInstance.instanceApiKey || '',
             messageKey: mediaMessageId,
-            n8nWebhookUrl: targetWebhookUrl || undefined,
+            n8nWebhookUrl: urlFluxo || targetWebhookUrl || undefined,
             n8nPayload: webhookPayload,
           });
           console.log('[Media Processing] ✅ Queued for message', message.id);
         } catch (queueError) {
           console.error('[Media Processing] Failed to queue:', queueError);
         }
-      } else if (targetWebhookUrl) {
+      } else if (targetWebhookUrl || podeDesviarPraFluxo) {
         try {
           // Mensagem de TEXTO do cliente espera um instante antes de ir pro
           // fluxo: se vierem outras em seguida, todas seguem juntas numa
@@ -1781,21 +1780,31 @@ export async function POST(req: NextRequest) {
           }).catch(() => null);
           const esperaMs = (ajuste?.agruparSegundos ?? Math.round(N8N_DEBOUNCE_MS / 1000)) * 1000;
           await enqueueN8NWebhook({
-            webhookUrl: targetWebhookUrl,
+            webhookUrl: targetWebhookUrl || '',
             payload: webhookPayload,
             companyId,
             conversationId,
             messageId: message.id,
+            // O worker e quem decide o destino final: se a conversa ainda tiver
+            // uma resumeUrl na hora do envio, ela ganha do webhook geral.
+            // Deixar isso pra la e o que impede o debounce de queimar a url de
+            // resume num job que acaba cancelado.
+            resolverResumeUrl: podeDesviarPraFluxo,
           }, { debounceMs: payload.type === 'incoming' ? esperaMs : 0 });
-          console.log(`[N8N Webhook] ✅ Queued for message ${message.id} (ai_status: ${aiStatus})`);
+          console.log(`[N8N Webhook] ✅ Queued for message ${message.id} (ai_status: ${aiStatus}, fluxo externo: ${podeDesviarPraFluxo})`);
         } catch (queueError) {
           console.error('[N8N Webhook] Failed to queue, falling back to sync:', queueError);
           try {
-            await fetch(targetWebhookUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(webhookPayload),
-            });
+            // Sem fila, este request e o envio: consome a url aqui mesmo.
+            const urlFluxo = podeDesviarPraFluxo ? await consumirResumeUrl(conversationId) : null;
+            const destino = urlFluxo || targetWebhookUrl;
+            if (destino) {
+              await fetch(destino, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(webhookPayload),
+              });
+            }
           } catch (syncError) {
             console.error('[N8N Webhook] Sync fallback also failed:', syncError);
           }
@@ -1825,7 +1834,12 @@ export async function POST(req: NextRequest) {
       // GUARD: Verificar se a conversa está ativa
       const followUpConv = await prisma.conversation.findUnique({
         where: { id: conversationId },
-        select: { status: true },
+        select: {
+          status: true,
+          resumeUrl: true,
+          resumeUrlExpiresAt: true,
+
+        },
       });
 
       // Conversa de avaliacao (ja tem review vinculada) nao recebe follow-up:
@@ -1834,11 +1848,22 @@ export async function POST(req: NextRequest) {
         where: { conversationId, companyId },
         select: { id: true },
       });
+
+      // ...mas a Review so nasce no FIM do fluxo, quando o n8n chama
+      // POST /api/reviews. Durante a conversa inteira ela nao existe, e era por
+      // isso que toda resposta do cliente agendava follow-up: 24h depois a IA
+      // acordava numa conversa que nao era dela e mandava mensagem sem pe nem
+      // cabeca. Quem cobre essa janela e a marca de fluxo externo.
+      const souFluxoExterno = followUpConv ? emFluxoExterno(followUpConv) : false;
+
       const shouldCreateFollowUps =
-        !followUpClient?.aiPaused && followUpConv?.status !== 'closed' && !conversaDeAvaliacao;
+        !followUpClient?.aiPaused &&
+        followUpConv?.status !== 'closed' &&
+        !conversaDeAvaliacao &&
+        !souFluxoExterno;
 
       if (!shouldCreateFollowUps) {
-        console.log(`[Follow-up] Skipping follow-up creation: ai_paused=${followUpClient?.aiPaused}, conv_status=${followUpConv?.status}, avaliacao=${!!conversaDeAvaliacao}`);
+        console.log(`[Follow-up] Skipping follow-up creation: ai_paused=${followUpClient?.aiPaused}, conv_status=${followUpConv?.status}, avaliacao=${!!conversaDeAvaliacao}, fluxo_externo=${souFluxoExterno}`);
       } else {
         // Resolve AiAgent vinculado a inbox da conversa atual (se houver),
         // senao usa o primeiro AiAgent ativo do restaurante (back-compat).

@@ -38,6 +38,8 @@ export interface Client {
   last_name?: string | null;
   phone?: string | null;
   email?: string | null;
+  /** remoteJid / LID cru, pra APIs que exigem esse formato */
+  whatsapp_lid?: string | null;
   avatar_url?: string | null;
   ai_paused?: boolean | null;
 }
@@ -66,6 +68,12 @@ export interface Conversation {
   } | null;
   unread_count?: number;
   last_message?: LastMessage | null;
+  /** URL de resume do fluxo externo (n8n). Some quando o CRM a consome. */
+  resume_url?: string | null;
+  /** Prazo da espera do fluxo. Sobrevive ao consumo da resume_url. */
+  resume_url_expires_at?: string | null;
+  /** Link pra abrir a execucao no n8n. So pra diagnostico; nunca e chamado. */
+  execution_url?: string | null;
 }
 
 export interface TeamMember {
