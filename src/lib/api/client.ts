@@ -11,7 +11,7 @@ import {
  * dentro de queryFn/mutationFn do React Query, que rodam fora do ciclo de
  * render e nao podem chamar hooks.
  */
-function getImpersonatedCompanyId(): string | null {
+export function getImpersonatedCompanyId(): string | null {
   if (typeof window === 'undefined') return null
 
   try {

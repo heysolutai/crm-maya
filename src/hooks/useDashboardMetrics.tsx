@@ -1,7 +1,8 @@
 import { apiFetch } from '@/lib/api/client';
 import { useQuery } from '@tanstack/react-query';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
-import { format, startOfDay, endOfDay } from 'date-fns';
+import { format } from 'date-fns';
+import type { DailySummaryRow, DashboardSummary } from '@/app/api/dashboard-metrics/types';
 
 const FUNNEL_COLORS = [
   'hsl(173, 80%, 40%)', 'hsl(190, 75%, 42%)', 'hsl(210, 70%, 50%)',
@@ -26,49 +27,43 @@ function computeTrend(current: number, previous: number): number | null {
   return ((current - previous) / previous) * 100;
 }
 
-/**
- * Tempo medio (min) entre a 1a mensagem do cliente e a 1a resposta.
- * `responder` restringe a resposta a IA ou a humano; sem ele, qualquer um.
- */
-function computeAvgResponseTime(
-  messages: { conversationId: string; senderType: string; createdAt: string }[],
-  responder?: 'ai' | 'agent'
-): number {
-  const byConversation = new Map<string, typeof messages>();
-  for (const msg of messages) {
-    const arr = byConversation.get(msg.conversationId) ?? [];
-    arr.push(msg);
-    byConversation.set(msg.conversationId, arr);
-  }
+const EMPTY_SUMMARY: DashboardSummary = {
+  conversations: 0,
+  reservations: 0,
+  reservationsByAi: 0,
+  handoffsEvent: 0,
+  handoffsHuman: 0,
+  daily: [],
+};
 
-  // Mede a 1a resposta do `responder` contra a mensagem de cliente que ela
-  // de fato respondeu (a primeira sem resposta desde a ultima resposta de
-  // qualquer um). Sem isso, num fluxo IA-first o tempo do atendente incluia
-  // toda a fase em que a IA estava cuidando da conversa.
-  const responseTimes: number[] = [];
-  for (const [, msgs] of byConversation) {
-    let pendingClientAt: number | null = null;
-    for (const m of msgs) {
-      const at = new Date(m.createdAt).getTime();
-      if (m.senderType === 'client') {
-        if (pendingClientAt === null) pendingClientAt = at;
-        continue;
-      }
-      if (m.senderType !== 'ai' && m.senderType !== 'agent') continue;
-      if (pendingClientAt === null) continue;
-      if (!responder || m.senderType === responder) {
-        const diffMin = (at - pendingClientAt) / 60000;
-        if (diffMin > 0 && diffMin < 1440) responseTimes.push(diffMin);
-        break;
-      }
-      // Resposta do outro lado: a pendencia foi atendida por ele.
-      pendingClientAt = null;
-    }
-  }
+function toCount(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
 
-  return responseTimes.length > 0
-    ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
-    : 0;
+/** Le o bloco `summary` da API sem confiar cegamente no formato. */
+function parseSummary(value: unknown): DashboardSummary {
+  if (!value || typeof value !== 'object') return EMPTY_SUMMARY;
+  const s = value as Record<string, unknown>;
+  const daily: DailySummaryRow[] = Array.isArray(s.daily)
+    ? s.daily
+        .filter((r): r is Record<string, unknown> => !!r && typeof r === 'object')
+        .map((r) => ({
+          date: String(r.date ?? ''),
+          conversations: toCount(r.conversations),
+          reservations: toCount(r.reservations),
+          handoffsEvent: toCount(r.handoffsEvent),
+          handoffsHuman: toCount(r.handoffsHuman),
+        }))
+    : [];
+  return {
+    conversations: toCount(s.conversations),
+    reservations: toCount(s.reservations),
+    reservationsByAi: toCount(s.reservationsByAi),
+    handoffsEvent: toCount(s.handoffsEvent),
+    handoffsHuman: toCount(s.handoffsHuman),
+    daily,
+  };
 }
 
 export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
@@ -82,9 +77,10 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
   const prevTo = new Date((dateFrom?.getTime() ?? Date.now() - 86400000) - 1).toISOString();
 
   const { data, isLoading } = useQuery({
-    // v3: a resposta ganhou os campos da aba Tempo Real; chave nova pra nao
-    // servir cache do formato antigo.
-    queryKey: ['dashboard-metrics-v3', companyId, from, to],
+    // v4: a resposta ganhou `summary` (resumo diario) e o tempo de resposta
+    // passou a vir agregado do servidor; chave nova pra nao servir cache do
+    // formato antigo.
+    queryKey: ['dashboard-metrics-v4', companyId, from, to],
     queryFn: async () => {
       if (!companyId) return null;
 
@@ -106,7 +102,6 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
       const sales = raw.sales ?? [];
       const prevClients = raw.prevClientsCount ?? 0;
       const prevSales = raw.prevSales ?? [];
-      const messages = raw.todayMessages ?? [];
       const users = raw.users ?? [];
       const stages = raw.stages ?? [];
       const allClients = raw.allClients ?? [];
@@ -124,6 +119,13 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
       const prevClosedCount: number = raw.prevClosedCount ?? 0;
       const messagesBySender: Record<string, number> = raw.messagesBySender ?? {};
       const statusInPeriodRaw: Record<string, number> = raw.statusInPeriod ?? {};
+      // Topo do dashboard: totais do periodo + linha por dia
+      const summary = parseSummary(raw.summary);
+      // Tempo de resposta e mensagens por hora: agregados no servidor, no
+      // periodo do filtro (antes era so "hoje", ignorando o filtro).
+      const responseTimesRaw: Record<string, unknown> =
+        raw.responseTimes && typeof raw.responseTimes === 'object' ? raw.responseTimes : {};
+      const hourlyRaw: unknown[] = Array.isArray(raw.hourlyMessages) ? raw.hourlyMessages : [];
 
       // === KPIs ===
       const totalConversations = conversations.length;
@@ -141,12 +143,7 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
       const agentsOnline = users.filter((u: any) => u.isOnline).length;
       const totalAgents = users.length;
 
-      const normalizedMessages = messages.map((m: any) => ({
-        conversationId: m.conversationId,
-        senderType: m.senderType,
-        createdAt: m.createdAt,
-      }));
-      const avgResponseTime = computeAvgResponseTime(normalizedMessages);
+      const avgResponseTime = toCount(responseTimesRaw.overall);
 
       const newClientsTrend = computeTrend(newClients, prevClients);
       const revenueTrend = computeTrend(revenue, prevRevenue);
@@ -159,24 +156,18 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
       const receivedMessages = messagesBySender.client ?? 0;
       const sentMessages = (messagesBySender.ai ?? 0) + (messagesBySender.agent ?? 0);
       const aiShare = sentMessages > 0 ? ((messagesBySender.ai ?? 0) / sentMessages) * 100 : 0;
-      const aiResponseTime = computeAvgResponseTime(normalizedMessages, 'ai');
-      const humanResponseTime = computeAvgResponseTime(normalizedMessages, 'agent');
+      const aiResponseTime = toCount(responseTimesRaw.ai);
+      const humanResponseTime = toCount(responseTimesRaw.agent);
       const statusInPeriod = {
         active: statusInPeriodRaw.active ?? 0,
         pending: statusInPeriodRaw.pending ?? 0,
         closed: statusInPeriodRaw.closed ?? 0,
       };
 
-      // === Chart: Hourly messages ===
-      const hourlyMap = new Map<number, number>();
-      for (let h = 0; h < 24; h++) hourlyMap.set(h, 0);
-      for (const msg of messages) {
-        const hour = new Date(msg.createdAt).getHours();
-        hourlyMap.set(hour, (hourlyMap.get(hour) ?? 0) + 1);
-      }
-      const hourlyData = Array.from(hourlyMap.entries()).map(([hour, count]) => ({
+      // === Chart: Hourly messages (periodo, fuso do restaurante) ===
+      const hourlyData = Array.from({ length: 24 }, (_, hour) => ({
         hour: `${hour.toString().padStart(2, '0')}h`,
-        mensagens: count,
+        mensagens: toCount(hourlyRaw[hour]),
       }));
 
       // === Chart: Agent performance ===
@@ -311,6 +302,8 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
         aiResponseTime,
         humanResponseTime,
         statusInPeriod,
+        // Topo: conversas, reservas e encaminhamentos (totais + por dia)
+        summary,
       };
     },
     enabled: !!companyId,
@@ -350,6 +343,7 @@ export function useDashboardMetrics(dateFrom?: Date, dateTo?: Date) {
     aiResponseTime: 0,
     humanResponseTime: 0,
     statusInPeriod: { active: 0, pending: 0, closed: 0 },
+    summary: EMPTY_SUMMARY,
   };
 
   return { ...(data ?? defaults), isLoading };

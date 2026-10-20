@@ -6,6 +6,7 @@ import { assignNextAgent, assignNextAgentInDepartment } from '@/lib/api/database
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
 import { publishEvent } from '@/lib/realtime';
 import { handleApiErrorCors } from '@/lib/api/errors'
+import { logConversationEvent } from '@/lib/conversations/events';
 
 const transferSchema = z.object({
   conversation_id: z.string().uuid(),
@@ -13,6 +14,9 @@ const transferSchema = z.object({
   department_id: z.string().uuid().optional(),
   mode: z.enum(['manual', 'round-robin', 'department']).optional().default('manual'),
   note: z.string().max(3000).optional(),
+  // Motivo do encaminhamento, so pra metrica do dashboard: 'evento' conta em
+  // "Encaminhadas p/ eventos", 'humano' (padrao) em "Encaminhadas p/ humano".
+  reason: z.enum(['humano', 'evento']).optional().default('humano'),
 });
 
 export async function OPTIONS(req: NextRequest) { return handleCors(req) || jsonResponse(null); }
@@ -28,7 +32,7 @@ export async function POST(req: NextRequest) {
       return errorResponse('Dados inválidos', 400);
     }
 
-    const { conversation_id: conversationId, target_user_id: targetUserId, department_id: departmentId, mode, note } = validation.data;
+    const { conversation_id: conversationId, target_user_id: targetUserId, department_id: departmentId, mode, note, reason } = validation.data;
 
     if (!conversationId) return badRequestResponse('conversation_id is required');
 
@@ -68,6 +72,20 @@ export async function POST(req: NextRequest) {
       }
     };
 
+    // Registra o encaminhamento na linha do tempo (base das contagens do
+    // dashboard). Sem sessao = chamada por API key (n8n) = foi a IA.
+    // logConversationEvent nunca lanca: metrica nao derruba a transferencia.
+    const recordHandoff = (input: { userId: string | null; departmentId: string | null; queued: boolean }) =>
+      logConversationEvent({
+        companyId: conversation.companyId,
+        conversationId,
+        type: reason === 'evento' ? 'handoff_event' : 'handoff_human',
+        actor: agentId ? 'agent' : 'ai',
+        userId: input.userId,
+        departmentId: input.departmentId,
+        metadata: { mode, reason, queued: input.queued, byUserId: agentId ?? null },
+      });
+
     let assignedUserId: string | null = null;
 
     // Mode: department: round-robin among online agents of a department
@@ -98,6 +116,7 @@ export async function POST(req: NextRequest) {
         });
 
         await saveTransferNote(`Transferida para departamento ${dept.name} (em fila)`);
+        await recordHandoff({ userId: null, departmentId: dept.id, queued: true });
 
         await publishEvent(companyId || '', { type: 'conversation:update', conversationId });
         await publishEvent(companyId || '', { type: 'conversation:transferred', conversationId, targetUserId: null, status: 'pending', clientName });
@@ -132,6 +151,7 @@ export async function POST(req: NextRequest) {
       });
 
       await saveTransferNote(`Transferida para ${assignedUser?.fullName ?? 'agente'} no departamento ${dept.name}`);
+      await recordHandoff({ userId: assignedUserId, departmentId: dept.id, queued: false });
 
       await publishEvent(companyId || '', { type: 'conversation:update', conversationId });
       await publishEvent(companyId || '', { type: 'conversation:transferred', conversationId, targetUserId: assignedUserId, status: 'active', clientName });
@@ -174,6 +194,7 @@ export async function POST(req: NextRequest) {
     });
 
     await saveTransferNote(`Transferida para ${assignedUser?.fullName ?? 'agente'} (${mode})`);
+    await recordHandoff({ userId: assignedUserId, departmentId: null, queued: false });
 
     await publishEvent(companyId || '', { type: 'conversation:update', conversationId });
     await publishEvent(companyId || '', { type: 'conversation:transferred', conversationId, targetUserId: assignedUserId, status: 'active', clientName });

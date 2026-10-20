@@ -1,4 +1,3 @@
-import { AIPromptsEditor } from '@/components/ai';
 import { SimpleAgentConfig } from '@/components/ai/SimpleAgentConfig';
 
 interface PromptsSubTabProps {
@@ -8,28 +7,16 @@ interface PromptsSubTabProps {
 /**
  * Prompts do restaurante no painel administrativo.
  *
- * Aqui so existia o editor de texto puro (AIPromptsEditor). Os dados que
- * ALIMENTAM o prompt: nome do restaurante, endereco, horarios, precos -
- * moravam exclusivamente em /app/inboxes/[id], que e outra tela. Resultado:
- * dava pra reescrever o prompt inteiro por aqui, mas nao pra corrigir o nome
- * do restaurante que aparece nele.
- *
- * O formulario simples entra primeiro por ser o caminho que quase todo mundo
- * quer; o editor avancado continua logo abaixo, pra quem precisa mexer no
- * texto na mao.
+ * Mesmo formulario que o restaurante usa (nome, endereco, horarios, precos e
+ * instrucoes extras). O texto completo, para quem precisa mexer na mao, fica
+ * dentro dele (secao "Editar o texto completo"), junto do aviso de que salvar
+ * o formulario gera o texto de novo. Antes o editor de texto puro ficava ao
+ * lado, e salvar um apagava a edicao do outro.
  */
 export function PromptsSubTab({ companyId }: PromptsSubTabProps) {
   return (
     <div className="space-y-6">
       <SimpleAgentConfig companyId={companyId} />
-
-      <AIPromptsEditor
-        companyId={companyId}
-        variant="full"
-        showConfigInfo={true}
-        showVariablesCard={true}
-      />
     </div>
   );
 }
-

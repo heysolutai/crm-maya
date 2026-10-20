@@ -22,6 +22,14 @@ export interface N8NWebhookJob {
   resolverResumeUrl?: boolean
 }
 
+/**
+ * Quem responde a mensagem depois que o audio/midia ficar pronto. Decidido na
+ * entrada (webhook) por despacharParaIA/decidirDestinoIA e carregado no job:
+ * o worker nao decide de novo (a resumeUrl do fluxo externo ja pode ter sido
+ * consumida na rota). Job antigo, sem o campo, segue o caminho do n8n.
+ */
+export type DestinoIA = 'maestro' | 'n8n'
+
 export interface TranscriptionJob {
   messageId: string
   conversationId: string
@@ -32,6 +40,7 @@ export interface TranscriptionJob {
   messageKey: string // UAZ message key for fallback methods
   n8nWebhookUrl?: string // To resend after transcription
   n8nPayload?: Record<string, unknown> // Original N8N payload to resend with transcription
+  destinoIA?: DestinoIA
 }
 
 export interface MediaProcessingJob {
@@ -47,6 +56,15 @@ export interface MediaProcessingJob {
   messageKey: string
   n8nWebhookUrl?: string
   n8nPayload?: Record<string, unknown>
+  destinoIA?: DestinoIA
+}
+
+/** Um turno do Maestro numa conversa (ver src/lib/maestro). */
+export interface MaestroTurnJob {
+  companyId: string
+  conversationId: string
+  /** Mensagem que disparou o turno (so pra log; o turno junta tudo que esta pendente). */
+  messageId?: string
 }
 
 export interface OutboundMessageJob {
@@ -99,6 +117,7 @@ export interface CronTickJob {
 export const QUEUE_NAMES = {
   INBOUND_MESSAGE: 'inbound-message',
   N8N_WEBHOOK: 'n8n-webhook',
+  MAESTRO_TURN: 'maestro-turn',
   TRANSCRIPTION: 'audio-transcription',
   MEDIA_PROCESSING: 'media-processing',
   OUTBOUND_MESSAGE: 'outbound-message',
@@ -108,6 +127,7 @@ export const QUEUE_NAMES = {
   CRON_REVIEW_REPORT: 'cron-review-report',
   CRON_FOLLOW_UPS: 'cron-follow-ups',
   CRON_WHATSAPP_STATUS: 'cron-whatsapp-status',
+  CRON_CLOUD_CONNECT: 'cron-cloud-connect',
   CRON_CLEANUP_PRESENCE: 'cron-cleanup-presence',
   CRON_REVIEW_DISPATCH: 'cron-review-dispatch',
 } as const
@@ -244,6 +264,34 @@ export async function enqueueN8NWebhook(
   // job esta parado; depois disso pode sumir.
   await redis.set(ponteiro, jobId, 'PX', espera + 60_000).catch(() => {})
   return job
+}
+
+/**
+ * Agenda o turno do Maestro com DEBOUNCE por conversa (mesma espera do n8n:
+ * ver N8N_DEBOUNCE_MS e ReviewSettings.agruparSegundos).
+ *
+ * Cada mensagem nova da mesma conversa empurra o turno pra frente: o cliente
+ * que manda "oi" / "queria reservar" / "pra sabado" em 5 segundos recebe UMA
+ * resposta pras tres, depois de `esperaSegundos` de silencio.
+ *
+ * Como funciona: `deduplication` do BullMQ em modo debounce (id por conversa,
+ * ttl = espera, extend + replace). Enquanto o job esta parado (delayed), outro
+ * add com o mesmo id substitui o anterior e reinicia a contagem. O jobId e
+ * gerado pelo BullMQ (unico), entao job concluido nunca engole o proximo: o
+ * problema do jobId fixo que o enqueueN8NWebhook descreve acima nao existe aqui.
+ *
+ * Uma tentativa so: o engine ja trata a propria falha (mensagem de seguranca +
+ * atendente). Retry automatico reenviaria resposta.
+ */
+export async function enfileirarTurnoMaestro(data: MaestroTurnJob, esperaSegundos: number) {
+  const queue = getOrCreateQueue<MaestroTurnJob>(QUEUE_NAMES.MAESTRO_TURN)
+  const esperaMs = Math.max(1, Math.round(esperaSegundos)) * 1000
+  return queue.add('turno', data, {
+    priority: 1,
+    delay: esperaMs,
+    attempts: 1,
+    deduplication: { id: `maestro-${data.conversationId}`, ttl: esperaMs, extend: true, replace: true },
+  })
 }
 
 export async function enqueueTranscription(data: TranscriptionJob) {

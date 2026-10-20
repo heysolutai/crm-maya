@@ -1,5 +1,8 @@
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, getImpersonatedCompanyId } from '@/lib/api/client';
 import { useState } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { WhatsAppCloudCard } from '@/components/super-admin/company-details/WhatsAppCloudCard';
+import { WhatsAppCloudConnect } from '@/components/inboxes/WhatsAppCloudConnect';
 import { useRouter } from 'next/navigation';
 import { useInboxes, type Inbox } from '@/hooks/useInboxes';
 import { useChannelCredentials } from '@/hooks/useChannelCredentials';
@@ -67,6 +70,9 @@ export default function Inboxes() {
   const { credentialFor, hasCredentialFor } = useChannelCredentials();
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [cloudDialogOpen, setCloudDialogOpen] = useState(false);
+  const { isSuperAdmin, companyId: sessionCompanyId } = useAuth();
+  const cloudCompanyId = isSuperAdmin ? getImpersonatedCompanyId() || sessionCompanyId : null;
   const [selectedChannel, setSelectedChannel] = useState<ChannelType | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [serverUrl, setServerUrl] = useState('');
@@ -248,7 +254,9 @@ export default function Inboxes() {
         onSuccess: (inbox: Inbox) => {
           setDialogOpen(false);
           resetForm();
-          router.push(`/app/inboxes/${inbox.id}`);
+          // Canal de QR: a tela de detalhe ja abre o QR Code (?conectar=1).
+          const isQr = CHANNEL_REGISTRY[inbox.channel_type as ChannelType]?.connectionMode === 'qr';
+          router.push(`/app/inboxes/${inbox.id}${isQr ? '?conectar=1' : ''}`);
         },
       }
     );
@@ -388,7 +396,17 @@ export default function Inboxes() {
                       key={c.type}
                       type="button"
                       disabled={disabled}
-                      onClick={() => !disabled && handleSelectChannel(c.type)}
+                      onClick={() => {
+                        if (disabled) return;
+                        // API oficial tem fluxo proprio (escolha do numero +
+                        // webhook automatico), restrito ao super-admin.
+                        if (c.type === 'whatsapp_cloud') {
+                          setDialogOpen(false);
+                          setCloudDialogOpen(true);
+                          return;
+                        }
+                        handleSelectChannel(c.type);
+                      }}
                       className={cn(
                         'flex items-center gap-3 rounded-lg border p-3 text-left transition-all',
                         isSelected
@@ -751,6 +769,26 @@ export default function Inboxes() {
               Criar caixa de entrada
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={cloudDialogOpen} onOpenChange={setCloudDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>WhatsApp Cloud</DialogTitle>
+            <DialogDescription>API oficial do WhatsApp: número verificado pela Meta, sem QR Code.</DialogDescription>
+          </DialogHeader>
+          {cloudCompanyId ? (
+            // Super-admin: botao de conexao + cadastro manual (dentro do card).
+            <WhatsAppCloudCard companyId={cloudCompanyId} />
+          ) : (
+            <WhatsAppCloudConnect
+              onConnected={(ids) => {
+                setCloudDialogOpen(false);
+                if (ids[0]) router.push(`/app/inboxes/${ids[0]}`);
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
 

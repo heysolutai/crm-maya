@@ -22,7 +22,6 @@ interface Props {
  */
 export function AuthCard({ titulo, descricao, children, mostrarVoltar = true }: Props) {
   const { branding } = useBranding();
-  const inicial = (branding.systemName || 'M').trim().charAt(0).toUpperCase();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-brand-surface px-4 py-12">
@@ -41,9 +40,8 @@ export function AuthCard({ titulo, descricao, children, mostrarVoltar = true }: 
               unoptimized
             />
           ) : (
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-brand-light flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-primary/25">
-              {inicial}
-            </div>
+            // Espaco da logo enquanto carrega (sem quadrado com inicial piscando).
+            <div className="h-12" aria-hidden />
           )}
         </div>
 

@@ -15,13 +15,14 @@ import type { AIPermissionKey } from '@/components/super-admin/company-details/A
 const fixedMenuItems = [
   { id: 'prompts', label: 'Prompts', icon: MessageSquareText, permKey: 'prompts' as AIPermissionKey },
   { id: 'faq', label: 'FAQ', icon: BookOpen, permKey: 'faq' as AIPermissionKey },
+  // Testar a IA: sempre liberado (sem numero de WhatsApp, pelo Maestro).
+  { id: 'playground', label: 'Testar a IA', icon: FlaskConical, permKey: 'prompts' as AIPermissionKey },
 ];
 
 // These tabs only appear if enabled by super admin
 const restrictedMenuItems = [
   { id: 'integrations', label: 'Integrações', icon: Key, permKey: 'integrations' as AIPermissionKey },
   { id: 'settings', label: 'Ajustes', icon: Settings, permKey: 'settings' as AIPermissionKey },
-  { id: 'playground', label: 'Playground', icon: FlaskConical, permKey: 'playground' as AIPermissionKey },
 ];
 
 export default function AppAISettings() {

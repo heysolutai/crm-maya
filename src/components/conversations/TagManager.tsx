@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { X, Plus } from "lucide-react";
+import { TAG_CATALOG } from "./tag-catalog";
 
 interface TagManagerProps {
   open: boolean;
@@ -14,15 +15,6 @@ interface TagManagerProps {
   onRemoveTag: (params: { conversationId: string; tag: string }) => void;
 }
 
-const PREDEFINED_TAGS = [
-  { name: "Interessado", color: "bg-green-500" },
-  { name: "Aguardando Resposta", color: "bg-yellow-500" },
-  { name: "Orçamento Enviado", color: "bg-blue-500" },
-  { name: "Follow-up", color: "bg-purple-500" },
-  { name: "Urgente", color: "bg-red-500" },
-  { name: "Qualificado", color: "bg-gray-500" },
-  { name: "Negociação", color: "bg-orange-500" },
-];
 
 export function TagManager({
   open,
@@ -101,7 +93,7 @@ export function TagManager({
           <div>
             <h4 className="text-sm font-medium mb-2">Etiquetas sugeridas</h4>
             <div className="flex flex-wrap gap-2">
-              {PREDEFINED_TAGS.map((tag) => (
+              {TAG_CATALOG.map((tag) => (
                 <Button
                   key={tag.name}
                   variant="outline"
@@ -110,7 +102,7 @@ export function TagManager({
                   disabled={currentTags.includes(tag.name)}
                   className="gap-2"
                 >
-                  <span className={`h-2 w-2 rounded-full ${tag.color}`} />
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tag.color }} />
                   {tag.name}
                 </Button>
               ))}

@@ -2,6 +2,8 @@ import { Worker, Queue } from 'bullmq'
 import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type CronTickJob } from '../queues'
 import { prisma } from '@/lib/db'
+import { isAiPausedNow } from '@/lib/ai/pause'
+import { sendCloudTextInWindow } from '@/lib/channels/cloud-window'
 import { prepararTextoParaWhatsApp } from '@/lib/whatsapp/texto-whatsapp'
 
 interface EtapaFollowUp {
@@ -26,9 +28,9 @@ type Conferencia = { cancelar: string } | { texto: string }
  */
 async function conferirEnvio(
   job: { companyId: string; conversationId: string | null; inboxId: string | null; stageOrder: number; createdAt: Date },
-  client: { firstName: string; phone: string | null; aiPaused: boolean }
+  client: { firstName: string; phone: string | null; aiPaused: boolean; aiPausedUntil: Date | null }
 ): Promise<Conferencia> {
-  if (client.aiPaused) return { cancelar: 'IA pausada para o cliente (atendimento manual)' }
+  if (isAiPausedNow(client)) return { cancelar: 'IA pausada para o cliente (atendimento manual)' }
 
   // Mesmo agente que a criacao usa: o da inbox, senao o primeiro ativo.
   const inbox = job.inboxId
@@ -121,15 +123,15 @@ async function processFollowUps() {
       })
 
       // Get WhatsApp instance
-      let instance: { id: string; apiUrl: string; instanceApiKey: string } | null = null
+      let instance: { id: string; apiUrl: string; instanceApiKey: string; channelType: string } | null = null
 
       if (job.inboxId) {
         const foundInstance = await prisma.inbox.findFirst({
           where: { id: job.inboxId, isActive: true },
-          select: { id: true, apiUrl: true, instanceApiKey: true },
+          select: { id: true, apiUrl: true, instanceApiKey: true, channelType: true },
         })
         if (foundInstance?.apiUrl && foundInstance?.instanceApiKey) {
-          instance = { id: foundInstance.id, apiUrl: foundInstance.apiUrl, instanceApiKey: foundInstance.instanceApiKey }
+          instance = { id: foundInstance.id, apiUrl: foundInstance.apiUrl, instanceApiKey: foundInstance.instanceApiKey, channelType: foundInstance.channelType }
         }
       }
 
@@ -137,10 +139,10 @@ async function processFollowUps() {
       if (!instance) {
         const foundInstance = await prisma.inbox.findFirst({
           where: { companyId: job.companyId, isActive: true },
-          select: { id: true, apiUrl: true, instanceApiKey: true },
+          select: { id: true, apiUrl: true, instanceApiKey: true, channelType: true },
         })
         if (foundInstance?.apiUrl && foundInstance?.instanceApiKey) {
-          instance = { id: foundInstance.id, apiUrl: foundInstance.apiUrl, instanceApiKey: foundInstance.instanceApiKey }
+          instance = { id: foundInstance.id, apiUrl: foundInstance.apiUrl, instanceApiKey: foundInstance.instanceApiKey, channelType: foundInstance.channelType }
         }
       }
 
@@ -167,7 +169,7 @@ async function processFollowUps() {
 
       const client = await prisma.client.findFirst({
         where: { id: job.clientId, companyId: job.companyId },
-        select: { phone: true, firstName: true, aiPaused: true },
+        select: { phone: true, firstName: true, aiPaused: true, aiPausedUntil: true },
       })
 
       if (!client?.phone) {
@@ -196,25 +198,46 @@ async function processFollowUps() {
 
       // Send WhatsApp message
       const cleanPhone = client.phone.replace(/[^0-9]/g, '')
-      const response = await fetch(`${instance.apiUrl}/send/text`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'token': instance.instanceApiKey,
-        },
-        body: JSON.stringify({
-          number: cleanPhone,
+      let waMessageId: string | undefined
+      if (instance.channelType === 'whatsapp_cloud') {
+        // API oficial: texto livre so dentro da janela de 24h do cliente.
+        const envio = await sendCloudTextInWindow({
+          inboxId: instance.id,
+          companyId: job.companyId,
+          conversationId: job.conversationId,
+          to: cleanPhone,
           text: texto,
-        }),
-      })
+        })
+        if (!envio.sent) {
+          console.log(`[Cron Follow-ups] Job ${job.id} cancelado: ${envio.reason}`)
+          await prisma.followUpJob.update({
+            where: { id: job.id },
+            data: { status: 'cancelled', errorMessage: envio.reason },
+          })
+          continue
+        }
+        waMessageId = envio.providerMessageId
+      } else {
+        const response = await fetch(`${instance.apiUrl}/send/text`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'token': instance.instanceApiKey,
+          },
+          body: JSON.stringify({
+            number: cleanPhone,
+            text: texto,
+          }),
+        })
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`WhatsApp API error (${response.status}): ${errorText}`)
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`WhatsApp API error (${response.status}): ${errorText}`)
+        }
+
+        const result = await response.json()
+        waMessageId = result?.key?.id || result?.message_id
       }
-
-      const result = await response.json()
-      const waMessageId = result?.key?.id || result?.message_id
 
       // Save message to conversation
       if (job.conversationId) {

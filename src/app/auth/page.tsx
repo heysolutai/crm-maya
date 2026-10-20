@@ -15,7 +15,7 @@ import { useBranding } from '@/hooks/useBranding'
 export default function AuthPage() {
   const router = useRouter()
   const { signIn, signUp, user, role, companyId, loading: authLoading } = useAuth()
-  const { branding } = useBranding()
+  const { branding, loading: carregandoMarca } = useBranding()
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -71,8 +71,8 @@ export default function AuthPage() {
     { icon: Calendar, label: 'Menos no-show, salão mais cheio' },
   ]
 
-  // Inicial do nome do sistema pra usar como fallback quando nao ha logo
-  const initial = (branding.systemName || 'C').trim().charAt(0).toUpperCase()
+  // Sem quadrado com a inicial enquanto a logo carrega: ele piscava ("R"
+  // laranja do nome padrao) antes da logo de verdade aparecer.
 
   return (
     <div className="min-h-screen flex">
@@ -106,14 +106,13 @@ export default function AuthPage() {
                 priority
               />
             ) : (
-              <div className="relative w-36 h-36 rounded-3xl bg-gradient-to-br from-brand-primary to-brand-deep flex items-center justify-center shadow-2xl">
-                <span className="text-white text-6xl font-bold">{initial}</span>
-              </div>
+              // Reserva o espaco da logo enquanto ela carrega.
+              <div className="relative w-36 h-36" aria-hidden />
             )}
           </div>
 
           {/* So mostra o nome se NAO tem logo (logo geralmente ja contem o nome) */}
-          {!branding.logoUrl && (
+          {!carregandoMarca && !branding.logoUrl && (
             <h1 className="text-4xl font-bold text-white mb-4 text-center">
               <span className="bg-gradient-to-r from-brand-primary via-brand-light to-brand-deep bg-clip-text text-transparent">
                 {branding.systemName}
@@ -153,13 +152,13 @@ export default function AuthPage() {
                 height={120}
               />
             ) : (
-              <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-brand-primary to-brand-deep flex items-center justify-center mb-4">
-                <span className="text-white text-3xl font-bold">{initial}</span>
-              </div>
+              <div className="w-20 h-20 mb-4" aria-hidden />
             )}
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-brand-primary via-brand-light to-brand-deep bg-clip-text text-transparent">
-              {branding.systemName}
-            </h1>
+            {!carregandoMarca && !branding.logoUrl && (
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-brand-primary via-brand-light to-brand-deep bg-clip-text text-transparent">
+                {branding.systemName}
+              </h1>
+            )}
           </div>
 
           {/* Form Header */}

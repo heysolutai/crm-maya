@@ -32,6 +32,9 @@ export interface APIKeys {
   elevenlabs_remove_background_noise?: boolean;
 }
 
+/** Quem responde ao cliente: o fluxo atual (n8n) ou o motor próprio (Maestro). */
+export type AgentEngine = 'n8n' | 'maestro';
+
 export interface AIConfiguration {
   id: string;
   company_id: string;
@@ -49,6 +52,8 @@ export interface AIConfiguration {
   api_keys: APIKeys;
   behavior_settings: BehaviorSettings;
   n8n_webhook_url: string | null;
+  /** Só o super-admin troca (PUT /api/ai-configurations recusa os demais). */
+  engine: AgentEngine;
   knowledge: string | null;
   memory_key: string | null;
   products_knowledge: string | null;
@@ -74,6 +79,7 @@ function mapConfig(item: any): AIConfiguration {
       ...(item.behaviorSettings ?? item.behavior_settings ?? {}),
     } as BehaviorSettings,
     n8n_webhook_url: item.n8nWebhookUrl ?? item.n8n_webhook_url ?? null,
+    engine: item.engine === 'maestro' ? 'maestro' : 'n8n',
     knowledge: item.knowledge ?? null,
     memory_key: item.memoryKey ?? item.memory_key ?? null,
     products_knowledge: item.productsKnowledge ?? item.products_knowledge ?? null,

@@ -1,7 +1,28 @@
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Phone, Bot, Loader2, ArrowLeft, MoreVertical, StickyNote, UserCheck, RefreshCw, X, Tag, MessageCircle, Pencil } from 'lucide-react';
+import {
+  Phone,
+  Bot,
+  Loader2,
+  ArrowLeft,
+  MoreVertical,
+  StickyNote,
+  RefreshCw,
+  X,
+  Tag,
+  MessageCircle,
+  Pencil,
+  ChevronDown,
+  PauseCircle,
+  Play,
+  Timer,
+  Infinity as InfinityIcon,
+  Copy,
+  Hash,
+  Workflow,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -9,6 +30,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -17,13 +39,59 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { createWhatsAppLink } from '@/lib/linkify';
-import { statusColors, statusLabels, type Conversation, type ConversationStatus } from './types';
+import { cn } from '@/lib/utils';
+import { statusColors, statusLabels, type Conversation, type ConversationStatus, type TeamMember } from './types';
+import {
+  OPCOES_PAUSA,
+  formatarDuracao,
+  formatarHorario,
+  isAiPausedNow,
+  minutosRestantes,
+  rotuloQuemPausou,
+} from './ai-pause';
+
+/**
+ * Relogio da contagem regressiva. So tica com pausa COM prazo (30s basta pra
+ * "volta em X min"); zera quando o prazo muda pra nao mostrar 1 min a mais.
+ */
+function useAgora(ativo: boolean, chave: string | null | undefined): number {
+  const [agora, setAgora] = useState(() => Date.now());
+  useEffect(() => {
+    setAgora(Date.now());
+    if (!ativo) return;
+    const t = setInterval(() => setAgora(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [ativo, chave]);
+  return agora;
+}
+
+/** So https vira link: a URL vem do n8n e um `javascript:` aqui seria XSS. */
+function urlExecucaoSegura(url: string | null | undefined): string | null {
+  return url && /^https:\/\//i.test(url) ? url : null;
+}
+
+async function copiar(texto: string, rotulo: string) {
+  try {
+    await navigator.clipboard.writeText(texto);
+    toast.success(`${rotulo} copiado`);
+  } catch {
+    // clipboard bloqueado (http sem tls, permissao negada)
+    toast.error(`Não foi possível copiar o ${rotulo.toLowerCase()}`);
+  }
+}
 
 interface ConversationHeaderProps {
   conversation: Conversation;
-  isTogglingAIPaused: boolean;
-  onToggleAIPaused: () => void;
+  isChangingAIPause: boolean;
+  /** Tempo padrao da empresa em minutos (0 = sem prazo). null = ainda nao carregou. */
+  aiPauseDefaultMinutes?: number | null;
+  /** undefined = tempo padrao da empresa; null = ate retomar; numero = minutos. */
+  onPauseAI: (minutes?: number | null) => void;
+  onResumeAI: () => void;
+  /** Pra dizer QUEM pausou (ai_paused_by guarda o id). */
+  teamMembers?: TeamMember[];
   onOpenNotes: () => void;
   onTransfer: () => void;
   onClose: () => void;
@@ -32,12 +100,17 @@ interface ConversationHeaderProps {
   onRemoveTag: (tag: string) => void;
   onEditContact: () => void;
   onBack?: () => void;
+  /** Abre a gaveta "Dados do contato" (so abaixo de lg; no desktop o painel e fixo). */
+  onOpenInfo?: () => void;
 }
 
 export const ConversationHeader = memo(function ConversationHeader({
   conversation,
-  isTogglingAIPaused,
-  onToggleAIPaused,
+  isChangingAIPause,
+  aiPauseDefaultMinutes = null,
+  onPauseAI,
+  onResumeAI,
+  teamMembers = [],
   onOpenNotes,
   onTransfer,
   onClose,
@@ -46,12 +119,81 @@ export const ConversationHeader = memo(function ConversationHeader({
   onRemoveTag,
   onEditContact,
   onBack,
+  onOpenInfo,
 }: ConversationHeaderProps) {
+  const abrirInfo = () => {
+    // No desktop a barra lateral ja mostra tudo; o toque no nome so vale
+    // abaixo de lg, onde o painel vira gaveta.
+    if (!onOpenInfo || window.matchMedia('(min-width: 1024px)').matches) return;
+    onOpenInfo();
+  };
+
   const clientName = conversation.client 
     ? `${conversation.client.first_name} ${conversation.client.last_name || ''}`.trim()
     : 'Cliente';
 
   const initials = clientName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+
+  // ── Pausa da IA ──
+  const cliente = conversation.client;
+  const prazoPausa = cliente?.ai_paused ? cliente.ai_paused_until ?? null : null;
+  const agora = useAgora(!!prazoPausa, prazoPausa);
+  const iaPausada = isAiPausedNow(cliente, agora);
+  const restante = iaPausada && prazoPausa ? formatarDuracao(Math.max(1, minutosRestantes(prazoPausa, agora))) : null;
+  /** "volta em 12 min" / "até retomar" */
+  const textoPausa = restante ? `volta em ${restante}` : 'até retomar';
+  const quemPausou = iaPausada ? rotuloQuemPausou(cliente?.ai_paused_by, teamMembers) : null;
+  const detalhePausa = iaPausada
+    ? [
+        prazoPausa ? `IA pausada até ${formatarHorario(prazoPausa, agora)}` : 'IA pausada até alguém retomar',
+        quemPausou ? `(pausada ${quemPausou})` : null,
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : '';
+  // "Pausar pelo tempo padrao" so quando o padrao tem prazo e nao repete 15/60.
+  const padraoExtra =
+    aiPauseDefaultMinutes && aiPauseDefaultMinutes > 0 && !OPCOES_PAUSA.some((o) => o.minutes === aiPauseDefaultMinutes)
+      ? aiPauseDefaultMinutes
+      : null;
+
+  // ── Depuracao (n8n) ──
+  const urlExecucao = urlExecucaoSegura(conversation.execution_url);
+  const telefone = cliente?.phone?.trim() || null;
+
+  const itensMenuPausa = (
+    <>
+      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+        {iaPausada ? `IA pausada · ${textoPausa}` : 'A IA para de responder este cliente'}
+      </DropdownMenuLabel>
+      {iaPausada && (
+        <>
+          <DropdownMenuItem onClick={onResumeAI} className="font-medium text-emerald-700 dark:text-emerald-400">
+            <Play className="h-4 w-4 mr-2" />
+            Retomar IA agora
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Alterar pausa</DropdownMenuLabel>
+        </>
+      )}
+      {OPCOES_PAUSA.map((op) => (
+        <DropdownMenuItem key={op.label} onClick={() => onPauseAI(op.minutes)}>
+          <Timer className="h-4 w-4 mr-2" />
+          {op.label}
+        </DropdownMenuItem>
+      ))}
+      {padraoExtra && (
+        <DropdownMenuItem onClick={() => onPauseAI(undefined)}>
+          <Timer className="h-4 w-4 mr-2" />
+          Pausar pelo tempo padrão ({formatarDuracao(padraoExtra)})
+        </DropdownMenuItem>
+      )}
+      <DropdownMenuItem onClick={() => onPauseAI(null)}>
+        <InfinityIcon className="h-4 w-4 mr-2" />
+        Pausar até eu retomar
+      </DropdownMenuItem>
+    </>
+  );
 
   return (
     <div className="border-b border-border bg-card">
@@ -118,7 +260,19 @@ export const ConversationHeader = memo(function ConversationHeader({
         </Popover>
 
         {/* Name + status */}
-        <div className="flex-1 min-w-0">
+        <div
+          className="flex-1 min-w-0 max-lg:cursor-pointer max-lg:min-h-10"
+          role={onOpenInfo ? 'button' : undefined}
+          tabIndex={onOpenInfo ? 0 : undefined}
+          aria-label={onOpenInfo ? 'Ver dados do contato' : undefined}
+          onClick={abrirInfo}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              abrirInfo();
+            }
+          }}
+        >
           <h2 className="text-base font-semibold truncate">{clientName}</h2>
           <div className="flex items-center gap-1.5 flex-wrap">
             <Badge
@@ -144,40 +298,90 @@ export const ConversationHeader = memo(function ConversationHeader({
           </div>
         </div>
 
-        {/* AI Pause button */}
-        {conversation.client?.id && (
-          <Button 
-            variant="ghost"
-            size="sm"
-            onClick={onToggleAIPaused}
-            disabled={isTogglingAIPaused}
-            className={`shrink-0 h-8 px-2 text-xs gap-1 ${
-              conversation.client?.ai_paused 
-                ? "bg-orange-500/15 text-orange-600 hover:bg-orange-500/25 dark:text-orange-400" 
-                : "text-muted-foreground"
-            }`}
-          >
-            {isTogglingAIPaused ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <>
-                <Bot className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">
-                  {conversation.client?.ai_paused ? "IA Pausada" : "Pausar IA"}
-                </span>
-              </>
+        {/* Execucao no n8n (desktop). No celular fica dentro do menu. */}
+        {urlExecucao && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button asChild variant="ghost" size="icon" className="hidden md:inline-flex shrink-0 h-9 w-9">
+                <a
+                  href={urlExecucao}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Abrir execução no n8n"
+                >
+                  <Workflow className="h-4 w-4" />
+                </a>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Abrir execução no n8n</TooltipContent>
+          </Tooltip>
+        )}
+
+        {/* Pausa da IA: estado sempre visivel + menu com os prazos. */}
+        {cliente?.id && (
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={isChangingAIPause}
+                  title={iaPausada ? detalhePausa : 'Pausar a IA nesta conversa'}
+                  aria-label={iaPausada ? `${detalhePausa}. Alterar pausa` : 'Pausar IA'}
+                  className={cn(
+                    'shrink-0 h-9 md:h-8 px-2 text-xs gap-1',
+                    iaPausada
+                      ? 'bg-orange-500/15 text-orange-700 hover:bg-orange-500/25 hover:text-orange-800 dark:text-orange-300 font-semibold'
+                      : 'border border-border text-muted-foreground'
+                  )}
+                >
+                  {isChangingAIPause ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : iaPausada ? (
+                    <PauseCircle className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                  ) : (
+                    <Bot className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                  )}
+                  {iaPausada ? (
+                    // Abaixo de lg (celular, ou tablet com a lista aberta ao
+                    // lado) nao cabe: o texto vai na faixa logo abaixo.
+                    <span className="hidden lg:inline whitespace-nowrap">IA pausada · {textoPausa}</span>
+                  ) : (
+                    <>
+                      <span className="sm:hidden">Pausar</span>
+                      <span className="hidden sm:inline">Pausar IA</span>
+                    </>
+                  )}
+                  <ChevronDown className="hidden sm:block h-3 w-3 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                {itensMenuPausa}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {iaPausada && (
+              <Button
+                size="sm"
+                onClick={onResumeAI}
+                disabled={isChangingAIPause}
+                className="hidden lg:inline-flex shrink-0 h-8 px-3 text-xs gap-1 bg-orange-600 hover:bg-orange-700 text-white"
+              >
+                <Play className="h-3.5 w-3.5" />
+                Retomar IA
+              </Button>
             )}
-          </Button>
+          </>
         )}
 
         {/* 3-dot menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9">
+            <Button variant="ghost" size="icon" className="shrink-0 h-9 w-9" aria-label="Mais ações">
               <MoreVertical className="h-5 w-5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem onClick={onOpenNotes}>
               <StickyNote className="h-4 w-4 mr-2" />
               Notas & Lembretes
@@ -185,6 +389,26 @@ export const ConversationHeader = memo(function ConversationHeader({
             <DropdownMenuItem onClick={onOpenTagManager}>
               <Tag className="h-4 w-4 mr-2" />
               Etiquetas
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {/* Depuracao: o que se cola na busca de execucoes do n8n. */}
+            {urlExecucao && (
+              <DropdownMenuItem asChild className="md:hidden">
+                <a href={urlExecucao} target="_blank" rel="noopener noreferrer">
+                  <Workflow className="h-4 w-4 mr-2" />
+                  Abrir execução no n8n
+                </a>
+              </DropdownMenuItem>
+            )}
+            {telefone && (
+              <DropdownMenuItem onClick={() => copiar(telefone, 'Telefone')}>
+                <Copy className="h-4 w-4 mr-2" />
+                Copiar telefone
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={() => copiar(conversation.id, 'ID da conversa')}>
+              <Hash className="h-4 w-4 mr-2" />
+              Copiar ID da conversa
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onTransfer}>
@@ -205,6 +429,30 @@ export const ConversationHeader = memo(function ConversationHeader({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Faixa de pausa abaixo de lg: no cabecalho estreito so cabe o icone,
+          entao o estado e o "Retomar" ficam aqui, impossiveis de nao ver. */}
+      {cliente?.id && iaPausada && (
+        <div
+          className="lg:hidden flex items-center gap-2 px-3 py-1.5 border-t border-orange-500/30 bg-orange-500/10 text-orange-800 dark:text-orange-300"
+          role="status"
+        >
+          <PauseCircle className="h-4 w-4 shrink-0" />
+          <span className="flex-1 min-w-0 text-xs font-medium truncate" title={detalhePausa}>
+            IA pausada · {textoPausa}
+            {quemPausou && <span className="font-normal opacity-80"> · {quemPausou}</span>}
+          </span>
+          <Button
+            size="sm"
+            onClick={onResumeAI}
+            disabled={isChangingAIPause}
+            className="shrink-0 h-8 px-3 text-xs gap-1 bg-orange-600 hover:bg-orange-700 text-white"
+          >
+            {isChangingAIPause ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            Retomar IA
+          </Button>
+        </div>
+      )}
 
       {/* Tags row - only show if there are tags */}
       {conversation.tags && conversation.tags.length > 0 && (

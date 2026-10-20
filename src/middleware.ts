@@ -142,7 +142,7 @@ export async function middleware(request: NextRequest) {
     const isSuperAdmin = role === 'super_admin'
 
     // Pages restricted to company_admin only
-    const adminOnlyPages = ['/app/settings', '/app/team', '/app/departments', '/app/ai-settings', '/app/agents']
+    const adminOnlyPages = ['/app/settings', '/app/team', '/app/departments', '/app/ai-settings', '/app/agents', '/app/integrations', '/app/ai-registro', '/app/events']
     if (adminOnlyPages.some(p => pathname.startsWith(p)) && !isSuperAdmin && role !== 'company_admin') {
       const url = request.nextUrl.clone()
       url.pathname = '/app/dashboard'

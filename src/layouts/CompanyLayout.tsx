@@ -69,6 +69,8 @@ import {
   Plus,
   Sparkles,
   TrendingUp,
+  ScrollText,
+  PartyPopper,
   type LucideIcon,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -79,6 +81,7 @@ import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
 import { cn } from '@/lib/utils';
 import { useBranding } from '@/hooks/useBranding';
 import { apiFetch } from '@/lib/api/client';
+import { useQuery } from '@tanstack/react-query';
 
 interface NavItem {
   name: string;
@@ -87,6 +90,8 @@ interface NavItem {
   roles: string[];
   requirePermission?: string;
   impersonationOnly?: boolean;
+  /** So aparece com o modulo de avaliacao ligado (ReviewSettings.enabled). */
+  requireReviewModule?: boolean;
   countKey?: 'unread' | 'appointmentsToday' | 'pendingFollowUps';
 }
 
@@ -104,7 +109,7 @@ const navGroups: NavGroup[] = [
       { name: 'Reservas', href: '/app/reservations', icon: CalendarCheck, roles: ['agent', 'manager', 'company_admin'] },
       { name: 'CRM', href: '/app/crm', icon: Kanban, roles: ['agent', 'manager', 'company_admin'] },
       { name: 'Clientes', href: '/app/clients', icon: Users, roles: ['viewer', 'agent', 'manager', 'company_admin'], requirePermission: 'can_access_crm' },
-      { name: 'Avaliações', href: '/app/reviews', icon: Star, roles: ['agent', 'manager', 'company_admin'] },
+      { name: 'Avaliações', href: '/app/reviews', icon: Star, roles: ['agent', 'manager', 'company_admin'], requireReviewModule: true },
       { name: 'Relatórios', href: '/app/reports', icon: BarChart3, roles: ['manager', 'company_admin'] },
     ],
   },
@@ -113,6 +118,8 @@ const navGroups: NavGroup[] = [
     items: [
       { name: 'Equipe', href: '/app/team', icon: UserCog, roles: ['company_admin'] },
       { name: 'Conexões', href: '/app/inboxes', icon: Inbox, roles: ['company_admin'] },
+      { name: 'Registro da IA', href: '/app/ai-registro', icon: ScrollText, roles: ['company_admin'] },
+      { name: 'Eventos', href: '/app/events', icon: PartyPopper, roles: ['company_admin'] },
     ],
   },
 ];
@@ -162,6 +169,20 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
   const effectiveCompanyId = isImpersonating ? impersonatedCompanyId : companyId;
   const effectiveCompanyName = isImpersonating ? impersonatedCompanyName : companyName;
 
+  // "Avaliações" só aparece com o módulo ligado pelo super-admin. Enquanto
+  // carrega, fica escondido: melhor surgir do que sumir na cara do usuário.
+  const { data: reviewModule } = useQuery<{ enabled: boolean }>({
+    queryKey: ['review-module-status', effectiveCompanyId],
+    queryFn: async () => {
+      const res = await apiFetch('/api/review-module-status');
+      if (!res.ok) return { enabled: false };
+      return (await res.json()) as { enabled: boolean };
+    },
+    enabled: !!effectiveCompanyId,
+    staleTime: 5 * 60 * 1000,
+  });
+  const reviewModuleEnabled = reviewModule?.enabled === true;
+
   useEffect(() => {
     if (effectiveCompanyId && !isImpersonating) {
       fetchCompanyName();
@@ -196,6 +217,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
 
   const filterNavItem = (item: NavItem): boolean => {
     if (item.impersonationOnly && !isImpersonating) return false;
+    if (item.requireReviewModule && !reviewModuleEnabled) return false;
     if (isSuperAdmin) return item.roles.includes('company_admin');
     if (!item.roles.includes(role || '')) return false;
     if (role && ['super_admin', 'company_admin', 'manager'].includes(role)) return true;
@@ -293,9 +315,8 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
                 {branding.logoUrl ? (
                   <Image src={branding.logoUrl} alt={branding.systemName} width={36} height={36} className="rounded-xl" />
                 ) : (
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-sm">
-                    <span className="text-primary-foreground text-sm font-bold tracking-tight">W</span>
-                  </div>
+                  // Espaco neutro enquanto a logo carrega (sem letra piscando).
+                  <div className="w-9 h-9 rounded-xl bg-sidebar-accent/60" aria-hidden />
                 )}
                 <span className={cn(
                   'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-sidebar',
@@ -306,7 +327,7 @@ export default function CompanyLayout({ children }: { children: ReactNode }) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] font-semibold text-sidebar-foreground truncate tracking-tight">
-                  {effectiveCompanyName || branding.systemName}
+                  {effectiveCompanyName || ' '}
                 </p>
                 <p className="text-[10.5px] text-sidebar-foreground/50 truncate mt-0.5">
                   {whatsAppStatus === 'connected' ? '● WhatsApp conectado' :

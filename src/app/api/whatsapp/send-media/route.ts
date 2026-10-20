@@ -3,12 +3,14 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { getWhatsAppInstance, findOrCreateConversation, saveMessage, getUAZMessageId, getClientPhoneByConversationId } from '@/lib/api/database';
-import { sendToWhatsApp } from '@/lib/api/whatsapp';
+import { sendToWhatsApp, marcarFalhaEnvio } from '@/lib/api/whatsapp';
+import { explicarFalhaEnvio, textoDaFalhaEnvio } from '@/lib/erros/envio';
 import { validateMediaPayload } from '@/lib/api/utils';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 import fs from 'fs';
 import path from 'path';
 import { handleApiErrorCors } from '@/lib/api/errors'
+import { checarEnvioDaIA, marcarRespondido, registrarBloqueio } from '@/lib/ai/turns';
 
 function normalizeBase64(input: string): string {
   const stripped = input.trim().replace(/^data:[^;]+;base64,/, '');
@@ -106,8 +108,26 @@ export async function POST(req: NextRequest) {
 
     const { agentId, companyId } = await authenticate(req);
     if (!companyId) throw new Error('Company not identified');
+    // IDOR: conversa informada precisa ser deste restaurante (sem isto a
+    // mensagem era gravada/enviada na conversa de outro restaurante).
+    if (payload.conversationId) {
+      const dono = await prisma.conversation.findFirst({
+        where: { id: payload.conversationId, companyId },
+        select: { id: true },
+      });
+      if (!dono) return jsonResponse({ success: false, error: 'Conversa não encontrada.', code: 'CONVERSATION_NOT_FOUND' }, 404);
+    }
     const instance = await getWhatsAppInstance(companyId);
     const conversationId = payload.conversationId || await findOrCreateConversation(payload.phone || '', companyId);
+
+    // Pausa da IA vale pro fluxo inteiro (ver send-text).
+    if (payload.fromAI) {
+      const envio = await checarEnvioDaIA(companyId, conversationId);
+      if (!envio.permitido) {
+        await registrarBloqueio(companyId, conversationId, envio.ate);
+        return jsonResponse({ success: false, error: 'IA pausada para este cliente: resposta não enviada.', code: 'AI_PAUSED', paused_until: envio.ate }, 409);
+      }
+    }
 
     let replyid: string | undefined;
     if (payload.replyToMessageId) {
@@ -121,10 +141,26 @@ export async function POST(req: NextRequest) {
       uaz_payload: payload, text: payload.text, docName: payload.docName, fileSize: payload.fileSize, mimeType: payload.mimeType,
     });
 
-    const fileBase64 = await resolveFileToBase64(payload.file);
-    console.log('[send-message-media] Media resolved to base64. Length:', fileBase64.length);
+    // WhatsApp Cloud: o adapter manda o LINK pra Meta baixar e so aceita https;
+    // em base64 o envio sempre falhava. Demais canais seguem com base64.
+    const conversa = await prisma.conversation.findFirst({
+      where: { id: conversationId, companyId },
+      select: { inbox: { select: { channelType: true } } },
+    });
+    const usarLink = conversa?.inbox?.channelType === 'whatsapp_cloud' && /^https:\/\//i.test(payload.file);
 
-    const uazPayload: any = { number: payload.phone, type: payload.type, file: fileBase64, fromAI: payload.fromAI || false, company_id: companyId };
+    let fileParaEnvio: string;
+    try {
+      fileParaEnvio = usarLink ? payload.file : await resolveFileToBase64(payload.file);
+    } catch (resolveErr) {
+      // A mensagem ja foi gravada: sem isto ela ficava na tela como enviada.
+      const raw = await marcarFalhaEnvio(message.id, `Arquivo nao pode ser lido: ${textoDaFalhaEnvio(resolveErr)}`, { companyId });
+      const falha = explicarFalhaEnvio(raw);
+      return jsonResponse({ success: false, message_id: message.id, error: falha.motivo, motivo: falha.motivo, o_que_fazer: falha.oQueFazer }, 500);
+    }
+    console.log('[send-message-media] Media ready.', usarLink ? 'Link https (WhatsApp Cloud)' : `Base64 length: ${fileParaEnvio.length}`);
+
+    const uazPayload: any = { number: payload.phone, type: payload.type, file: fileParaEnvio, fromAI: payload.fromAI || false, company_id: companyId };
     if (payload.text) uazPayload.text = payload.text;
     if (payload.docName) uazPayload.docName = payload.docName;
     if (replyid) uazPayload.replyid = replyid;
@@ -139,7 +175,13 @@ export async function POST(req: NextRequest) {
 
     const { success, error } = await sendToWhatsApp(instance, '/send/media', uazPayload, message.id);
 
-    if (!success) return jsonResponse({ success: false, message_id: message.id, error: error || 'Failed to send WhatsApp message' }, 500);
+    if (!success) {
+      // Texto cru ja ficou na mensagem (send_error); aqui so a explicacao simples.
+      const falha = explicarFalhaEnvio(error);
+      return jsonResponse({ success: false, message_id: message.id, error: falha.motivo, motivo: falha.motivo, o_que_fazer: falha.oQueFazer }, 500);
+    }
+
+    if (payload.fromAI) await marcarRespondido(companyId, conversationId, messageText || `[${payload.type}]`);
 
     return jsonResponse({ success: true, message_id: message.id, conversation_id: conversationId, sender_type: payload.fromAI ? 'ai' : 'agent', media_type: payload.type });
   } catch (error) {

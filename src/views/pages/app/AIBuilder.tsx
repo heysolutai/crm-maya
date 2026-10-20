@@ -17,7 +17,7 @@ const PROMPT_SECTIONS = [
     icon: User,
     description: 'Defina quem é o agente: nome, personalidade, tom de voz, como ele se apresenta.',
     placeholder: `Exemplo:
-Você é a Ana, assistente virtual da Ótica Premium.
+Você é a Sofia, assistente virtual da Cantina da Nonna.
 Você é simpática, prestativa e objetiva.
 Sempre se apresente pelo nome na primeira interação.
 Use linguagem casual mas profissional.
@@ -30,9 +30,9 @@ Trate o cliente por "você".`,
     icon: Target,
     description: 'Qual é a missão principal do agente? O que ele deve buscar em cada conversa?',
     placeholder: `Exemplo:
-Seu objetivo principal é converter leads em vendas.
-Sempre tente entender a necessidade do cliente antes de oferecer produtos.
-Se o cliente demonstrar interesse, colete nome, telefone e agende uma visita.
+Seu objetivo principal é transformar conversas em reservas.
+Sempre entenda o que o cliente procura (data, horário, número de pessoas, ocasião).
+Se o cliente demonstrar interesse, colete nome e telefone e confirme a reserva.
 Nunca deixe uma conversa sem um próximo passo definido.`,
     rows: 6,
   },
@@ -42,12 +42,12 @@ Nunca deixe uma conversa sem um próximo passo definido.`,
     icon: Bot,
     description: 'O que o agente faz na prática? Quais ações ele pode executar?',
     placeholder: `Exemplo:
-- Responder dúvidas sobre produtos e preços
-- Agendar consultas/visitas
-- Enviar catálogo de produtos
+- Responder dúvidas sobre o cardápio e preços
+- Fazer, alterar e cancelar reservas
+- Enviar o cardápio
 - Coletar dados do cliente (nome, telefone)
 - Transferir para atendente humano quando necessário
-- Enviar localização da loja`,
+- Enviar a localização do restaurante`,
     rows: 8,
   },
   {
@@ -61,19 +61,19 @@ Cumprimente o cliente, pergunte como pode ajudar.
 
 ETAPA 2 - QUALIFICAÇÃO:
 Entenda o que o cliente precisa. Faça perguntas como:
-- "Você está procurando óculos de grau ou solar?"
-- "Já tem receita médica?"
+- "Para quantas pessoas seria a reserva?"
+- "Qual dia e horário você prefere?"
 
 ETAPA 3 - APRESENTAÇÃO:
-Apresente as opções disponíveis com preços.
-Destaque promoções e diferenciais.
+Apresente as opções disponíveis (salão, varanda, menu do dia).
+Destaque pratos especiais e diferenciais da casa.
 
 ETAPA 4 - FECHAMENTO:
-Ofereça agendamento ou reserve o produto.
+Confirme a reserva com data, horário e número de pessoas.
 Colete dados para contato.
 
-ETAPA 5 - PÓS-VENDA:
-Confirme o agendamento e envie lembrete.`,
+ETAPA 5 - PÓS-VISITA:
+Agradeça a visita e peça uma avaliação.`,
     rows: 16,
   },
   {
@@ -82,13 +82,12 @@ Confirme o agendamento e envie lembrete.`,
     icon: BookOpen,
     description: 'Regras que o agente DEVE seguir. Limites, restrições, políticas do restaurante.',
     placeholder: `Exemplo:
-- NUNCA invente informações sobre produtos
-- Desconto máximo permitido: 10%
-- Sempre confirme disponibilidade antes de prometer entrega
-- Se o cliente reclamar, peça desculpas e ofereça transferência para gerente
-- Não compartilhe preços de concorrentes
-- Formas de pagamento: PIX (5% desconto), cartão até 10x, boleto
-- Frete grátis acima de R$ 300`,
+- NUNCA invente pratos ou preços que não estão no cardápio
+- Reservas para grupos acima de 12 pessoas: transferir para o gerente
+- Sempre confirme disponibilidade antes de prometer a mesa
+- Se o cliente reclamar, peça desculpas e ofereça transferência para o gerente
+- Formas de pagamento: PIX, cartão de crédito e débito, vale-refeição
+- Taxa de serviço opcional de 10%`,
     rows: 10,
   },
   {
@@ -98,19 +97,19 @@ Confirme o agendamento e envie lembrete.`,
     description: 'Horários de funcionamento, regras para fora do expediente, agendamentos.',
     placeholder: `Exemplo:
 HORÁRIO DE FUNCIONAMENTO:
-- Segunda a Sexta: 08:00 às 18:00
-- Sábado: 08:00 às 13:00
-- Domingo e feriados: Fechado
+- Terça a Sexta: 11:30 às 15:00 e 18:30 às 23:00
+- Sábado e Domingo: 11:30 às 23:30
+- Segunda: Fechado
 
 FORA DO HORÁRIO:
 - Informe o horário de funcionamento
 - Colete nome e telefone do cliente
-- Diga que retornaremos no próximo dia útil
+- Diga que a equipe retorna no próximo horário de atendimento
 
-AGENDAMENTOS:
-- Duração padrão: 30 minutos
+RESERVAS:
+- Horários para reserva: 12:00 às 14:00 e 19:00 às 22:00
 - Antecedência mínima: 2 horas
-- Máximo de agendamentos por dia: 10`,
+- Tolerância de atraso: 15 minutos`,
     rows: 12,
   },
   {
@@ -119,9 +118,9 @@ AGENDAMENTOS:
     icon: Sparkles,
     description: 'A primeira mensagem que o agente envia quando um novo cliente inicia conversa.',
     placeholder: `Exemplo:
-Olá! 👋 Sou a Ana, assistente virtual da Ótica Premium!
+Olá! 👋 Sou a Sofia, assistente virtual da Cantina da Nonna!
 
-Estou aqui para te ajudar a encontrar os óculos perfeitos para você. 😊
+Posso te ajudar com reservas, cardápio e qualquer dúvida sobre o restaurante. 😊
 
 Como posso te ajudar hoje?`,
     rows: 6,
@@ -204,15 +203,15 @@ export default function AIBuilder() {
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <Label>Nome do restaurante *</Label>
-              <Input placeholder="Ex: Ótica Premium" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+              <Input placeholder="Ex: Cantina da Nonna" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Nome do agente *</Label>
-              <Input placeholder="Ex: Ana" value={agentName} onChange={(e) => setAgentName(e.target.value)} />
+              <Input placeholder="Ex: Sofia" value={agentName} onChange={(e) => setAgentName(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Segmento</Label>
-              <Input placeholder="Ex: Ótica, Clínica" value={segment} onChange={(e) => setSegment(e.target.value)} />
+              <Input placeholder="Ex: Italiana, Pizzaria, Bistrô" value={segment} onChange={(e) => setSegment(e.target.value)} />
             </div>
           </div>
         </CardContent>

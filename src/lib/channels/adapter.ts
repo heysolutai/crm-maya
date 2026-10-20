@@ -88,6 +88,13 @@ export interface ProvisionResult {
   qrCode?: string | null;
   /** Pairing code alternativo (Evolution retorna esse junto com o QR) */
   pairingCode?: string | null;
+  /**
+   * Status ja conhecido no provisionamento. Canais sem QR (API oficial) ja
+   * nascem conectados; sem isso a rota grava 'disconnected'.
+   */
+  status?: 'connected' | 'connecting' | 'disconnected';
+  /** Numero confirmado pelo provider (ex: display_phone_number da Meta) */
+  phoneNumber?: string | null;
 }
 
 export interface QrResult {
@@ -155,4 +162,20 @@ export interface ChannelAdapter {
 
   /** Envia mensagem de texto */
   sendText(agent: ChannelAgent, input: SendTextInput): Promise<SendTextResult>;
+
+  /**
+   * Envia midia por URL publica. Opcional: so canais que nao passam pelo
+   * caminho legado da UazAPI (lib/api/whatsapp.ts) implementam.
+   */
+  sendMedia?(agent: ChannelAgent, input: SendMediaInput): Promise<SendTextResult>;
+}
+
+export interface SendMediaInput {
+  to: string;
+  type: 'image' | 'video' | 'audio' | 'document' | 'sticker';
+  /** URL publica (https) do arquivo */
+  url: string;
+  caption?: string;
+  fileName?: string;
+  quotedMessageId?: string;
 }

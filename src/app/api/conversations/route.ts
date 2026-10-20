@@ -6,6 +6,7 @@ import { phoneVariants, canonicalPhone } from '@/lib/api/utils'
 import { publishEvent } from '@/lib/realtime'
 import { z } from 'zod'
 import { handleApiError } from '@/lib/api/errors'
+import type { Prisma } from '@prisma/client'
 
 const createConversationSchema = z.object({
   companyId: z.string().uuid().optional(),
@@ -30,27 +31,122 @@ const updateConversationSchema = z.object({
   aiHandled: z.boolean().optional(),
 })
 
+/** Data aceita na query: ISO completo ou YYYY-MM-DD. */
+const queryDate = z
+  .string()
+  .max(40)
+  .refine((v) => !Number.isNaN(Date.parse(v)), { message: 'Data invalida' })
+
+// Query string vazia ("?status=") vale como ausente. O .optional() de fora e
+// necessario no zod v4: sem ele o preprocess rejeita a chave ausente.
+const optionalParam = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((v) => (v === '' || v === null ? undefined : v), schema.optional()).optional()
+
+const listQuerySchema = z.object({
+  status: optionalParam(conversationStatusEnum),
+  aiHandled: optionalParam(z.enum(['true', 'false'])),
+  /** true = so conversas cujo cliente esta com a IA pausada AGORA. */
+  aiPaused: optionalParam(z.enum(['true', 'false'])),
+  startDate: optionalParam(queryDate),
+  endDate: optionalParam(queryDate),
+  assignedTo: optionalParam(z.string().uuid()),
+  departmentId: optionalParam(z.string().uuid()),
+  inboxId: optionalParam(z.string().uuid()),
+  /** Nome (first/last/full) ou telefone (so digitos). */
+  search: optionalParam(z.string().trim().max(100)),
+  /** Repetivel (?tag=a&tag=b): conversa com QUALQUER uma delas. */
+  tag: z.array(z.string().trim().min(1).max(100)).max(20).optional(),
+  limit: z.coerce.number().int().min(1).max(1000).catch(100),
+  offset: z.coerce.number().int().min(0).catch(0),
+})
+
+/** Busca server-side: nome (cada palavra) OU telefone pelos digitos. */
+function buildSearchFilter(term: string): Prisma.ClientWhereInput | null {
+  const texto = term.trim()
+  if (!texto) return null
+
+  const palavras = texto.split(/\s+/).filter(Boolean).slice(0, 5)
+  const porNome: Prisma.ClientWhereInput = {
+    AND: palavras.map((p) => ({
+      OR: [
+        { firstName: { contains: p, mode: 'insensitive' as const } },
+        { lastName: { contains: p, mode: 'insensitive' as const } },
+        { fullName: { contains: p, mode: 'insensitive' as const } },
+      ],
+    })),
+  }
+
+  const or: Prisma.ClientWhereInput[] = [porNome]
+  // Telefone e gravado so com digitos: "(11) 99999-1234" vira "11999991234".
+  // Abaixo de 4 digitos casaria metade da base.
+  const digitos = texto.replace(/\D/g, '')
+  if (digitos.length >= 4) or.push({ phone: { contains: digitos } })
+
+  return { OR: or }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { companyId, agentId, isSuperAdmin } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
-    const status = req.nextUrl.searchParams.get('status')
-    const aiHandled = req.nextUrl.searchParams.get('aiHandled')
-    const startDate = req.nextUrl.searchParams.get('startDate')
-    const endDate = req.nextUrl.searchParams.get('endDate')
-    const assignedTo = req.nextUrl.searchParams.get('assignedTo')
-    const departmentId = req.nextUrl.searchParams.get('departmentId')
-    const inboxId = req.nextUrl.searchParams.get('inboxId') || req.nextUrl.searchParams.get('whatsappInstanceId')
+    const sp = req.nextUrl.searchParams
+    const parsed = listQuerySchema.safeParse({
+      status: sp.get('status'),
+      aiHandled: sp.get('aiHandled'),
+      aiPaused: sp.get('aiPaused'),
+      startDate: sp.get('startDate'),
+      endDate: sp.get('endDate'),
+      assignedTo: sp.get('assignedTo'),
+      departmentId: sp.get('departmentId'),
+      inboxId: sp.get('inboxId') || sp.get('whatsappInstanceId'),
+      search: sp.get('search'),
+      tag: sp.getAll('tag').filter((t) => t.trim() !== ''),
+      limit: sp.get('limit') ?? undefined,
+      offset: sp.get('offset') ?? undefined,
+    })
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Parametros invalidos', details: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+    const q = parsed.data
 
-    const where: any = { companyId }
-    if (status) where.status = status
-    if (aiHandled !== null && aiHandled !== undefined && aiHandled !== '') where.aiHandled = aiHandled === 'true'
-    if (startDate) where.startedAt = { ...where.startedAt, gte: new Date(startDate) }
-    if (endDate) where.startedAt = { ...where.startedAt, lte: new Date(endDate) }
-    if (assignedTo) where.transferredTo = assignedTo
-    if (departmentId) where.departmentId = departmentId
-    if (inboxId) where.inboxId = inboxId
+    const where: Prisma.ConversationWhereInput = { companyId }
+    // Filtros de cliente (busca, IA pausada) entram em AND: cada um e um
+    // filtro de relacao proprio e nao podem sobrescrever um ao outro.
+    const and: Prisma.ConversationWhereInput[] = []
+
+    if (q.status) where.status = q.status
+    if (q.aiHandled) where.aiHandled = q.aiHandled === 'true'
+    if (q.startDate || q.endDate) {
+      where.startedAt = {
+        ...(q.startDate ? { gte: new Date(q.startDate) } : {}),
+        ...(q.endDate ? { lte: new Date(q.endDate) } : {}),
+      }
+    }
+    if (q.assignedTo) where.transferredTo = q.assignedTo
+    if (q.departmentId) where.departmentId = q.departmentId
+    if (q.inboxId) where.inboxId = q.inboxId
+    if (q.tag && q.tag.length > 0) where.tags = { hasSome: q.tag }
+
+    if (q.search) {
+      const filtro = buildSearchFilter(q.search)
+      if (filtro) and.push({ client: filtro })
+    }
+
+    // Mesma regra do isAiPausedNow: pausada e com prazo no futuro (ou sem prazo).
+    if (q.aiPaused === 'true') {
+      and.push({
+        client: {
+          aiPaused: true,
+          OR: [{ aiPausedUntil: null }, { aiPausedUntil: { gt: new Date() } }],
+        },
+      })
+    }
+
+    if (and.length > 0) where.AND = and
 
     // Visibilidade por membership de inbox (regra B: estrita):
     //   - super_admin / company_admin / manager veem TUDO do restaurante
@@ -89,20 +185,36 @@ export async function GET(req: NextRequest) {
           // Sem inbox → vazio. Usamos um UUID impossivel pra garantir 0 resultados
           // sem precisar branchar o caller (mantem o shape do where).
           where.inboxId = '00000000-0000-0000-0000-000000000000'
+        } else if (q.inboxId) {
+          // Filtro de canal escolhido na tela: so vale se for uma inbox dele.
+          where.inboxId = memberInboxIds.includes(q.inboxId)
+            ? q.inboxId
+            : '00000000-0000-0000-0000-000000000000'
         } else {
           where.inboxId = { in: memberInboxIds }
         }
       }
     }
 
-    const limit = parseInt(req.nextUrl.searchParams.get('limit') || '100')
-    const offset = parseInt(req.nextUrl.searchParams.get('offset') || '0')
-
     const conversations = await prisma.conversation.findMany({
       where,
+      // include traz todos os escalares da conversa — inclusive executionUrl,
+      // o link da execucao no n8n que o cabecalho abre.
       include: {
         client: {
-          select: { id: true, firstName: true, lastName: true, phone: true, whatsappLid: true, email: true, avatarUrl: true, aiPaused: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            whatsappLid: true,
+            email: true,
+            avatarUrl: true,
+            aiPaused: true,
+            aiPausedUntil: true,
+            aiPausedAt: true,
+            aiPausedBy: true,
+          },
         },
         transferAgent: { select: { fullName: true } },
         department: { select: { id: true, name: true, color: true } },
@@ -116,8 +228,8 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: [{ updatedAt: 'desc' }, { startedAt: 'desc' }],
-      take: limit,
-      skip: offset,
+      take: q.limit,
+      skip: q.offset,
     })
 
     return NextResponse.json(conversations)
@@ -283,6 +395,27 @@ export async function PUT(req: NextRequest) {
 
     const existing = await prisma.conversation.findFirst({ where: { id, companyId } })
     if (!existing) return NextResponse.json({ error: 'Nao encontrado' }, { status: 404 })
+
+    // IDOR: atendente e departamento de destino vem do body — precisam ser
+    // deste restaurante, senao a conversa seria entregue a outra empresa.
+    if (updates.transferredTo) {
+      const alvo = await prisma.user.findFirst({
+        where: {
+          id: updates.transferredTo,
+          isActive: true,
+          OR: [{ companyId }, { userRoles: { some: { companyId } } }],
+        },
+        select: { id: true },
+      })
+      if (!alvo) return NextResponse.json({ error: 'Atendente invalido' }, { status: 400 })
+    }
+    if (updates.departmentId) {
+      const dept = await prisma.department.findFirst({
+        where: { id: updates.departmentId, companyId },
+        select: { id: true },
+      })
+      if (!dept) return NextResponse.json({ error: 'Departamento invalido' }, { status: 400 })
+    }
 
     // endedAt e a data REAL de fechamento: o dashboard conta "finalizadas no
     // periodo" por ele (updatedAt sobe em qualquer edicao). Reabrir limpa.

@@ -15,13 +15,19 @@ export async function POST(req: NextRequest) {
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
-      select: { clientId: true, companyId: true },
+      select: { clientId: true, companyId: true, inbox: { select: { channelType: true } } },
     });
     if (!conversation) return jsonResponse({ success: false, error: 'Conversation not found' }, 404);
 
     // Isolamento multi-tenant: a conversa tem que ser do restaurante do caller.
     if (!isSuperAdmin && conversation.companyId !== authCompanyId) {
       return jsonResponse({ success: false, error: 'Nao encontrado' }, 404);
+    }
+
+    // API oficial nao tem "gravando"/"digitando" avulso (so atrelado a uma
+    // mensagem recebida, via /messages/typing): ignora sem erro.
+    if (conversation.inbox?.channelType === 'whatsapp_cloud') {
+      return jsonResponse({ success: true, skipped: 'presence_not_supported_on_cloud' });
     }
 
     if (!conversation.clientId) return jsonResponse({ success: false, error: 'Client not found for conversation' }, 404);

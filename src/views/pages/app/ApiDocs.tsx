@@ -255,7 +255,7 @@ Accept: application/json`}
                 method="POST"
                 path="/api/whatsapp/send-text"
                 name="Enviar Mensagem de Texto"
-                description="Envia uma mensagem de texto via WhatsApp. Identifica o destinatário por phone ou conversationId."
+                description="Envia uma mensagem de texto via WhatsApp. Identifica o destinatário por phone ou conversationId. Com fromAI=true (resposta da IA), o CRM recusa o envio enquanto a IA estiver pausada para o cliente (um atendente respondeu ou alguém pausou): responde 409 AI_PAUSED com paused_until e registra no Registro da IA. Vale também para send-media e send-audio. O payload que o fluxo recebe traz ai_status e ai_paused_until."
                 authentication="bearer"
                 bodyParameters={[
                   { name: 'phone', type: 'string', required: false, description: 'Número do destinatário (obrigatório se não enviar conversationId)' },
@@ -286,6 +286,7 @@ Accept: application/json`}
   "sender_type": "agent"
 }`}
                 errors={[
+                  { code: 'AI_PAUSED', status: 409, message: 'fromAI=true com a IA pausada para o cliente: resposta não enviada (vem com paused_until)' },
                   { code: 'UNAUTHORIZED', status: 401, message: 'Token inválido ou não fornecido' },
                   { code: 'MISSING_FIELDS', status: 400, message: 'phone ou conversationId e message são obrigatórios' },
                   { code: 'INSTANCE_NOT_FOUND', status: 500, message: 'Instância WhatsApp não encontrada para o restaurante' },
@@ -501,7 +502,7 @@ Accept: application/json`}
                 method="POST"
                 path="/api/messaging/transfer"
                 name="Transferir Conversa"
-                description="Transfere uma conversa em 3 modos: manual (para um agente específico), round-robin (global no restaurante) ou department (round-robin apenas entre agentes ONLINE de um departamento: com fila automática se ninguém estiver online). Em todos os modos a IA é pausada automaticamente na conversa."
+                description="Transfere uma conversa em 3 modos: manual (para um agente específico), round-robin (global no restaurante) ou department (round-robin apenas entre agentes ONLINE de um departamento: com fila automática se ninguém estiver online). A transferência NÃO pausa a IA: se o fluxo precisar que a IA pare de responder, pause-a à parte. Aceita sessão (Bearer) ou x-api-key (n8n). Toda transferência bem-sucedida (inclusive a que cai na fila) conta no Dashboard como encaminhamento: use reason='evento' quando o encaminhamento for para a equipe de eventos."
                 authentication="bearer"
                 bodyParameters={[
                   { name: 'conversation_id', type: 'UUID', required: true, description: 'ID da conversa a transferir' },
@@ -509,6 +510,7 @@ Accept: application/json`}
                   { name: 'target_user_id', type: 'UUID', required: false, description: 'ID do agente destino: obrigatório no modo "manual"' },
                   { name: 'department_id', type: 'UUID', required: false, description: 'ID do departamento: obrigatório no modo "department". Se nenhum agente estiver online, a conversa entra em fila (status="pending", transferred_to=null) aguardando um agente ficar online.' },
                   { name: 'note', type: 'string', required: false, description: 'Nota opcional (máx 3000 chars) registrada no histórico da conversa. Útil pra documentar o motivo da transferência. Funciona nos 3 modos.' },
+                  { name: 'reason', type: 'enum', required: false, description: 'Motivo do encaminhamento, usado nas métricas do Dashboard: "humano" (padrão) conta em "Encaminhadas p/ humano"; "evento" conta em "Encaminhadas p/ eventos". Não muda a transferência em si.' },
                 ]}
                 exampleRequest={`// 1) Transferência manual para agente específico
 curl -X POST "/api/messaging/transfer" \\
@@ -537,7 +539,19 @@ curl -X POST "/api/messaging/transfer" \\
     "conversation_id": "uuid-da-conversa",
     "department_id": "uuid-do-departamento",
     "mode": "department",
-    "note": "Cliente interessado em Ducati XDiavel: já tem orçamento aprovado"
+    "note": "Cliente quer orçamento para jantar de 40 pessoas"
+  }'
+
+// 4) Encaminhar para a equipe de EVENTOS (n8n, via x-api-key)
+curl -X POST "/api/messaging/transfer" \\
+  -H "x-api-key: sua-api-key" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "conversation_id": "uuid-da-conversa",
+    "department_id": "uuid-do-departamento-de-eventos",
+    "mode": "department",
+    "reason": "evento",
+    "note": "Aniversário de 30 pessoas em 12/11"
   }'`}
                 exampleResponse={`// ─── Modo manual ou round-robin ───
 {
@@ -582,6 +596,195 @@ curl -X POST "/api/messaging/transfer" \\
                   { code: 'DEPARTMENT_NOT_FOUND', status: 404, message: 'Departamento não encontrado ou inativo' },
                   { code: 'TARGET_NOT_FOUND', status: 404, message: 'Agente destino não encontrado ou inativo' },
                   { code: 'NO_AGENTS', status: 422, message: 'Nenhum agente ativo disponível para round-robin (modo round-robin)' },
+                ]}
+              />
+
+              <ApiEndpointCard
+                method="POST"
+                path="/api/conversation-events"
+                name="Registrar Encaminhamento (sem transferir)"
+                description="Registra que a conversa foi encaminhada para a equipe de eventos ou para atendimento humano SEM transferir a conversa (ex: a IA enviou ao cliente o contato da equipe de eventos). Conta no Dashboard em 'Encaminhadas p/ eventos' ou 'Encaminhadas p/ humano'. Não altera a conversa nem pausa a IA. Se a conversa for transferida pelo /api/messaging/transfer, NÃO chame este endpoint: a transferência já registra o encaminhamento. Chamadas repetidas para a mesma conversa no mesmo dia contam uma vez só."
+                authentication="api-key"
+                bodyParameters={[
+                  { name: 'conversation_id', type: 'UUID', required: true, description: 'ID da conversa (precisa ser do restaurante da API key)' },
+                  { name: 'type', type: 'enum', required: true, description: '"handoff_event" (encaminhada p/ eventos) ou "handoff_human" (encaminhada p/ atendimento humano)' },
+                  { name: 'note', type: 'string', required: false, description: 'Observação opcional (máx 500 chars), guardada no evento' },
+                ]}
+                exampleRequest={`curl -X POST "/api/conversation-events" \\
+  -H "x-api-key: sua-api-key" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "conversation_id": "uuid-da-conversa",
+    "type": "handoff_event",
+    "note": "Enviado contato da equipe de eventos"
+  }'`}
+                exampleResponse={`// 201 Created
+{
+  "success": true,
+  "event": {
+    "id": "uuid-do-evento",
+    "conversationId": "uuid-da-conversa",
+    "type": "handoff_event",
+    "actor": "ai",
+    "userId": null,
+    "departmentId": null,
+    "metadata": { "source": "api", "note": "Enviado contato da equipe de eventos" },
+    "createdAt": "2026-10-04T18:30:00.000Z"
+  }
+}`}
+                errors={[
+                  { code: 'UNAUTHORIZED', status: 401, message: 'API key inválida ou ausente' },
+                  { code: 'VALIDATION_ERROR', status: 400, message: 'conversation_id ou type inválido' },
+                  { code: 'CONVERSATION_NOT_FOUND', status: 404, message: 'Conversa não encontrada ou não pertence ao restaurante' },
+                ]}
+              />
+
+              <ApiEndpointCard
+                method="GET"
+                path="/api/conversation-events"
+                name="Linha do Tempo da Conversa"
+                description="Lista os eventos registrados de uma conversa, do mais antigo ao mais recente (máx 500): encaminhamentos (handoff_human, handoff_event) e pausas da IA (ai_paused, ai_resumed). actor indica quem gerou: ai (n8n/API key), agent (atendente), phone ou system."
+                authentication="api-key"
+                queryParameters={[
+                  { name: 'conversationId', type: 'UUID', required: true, description: 'ID da conversa' },
+                ]}
+                exampleRequest={`curl -X GET "/api/conversation-events?conversationId=uuid-da-conversa" \\
+  -H "x-api-key: sua-api-key"`}
+                exampleResponse={`{
+  "data": [
+    {
+      "id": "uuid-do-evento",
+      "conversationId": "uuid-da-conversa",
+      "type": "handoff_human",
+      "actor": "ai",
+      "userId": "uuid-do-agente",
+      "departmentId": "uuid-do-departamento",
+      "metadata": { "mode": "department", "reason": "humano", "queued": false },
+      "createdAt": "2026-10-04T18:30:00.000Z"
+    }
+  ]
+}`}
+                errors={[
+                  { code: 'UNAUTHORIZED', status: 401, message: 'API key inválida ou ausente' },
+                  { code: 'INVALID_ID', status: 400, message: 'conversationId inválido' },
+                  { code: 'CONVERSATION_NOT_FOUND', status: 404, message: 'Conversa não encontrada ou não pertence ao restaurante' },
+                ]}
+              />
+
+              <ApiEndpointCard
+                method="POST"
+                path="/api/conversations/execution-url"
+                name="Registrar Execução do Fluxo (Logs da IA)"
+                description="Chame a cada mensagem do cliente para registrar a execução do fluxo de IA (n8n ou Maestro). Cada chamada vira uma linha na seção 'Logs da IA' da conversa, ligada à mensagem do cliente que disparou. Mesmo run_id na mesma conversa atualiza a mesma linha: dá pra mandar status 'started' no início e 'success' ou 'error' (com a mensagem de erro) no fim. execution_url atualiza também o botão 'Abrir execução' da conversa. thread_id fica salvo na conversa e volta no payload das próximas mensagens como ai_thread_id, pra continuar a mesma thread. Também aceita resume_url (fluxo com espera, ex: avaliação). No n8n não existe thread: use run_id = {{$execution.id}} e, no fluxo de erro (Error Trigger), chame só com run_id = {{$json.execution.id}}, status 'error' e error = {{$json.execution.error.message}}: o CRM acha a conversa pela execução já registrada."
+                authentication="api-key"
+                bodyParameters={[
+                  { name: 'conversation_id', type: 'UUID', required: false, description: 'ID da conversa (ou use phone). Vem no payload como conversation_id. Pode omitir ao atualizar uma execução já registrada (basta o run_id)' },
+                  { name: 'phone', type: 'string', required: false, description: 'Telefone do cliente, alternativa ao conversation_id' },
+                  { name: 'provider', type: 'string', required: false, description: '"n8n" (padrão) ou "maestro"' },
+                  { name: 'thread_id', type: 'string', required: false, description: 'Só Maestro (thread da OpenAI). Salva na conversa e devolvida como ai_thread_id. No n8n, omita' },
+                  { name: 'run_id', type: 'string', required: false, description: 'Id da execução: run da OpenAI (Maestro) ou {{$execution.id}} (n8n). Mesmo run_id = atualiza a mesma linha do log' },
+                  { name: 'status', type: 'enum', required: false, description: '"started" (ou "running"), "success" ou "error"' },
+                  { name: 'error', type: 'string', required: false, description: 'Mensagem de erro (máx 4000 chars). Sem status, marca a execução como erro' },
+                  { name: 'execution_url', type: 'string', required: false, description: 'Link https para abrir a execução no n8n/Maestro' },
+                  { name: 'message_id', type: 'UUID', required: false, description: 'Mensagem do cliente que disparou (campo message_id do payload). Omitido = última mensagem do cliente' },
+                ]}
+                exampleRequest={`curl -X POST "/api/conversations/execution-url" \\
+  -H "x-api-key: sua-api-key" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "conversation_id": "uuid-da-conversa",
+    "message_id": "uuid-da-mensagem",
+    "provider": "maestro",
+    "thread_id": "thread_abc123",
+    "run_id": "run_xyz789",
+    "status": "error",
+    "error": "Timeout ao consultar disponibilidade na Reserve Maya",
+    "execution_url": "https://maestro.exemplo.com/threads/thread_abc123/runs/run_xyz789"
+  }'`}
+                exampleResponse={`// 200 OK
+{
+  "success": true,
+  "conversation_id": "uuid-da-conversa",
+  "resume_url": null,
+  "execution_url": "https://maestro.exemplo.com/threads/thread_abc123/runs/run_xyz789",
+  "thread_id": "thread_abc123",
+  "expires_at": null,
+  "log_id": "uuid-do-log"
+}`}
+                errors={[
+                  { code: 'UNAUTHORIZED', status: 401, message: 'API key inválida ou ausente' },
+                  { code: 'VALIDATION_ERROR', status: 400, message: 'Campos inválidos ou execution_url sem https' },
+                  { code: 'CONVERSATION_NOT_FOUND', status: 404, message: 'Conversa não encontrada ou não pertence ao restaurante' },
+                ]}
+              />
+
+              <ApiEndpointCard
+                method="GET"
+                path="/api/ai-tools"
+                name="Ferramentas da IA (listar)"
+                description="Ferramentas ligadas para o restaurante (as nativas do CRM e as das integrações ativas, como Reserve Maya), já no formato de function calling da OpenAI, mais o trecho de prompt com o que a IA pode fazer. Busque a cada conversa e passe para o modelo (tools do run/request). Um único assistente atende qualquer restaurante: a lista muda conforme o que cada um ligou em Integrações."
+                authentication="api-key"
+                queryParameters={[
+                  { name: 'conversation_id', type: 'UUID', required: false, description: 'Conversa (opcional, só valida que é do restaurante)' },
+                ]}
+                exampleRequest={`curl -X GET "/api/ai-tools?conversation_id=uuid-da-conversa" \\
+  -H "x-api-key: sua-api-key"`}
+                exampleResponse={`// 200 OK
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "verificar_disponibilidade",
+        "description": "Verifica se há mesa disponível para a data, o horário e o número de pessoas...",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "date": { "type": "string", "description": "Data da reserva (formato AAAA-MM-DD)" },
+            "time": { "type": "string", "description": "Horário da reserva (formato HH:MM, 24h)" },
+            "people": { "type": "integer", "description": "Quantidade de pessoas" }
+          },
+          "required": ["date", "time", "people"],
+          "additionalProperties": false
+        }
+      }
+    }
+  ],
+  "prompt": "FERRAMENTAS QUE VOCÊ PODE USAR\\n- Ver horários disponíveis: antes de reservar, verifique a disponibilidade\\n..."
+}`}
+                errors={[
+                  { code: 'UNAUTHORIZED', status: 401, message: 'API key inválida ou ausente' },
+                  { code: 'CONVERSATION_NOT_FOUND', status: 404, message: 'Conversa não encontrada ou não pertence ao restaurante' },
+                ]}
+              />
+
+              <ApiEndpointCard
+                method="POST"
+                path="/api/ai-tools/{nome}"
+                name="Ferramentas da IA (executar)"
+                description="Executa a ferramenta que o modelo pediu. Mande o conversation_id (do payload) e os arguments que o modelo gerou (objeto ou a string JSON da OpenAI). O CRM completa sozinho o que a IA não pode escolher (ID do restaurante, telefone e nome do cliente), valida os argumentos, chama o sistema externo, registra no CRM (ex: a reserva entra no dashboard) e aparece nos Logs da IA da conversa. Responde SEMPRE 200 com { ok, result }: devolva o result ao modelo como saída da ferramenta, mesmo com ok=false (ele traz a instrução do que fazer, ex: perguntar o dado que falta ou oferecer transferir). Ações que alteram algo (criar/cancelar reserva) repetidas com os mesmos argumentos em menos de 2 minutos devolvem o resultado anterior, sem duplicar."
+                authentication="api-key"
+                bodyParameters={[
+                  { name: 'conversation_id', type: 'UUID', required: true, description: 'ID da conversa (campo conversation_id do payload)' },
+                  { name: 'arguments', type: 'object | string', required: true, description: 'Argumentos gerados pelo modelo (pode mandar a string JSON da OpenAI como veio)' },
+                  { name: 'run_id', type: 'string', required: false, description: 'Run (Maestro) ou {{$execution.id}} (n8n), para ligar a chamada à execução nos Logs da IA' },
+                ]}
+                exampleRequest={`curl -X POST "/api/ai-tools/criar_reserva" \\
+  -H "x-api-key: sua-api-key" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "conversation_id": "uuid-da-conversa",
+    "run_id": "run_xyz789",
+    "arguments": "{\\"date\\":\\"2026-10-10\\",\\"time\\":\\"20:00\\",\\"people\\":4,\\"comment\\":\\"aniversário\\"}"
+  }'`}
+                exampleResponse={`// 200 OK (deu certo)
+{ "ok": true, "result": "Reserva confirmada. Link para o cliente gerenciar a reserva: https://..." }
+
+// 200 OK (faltou dado: devolva ao modelo do mesmo jeito)
+{ "ok": false, "result": "Não executei \\"Fazer reservas\\": people: obrigatório (Quantidade de pessoas). Pergunte ao cliente o que falta (ou corrija o formato) e tente de novo." }`}
+                errors={[
+                  { code: 'UNAUTHORIZED', status: 401, message: 'API key inválida ou ausente' },
+                  { code: 'VALIDATION_ERROR', status: 400, message: 'conversation_id ausente ou nome de ferramenta inválido' },
                 ]}
               />
 

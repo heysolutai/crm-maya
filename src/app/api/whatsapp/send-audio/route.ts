@@ -1,11 +1,13 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
+import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { getWhatsAppInstance, findOrCreateConversation, saveMessage, getClientPhoneByConversationId } from '@/lib/api/database';
 import { sendToWhatsApp } from '@/lib/api/whatsapp';
 import { handleCors, jsonResponse } from '@/lib/api/cors';
 import { uploadToB2, buildB2Key, MIME_TO_EXT } from '@/lib/storage';
 import { handleApiErrorCors } from '@/lib/api/errors'
+import { checarEnvioDaIA, marcarRespondido, registrarBloqueio } from '@/lib/ai/turns';
 
 const sendAudioSchema = z.object({
   audioBase64: z.string(),
@@ -45,8 +47,27 @@ export async function POST(req: NextRequest) {
     if (!companyId) return jsonResponse({ error: 'Company not identified' }, 400);
     console.log(`[send-audio-message] Authenticated - companyId: ${companyId}`);
 
+    // IDOR: conversa informada precisa ser deste restaurante (sem isto o audio
+    // era gravado/enviado na conversa de outro restaurante).
+    if (conversationId) {
+      const dono = await prisma.conversation.findFirst({
+        where: { id: conversationId, companyId },
+        select: { id: true },
+      });
+      if (!dono) return jsonResponse({ error: 'Conversa não encontrada.', code: 'CONVERSATION_NOT_FOUND' }, 404);
+    }
+
     const instance = await getWhatsAppInstance(companyId);
     if (!conversationId) conversationId = await findOrCreateConversation(phone || '', companyId);
+
+    // Pausa da IA vale pro fluxo inteiro (ver send-text).
+    if (fromAI) {
+      const envio = await checarEnvioDaIA(companyId, conversationId);
+      if (!envio.permitido) {
+        await registrarBloqueio(companyId, conversationId, envio.ate);
+        return jsonResponse({ success: false, error: 'IA pausada para este cliente: resposta não enviada.', code: 'AI_PAUSED', paused_until: envio.ate }, 409);
+      }
+    }
 
     // Upload audio para o B2 (mesmo padrão usado pelo restante do sistema)
     const buffer = Buffer.from(audioBase64, 'base64');
@@ -78,6 +99,7 @@ export async function POST(req: NextRequest) {
     const uazPayload = { phone, type: 'ptt', file: publicUrl, fromAI: fromAI || false, company_id: companyId };
     const { success, error: whatsappError } = await sendToWhatsApp(instance, '/send/media', uazPayload, message.id);
     if (!success) console.error('[send-audio-message] Failed to send WhatsApp audio:', whatsappError);
+    else if (fromAI) await marcarRespondido(companyId, conversationId, '[áudio]');
 
     return jsonResponse({
       success: true,

@@ -1,5 +1,5 @@
-import { memo, useState } from 'react';
-import { Bot, Loader2, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { memo, useState, type MouseEvent } from 'react';
+import { Bot, Loader2, FileText, ChevronDown, ChevronUp, AlertCircle, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { AudioPlayer } from './AudioPlayer';
@@ -16,6 +16,9 @@ import { formatMessageTime, cn } from '@/lib/utils';
 import { renderWhatsAppText } from '@/lib/whatsapp/formatar-texto';
 import { getInitials, type Message, type Client, type QuotedMessage } from './types';
 import type { Reaction } from '@/hooks/useMessageReactions';
+import { useAuth } from '@/hooks/useAuth';
+import { useReenviarMensagem } from '@/hooks/useConversations';
+import { explicarFalhaEnvio, falhaDaMensagem, mensagemReenviavel } from '@/lib/erros/envio';
 
 interface MessageBubbleProps {
   message: Message;
@@ -128,6 +131,101 @@ function MidiaIndisponivel({ msg }: { msg: Message }) {
   );
 }
 
+/**
+ * Mensagem do restaurante que NAO chegou no WhatsApp. Sem isto a bolha
+ * parecia enviada. Diz o motivo e o que fazer em palavras simples e, quando
+ * adianta, oferece "Tentar de novo" (reenvia a mesma mensagem). O erro
+ * tecnico cru so aparece pro super-admin.
+ */
+function FalhaDeEnvio({
+  msg,
+  raw,
+  selectionMode,
+  onReenviada,
+}: {
+  msg: Message;
+  raw: string;
+  selectionMode: boolean;
+  onReenviada: () => void;
+}) {
+  const { isSuperAdmin } = useAuth();
+  const reenviar = useReenviarMensagem();
+  const falha = explicarFalhaEnvio(raw);
+  const podeReenviar =
+    falha.podeTentarDeNovo &&
+    mensagemReenviavel({ messageType: msg.message_type, messageText: msg.message_text, mediaUrl: msg.media_url });
+  // Sem botao, o "o que fazer" e o unico caminho: ja aparece aberto.
+  const [mostrarDica, setMostrarDica] = useState(!podeReenviar);
+
+  const tentarDeNovo = (e: MouseEvent) => {
+    e.stopPropagation();
+    reenviar.mutate(msg.id, {
+      onSuccess: (r) => {
+        if (r.ok) onReenviada();
+      },
+    });
+  };
+
+  return (
+    <div
+      role="alert"
+      className={cn(
+        'mt-1 w-fit max-w-full rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-left text-[12px] leading-snug text-red-900',
+        'dark:border-red-900/70 dark:bg-red-950/50 dark:text-red-100',
+        selectionMode && 'pointer-events-none',
+      )}
+    >
+      <p className="flex items-start gap-1.5">
+        <AlertCircle className="mt-[1px] h-3.5 w-3.5 shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
+        <span>
+          <span className="font-semibold">Não enviada.</span> {falha.motivo}
+        </span>
+      </p>
+
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setMostrarDica((v) => !v);
+        }}
+        aria-expanded={mostrarDica}
+        className="mt-1 inline-flex items-center gap-0.5 rounded text-[11.5px] font-medium text-red-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 dark:text-red-300"
+      >
+        O que fazer?
+        {mostrarDica ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </button>
+      {mostrarDica && <p className="mt-0.5 text-[11.5px] text-red-800 dark:text-red-200">{falha.oQueFazer}</p>}
+
+      {podeReenviar && !selectionMode && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-1.5 flex h-7 px-2 text-[12px] border-red-300 bg-white text-red-700 hover:bg-red-100 hover:text-red-800 dark:border-red-800 dark:bg-transparent dark:text-red-200 dark:hover:bg-red-900/40 dark:hover:text-red-100"
+          onClick={tentarDeNovo}
+          disabled={reenviar.isPending}
+        >
+          {reenviar.isPending ? (
+            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RotateCw className="mr-1 h-3.5 w-3.5" />
+          )}
+          {reenviar.isPending ? 'Enviando…' : 'Tentar de novo'}
+        </Button>
+      )}
+
+      {isSuperAdmin && (
+        <p
+          className="mt-1 break-all font-mono text-[10.5px] text-red-900/70 dark:text-red-200/70"
+          title="Erro técnico (só o super-admin vê)"
+        >
+          {raw}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export const MessageBubble = memo(function MessageBubble({
   message,
   isClient,
@@ -165,6 +263,21 @@ export const MessageBubble = memo(function MessageBubble({
       : null);
 
   const isAudioMessage = (msg.message_type === 'audio' || msg.message_type === 'ptt') && !!msg.media_url;
+
+  // Falha de envio (so mensagem do restaurante: atendente ou IA). Depois de um
+  // "Tentar de novo" que deu certo a bolha some com o aviso na hora, mesmo se
+  // o tempo real estiver fora; uma falha NOVA (outro failed_at) volta a aparecer.
+  const isOptimistic = !!(msg as Message & { _optimistic?: boolean })._optimistic;
+  const ehDoRestaurante = msg.sender_type === 'agent' || msg.sender_type === 'ai';
+  const falhaCrua = ehDoRestaurante && !isOptimistic ? falhaDaMensagem(msg.metadata, msg.read_status) : null;
+  const chaveFalha = falhaCrua ? `${falhaCrua}|${String(meta.failed_at ?? '')}` : null;
+  const [falhaSuperada, setFalhaSuperada] = useState<string | null>(null);
+  const falhaEnvio = falhaCrua && chaveFalha !== falhaSuperada ? falhaCrua : null;
+  const statusEnvio = falhaEnvio
+    ? 'failed'
+    : msg.read_status && msg.read_status !== 'failed'
+      ? msg.read_status
+      : 'sent';
 
   const handleTranscribeClick = () => {
     if (storedTranscription) {
@@ -230,15 +343,18 @@ export const MessageBubble = memo(function MessageBubble({
           selectionMode && 'pointer-events-none',
         )}>
           <div
-            className={`relative rounded-lg px-[9px] py-[6px] shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] ${
+            className={cn(
+              'relative rounded-lg px-[9px] py-[6px] shadow-[0_1px_0.5px_rgba(0,0,0,0.13)]',
               isClient
-                ? `bg-white dark:bg-[#202c33] text-foreground ${
-                    isFirstInGroup ? 'rounded-tl-none' : ''
-                  }`
-                : `bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-white ${
-                    isFirstInGroup ? 'rounded-tr-none' : ''
-                  }`
-            }`}
+                ? cn('bg-white dark:bg-[#202c33] text-foreground', isFirstInGroup && 'rounded-tl-none')
+                : cn(
+                    falhaEnvio
+                      ? 'bg-red-50 dark:bg-red-950/40 ring-1 ring-red-300 dark:ring-red-800'
+                      : 'bg-[#d9fdd3] dark:bg-[#005c4b]',
+                    'text-[#111b21] dark:text-white',
+                    isFirstInGroup && 'rounded-tr-none',
+                  ),
+            )}
           >
             {/* Preview da mensagem citada */}
             {msg.quoted_message_id && quotedMessage && (
@@ -405,7 +521,7 @@ export const MessageBubble = memo(function MessageBubble({
               </span>
 
               <MessageStatus
-                status={(msg as any).read_status || 'sent'}
+                status={statusEnvio}
                 isClient={isClient}
               />
             </div>
@@ -426,6 +542,17 @@ export const MessageBubble = memo(function MessageBubble({
           )}
         </div>
         
+        {/* Nao chegou no WhatsApp: motivo, o que fazer e "Tentar de novo" */}
+        {falhaEnvio && chaveFalha && (
+          <FalhaDeEnvio
+            key={chaveFalha}
+            msg={msg}
+            raw={falhaEnvio}
+            selectionMode={selectionMode}
+            onReenviada={() => setFalhaSuperada(chaveFalha)}
+          />
+        )}
+
         {/* Exibir reações abaixo da mensagem */}
         <MessageReactions messageId={msg.id} reactions={reactions} onRemoveReaction={onRemoveReaction} />
       </div>

@@ -2,10 +2,53 @@ import { Worker, Queue } from 'bullmq'
 import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type CronTickJob } from '../queues'
 import { prisma } from '@/lib/db'
+import { getCovercutNumberStatus } from '@/lib/channels/covercut'
+
+/**
+ * WhatsApp Cloud: status vem da Covercut (Graph API). Erro de rede nao muda
+ * nada; so marca desconectado quando a Covercut responde que nao esta.
+ */
+async function checkCloudStatus(): Promise<number> {
+  const inboxes = await prisma.inbox.findMany({
+    where: { isActive: true, channelType: 'whatsapp_cloud' },
+    select: { id: true, status: true, instanceName: true, channelConfig: true },
+  })
+  let changes = 0
+  for (const inbox of inboxes) {
+    const config = (inbox.channelConfig ?? {}) as Record<string, unknown>
+    const phoneNumberId = typeof config.phoneNumberId === 'string' ? config.phoneNumberId : ''
+    if (!phoneNumberId) continue
+    try {
+      const status = await getCovercutNumberStatus(phoneNumberId)
+      const raw = (status.status || '').toUpperCase()
+      const newStatus = raw === 'CONNECTED' || raw === 'ACTIVE' ? 'connected' : 'disconnected'
+      if (newStatus !== inbox.status) {
+        await prisma.inbox.update({
+          where: { id: inbox.id },
+          data: {
+            status: newStatus,
+            errorMessage: newStatus === 'connected' ? null : `WhatsApp Cloud: ${raw || 'sem status'}`,
+            ...(newStatus === 'connected' ? { lastConnectedAt: new Date() } : {}),
+          },
+        })
+        changes++
+        console.log(`[Cron WhatsApp Status] ${inbox.instanceName}: ${inbox.status} -> ${newStatus}`)
+      }
+    } catch (err) {
+      console.warn(`[Cron WhatsApp Status] Cloud ${inbox.instanceName} sem resposta:`, (err as Error)?.message)
+    }
+  }
+  return changes
+}
 
 async function checkWhatsAppStatus() {
+  await checkCloudStatus().catch((err) => console.error('[Cron WhatsApp Status] Cloud falhou:', err))
+
+  // Daqui pra baixo e protocolo da UazAPI (/instance/status). Antes rodava em
+  // TODAS as inboxes: numero oficial ou NotificaMe levava 401 e era marcado
+  // como desconectado sem estar.
   const instances = await prisma.inbox.findMany({
-    where: { isActive: true },
+    where: { isActive: true, channelType: 'uazapi' },
     select: {
       id: true,
       companyId: true,

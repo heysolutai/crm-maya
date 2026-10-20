@@ -1,10 +1,12 @@
 import { Worker, Job } from 'bullmq'
 import { getRedisConnection } from '../connection'
-import { QUEUE_NAMES, type MediaProcessingJob, enqueueN8NWebhook } from '../queues'
+import { QUEUE_NAMES, type MediaProcessingJob } from '../queues'
+import { despacharParaIA } from '@/lib/maestro/despacho'
 import { prisma } from '@/lib/db'
 import { uploadToB2, buildB2Key, MIME_TO_EXT } from '@/lib/storage'
 import { prepararAudioParaWeb } from '@/lib/audio-transcode'
 import { publishEvent } from '@/lib/realtime'
+import { isCovercutMediaRef, downloadCovercutMedia } from '@/lib/channels/covercut'
 
 // Download media via UazAPI /message/download endpoint (only reliable method: WhatsApp URLs are encrypted)
 async function downloadViaUazAPI(
@@ -125,8 +127,11 @@ async function processMedia(job: Job<MediaProcessingJob>) {
 
   console.log(`[Media Worker] Processing ${mediaType} for message ${messageId}, key: ${messageKey}`)
 
-  // Download via UazAPI (only reliable method: WhatsApp URLs are encrypted)
-  const mediaData = await downloadViaUazAPI(messageKey, instanceApiKey, instanceApiUrl)
+  // Download via UazAPI (only reliable method: WhatsApp URLs are encrypted).
+  // WhatsApp Cloud: referencia covercut-media:// (media_id da Meta).
+  const mediaData = isCovercutMediaRef(job.data.mediaUrl)
+    ? await downloadCovercutMedia(job.data.mediaUrl)
+    : await downloadViaUazAPI(messageKey, instanceApiKey, instanceApiUrl)
 
   if (!mediaData || mediaData.buffer.length === 0) {
     throw new Error(`Failed to download media for message ${messageId} (key: ${messageKey})`)
@@ -210,17 +215,38 @@ async function processMedia(job: Job<MediaProcessingJob>) {
     patch: { media_url: storagePath, metadata: enriched },
   }).catch((e) => console.error('[Media Worker] publish falhou:', (e as Error).message))
 
-  // Send N8N webhook with public URL (B2 URL já é pública)
-  if (n8nWebhookUrl && n8nPayload) {
-    await enqueueN8NWebhook({
-      webhookUrl: n8nWebhookUrl,
-      payload: {
-        ...n8nPayload,
-        media_url: storagePath, // storagePath agora é a URL pública do B2
-      },
+  // Maestro: a mensagem ja esta salva (legenda/marcador); o turno le do banco.
+  // Decidido na entrada do webhook (job.destinoIA). O n8n NAO e chamado junto.
+  if (job.data.destinoIA === 'maestro') {
+    await despacharParaIA({
       companyId,
       conversationId,
       messageId,
+      // Midia enviada pelo atendente (eco) nunca dispara a IA do Maestro.
+      doCliente: n8nPayload?.fromMe !== true,
+      destino: 'maestro',
+    })
+    console.log(`[Media Worker] turno do Maestro enfileirado para a mensagem ${messageId}`)
+  } else if (n8nWebhookUrl && n8nPayload) {
+    // Send N8N webhook with public URL (B2 URL já é pública)
+    await despacharParaIA({
+      companyId,
+      conversationId,
+      messageId,
+      doCliente: n8nPayload.fromMe !== true,
+      destino: 'n8n',
+      n8n: {
+        data: {
+          webhookUrl: n8nWebhookUrl,
+          payload: {
+            ...n8nPayload,
+            media_url: storagePath, // storagePath agora é a URL pública do B2
+          },
+          companyId,
+          conversationId,
+          messageId,
+        },
+      },
     })
     console.log(`[Media Worker] N8N webhook media_url: ${storagePath}`)
   }
@@ -259,6 +285,23 @@ async function registrarFalhaTerminal(job: Job<MediaProcessingJob> | undefined, 
     }).catch(() => {})
   } catch (e) {
     console.error('[Media Worker] nao consegui registrar a falha na mensagem:', (e as Error).message)
+  }
+
+  // Maestro: sem isto o cliente que mandou a foto ficava sem resposta para sempre
+  // (o turno so e disparado depois do upload). O turno ve o marcador "[imagem]" e
+  // pede pro cliente escrever. No n8n nada muda.
+  if (job.data.destinoIA === 'maestro') {
+    try {
+      await despacharParaIA({
+        companyId,
+        conversationId,
+        messageId,
+        doCliente: job.data.n8nPayload?.fromMe !== true,
+        destino: 'maestro',
+      })
+    } catch (e) {
+      console.error('[Media Worker] nao consegui acionar o Maestro apos a falha da midia:', (e as Error).message)
+    }
   }
 }
 

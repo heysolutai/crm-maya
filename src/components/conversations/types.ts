@@ -41,7 +41,13 @@ export interface Client {
   /** remoteJid / LID cru, pra APIs que exigem esse formato */
   whatsapp_lid?: string | null;
   avatar_url?: string | null;
+  /** Booleano cru do banco. Pra saber se esta pausada AGORA use isAiPausedNow (./ai-pause). */
   ai_paused?: boolean | null;
+  /** Ate quando a pausa vale. Null com ai_paused = so volta manual. */
+  ai_paused_until?: string | null;
+  ai_paused_at?: string | null;
+  /** Id do usuario, 'phone' (respondeu pelo celular), 'agent' ou 'system'. */
+  ai_paused_by?: string | null;
 }
 
 export interface LastMessage {
@@ -60,6 +66,8 @@ export interface Conversation {
   transferred_user?: {
     full_name: string | null;
   } | null;
+  /** Id do atendente atribuido (transferredTo). */
+  transferred_to?: string | null;
   department_id?: string | null;
   department?: {
     id: string;

@@ -3,13 +3,15 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { getWhatsAppInstance, findOrCreateConversation, saveMessage, getUAZMessageId, getClientPhoneByConversationId } from '@/lib/api/database';
-import { sendToWhatsApp } from '@/lib/api/whatsapp';
+import { sendToWhatsApp, marcarFalhaEnvio } from '@/lib/api/whatsapp';
+import { explicarFalhaEnvio } from '@/lib/erros/envio';
 import { validateTextPayload } from '@/lib/api/utils';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
 import { getAdapter, hasAdapter } from '@/lib/channels/registry';
 import { isChannelType } from '@/lib/channels/types';
 import { prepararTextoParaWhatsApp } from '@/lib/whatsapp/texto-whatsapp';
+import { checarEnvioDaIA, marcarRespondido, registrarBloqueio } from '@/lib/ai/turns';
 
 const apiError = (message: string, errorCode: string, status: number, extra?: Record<string, unknown>) =>
   jsonResponse({ success: false, error: errorCode, message, ...extra }, status);
@@ -106,6 +108,18 @@ export async function POST(req: NextRequest) {
     });
     if (!conversation) return apiError('Conversa não encontrada.', 'CONVERSATION_NOT_FOUND', 404);
 
+    // Pausa da IA vale pro fluxo INTEIRO: resposta da IA (n8n, Maestro...)
+    // enquanto o cliente esta pausado nao sai, e fica no Registro da IA.
+    if (payload.fromAI) {
+      const envio = await checarEnvioDaIA(companyId, conversationId);
+      if (!envio.permitido) {
+        await registrarBloqueio(companyId, conversationId, envio.ate);
+        return apiError('IA pausada para este cliente: resposta não enviada.', 'AI_PAUSED', 409, {
+          paused_until: envio.ate,
+        });
+      }
+    }
+
     // Inbox de envio: a explicita do body > a vinculada a conversa
     const sendInboxId = requestedInbox?.id || conversation.inboxId;
 
@@ -154,6 +168,7 @@ export async function POST(req: NextRequest) {
           }
 
           console.log('[send-message-text] adapter send done:', Date.now() - t0, 'ms');
+          if (payload.fromAI) await marcarRespondido(companyId, conversationId, payload.message);
           return jsonResponse({
             success: true,
             message_id: message.id,
@@ -161,12 +176,16 @@ export async function POST(req: NextRequest) {
             sender_type: payload.fromAI ? 'ai' : 'agent',
             channel: agent.channelType,
           });
-        } catch (sendErr: any) {
-          await prisma.message.update({
-            where: { id: message.id },
-            data: { metadata: { send_error: sendErr?.message || 'unknown', failed_at: new Date().toISOString() } as any },
-          }).catch(() => {});
-          return apiError(sendErr?.message || 'Falha ao enviar pelo agente.', 'ADAPTER_SEND_FAILED', 502, { message_id: message.id });
+        } catch (sendErr) {
+          // Texto cru fica na mensagem (o super-admin ve); quem chamou recebe
+          // a explicacao em portugues simples.
+          const raw = await marcarFalhaEnvio(message.id, sendErr, { companyId });
+          const falha = explicarFalhaEnvio(raw);
+          return apiError(falha.motivo, 'ADAPTER_SEND_FAILED', 502, {
+            message_id: message.id,
+            motivo: falha.motivo,
+            o_que_fazer: falha.oQueFazer,
+          });
         }
       }
     }
@@ -214,7 +233,16 @@ export async function POST(req: NextRequest) {
 
     console.log('[send-message-text] Total time:', Date.now() - t0, 'ms');
 
-    if (!success) return apiError('Falha ao enviar mensagem pelo WhatsApp.', 'WHATSAPP_SEND_FAILED', 500, { message_id: message.id });
+    if (!success) {
+      const falha = explicarFalhaEnvio(error);
+      return apiError(falha.motivo, 'WHATSAPP_SEND_FAILED', 500, {
+        message_id: message.id,
+        motivo: falha.motivo,
+        o_que_fazer: falha.oQueFazer,
+      });
+    }
+
+    if (payload.fromAI) await marcarRespondido(companyId, conversationId, payload.message);
 
     return jsonResponse({ success: true, message_id: message.id, conversation_id: conversationId, sender_type: payload.fromAI ? 'ai' : 'agent' });
   } catch (error) {

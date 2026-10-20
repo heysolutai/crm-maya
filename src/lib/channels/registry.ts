@@ -8,11 +8,13 @@ import type { ChannelAdapter } from './adapter';
 import { evolutionBaileysAdapter } from './adapters/evolution-baileys';
 import { uazapiAdapter } from './adapters/uazapi';
 import { notificameAdapter } from './adapters/notificame';
+import { whatsappCloudAdapter } from './adapters/whatsapp-cloud';
 
 const adapters: Partial<Record<ChannelType, ChannelAdapter>> = {
   uazapi: uazapiAdapter,
   evolution_baileys: evolutionBaileysAdapter,
   notificame: notificameAdapter,
+  whatsapp_cloud: whatsappCloudAdapter,
 };
 
 export function getAdapter(channelType: ChannelType): ChannelAdapter {

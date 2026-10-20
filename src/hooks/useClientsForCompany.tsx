@@ -15,13 +15,17 @@ export interface ClientForCompany {
 }
 
 function mapClient(raw: any): ClientForCompany {
+  // Pausa com prazo vencido = IA ativa (mesma regra de isAiPausedNow).
+  const pausedFlag = Boolean(raw.aiPaused ?? raw.ai_paused ?? false);
+  const pausedUntil = raw.aiPausedUntil ?? raw.ai_paused_until ?? null;
+  const pausedNow = pausedFlag && (!pausedUntil || new Date(pausedUntil).getTime() > Date.now());
   return {
     id: raw.id,
     first_name: raw.firstName ?? raw.first_name,
     last_name: raw.lastName ?? raw.last_name,
     phone: raw.phone,
     email: raw.email,
-    ai_paused: raw.aiPaused ?? raw.ai_paused ?? false,
+    ai_paused: pausedNow,
     created_at: raw.createdAt ?? raw.created_at,
     avatar_url: raw.avatarUrl ?? raw.avatar_url,
     stage_id: raw.stageId ?? raw.stage_id,

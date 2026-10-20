@@ -1,14 +1,38 @@
 import { memo, useState, useMemo } from 'react';
-import { ChevronDown, SlidersHorizontal, Building2, Users, MessageCircle, Activity, UserCircle2 } from 'lucide-react';
+import { ChevronDown, SlidersHorizontal, Building2, Users, MessageCircle, Activity, UserCircle2, CalendarDays, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { isAiPausedNow } from './ai-pause';
 import type { Conversation, TeamMember } from './types';
 
 interface Department {
   id: string;
   name: string;
   color: string;
+}
+
+/** Periodo pela data de INICIO da conversa (startedAt). */
+export type PeriodFilter = 'all' | 'today' | '7d' | '30d';
+
+export const PERIOD_OPTIONS: { value: PeriodFilter; label: string }[] = [
+  { value: 'today', label: 'Hoje' },
+  { value: '7d', label: '7 dias' },
+  { value: '30d', label: '30 dias' },
+  { value: 'all', label: 'Todos' },
+];
+
+/**
+ * ISO do comeco do dia (hora local) que abre o periodo. Sempre meia-noite:
+ * o valor fica estavel no dia todo, entao a chave da query nao muda a cada render.
+ */
+export function periodStart(period: PeriodFilter): string | undefined {
+  if (period === 'all') return undefined;
+  const dias = period === 'today' ? 0 : period === '7d' ? 6 : 29;
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - dias);
+  return d.toISOString();
 }
 
 interface ConversationFiltersProps {
@@ -24,9 +48,13 @@ interface ConversationFiltersProps {
   onDepartmentFilterChange: (value: string) => void;
   userFilter: string;
   onUserFilterChange: (value: string) => void;
+  periodFilter: PeriodFilter;
+  onPeriodFilterChange: (value: PeriodFilter) => void;
+  aiPausedFilter: boolean;
+  onAiPausedFilterChange: (value: boolean) => void;
 }
 
-type SectionKey = 'status' | 'department' | 'user' | 'queue' | 'channel';
+type SectionKey = 'period' | 'ai' | 'status' | 'department' | 'user' | 'queue' | 'channel';
 
 const STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
   { value: 'unread',      label: 'Não lidas',    color: '#ef4444' },
@@ -53,8 +81,14 @@ export const ConversationFilters = memo(function ConversationFilters({
   onDepartmentFilterChange,
   userFilter,
   onUserFilterChange,
+  periodFilter,
+  onPeriodFilterChange,
+  aiPausedFilter,
+  onAiPausedFilterChange,
 }: ConversationFiltersProps) {
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({
+    period: true,
+    ai: true,
     status: true,
     department: true,
     user: true,
@@ -70,8 +104,12 @@ export const ConversationFilters = memo(function ConversationFilters({
     const byUser: Record<string, number> = {};
     let channelWhatsapp = 0;
     let queueTotal = 0;
+    let aiPaused = 0;
+    const agora = Date.now();
 
     for (const c of all) {
+      if (isAiPausedNow(c.client, agora)) aiPaused++;
+
       const s = (c as any).status || 'active';
       byStatus[s] = (byStatus[s] || 0) + 1;
 
@@ -97,14 +135,16 @@ export const ConversationFilters = memo(function ConversationFilters({
       queueTotal += queueCounts[dept.id] || 0;
     }
 
-    return { byStatus, byDept, byUser, channelWhatsapp, queueTotal };
+    return { byStatus, byDept, byUser, channelWhatsapp, queueTotal, aiPaused };
   }, [conversations, departments, queueCounts]);
 
   // Conta filtros ativos (considerando "all" como sem filtro)
   const activeCount =
     (statusFilter && statusFilter !== 'all' ? 1 : 0) +
     (departmentFilter && departmentFilter !== 'all' ? 1 : 0) +
-    (userFilter && userFilter !== 'all' ? 1 : 0);
+    (userFilter && userFilter !== 'all' ? 1 : 0) +
+    (periodFilter !== 'all' ? 1 : 0) +
+    (aiPausedFilter ? 1 : 0);
 
   const toggle = (key: SectionKey) =>
     setSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -125,6 +165,8 @@ export const ConversationFilters = memo(function ConversationFilters({
     onStatusFilterChange('all');
     onDepartmentFilterChange('all');
     onUserFilterChange('all');
+    onPeriodFilterChange('all');
+    onAiPausedFilterChange(false);
   };
 
   return (
@@ -155,6 +197,50 @@ export const ConversationFilters = memo(function ConversationFilters({
 
       {open && (
         <div className="px-2 pb-2 space-y-1.5">
+          <FilterSection
+            label="Período"
+            icon={<CalendarDays className="h-3.5 w-3.5" />}
+            open={sections.period}
+            onToggle={() => toggle('period')}
+          >
+            {/* Botoes segmentados: escolha unica, sempre um marcado. */}
+            <div className="grid grid-cols-4 gap-1 px-2 py-1" role="radiogroup" aria-label="Período">
+              {PERIOD_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={periodFilter === opt.value}
+                  onClick={() => onPeriodFilterChange(opt.value)}
+                  className={cn(
+                    'h-8 max-lg:h-10 rounded-md border text-[12px] font-medium transition-colors',
+                    periodFilter === opt.value
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background text-muted-foreground border-border hover:bg-accent/40'
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="px-3 pb-1 text-[11px] text-muted-foreground">Pela data de início da conversa.</p>
+          </FilterSection>
+
+          <FilterSection
+            label="IA"
+            icon={<Bot className="h-3.5 w-3.5" />}
+            open={sections.ai}
+            onToggle={() => toggle('ai')}
+          >
+            <FilterItem
+              checked={aiPausedFilter}
+              color="#f97316"
+              label="IA pausada"
+              count={counts.aiPaused}
+              onClick={() => onAiPausedFilterChange(!aiPausedFilter)}
+            />
+          </FilterSection>
+
           <FilterSection
             label="Status"
             icon={<Activity className="h-3.5 w-3.5" />}

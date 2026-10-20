@@ -5,54 +5,13 @@ import { handleApiError } from '@/lib/api/errors'
 import { CHANNEL_TYPES, isChannelType, CHANNEL_REGISTRY } from '@/lib/channels/types'
 import { getAdapter, hasAdapter } from '@/lib/channels/registry'
 import { ChannelError } from '@/lib/channels/errors'
+import { cloudInstanceName } from '@/lib/channels/adapters/whatsapp-cloud'
 import { normalizeCompanySlug, buildAgentMemoryKey } from '@/lib/api/utils'
 import { maskKey, redactChannelConfig, redactDeep, REDACTED } from '@/lib/api/redact'
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
-
-/**
- * Garante que a inbox recem-criada tem um AiAgent DEDICADO (1:1).
- * Cada instancia conectada = seu proprio agente, nunca compartilhado: no
- * produto restaurante "conexao" e "agente" sao a mesma coisa. Por isso sempre
- * cria um agente novo (em branco) e vincula a esta inbox.
- */
-async function ensureInboxAiAgent(inboxId: string, companyId: string, displayName: string) {
-  const inbox = await prisma.inbox.findUnique({
-    where: { id: inboxId },
-    select: { aiAgentId: true },
-  })
-  if (inbox?.aiAgentId) return
-
-  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } })
-  const slug = normalizeCompanySlug(company?.name || displayName)
-
-  const newAiAgentId = randomUUID()
-  await prisma.aiAgent.create({
-    data: {
-      id: newAiAgentId,
-      companyId,
-      name: displayName,
-      prompts: {} as Prisma.InputJsonValue,
-      behaviorSettings: {} as Prisma.InputJsonValue,
-      conditions: {} as Prisma.InputJsonValue,
-      apiKeys: {} as Prisma.InputJsonValue,
-      variables: {} as Prisma.InputJsonValue,
-      knowledge: slug ? `know_${slug}` : null,
-      memoryKey: buildAgentMemoryKey(newAiAgentId, displayName),
-      productsKnowledge: slug ? `products_${slug}` : null,
-      n8nWebhookUrl: null,
-      followUpEnabled: false,
-      followUpStages: [] as Prisma.InputJsonValue,
-      isActive: true,
-    },
-  })
-
-  await prisma.inbox.update({
-    where: { id: inboxId },
-    data: { aiAgentId: newAiAgentId },
-  })
-}
+import { ensureInboxAiAgent } from '@/lib/api/inbox-ai-agent'
 
 const createAgentSchema = z.object({
   channelType: z.enum(CHANNEL_TYPES),
@@ -146,6 +105,7 @@ function mapAgent(i: any) {
 //   uazapi            -> /api/webhooks/whatsapp
 //   evolution_baileys -> /api/webhooks/evolution
 //   notificame        -> /api/webhooks/notificame
+//   whatsapp_cloud    -> /api/webhooks/whatsapp-cloud
 //
 // Quem chegar com um canal novo: cadastra aqui a rota correspondente.
 // (a inbox e resolvida pelo instanceName do payload; o agentId vai na query
@@ -154,6 +114,7 @@ const WEBHOOK_ROUTE_BY_CHANNEL: Record<string, string> = {
   uazapi: 'whatsapp',
   evolution_baileys: 'evolution',
   notificame: 'notificame',
+  whatsapp_cloud: 'whatsapp-cloud',
 }
 
 function publicWebhookUrl(req: NextRequest, channelType: string, agentId: string): string {
@@ -181,7 +142,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { companyId } = await authenticate(req)
+    const { companyId, isSuperAdmin } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
 
     const body = await req.json()
@@ -251,6 +212,34 @@ export async function POST(req: NextRequest) {
         { error: 'Canal ainda nao disponivel', code: 'CHANNEL_UNAVAILABLE' },
         { status: 400 }
       )
+    }
+
+    // WhatsApp Cloud: as credenciais da Covercut sao UNICAS da plataforma e o
+    // numero e escolhido pelo phone_number_id. Se o admin do restaurante
+    // pudesse cadastrar, bastaria saber o id do numero de outro restaurante
+    // pra desviar o webhook dele. Por isso: so super-admin, e um numero so
+    // pode estar em UMA inbox no sistema inteiro.
+    if (channelType === 'whatsapp_cloud') {
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'A conexao do WhatsApp Cloud e feita pela equipe Maya. Fale com o suporte.' },
+          { status: 403 }
+        )
+      }
+      const rawId = typeof extra?.phoneNumberId === 'string' ? extra.phoneNumberId.replace(/\D/g, '') : ''
+      if (!rawId || rawId.length < 6 || rawId.length > 30) {
+        return NextResponse.json({ error: 'Phone Number ID invalido' }, { status: 400 })
+      }
+      const emUso = await prisma.inbox.findFirst({
+        where: { instanceName: cloudInstanceName(rawId) },
+        select: { id: true },
+      })
+      if (emUso) {
+        return NextResponse.json(
+          { error: 'Este numero ja esta vinculado a uma inbox', code: 'CONFLICT' },
+          { status: 409 }
+        )
+      }
     }
 
     // NotificaMe usa URL fixa: preenche aqui pra a upsert de channelCredential
@@ -350,8 +339,9 @@ export async function POST(req: NextRequest) {
             channelConfig: channelConfig as any,
             metadata: result.metadata as any,
             qrCode: result.qrCode || null,
-            status: result.qrCode ? 'connecting' : 'disconnected',
-            phoneNumber: phoneNumber || null,
+            status: result.status ?? (result.qrCode ? 'connecting' : 'disconnected'),
+            phoneNumber: phoneNumber || result.phoneNumber || null,
+            ...(result.status === 'connected' ? { lastConnectedAt: new Date() } : {}),
           },
         })
 

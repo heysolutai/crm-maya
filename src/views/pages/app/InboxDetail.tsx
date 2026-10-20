@@ -1,5 +1,5 @@
 import { apiFetch } from '@/lib/api/client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useInboxes } from '@/hooks/useInboxes';
@@ -31,23 +31,18 @@ import {
   Save,
   CheckSquare,
   Square,
-  MessageSquareText,
   BookOpen,
-  Key,
-  Settings as SettingsIcon,
   FlaskConical,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { CHANNEL_REGISTRY, type ChannelType } from '@/lib/channels/types';
+import { explicarErroConexao } from '@/lib/erros/envio';
 import { cn } from '@/lib/utils';
 import { useEffectiveCompanyId } from '@/hooks/useEffectiveCompanyId';
 import { useCompanySettings } from '@/hooks/useCompanySettings';
 import { useAuth } from '@/hooks/useAuth';
-import { AIPromptsEditor } from '@/components/ai';
-import { SimpleAgentConfig } from '@/components/ai/SimpleAgentConfig';
+import { AgentTab } from '@/components/agente-ia/AgentTab';
 import { FAQManager } from '@/components/settings/FAQManager';
-import { SettingsSubTab } from '@/components/super-admin/company-details/ai-config/SettingsSubTab';
-import { APIKeysSubTab } from '@/components/super-admin/company-details/ai-config/APIKeysSubTab';
 import { PlaygroundChat } from '@/components/ai/PlaygroundChat';
 import type { AIPermissionKey } from '@/components/super-admin/company-details/AIPermissionsConfig';
 
@@ -68,22 +63,17 @@ const statusStyles: Record<string, { dot: string; label: string; badge: 'default
   error: { dot: 'bg-rose-500', label: 'Erro', badge: 'destructive' },
 };
 
+// Abas da conexão. Conexão e agente de IA são a mesma coisa (1:1): por isso o
+// agente, as perguntas e respostas e o teste da IA moram aqui.
 const baseTabs = [
   { id: 'connection', label: 'Conexão', icon: Plug },
   { id: 'members', label: 'Atendentes', icon: Users },
+  { id: 'agent', label: 'Agente de IA', icon: Bot },
+  { id: 'faq', label: 'Perguntas e respostas', icon: BookOpen },
 ];
-
-// Abas da IA do agente DEDICADO desta conexão (1:1). Mesmas da antiga tela
-// de "Agente IA", agora embutidas aqui: conexão e agente sao a mesma coisa.
-const aiFixedTabs = [
-  { id: 'prompts', label: 'Prompts', icon: MessageSquareText, permKey: 'prompts' as AIPermissionKey },
-  { id: 'faq', label: 'FAQ', icon: BookOpen, permKey: 'faq' as AIPermissionKey },
-];
-const aiRestrictedTabs = [
-  { id: 'integrations', label: 'Integrações', icon: Key, permKey: 'integrations' as AIPermissionKey },
-  { id: 'settings', label: 'Ajustes', icon: SettingsIcon, permKey: 'settings' as AIPermissionKey },
-  { id: 'playground', label: 'Playground', icon: FlaskConical, permKey: 'playground' as AIPermissionKey },
-];
+// Sempre liberado: testa a IA (Maestro) sem precisar de número de WhatsApp.
+const playgroundTab = { id: 'playground', label: 'Testar a IA', icon: FlaskConical };
+const tabs = [...baseTabs, playgroundTab];
 
 interface Props {
   inboxId: string;
@@ -94,21 +84,21 @@ export default function InboxDetail({ inboxId }: Props) {
   const { inboxes, isLoading } = useInboxes();
   const { effectiveCompanyId: companyId } = useEffectiveCompanyId();
   const { company } = useCompanySettings();
-  const { role } = useAuth();
+  const { isSuperAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState('connection');
 
   const inbox = inboxes.find((a) => a.id === inboxId);
 
-  // Abas da conexao + abas de IA (estas gated pelas permissoes do restaurante).
-  const tabs = useMemo(() => {
-    const isSuperAdmin = role === 'super_admin';
-    if (isSuperAdmin) return [...baseTabs, ...aiFixedTabs, ...aiRestrictedTabs];
-    const settings = company?.settings as Record<string, any> | null;
-    const aiPerms = settings?.ai_permissions as Record<string, boolean> | undefined;
-    if (!aiPerms) return [...baseTabs, ...aiFixedTabs, ...aiRestrictedTabs];
-    const enabledRestricted = aiRestrictedTabs.filter((t) => aiPerms[t.permKey] === true);
-    return [...baseTabs, ...aiFixedTabs, ...enabledRestricted];
-  }, [role, company]);
+  // Permissões de IA do restaurante (Company.settings.ai_permissions). Super-admin,
+  // ou restaurante sem nenhuma permissão salva, vê tudo; com permissões salvas,
+  // cada item restrito só aparece se estiver ligado.
+  const podeVer = useMemo(() => {
+    const settings = company?.settings as Record<string, unknown> | null | undefined;
+    const bruto = settings?.ai_permissions;
+    const aiPerms =
+      bruto && typeof bruto === 'object' ? (bruto as Partial<Record<AIPermissionKey, boolean>>) : undefined;
+    return (chave: AIPermissionKey): boolean => isSuperAdmin || !aiPerms || aiPerms[chave] === true;
+  }, [isSuperAdmin, company]);
 
   if (isLoading) {
     return (
@@ -150,18 +140,21 @@ export default function InboxDetail({ inboxId }: Props) {
         return <ConnectionTab inbox={inbox} />;
       case 'members':
         return <MembersTab inboxId={inbox.id} />;
-      case 'prompts':
+      case 'agent':
         return companyId ? (
-          <SimpleAgentConfig companyId={companyId} agentId={aiAgentId} />
+          <AgentTab
+            inboxId={inbox.id}
+            companyId={companyId}
+            agentId={aiAgentId}
+            isSuperAdmin={isSuperAdmin}
+            canProviders={podeVer('integrations')}
+            canTechnical={podeVer('settings')}
+          />
         ) : null;
       case 'faq':
         return companyId ? <FAQManager companyId={companyId} /> : null;
-      case 'integrations':
-        return companyId ? <APIKeysSubTab companyId={companyId} agentId={aiAgentId} /> : null;
-      case 'settings':
-        return companyId ? <SettingsSubTab companyId={companyId} agentId={aiAgentId} /> : null;
       case 'playground':
-        return companyId ? <PlaygroundChat companyId={companyId} agentId={aiAgentId} /> : null;
+        return companyId ? <PlaygroundChat companyId={companyId} agentId={aiAgentId} inboxId={inbox.id} /> : null;
       default:
         return null;
     }
@@ -205,8 +198,9 @@ export default function InboxDetail({ inboxId }: Props) {
         </div>
       </div>
 
-      <div className="md:hidden">
-        <div className="overflow-x-auto -mx-4 px-4 pb-3">
+      <div className="md:flex md:gap-6">
+        {/* Celular: abas em linha, com rolagem para o lado */}
+        <div className="md:hidden overflow-x-auto -mx-4 px-4 pb-3">
           <div className="flex gap-2 w-max">
             {tabs.map((tab) => (
               <button
@@ -225,11 +219,9 @@ export default function InboxDetail({ inboxId }: Props) {
             ))}
           </div>
         </div>
-        <div className="mt-4">{renderContent()}</div>
-      </div>
 
-      <div className="hidden md:flex gap-6">
-        <nav className="w-56 shrink-0 space-y-1">
+        {/* Computador: menu na lateral */}
+        <nav className="hidden md:block w-56 shrink-0 space-y-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -246,7 +238,9 @@ export default function InboxDetail({ inboxId }: Props) {
             </button>
           ))}
         </nav>
-        <div className="flex-1 min-w-0">{renderContent()}</div>
+
+        {/* O conteúdo é montado uma vez só (nada de formulário duplicado na tela) */}
+        <div className="mt-1 min-w-0 flex-1 md:mt-0">{renderContent()}</div>
       </div>
     </div>
   );
@@ -258,9 +252,13 @@ function ConnectionTab({ inbox }: { inbox: ReturnType<typeof useInboxes>['inboxe
   // Necessario pra super-admin personificado: as rotas /api/agents/[id]/* exigem
   // ?companyId= pra resolver o restaurante (senao retornam "Restaurante nao encontrado").
   const { effectiveCompanyId: companyId } = useEffectiveCompanyId();
+  const { isSuperAdmin } = useAuth();
   const channelMeta = CHANNEL_REGISTRY[inbox.channel_type];
   const isAvailable = channelMeta?.status === 'available';
   const isTokenMode = channelMeta?.connectionMode === 'token';
+  // Último problema da conexão em palavras simples (o texto cru só o super-admin vê).
+  const ultimoProblema =
+    inbox.error_message && inbox.status !== 'connected' ? explicarErroConexao(inbox.error_message) : null;
 
   const [qrLoading, setQrLoading] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -301,6 +299,20 @@ function ConnectionTab({ inbox }: { inbox: ReturnType<typeof useInboxes>['inboxe
       setQrLoading(false);
     }
   };
+
+  // Caixa recem-criada na tela de Conexoes (?conectar=1): ja abre o QR, sem o
+  // admin ter que procurar o botao. Le a URL no efeito (nao useSearchParams)
+  // pra nao exigir Suspense na pagina.
+  const autoQrRef = useRef(false);
+  useEffect(() => {
+    if (autoQrRef.current) return;
+    if (new URLSearchParams(window.location.search).get('conectar') !== '1') return;
+    if (isTokenMode || !isAvailable || isConnected || inbox.qr_code) return;
+    autoQrRef.current = true;
+    void handleGenerateQr();
+    // handleGenerateQr muda a cada render; o ref ja garante uma execucao so.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTokenMode, isAvailable, isConnected, inbox.qr_code]);
 
   const handleDisconnect = async () => {
     setDisconnecting(true);
@@ -360,10 +372,17 @@ function ConnectionTab({ inbox }: { inbox: ReturnType<typeof useInboxes>['inboxe
           </div>
         )}
 
-        {inbox.error_message && inbox.status !== 'connected' && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-            <p className="font-medium">Último erro do provider:</p>
-            <p className="text-xs mt-1 break-words">{inbox.error_message}</p>
+        {ultimoProblema && (
+          <div className="space-y-1.5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm">
+            <p className="font-semibold text-destructive">Último problema</p>
+            <p className="leading-snug">{ultimoProblema.motivo}</p>
+            <p className="leading-snug">
+              <span className="font-semibold">O que fazer: </span>
+              {ultimoProblema.oQueFazer}
+            </p>
+            {isSuperAdmin && (
+              <p className="break-words font-mono text-[11px] text-muted-foreground">{inbox.error_message}</p>
+            )}
           </div>
         )}
 
@@ -371,12 +390,28 @@ function ConnectionTab({ inbox }: { inbox: ReturnType<typeof useInboxes>['inboxe
           <div className="rounded-lg border bg-muted/30 p-6 space-y-3 text-center">
             <Cloud className="h-10 w-10 mx-auto text-muted-foreground" />
             <div>
-              <p className="font-medium">
-                {isConnected ? 'Canal ativo via API token' : 'Canal configurado via API token'}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Sem QR Code: autenticação via token na API NotificaMe. Status sincroniza automaticamente.
-              </p>
+              {inbox.channel_type === 'whatsapp_cloud' ? (
+                <>
+                  <p className="font-medium">
+                    {isConnected ? 'WhatsApp Cloud ativo' : 'WhatsApp Cloud desconectado'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    API oficial do WhatsApp: sem QR Code. O recebimento de mensagens foi configurado automaticamente.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Fora da janela de 24h após a última mensagem do cliente, a Meta só aceita mensagens de template.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium">
+                    {isConnected ? 'Canal ativo via API token' : 'Canal configurado via API token'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Sem QR Code: autenticação via token na API NotificaMe. Status sincroniza automaticamente.
+                  </p>
+                </>
+              )}
             </div>
             {inbox.channel_config &&
               typeof inbox.channel_config === 'object' &&

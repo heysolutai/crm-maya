@@ -13,14 +13,14 @@ interface AIPermissionsConfigProps {
 }
 
 const AI_FEATURES = [
-  { key: 'prompts', label: 'Prompts', description: 'Editar prompts de atendimento, agendamento e primeira mensagem' },
+  { key: 'prompts', label: 'Prompt', description: 'Agente de IA › Prompt: nome, tom de voz, endereço, horários e instruções da IA' },
   { key: 'follow_ups', label: 'Automações / Follow-ups', description: 'Configurar etapas de follow-up automático' },
   { key: 'connections', label: 'Conexões', description: 'Gerenciar WhatsApp e Google Calendar' },
-  { key: 'faq', label: 'FAQ / Base de Conhecimento', description: 'Gerenciar perguntas frequentes e base de conhecimento' },
-  { key: 'integrations', label: 'Integrações (API Keys IA)', description: 'Configurar chaves de API dos provedores de IA (OpenAI, etc.)' },
+  { key: 'faq', label: 'Perguntas e respostas', description: 'Aba Perguntas e respostas: gerenciar perguntas frequentes e base de conhecimento' },
+  { key: 'integrations', label: 'Provedores de IA (chaves)', description: 'Agente de IA › Provedores: chaves de API e modelo dos provedores de IA (OpenAI, etc.)' },
   { key: 'api_keys', label: 'API Keys do Restaurante', description: 'Gerenciar chaves de API para integração externa' },
-  { key: 'settings', label: 'Ajustes de IA', description: 'Configurar modelo, idioma, comportamento e webhooks' },
-  { key: 'playground', label: 'Playground', description: 'Testar a IA em tempo real com simulação de chat' },
+  { key: 'settings', label: 'Configurações técnicas da IA', description: 'Agente de IA › Comportamento: bloco de configurações técnicas (criatividade, áudio, webhook do n8n)' },
+  // "Testar a IA" nao tem chave: fica sempre liberado pro administrador do restaurante.
 ] as const;
 
 export type AIPermissionKey = typeof AI_FEATURES[number]['key'];
@@ -33,7 +33,6 @@ export interface AIPermissions {
   integrations: boolean;
   api_keys: boolean;
   settings: boolean;
-  playground: boolean;
 }
 
 const DEFAULT_PERMISSIONS: AIPermissions = {
@@ -44,7 +43,6 @@ const DEFAULT_PERMISSIONS: AIPermissions = {
   integrations: false,
   api_keys: false,
   settings: false,
-  playground: false,
 };
 
 export function AIPermissionsConfig({ companyId }: AIPermissionsConfigProps) {

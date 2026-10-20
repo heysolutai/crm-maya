@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
+import { covercutRequest } from '@/lib/channels/covercut';
 
 const sendReactionSchema = z.object({
   messageId: z.string().uuid(),
@@ -59,22 +60,40 @@ export async function POST(req: NextRequest) {
 
     if (!uazMessageId) throw new Error('Message does not have UAZ message ID');
 
-    const instance = await prisma.inbox.findFirst({
-      where: { companyId, isActive: true },
-    });
-
-    if (!instance) throw new Error('WhatsApp instance not found');
-
     const cleanPhone = phone!.replace(/[^0-9]/g, '');
-    const formattedNumber = cleanPhone.includes('@') ? cleanPhone : `${cleanPhone}@s.whatsapp.net`;
 
-    const response = await fetch(`${instance.apiUrl}/message/react`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'token': instance.instanceApiKey || '' },
-      body: JSON.stringify({ number: formattedNumber, text: emoji || '', id: uazMessageId }),
+    // Conversa de inbox WhatsApp Cloud: reacao pela API oficial.
+    const convInbox = await prisma.conversation.findFirst({
+      where: { id: message.conversationId, companyId },
+      select: { inbox: { select: { channelType: true, channelConfig: true } } },
     });
+    if (convInbox?.inbox?.channelType === 'whatsapp_cloud') {
+      const config = (convInbox.inbox.channelConfig ?? {}) as Record<string, unknown>;
+      await covercutRequest('POST', '/messages/send', {
+        body: {
+          from: typeof config.phoneNumberId === 'string' ? config.phoneNumberId : '',
+          to: cleanPhone,
+          type: 'reaction',
+          reaction: { message_id: uazMessageId, emoji: emoji || '' },
+        },
+      });
+    } else {
+      const instance = await prisma.inbox.findFirst({
+        where: { companyId, isActive: true },
+      });
 
-    if (!response.ok) throw new Error(`UAZapi error: ${response.status}`);
+      if (!instance) throw new Error('WhatsApp instance not found');
+
+      const formattedNumber = cleanPhone.includes('@') ? cleanPhone : `${cleanPhone}@s.whatsapp.net`;
+
+      const response = await fetch(`${instance.apiUrl}/message/react`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'token': instance.instanceApiKey || '' },
+        body: JSON.stringify({ number: formattedNumber, text: emoji || '', id: uazMessageId }),
+      });
+
+      if (!response.ok) throw new Error(`UAZapi error: ${response.status}`);
+    }
 
     // Save or remove reaction in DB (agentId is null when using API key)
     if (agentId) {

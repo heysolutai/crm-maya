@@ -2,6 +2,7 @@ import { Worker, Queue } from 'bullmq'
 import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type CronTickJob } from '../queues'
 import { prisma } from '@/lib/db'
+import { sendCloudTextInWindow } from '@/lib/channels/cloud-window'
 
 async function processReminders() {
   // Fetch pending reminders that are due
@@ -46,7 +47,7 @@ async function processReminders() {
       // Get WhatsApp instance for this company
       const instance = await prisma.inbox.findFirst({
         where: { companyId: reminder.companyId, isActive: true },
-        select: { id: true, apiUrl: true, instanceApiKey: true },
+        select: { id: true, apiUrl: true, instanceApiKey: true, channelType: true },
       })
 
       if (!instance) {
@@ -87,25 +88,47 @@ async function processReminders() {
 
       // Send WhatsApp message via API
       const cleanPhone = client.phone.replace(/[^0-9]/g, '')
-      const response = await fetch(`${instance.apiUrl}/send/text`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'token': instance.instanceApiKey || '',
-        },
-        body: JSON.stringify({
-          number: cleanPhone,
-          text: reminder.messageText,
-        }),
-      })
+      let waMessageId: string | undefined
+      if (instance.channelType === 'whatsapp_cloud') {
+        // API oficial: texto livre so dentro da janela de 24h do cliente.
+        const envio = await sendCloudTextInWindow({
+          inboxId: instance.id,
+          companyId: reminder.companyId,
+          conversationId: reminder.conversationId,
+          to: cleanPhone,
+          text: reminder.messageText ?? '',
+        })
+        if (!envio.sent) {
+          console.log(`[Cron Reminders] Lembrete ${reminder.id} cancelado: ${envio.reason}`)
+          await prisma.reminder.update({
+            where: { id: reminder.id },
+            data: { status: 'failed', errorMessage: envio.reason },
+          })
+          errors++
+          continue
+        }
+        waMessageId = envio.providerMessageId
+      } else {
+        const response = await fetch(`${instance.apiUrl}/send/text`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'token': instance.instanceApiKey || '',
+          },
+          body: JSON.stringify({
+            number: cleanPhone,
+            text: reminder.messageText,
+          }),
+        })
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`WhatsApp API error (${response.status}): ${errorText}`)
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`WhatsApp API error (${response.status}): ${errorText}`)
+        }
+
+        const result = await response.json()
+        waMessageId = result?.key?.id || result?.message_id
       }
-
-      const result = await response.json()
-      const waMessageId = result?.key?.id || result?.message_id
 
       // Save message to conversation if exists
       if (reminder.conversationId) {

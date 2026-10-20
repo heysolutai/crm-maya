@@ -120,6 +120,8 @@ const updateAiConfigurationSchema = z.object({
     .optional(),
   conditions: z.any().optional(),
   variables: z.any().optional(),
+  /** Quem responde: so o super-admin troca (ver PUT). */
+  engine: z.enum(['n8n', 'maestro']).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -245,7 +247,7 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const { companyId, agentId } = await authenticate(req)
+    const { companyId, agentId, isSuperAdmin } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const body = await req.json()
     const validation = updateAiConfigurationSchema.safeParse(body)
@@ -261,6 +263,12 @@ export async function PUT(req: NextRequest) {
       where: { id, companyId },
     })
     if (!existing) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+
+    // Trocar de n8n pra Maestro muda quem fala com o cliente: decisao tecnica,
+    // so do super-admin (o restaurante nao ve essa opcao).
+    if (updates.engine !== undefined && !isSuperAdmin) {
+      return NextResponse.json({ error: 'Apenas o suporte pode trocar quem responde' }, { status: 403 })
+    }
 
     // Map snake_case to camelCase for known fields
     const data: any = {}
@@ -298,6 +306,7 @@ export async function PUT(req: NextRequest) {
     if (updates.memory_key !== undefined) data.memoryKey = updates.memory_key
     if (updates.products_knowledge !== undefined) data.productsKnowledge = updates.products_knowledge
     if (updates.n8n_webhook_url !== undefined) data.n8nWebhookUrl = updates.n8n_webhook_url
+    if (updates.engine !== undefined) data.engine = updates.engine
     if (updates.conditions !== undefined) data.conditions = updates.conditions
     if (updates.variables !== undefined) data.variables = updates.variables
 

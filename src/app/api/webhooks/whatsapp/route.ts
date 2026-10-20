@@ -4,12 +4,16 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { handleCors, jsonResponse, errorResponse, badRequestResponse } from '@/lib/api/cors';
 import { phoneVariants, canonicalPhone, restaurantIdDaInbox } from '@/lib/api/utils';
-import { enqueueInboundMessage, enqueueN8NWebhook, N8N_DEBOUNCE_MS, enqueueTranscription, enqueueMediaProcessing } from '@/lib/queue';
+import { enqueueInboundMessage, N8N_DEBOUNCE_MS, enqueueTranscription, enqueueMediaProcessing } from '@/lib/queue';
+import { despacharParaIA, decidirDestinoIA, ErroDespacho } from '@/lib/maestro/despacho';
 import { consumirResumeUrl, emFluxoExterno } from '@/lib/conversations/resume-url';
 import { uploadToB2, buildB2Key, MIME_TO_EXT, deleteMediaFromUrl } from '@/lib/storage';
 import { publishEvent } from '@/lib/realtime';
 import { sendPushToCompany } from '@/lib/push';
 import { pauseClientAIByConversation } from '@/lib/api/database';
+import { isAiPausedNow } from '@/lib/ai/pause';
+import { registrarTurno } from '@/lib/ai/turns';
+import { MOTIVOS } from '@/lib/ai/motivos';
 import { handleApiErrorCors } from '@/lib/api/errors'
 import { getSystemSetting } from '@/lib/system-settings'
 import { getDecryptedApiKey } from '@/lib/api/api-key-utils'
@@ -1321,8 +1325,11 @@ export async function POST(req: NextRequest) {
     }
 
     // 3.5. Buscar a inbox completa (com API keys para mídia e transcrição)
+    // Credenciais da inbox QUE RECEBEU a mensagem. Antes pegava a primeira
+    // inbox ativa do restaurante: com dois numeros (ex: QR + WhatsApp Cloud)
+    // a midia era baixada com o token do numero errado.
     const whatsappInstance = await prisma.inbox.findFirst({
-      where: { companyId, isActive: true },
+      where: { id: inboxId, companyId, isActive: true },
       select: { instanceApiKey: true, apiUrl: true },
     });
 
@@ -1468,7 +1475,7 @@ export async function POST(req: NextRequest) {
     // a UAZapi ecoa pra ca como senderType='agent'. Pausa a IA pra nao haver
     // atropelamento entre humano e IA respondendo o mesmo cliente.
     if (senderType === 'agent') {
-      pauseClientAIByConversation(conversationId).catch(err => {
+      pauseClientAIByConversation(conversationId, 'phone').catch(err => {
         console.warn('[webhook] auto-pause falhou (nao bloqueante):', err?.message);
       });
     }
@@ -1531,7 +1538,7 @@ export async function POST(req: NextRequest) {
       const [clientDataResult, apiKeyResult, companyDataResult, convDataResult] = await Promise.all([
         prisma.client.findUnique({
           where: { id: clientId },
-          select: { firstName: true, lastName: true, aiPaused: true },
+          select: { firstName: true, lastName: true, aiPaused: true, aiPausedUntil: true },
         }),
         // `apiKey.key` guarda a chave CRIPTOGRAFADA (iv:dados:tag): o n8n
         // precisa da chave real pra chamar a API de volta.
@@ -1546,6 +1553,7 @@ export async function POST(req: NextRequest) {
             stage: true,
             status: true,
             friendlyId: true,
+            aiThreadId: true,
             resumeUrl: true,
             resumeUrlExpiresAt: true,
             transferredTo: true,
@@ -1563,16 +1571,20 @@ export async function POST(req: NextRequest) {
       // AI config agora e POR INBOX (Inbox.aiAgentId: M:1).
       // Fallback: se a inbox nao tiver AiAgent vinculado, pega o primeiro
       // do restaurante pra nao quebrar fluxo antigo.
+      // O agente da inbox vem MESMO desligado: desligado = o restaurante
+      // desligou a IA deste WhatsApp (chave "IA atendendo"). Antes ele sumia e
+      // a mensagem caia no fluxo padrao do sistema, ou seja, a IA respondia.
       const aiConfigResult = convDataResult?.inbox?.aiAgentId
         ? await prisma.aiAgent.findFirst({
-            where: { id: convDataResult.inbox.aiAgentId, companyId, isActive: true },
-            select: { n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
+            where: { id: convDataResult.inbox.aiAgentId, companyId },
+            select: { id: true, engine: true, isActive: true, n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
           })
         : await prisma.aiAgent.findFirst({
             where: { companyId, isActive: true },
-            select: { n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
+            select: { id: true, engine: true, isActive: true, n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
           });
 
+      const iaDesligada = aiConfigResult?.isActive === false;
       const companyAiConfig = aiConfigResult;
       const clientData = clientDataResult;
       const companyApiKey = apiKeyResult;
@@ -1599,8 +1611,10 @@ export async function POST(req: NextRequest) {
         console.warn('[N8N Webhook] quoted_message_id presente mas nao achamos a mensagem original:', payload.quoted_message_id);
       }
 
-      const n8nWebhookUrl =
-        companyAiConfig?.n8nWebhookUrl || (await getSystemSetting('n8n_ai_webhook_url'));
+      // IA desligada: nenhum fluxo de IA (so o desvio de fluxo externo, abaixo).
+      const n8nWebhookUrl = iaDesligada
+        ? null
+        : companyAiConfig?.n8nWebhookUrl || (await getSystemSetting('n8n_ai_webhook_url'));
 
       // Desvio de fluxo externo (ex: avaliacao no n8n): se a conversa tem uma
       // resumeUrl registrada, a resposta do cliente vai pra ela em vez do
@@ -1614,6 +1628,22 @@ export async function POST(req: NextRequest) {
       // envia (ver `consumirExecutionUrl` no worker). Audio e midia continuam
       // consumindo aqui: os jobs deles nao sao cancelaveis.
       const podeDesviarPraFluxo = payload.type === 'incoming' && !!conversationData?.resumeUrl;
+
+      // Quem responde: n8n (como sempre) ou Maestro (IA do proprio CRM). Decisao
+      // unica em src/lib/maestro/despacho.ts: conversa sob fluxo externo e agente
+      // 'n8n' ficam no n8n; agente 'maestro' ativo recebe um turno (e o n8n NAO
+      // e chamado: seriam duas IAs na mesma conversa).
+      const destinoIA = await decidirDestinoIA({
+        companyId,
+        conversationId,
+        // Agente do Maestro desligado segue pro Maestro, que registra "desligado" e nao responde.
+        agente: companyAiConfig
+          ? { id: companyAiConfig.id, engine: companyAiConfig.engine, isActive: companyAiConfig.isActive }
+          : null,
+        conversa: conversationData
+          ? { resumeUrl: conversationData.resumeUrl, resumeUrlExpiresAt: conversationData.resumeUrlExpiresAt }
+          : null,
+      });
       const targetWebhookUrl = n8nWebhookUrl;
       const knowledgeName = companyAiConfig?.knowledge || null;
       const memoryKeyName = companyAiConfig?.memoryKey || null;
@@ -1644,7 +1674,7 @@ export async function POST(req: NextRequest) {
         ? `${clientData.firstName} ${clientData.lastName || ''}`.trim()
         : payload.phone;
 
-      const aiStatus = clientData?.aiPaused ? 'paused' : 'active';
+      const aiStatus = isAiPausedNow(clientData) ? 'paused' : 'active';
 
       let fullMediaUrl: string | null = null;
       if (payload.media_url) {
@@ -1662,6 +1692,9 @@ export async function POST(req: NextRequest) {
         company_id: companyId,
         conversation_id: conversationId,
         conversation_friendly_id: conversationData?.friendlyId || null,
+        // Thread do orquestrador (Maestro) registrada pelo proprio fluxo via
+        // /api/conversations/execution-url: null na primeira mensagem.
+        ai_thread_id: conversationData?.aiThreadId || null,
         conversation_status: conversationData?.status || null,
         client_id: clientId,
         // Atendente humano (legado: 'agent' aqui = atendente, nao agente do canal)
@@ -1708,6 +1741,9 @@ export async function POST(req: NextRequest) {
         company_name: companyData?.name || null,
         configuracoes_agendamento: configuracoesAgendamento,
         ai_status: aiStatus,
+        // Ate quando a IA esta pausada (null = ativa, ou pausada sem prazo se ai_status=paused).
+        // Resposta da IA durante a pausa e barrada no envio de qualquer jeito.
+        ai_paused_until: aiStatus === 'paused' ? clientData?.aiPausedUntil ?? null : null,
         knowledge: knowledgeName,
         memory_key: memoryKeyName,
         products_knowledge: productsKnowledgeName,
@@ -1736,6 +1772,7 @@ export async function POST(req: NextRequest) {
             messageKey: mediaMessageId,
             n8nWebhookUrl: urlFluxo || targetWebhookUrl || undefined,
             n8nPayload: webhookPayload,
+            destinoIA,
           });
           console.log('[Audio Transcription] ✅ Queued transcription job for message', message.id);
         } catch (queueError) {
@@ -1763,10 +1800,28 @@ export async function POST(req: NextRequest) {
             messageKey: mediaMessageId,
             n8nWebhookUrl: urlFluxo || targetWebhookUrl || undefined,
             n8nPayload: webhookPayload,
+            destinoIA,
           });
           console.log('[Media Processing] ✅ Queued for message', message.id);
         } catch (queueError) {
           console.error('[Media Processing] Failed to queue:', queueError);
+        }
+      } else if (destinoIA === 'maestro') {
+        // Texto do cliente (ou eco do atendente, que nao dispara nada): vira um
+        // turno do Maestro com a mesma espera de agrupamento do n8n.
+        try {
+          const destino = await despacharParaIA({
+            companyId,
+            conversationId,
+            messageId: message.id,
+            doCliente: payload.type === 'incoming',
+            destino: 'maestro',
+          });
+          console.log(`[Maestro] despacho da mensagem ${message.id}: ${destino}`);
+        } catch (maestroError) {
+          // Sem fallback pro n8n de proposito (duas IAs na mesma conversa). O erro
+          // ja ficou no Registro da IA.
+          console.error('[Maestro] falha ao enfileirar o turno:', maestroError instanceof ErroDespacho ? maestroError.message : maestroError);
         }
       } else if (targetWebhookUrl || podeDesviarPraFluxo) {
         try {
@@ -1779,18 +1834,28 @@ export async function POST(req: NextRequest) {
             select: { agruparSegundos: true },
           }).catch(() => null);
           const esperaMs = (ajuste?.agruparSegundos ?? Math.round(N8N_DEBOUNCE_MS / 1000)) * 1000;
-          await enqueueN8NWebhook({
-            webhookUrl: targetWebhookUrl || '',
-            payload: webhookPayload,
+          await despacharParaIA({
             companyId,
             conversationId,
             messageId: message.id,
-            // O worker e quem decide o destino final: se a conversa ainda tiver
-            // uma resumeUrl na hora do envio, ela ganha do webhook geral.
-            // Deixar isso pra la e o que impede o debounce de queimar a url de
-            // resume num job que acaba cancelado.
-            resolverResumeUrl: podeDesviarPraFluxo,
-          }, { debounceMs: payload.type === 'incoming' ? esperaMs : 0 });
+            doCliente: payload.type === 'incoming',
+            destino: 'n8n',
+            n8n: {
+              data: {
+                webhookUrl: targetWebhookUrl || '',
+                payload: webhookPayload,
+                companyId,
+                conversationId,
+                messageId: message.id,
+                // O worker e quem decide o destino final: se a conversa ainda tiver
+                // uma resumeUrl na hora do envio, ela ganha do webhook geral.
+                // Deixar isso pra la e o que impede o debounce de queimar a url de
+                // resume num job que acaba cancelado.
+                resolverResumeUrl: podeDesviarPraFluxo,
+              },
+              opts: { debounceMs: payload.type === 'incoming' ? esperaMs : 0 },
+            },
+          });
           console.log(`[N8N Webhook] ✅ Queued for message ${message.id} (ai_status: ${aiStatus}, fluxo externo: ${podeDesviarPraFluxo})`);
         } catch (queueError) {
           console.error('[N8N Webhook] Failed to queue, falling back to sync:', queueError);
@@ -1811,6 +1876,16 @@ export async function POST(req: NextRequest) {
         }
       } else {
         console.log('[N8N Webhook] No webhook URL configured, skipping');
+        if (payload.type === 'incoming') {
+          await registrarTurno({
+            companyId,
+            conversationId,
+            messageIds: [message.id],
+            texto: payload.message || null,
+            status: 'ignorado',
+            motivo: iaDesligada ? MOTIVOS.IA_DESLIGADA : MOTIVOS.SEM_FLUXO,
+          });
+        }
       }
     }
 
@@ -1828,7 +1903,7 @@ export async function POST(req: NextRequest) {
       // GUARD: Verificar se a IA está pausada para este cliente (atendimento manual)
       const followUpClient = await prisma.client.findUnique({
         where: { id: clientId },
-        select: { aiPaused: true },
+        select: { aiPaused: true, aiPausedUntil: true },
       });
 
       // GUARD: Verificar se a conversa está ativa
@@ -1857,7 +1932,7 @@ export async function POST(req: NextRequest) {
       const souFluxoExterno = followUpConv ? emFluxoExterno(followUpConv) : false;
 
       const shouldCreateFollowUps =
-        !followUpClient?.aiPaused &&
+        !isAiPausedNow(followUpClient) &&
         followUpConv?.status !== 'closed' &&
         !conversaDeAvaliacao &&
         !souFluxoExterno;

@@ -261,7 +261,7 @@ export default function SetupPage() {
                 <Label htmlFor="companyName">Nome do Restaurante</Label>
                 <Input
                   id="companyName"
-                  placeholder="Ex: Otica Exemplo"
+                  placeholder="Ex: Cantina da Nonna"
                   value={companyData.companyName}
                   onChange={e => setCompanyData(d => ({ ...d, companyName: e.target.value }))}
                 />

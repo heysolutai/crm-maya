@@ -45,6 +45,8 @@ export type RealtimeEvent =
   | { type: 'message:delete'; conversationId: string; messageId: string }
   | { type: 'message:update'; conversationId: string; messageId: string; patch: Record<string, unknown> }
   | { type: 'conversation:update'; conversationId: string }
+  // Nova execucao (ou status novo) do fluxo de IA: aba "Logs da IA" recarrega.
+  | { type: 'execution:log'; conversationId: string; executionUrl?: string | null }
   | { type: 'note:new'; conversationId: string; note: unknown }
   // Transferencia de conversa. targetUserId = agente alvo (null = foi pra fila
   // do departamento). O cliente decide a quem notificar: status 'pending'

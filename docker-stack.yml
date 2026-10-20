@@ -74,7 +74,12 @@ x-app-env: &app-env
   WHATSAPP_ADMIN_TOKEN: ""
 
   # ----- WhatsApp Cloud (Covercut / BSP) -----
+  # Credenciais de revendedor (unicas da plataforma): painel Covercut > API.
+  COVERCUT_API_URL: "https://api.covercut.com.br/api/v1"
+  COVERCUT_API_KEY: ""
+  COVERCUT_API_SECRET: ""
   COVERCUT_WEBHOOK_SECRET: ""
+  COVERCUT_SAAS_NUMBER_LIMIT: "1"
 
   # ----- N8N / automacoes -----
   N8N_AI_WEBHOOK_URL: ""

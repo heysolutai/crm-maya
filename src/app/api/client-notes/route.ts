@@ -9,7 +9,9 @@ export async function GET(req: NextRequest) {
     const { companyId } = await authenticate(req)
     if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const clientId = req.nextUrl.searchParams.get('clientId')
-    if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
+    if (!clientId || !z.string().uuid().safeParse(clientId).success) {
+      return NextResponse.json({ error: 'clientId invalido' }, { status: 400 })
+    }
 
     const where = { clientId, companyId }
 
@@ -29,7 +31,7 @@ export async function GET(req: NextRequest) {
 
 const createClientNoteSchema = z.object({
   client_id: z.string().uuid(),
-  note: z.string().min(1, 'Note is required'),
+  note: z.string().trim().min(1, 'Note is required').max(2000),
   company_id: z.string().uuid().optional(),
   created_by: z.string().optional(),
 });
@@ -74,11 +76,16 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const { companyId } = await authenticate(req)
+    // Sem este guard, `companyId: undefined` some do where e o findFirst
+    // acharia a nota de QUALQUER empresa.
+    if (!companyId) return NextResponse.json({ error: 'Restaurante nao encontrado' }, { status: 403 })
     const id = req.nextUrl.searchParams.get('id')
-    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+    if (!id || !z.string().uuid().safeParse(id).success) {
+      return NextResponse.json({ error: 'id invalido' }, { status: 400 })
+    }
 
     const existing = await prisma.clientNote.findFirst({
-      where: { id, companyId: companyId! },
+      where: { id, companyId },
     })
     if (!existing) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
 

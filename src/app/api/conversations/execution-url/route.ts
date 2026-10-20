@@ -6,6 +6,7 @@ import { findOrCreateConversation } from '@/lib/api/database'
 
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors'
 import { handleApiErrorCors } from '@/lib/api/errors'
+import { publishEvent } from '@/lib/realtime'
 
 /**
  * Registra (ou limpa) os ponteiros do fluxo externo do n8n numa conversa.
@@ -48,13 +49,108 @@ const bodySchema = z.object({
   resume_url: z.string().url().max(2000).nullable().optional(),
   resumeUrl: z.string().url().max(2000).nullable().optional(),
   /// Link pra abrir a execucao no n8n — so pra gente ver, nunca e chamado.
+  /// So https (validado abaixo, depois da compatibilidade com o formato antigo).
   execution_url: z.string().url().max(2000).nullable().optional(),
   executionUrl: z.string().url().max(2000).nullable().optional(),
   /// Validade da resume_url em segundos (60s a 7 dias). Vencida, o CRM ignora:
   /// a conversa volta pro fluxo de IA normal sozinha.
   /// coerce: o n8n manda body parameters como string ("86400").
   ttl_seconds: z.coerce.number().int().min(60).max(7 * 24 * 60 * 60).optional(),
+
+  // ---- Log da execucao (aba "Logs da IA" da conversa) ----
+  /// Orquestrador: 'n8n' (padrao), 'maestro', ...
+  provider: z.string().trim().min(1).max(30).optional(),
+  thread_id: z.string().trim().min(1).max(200).optional(),
+  threadId: z.string().trim().min(1).max(200).optional(),
+  run_id: z.string().trim().min(1).max(200).optional(),
+  runId: z.string().trim().min(1).max(200).optional(),
+  status: z.enum(['started', 'running', 'success', 'error']).optional(),
+  error: z.string().max(4000).optional(),
+  error_message: z.string().max(4000).optional(),
+  /// Mensagem do cliente que disparou (uuid do CRM, campo message_id do payload).
+  /// Omitido = ultima mensagem do cliente na conversa.
+  message_id: z.string().uuid().optional(),
+  messageId: z.string().uuid().optional(),
 })
+
+/**
+ * Uma linha por execucao. Mesmo run_id na mesma conversa = atualiza a linha
+ * (ex: 'started' e depois 'error'), pra aba nao mostrar a mesma execucao duas
+ * vezes. Campos ausentes nao apagam o que ja foi registrado.
+ */
+async function registrarLog(input: {
+  companyId: string
+  conversationId: string
+  messageId?: string
+  provider: string
+  threadId?: string
+  runId?: string
+  executionUrl?: string
+  status?: string
+  errorMessage?: string
+}): Promise<string> {
+  // Chave da execucao: run_id (Maestro: run da OpenAI; n8n: $execution.id).
+  // Sem run_id, a propria URL da execucao identifica a linha.
+  const chave = input.runId
+    ? { runId: input.runId }
+    : input.executionUrl
+      ? { executionUrl: input.executionUrl }
+      : null
+  const existente = chave
+    ? await prisma.executionLog.findFirst({
+        where: { conversationId: input.conversationId, ...chave },
+        select: { id: true },
+      })
+    : null
+
+  if (existente) {
+    await prisma.executionLog.update({
+      where: { id: existente.id },
+      data: {
+        ...(input.threadId ? { threadId: input.threadId } : {}),
+        ...(input.executionUrl ? { executionUrl: input.executionUrl } : {}),
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.errorMessage ? { errorMessage: input.errorMessage } : {}),
+      },
+    })
+    return existente.id
+  }
+
+  // Mensagem que disparou: a informada (se for desta conversa) ou a ultima
+  // do cliente. O fluxo roda a cada mensagem do cliente, entao e ela.
+  let messageId: string | null = null
+  if (input.messageId) {
+    const msg = await prisma.message.findFirst({
+      where: { id: input.messageId, conversationId: input.conversationId },
+      select: { id: true },
+    })
+    messageId = msg?.id ?? null
+  }
+  if (!messageId) {
+    const ultima = await prisma.message.findFirst({
+      where: { conversationId: input.conversationId, senderType: 'client' },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    })
+    messageId = ultima?.id ?? null
+  }
+
+  const log = await prisma.executionLog.create({
+    data: {
+      companyId: input.companyId,
+      conversationId: input.conversationId,
+      messageId,
+      provider: input.provider,
+      threadId: input.threadId ?? null,
+      runId: input.runId ?? null,
+      executionUrl: input.executionUrl ?? null,
+      status: input.status ?? (input.errorMessage ? 'error' : null),
+      errorMessage: input.errorMessage ?? null,
+    },
+    select: { id: true },
+  })
+  return log.id
+}
 
 export async function OPTIONS(req: NextRequest) {
   return handleCors(req) || jsonResponse(null)
@@ -105,8 +201,26 @@ export async function POST(req: NextRequest) {
       resumeUrl = null
     }
 
-    if (resumeUrl === undefined && executionUrl === undefined) {
-      return errorResponse('Informe resume_url e/ou execution_url (use null para limpar)', 400)
+    const threadId = d.thread_id ?? d.threadId
+    const runId = d.run_id ?? d.runId
+    const errorMessage = d.error_message ?? d.error
+    // 'running' e sinonimo de 'started' (nome que alguns fluxos usam).
+    const status = d.status === 'running' ? 'started' : d.status
+    const temLog = !!(threadId || runId || status || errorMessage || typeof executionUrl === 'string')
+
+    if (resumeUrl === undefined && executionUrl === undefined && !temLog) {
+      return errorResponse('Informe resume_url, execution_url ou dados da execucao (thread_id, run_id, status)', 400)
+    }
+
+    // O link da execucao vira um botao clicavel no CRM: so https. A checagem
+    // fica DEPOIS da compatibilidade acima de proposito — fluxo antigo que
+    // manda a resume url (as vezes http interno) em `execution_url` continua
+    // funcionando, porque ela ja foi movida pra resumeUrl.
+    if (typeof executionUrl === 'string' && !executionUrl.toLowerCase().startsWith('https://')) {
+      return jsonResponse(
+        { error: 'Dados invalidos', details: { execution_url: ['A URL da execucao deve comecar com https://'] } },
+        400
+      )
     }
 
     const requestedId = d.conversation_id || d.conversationId
@@ -123,7 +237,26 @@ export async function POST(req: NextRequest) {
     } else if (d.phone) {
       conversationId = await findOrCreateConversation(d.phone, companyId)
     } else {
-      return errorResponse('Informe conversation_id ou phone', 400)
+      // Sem conversa: so pra ATUALIZAR uma execucao ja registrada, achada pelo
+      // run_id (ou URL). E o caso do Error Trigger do n8n, que recebe o id da
+      // execucao que falhou mas nao os dados dela. Escopo: o restaurante da
+      // API key.
+      const chave = runId
+        ? { runId }
+        : typeof executionUrl === 'string'
+          ? { executionUrl }
+          : null
+      const anterior = chave
+        ? await prisma.executionLog.findFirst({
+            where: { companyId, ...chave },
+            orderBy: { createdAt: 'desc' },
+            select: { conversationId: true },
+          })
+        : null
+      if (!anterior) {
+        return errorResponse('Informe conversation_id ou phone (ou o run_id de uma execucao ja registrada)', 400)
+      }
+      conversationId = anterior.conversationId
     }
 
     // TTL so entra quando esta REGISTRANDO uma resume url. Ao limpar, o prazo
@@ -141,16 +274,38 @@ export async function POST(req: NextRequest) {
         ...(resumeUrl !== undefined ? { resumeUrl } : {}),
         ...(resumeUrlExpiresAt !== undefined ? { resumeUrlExpiresAt } : {}),
         ...(executionUrl !== undefined ? { executionUrl } : {}),
+        // Thread do orquestrador (Maestro): volta no payload da proxima mensagem.
+        ...(threadId ? { aiThreadId: threadId } : {}),
       },
-      select: { resumeUrl: true, resumeUrlExpiresAt: true, executionUrl: true },
+      select: { resumeUrl: true, resumeUrlExpiresAt: true, executionUrl: true, aiThreadId: true },
     })
+
+    const logId = temLog
+      ? await registrarLog({
+          companyId,
+          conversationId,
+          messageId: d.message_id ?? d.messageId,
+          provider: d.provider?.toLowerCase() ?? 'n8n',
+          threadId,
+          runId,
+          executionUrl: typeof executionUrl === 'string' ? executionUrl : undefined,
+          status,
+          errorMessage,
+        })
+      : null
+
+    if (temLog) {
+      await publishEvent(companyId, { type: 'execution:log', conversationId, executionUrl: atualizada.executionUrl })
+    }
 
     return jsonResponse({
       success: true,
       conversation_id: conversationId,
       resume_url: atualizada.resumeUrl,
       execution_url: atualizada.executionUrl,
+      thread_id: atualizada.aiThreadId,
       expires_at: atualizada.resumeUrlExpiresAt,
+      log_id: logId,
     })
   } catch (error) {
     return handleApiErrorCors(error, 'Erro ao registrar execution url')

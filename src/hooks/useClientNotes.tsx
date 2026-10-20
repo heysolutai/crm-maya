@@ -1,5 +1,5 @@
 import { apiFetch } from '@/lib/api/client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useEffectiveCompanyId } from './useEffectiveCompanyId';
 import { toast } from '@/hooks/use-toast';
 
@@ -37,24 +37,32 @@ export function useClientNotes(clientId: string | null) {
   const { effectiveCompanyId: companyId } = useEffectiveCompanyId();
   const [notes, setNotes] = useState<ClientNote[]>([]);
   const [loading, setLoading] = useState(false);
+  // Contato da busca mais recente. Quem usa o hook troca de contato sem
+  // remontar (painel da conversa): uma resposta atrasada do contato anterior
+  // nao pode sobrescrever as notas do atual.
+  const clienteAtual = useRef(clientId);
+  clienteAtual.current = clientId;
 
   const fetchNotes = async () => {
     if (!clientId || !companyId) return;
+    const alvo = clientId;
 
     setLoading(true);
     try {
       const res = await apiFetch(`/api/client-notes?clientId=${clientId}&companyId=${companyId}`);
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to fetch notes');
       const data = await res.json();
+      if (clienteAtual.current !== alvo) return;
       setNotes((data || []).map(mapNote));
     } catch (error: any) {
+      if (clienteAtual.current !== alvo) return;
       toast({
         title: 'Erro ao carregar anotações',
         description: error.message,
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      if (clienteAtual.current === alvo) setLoading(false);
     }
   };
 
@@ -122,6 +130,9 @@ export function useClientNotes(clientId: string | null) {
   };
 
   useEffect(() => {
+    // Zera ANTES de buscar: sem isso as notas do contato anterior ficam na
+    // tela, sob o nome do novo, ate a resposta chegar.
+    setNotes([]);
     fetchNotes();
   }, [clientId, companyId]);
 

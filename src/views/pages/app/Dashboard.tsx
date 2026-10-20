@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { OnboardingChecklist } from '@/components/dashboard/OnboardingChecklist';
+import { DailyOverview } from '@/components/dashboard/DailyOverview';
+import { SituacaoCard } from '@/components/situacao/SituacaoCard';
 import {
   BarChart,
   Bar,
@@ -519,6 +521,7 @@ export default function CompanyDashboard() {
     receivedMessages, sentMessages, aiShare,
     aiResponseTime, humanResponseTime,
     statusInPeriod,
+    summary,
     isLoading,
   } = useDashboardMetrics(dateFrom, dateTo);
 
@@ -553,6 +556,9 @@ export default function CompanyDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Situação: o que impede a IA / o WhatsApp de atender (ou "Tudo funcionando") */}
+      <SituacaoCard />
+
       {/* Primeiros passos (some quando tudo configurado) */}
       <OnboardingChecklist />
 
@@ -635,6 +641,9 @@ export default function CompanyDashboard() {
           </Popover>
         </div>
       </div>
+
+      {/* Resumo do periodo: conversas, reservas e encaminhamentos, por dia */}
+      <DailyOverview summary={summary} periodLabel={periodLabel} isLoading={isLoading} />
 
       {/* Tabs: Tempo Real / Relatórios (internas) · Kanban / Reservas (paginas) */}
       <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-border/60 bg-card p-1 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
@@ -737,7 +746,7 @@ export default function CompanyDashboard() {
               footer={{
                 icon: Clock,
                 title: `Primeira resposta em ${formatResponseTime(avgResponseTime)}`,
-                description: 'Tempo médio até a primeira resposta ao cliente, hoje.',
+                description: `Tempo médio até a primeira resposta ao cliente · ${periodLabel}.`,
               }}
             >
               <TimeBars
@@ -829,7 +838,7 @@ export default function CompanyDashboard() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <ChartCard
-                  title="Atendimentos por Hora (Hoje)"
+                  title={`Mensagens por Hora (${periodLabel})`}
                   icon={MessageSquare}
                   iconColor="text-blue-500"
                   iconBg="bg-blue-500/10"

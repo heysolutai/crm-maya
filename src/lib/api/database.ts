@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 import type { WhatsAppInstance } from './types';
 import { phoneVariants, canonicalPhone } from './utils';
 import { publishEvent } from '@/lib/realtime';
+import { pauseClientAI } from '@/lib/ai/pause';
 
 export async function getWhatsAppInstance(companyId: string): Promise<WhatsAppInstance> {
   const instance = await prisma.inbox.findFirst({
@@ -458,11 +459,19 @@ export async function assignNextAgentInInbox(
   }
 }
 
-export async function pauseClientAIByConversation(conversationId: string): Promise<boolean> {
+/**
+ * Pausa automatica quando um humano responde (CRM ou celular). Usa o tempo
+ * padrao da empresa e nunca encurta uma pausa maior ja valendo.
+ */
+export async function pauseClientAIByConversation(
+  conversationId: string,
+  actor: 'agent' | 'phone' = 'agent',
+  userId?: string | null,
+): Promise<boolean> {
   try {
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
-      select: { clientId: true },
+      select: { clientId: true, companyId: true },
     });
 
     if (!conversation?.clientId) {
@@ -470,12 +479,16 @@ export async function pauseClientAIByConversation(conversationId: string): Promi
       return false;
     }
 
-    await prisma.client.update({
-      where: { id: conversation.clientId },
-      data: { aiPaused: true },
+    const { until } = await pauseClientAI({
+      companyId: conversation.companyId,
+      clientId: conversation.clientId,
+      conversationId,
+      actor,
+      userId,
+      automatic: true,
     });
 
-    console.log('[AI Pause] AI automatically paused for client:', conversation.clientId);
+    console.log('[AI Pause] AI automatically paused for client:', conversation.clientId, 'until:', until?.toISOString() ?? 'manual');
     return true;
   } catch (error) {
     console.error('[AI Pause] Exception:', error);

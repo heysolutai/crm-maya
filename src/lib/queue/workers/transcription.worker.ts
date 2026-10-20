@@ -1,10 +1,12 @@
 import { Worker, Job } from 'bullmq'
 import { getRedisConnection } from '../connection'
-import { QUEUE_NAMES, type TranscriptionJob, enqueueN8NWebhook } from '../queues'
+import { QUEUE_NAMES, type TranscriptionJob } from '../queues'
+import { despacharParaIA } from '@/lib/maestro/despacho'
 import { prisma } from '@/lib/db'
 import { uploadToB2, buildB2Key, MIME_TO_EXT, isOwnedStorageUrl } from '@/lib/storage'
 import { prepararAudioParaWeb } from '@/lib/audio-transcode'
 import { getSystemSettingFresh } from '@/lib/system-settings'
+import { isCovercutMediaRef, downloadCovercutMedia } from '@/lib/channels/covercut'
 
 interface UazDownloadResult {
   transcription: string | null
@@ -160,8 +162,8 @@ async function fetchAudioFromUazAPI(
 async function processTranscription(job: Job<TranscriptionJob>) {
   const {
     messageId, conversationId, companyId,
-    instanceApiUrl, instanceApiKey, messageKey,
-    n8nWebhookUrl, n8nPayload,
+    instanceApiUrl, instanceApiKey, messageKey, audioUrl,
+    n8nWebhookUrl, n8nPayload, destinoIA,
   } = job.data
 
   console.log(`[Transcription Worker] Processing job ${job.id} for message ${messageId}`)
@@ -171,21 +173,42 @@ async function processTranscription(job: Job<TranscriptionJob>) {
   // fora do ar, sem chave ou sem credencial da instancia simplesmente nao
   // chegava no fluxo, e a IA nunca respondia.
   const notificarN8n = async (transcription: string | null, mediaUrl: string | null, motivo?: string) => {
+    // Mensagem enviada pelo atendente (eco) nunca dispara a IA do Maestro.
+    const doCliente = n8nPayload?.fromMe !== true
+
+    // Maestro: o texto (ou o marcador de falha) ja esta salvo na mensagem e o
+    // turno le tudo do banco; nao ha payload nem n8n. Decidido na entrada do
+    // webhook (job.destinoIA). O n8n NAO e chamado junto: seriam duas IAs.
+    if (destinoIA === 'maestro') {
+      await despacharParaIA({ companyId, conversationId, messageId, doCliente, destino: 'maestro' })
+      console.log(`[Transcription Worker] turno do Maestro enfileirado (transcricao ${transcription ? 'ok' : 'ausente'})`)
+      return
+    }
+
     if (!n8nWebhookUrl || !n8nPayload) return
-    await enqueueN8NWebhook({
-      webhookUrl: n8nWebhookUrl,
-      payload: {
-        ...n8nPayload,
-        conteudo: transcription || '',
-        tipo_mensagem: 'audio',
-        transcricao_ok: !!transcription,
-        ...(motivo ? { transcricao_erro: motivo } : {}),
-        // URL estavel do B2 quando temos; senao a que veio do webhook.
-        ...(mediaUrl ? { media_url: mediaUrl } : {}),
-      },
+    await despacharParaIA({
       companyId,
       conversationId,
       messageId,
+      doCliente,
+      destino: 'n8n',
+      n8n: {
+        data: {
+          webhookUrl: n8nWebhookUrl,
+          payload: {
+            ...n8nPayload,
+            conteudo: transcription || '',
+            tipo_mensagem: 'audio',
+            transcricao_ok: !!transcription,
+            ...(motivo ? { transcricao_erro: motivo } : {}),
+            // URL estavel do B2 quando temos; senao a que veio do webhook.
+            ...(mediaUrl ? { media_url: mediaUrl } : {}),
+          },
+          companyId,
+          conversationId,
+          messageId,
+        },
+      },
     })
     console.log(`[Transcription Worker] N8N webhook enfileirado (transcricao ${transcription ? 'ok' : 'ausente'})`)
   }
@@ -225,9 +248,15 @@ async function processTranscription(job: Job<TranscriptionJob>) {
     return { messageId, transcription: null, reason: 'missing_instance' }
   }
 
-  const downloadResult = await fetchAudioFromUazAPI(
-    messageKey, instanceApiKey, instanceApiUrl, openAiKey
-  )
+  // WhatsApp Cloud: o audio vem por referencia da Covercut (sem transcricao
+  // no provider); o Whisper abaixo transcreve com o buffer baixado.
+  const downloadResult: UazDownloadResult = isCovercutMediaRef(audioUrl)
+    ? await downloadCovercutMedia(audioUrl).then((media) => ({
+        transcription: null,
+        buffer: media?.buffer ?? null,
+        mimeType: media?.mimeType ?? 'audio/ogg',
+      }))
+    : await fetchAudioFromUazAPI(messageKey, instanceApiKey, instanceApiUrl, openAiKey)
   let transcription = downloadResult.transcription
   const { buffer, mimeType, transcriptionError } = downloadResult
 

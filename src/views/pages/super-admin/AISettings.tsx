@@ -49,7 +49,7 @@ function AISettingsContent() {
   const [comboboxOpen, setComboboxOpen] = useState(false);
   const { company, isLoading } = useCompanyDetails(id);
   const { companies } = useCompanies();
-  const { items, completedCount, totalCount } = useSetupChecklist(id);
+  const { items, completedCount, totalCount, allRequiredDone } = useSetupChecklist(id);
   const { toast } = useToast();
   const { isDirty, confirmIfDirty, showDialog, handleConfirm, handleCancel } = useUnsavedChanges();
 
@@ -107,13 +107,13 @@ function AISettingsContent() {
 
   const getBannerStyle = () => {
     if (completedCount === totalCount) return 'border-emerald-500/50 bg-emerald-500/10';
-    if (completedCount >= 13) return 'border-yellow-500/50 bg-yellow-500/10';
+    if (allRequiredDone) return 'border-yellow-500/50 bg-yellow-500/10';
     return 'border-red-500/50 bg-red-500/10';
   };
 
   const getBannerIcon = () => {
     if (completedCount === totalCount) return <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />;
-    if (completedCount >= 13) return <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 shrink-0" />;
+    if (allRequiredDone) return <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 shrink-0" />;
     return <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0" />;
   };
 

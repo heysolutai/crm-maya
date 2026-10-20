@@ -1,11 +1,13 @@
 import { startInboundMessageWorker } from './workers/inbound-message.worker'
 import { startN8NWebhookWorker } from './workers/n8n-webhook.worker'
+import { startMaestroTurnWorker } from './workers/maestro-turn.worker'
 import { startTranscriptionWorker } from './workers/transcription.worker'
 import { startMediaProcessingWorker } from './workers/media-processing.worker'
 import { startOutboundMessageWorker } from './workers/outbound-message.worker'
 import { startRemindersWorker } from './workers/cron-reminders.worker'
 import { startFollowUpsWorker } from './workers/cron-follow-ups.worker'
 import { startWhatsAppStatusWorker } from './workers/cron-whatsapp-status.worker'
+import { startCloudConnectWorker } from './workers/cron-cloud-connect.worker'
 import { startCleanupPresenceWorker } from './workers/cron-cleanup-presence.worker'
 import { startReviewDispatchWorker } from './workers/cron-review-dispatch.worker'
 import { startReviewReportWorker } from './workers/cron-review-report.worker'
@@ -22,6 +24,7 @@ let workersStarted = false
  * - Reminders: processes pending reminders every 60s
  * - Follow-ups: processes pending follow-up jobs every 60s
  * - WhatsApp Status: checks instance connectivity every 5min
+ * - Cloud Connect: creates inboxes for WhatsApp Cloud numbers connected via link every 2min
  * - Cleanup Presence: marks stale users as offline every 2min
  */
 export function startAllWorkers() {
@@ -46,6 +49,7 @@ export function startAllWorkers() {
   // Message processing workers
   startInboundMessageWorker()
   startN8NWebhookWorker()
+  startMaestroTurnWorker()
   startTranscriptionWorker()
   startMediaProcessingWorker()
   startOutboundMessageWorker()
@@ -57,6 +61,7 @@ export function startAllWorkers() {
   startRemindersWorker()
   startFollowUpsWorker()
   startWhatsAppStatusWorker()
+  startCloudConnectWorker()
   startCleanupPresenceWorker()
   startReviewDispatchWorker()
   startReviewReportWorker()

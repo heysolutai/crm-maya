@@ -7,11 +7,16 @@ import { useUserPermissions } from './useUserPermissions';
 import { useToast } from './use-toast';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { getErrorMessage } from '@/utils/getErrorMessage';
+import { formatarDuracao, prazoOtimista } from '@/components/conversations/ai-pause';
 
 export type ConversationFilters = {
+  /** Busca no servidor: nome do contato ou telefone (so digitos). */
   search?: string;
   status?: string;
   aiHandled?: boolean;
+  /** true = so conversas com a IA pausada agora. */
+  aiPaused?: boolean;
+  /** Filtra pela data de inicio da conversa (startedAt), ISO. */
   startDate?: string;
   endDate?: string;
   tags?: string[];
@@ -19,6 +24,113 @@ export type ConversationFilters = {
   assignedTo?: string;
   inboxId?: string;
 };
+
+/**
+ * Pausar: minutes omitido = tempo padrao da empresa; null = ate retomar.
+ * Retomar: IA volta na hora.
+ */
+export type AIPauseRequest =
+  | { conversationId: string; action: 'pause'; minutes?: number | null }
+  | { conversationId: string; action: 'resume' };
+
+interface AIPauseResponse {
+  aiPaused: boolean;
+  aiPausedUntil: string | null;
+}
+
+/** O minimo da conversa normalizada que o patch otimista da pausa precisa. */
+interface CachedConversation {
+  id: string;
+  client?: ({ id: string } & Record<string, unknown>) | null;
+}
+
+/** Campos de pausa no shape normalizado (snake_case) do cliente da conversa. */
+interface AIPauseClientPatch {
+  ai_paused: boolean;
+  ai_paused_until: string | null;
+  ai_paused_at?: string | null;
+  ai_paused_by?: string | null;
+}
+
+/** Resposta de POST /api/messages/[id]/retry, ja em linguagem do restaurante. */
+export interface ResultadoReenvio {
+  ok: boolean;
+  /** A mensagem ja estava enviada (outra pessoa reenviou antes). */
+  jaEnviada?: boolean;
+  motivo?: string;
+  oQueFazer?: string;
+  podeTentarDeNovo?: boolean;
+  /** Texto cru do erro: o servidor so manda pro super-admin. */
+  erro?: string;
+}
+
+interface RespostaReenvio {
+  ok?: unknown;
+  code?: unknown;
+  error?: unknown;
+  motivo?: unknown;
+  oQueFazer?: unknown;
+  podeTentarDeNovo?: unknown;
+  erro?: unknown;
+}
+
+const textoOuUndefined = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v : undefined);
+
+/**
+ * "Tentar de novo" de uma mensagem que nao chegou no WhatsApp. Hook proprio
+ * (nao depende do useConversations, que abre o SSE): a bolha usa direto. A
+ * tela aberta atualiza pelo evento message:update que a rota publica.
+ */
+export function useReenviarMensagem() {
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (messageId: string): Promise<ResultadoReenvio> => {
+      const res = await apiFetch(`/api/messages/${encodeURIComponent(messageId)}/retry`, { method: 'POST' });
+      const json: RespostaReenvio = await res.json().catch(() => ({}));
+      if (res.ok) {
+        return {
+          ok: json.ok === true,
+          motivo: textoOuUndefined(json.motivo),
+          oQueFazer: textoOuUndefined(json.oQueFazer),
+          podeTentarDeNovo: json.podeTentarDeNovo === true,
+          erro: textoOuUndefined(json.erro),
+        };
+      }
+      if (json.code === 'NOT_FAILED') return { ok: true, jaEnviada: true };
+      // 4xx com mensagem pronta (IA pausada, tipo que nao reenvia, ja tentando...).
+      if (res.status >= 400 && res.status < 500 && textoOuUndefined(json.error)) {
+        return {
+          ok: false,
+          motivo: textoOuUndefined(json.motivo) ?? textoOuUndefined(json.error),
+          oQueFazer: textoOuUndefined(json.oQueFazer),
+          podeTentarDeNovo: false,
+        };
+      }
+      throw new Error('Falha ao tentar de novo');
+    },
+    onSuccess: (r) => {
+      if (r.ok) {
+        toast({
+          title: r.jaEnviada ? 'Esta mensagem já tinha sido enviada' : 'Mensagem enviada',
+          description: r.jaEnviada ? undefined : 'Desta vez chegou no WhatsApp do cliente.',
+        });
+        return;
+      }
+      toast({
+        title: 'Ainda não foi possível enviar',
+        description: [r.motivo, r.oQueFazer].filter(Boolean).join(' ') || 'Tente de novo em alguns minutos.',
+        variant: 'destructive',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Não deu para tentar de novo agora',
+        description: 'Confira a internet deste computador e tente outra vez.',
+        variant: 'destructive',
+      });
+    },
+  });
+}
 
 export function useConversations(filters?: ConversationFilters) {
   const { user, role } = useAuth();
@@ -90,7 +202,7 @@ export function useConversations(filters?: ConversationFilters) {
       : null,
   });
 
-  const { data: conversations, isLoading } = useQuery({
+  const { data: conversations, isLoading, isFetching: isFetchingConversations } = useQuery({
     queryKey: ['conversations', companyId, filters],
     queryFn: async () => {
       if (!companyId) return [];
@@ -111,26 +223,16 @@ export function useConversations(filters?: ConversationFilters) {
       if (filters?.endDate) params.set('endDate', filters.endDate);
       if (filters?.departmentId) params.set('departmentId', filters.departmentId);
       if (filters?.inboxId) params.set('inboxId', filters.inboxId);
+      if (filters?.aiPaused) params.set('aiPaused', 'true');
+      // Busca e etiquetas no SERVIDOR: antes filtrava so as 100 conversas ja
+      // carregadas, e quem nao estava nelas "nao existia" na busca.
+      const termo = filters?.search?.trim();
+      if (termo) params.set('search', termo.slice(0, 100));
+      for (const tag of filters?.tags ?? []) params.append('tag', tag);
 
       const res = await apiFetch(`/api/conversations?${params}`);
       if (!res.ok) throw new Error('Failed to fetch conversations');
       let results = await res.json();
-
-      // Filter by tags and search on client side
-      if (filters?.search && filters.search.trim()) {
-        const searchTerm = filters.search.trim().toLowerCase();
-        results = results.filter((conv: any) => {
-          const clientName = `${conv.client?.firstName || conv.client?.first_name || ''} ${conv.client?.lastName || conv.client?.last_name || ''}`.toLowerCase();
-          const phone = conv.client?.phone || '';
-          return clientName.includes(searchTerm) || phone.includes(searchTerm);
-        });
-      }
-
-      if (filters?.tags && filters.tags.length > 0) {
-        results = results.filter((conv: any) =>
-          filters.tags?.some((tag) => conv.tags?.includes(tag))
-        );
-      }
 
       // Fetch unread counts
       const conversationIds = results.map((c: any) => c.id);
@@ -158,6 +260,9 @@ export function useConversations(filters?: ConversationFilters) {
           email: conv.client.email || null,
           avatar_url: conv.client.avatarUrl || conv.client.avatar_url || null,
           ai_paused: conv.client.aiPaused ?? conv.client.ai_paused ?? false,
+          ai_paused_until: conv.client.aiPausedUntil ?? conv.client.ai_paused_until ?? null,
+          ai_paused_at: conv.client.aiPausedAt ?? conv.client.ai_paused_at ?? null,
+          ai_paused_by: conv.client.aiPausedBy ?? conv.client.ai_paused_by ?? null,
         } : null;
         // Normalize transferAgent → transferred_user
         const transferred_user = conv.transferAgent
@@ -185,6 +290,7 @@ export function useConversations(filters?: ConversationFilters) {
           resume_url_expires_at: conv.resumeUrlExpiresAt ?? conv.resume_url_expires_at ?? null,
           execution_url: conv.executionUrl ?? conv.execution_url ?? null,
           transferred_user,
+          transferred_to: conv.transferredTo ?? conv.transferred_to ?? null,
           unread_count: countMap[conv.id] || 0,
           last_message: lastMsg ? {
             text: lastMsg.messageText || lastMsg.message_text,
@@ -210,6 +316,25 @@ export function useConversations(filters?: ConversationFilters) {
     staleTime: 10_000,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
+    // Trocar busca/filtro mantem a lista anterior na tela ate a nova chegar,
+    // em vez de piscar o skeleton a cada letra digitada.
+    // So do mesmo restaurante: trocar de empresa (super admin) nao reaproveita.
+    placeholderData: (anterior, queryAnterior) =>
+      queryAnterior?.queryKey?.[1] === companyId ? anterior : undefined,
+  });
+
+  // Tempo padrao de pausa da empresa — so pra rotular "Pausar pelo tempo
+  // padrao (X min)" e montar o prazo otimista.
+  const { data: aiPauseDefaultMinutes } = useQuery({
+    queryKey: ['ai-pause-default', companyId],
+    queryFn: async (): Promise<number | null> => {
+      const res = await apiFetch('/api/conversations/ai-pause');
+      if (!res.ok) return null;
+      const json: { defaultMinutes?: unknown } = await res.json();
+      return typeof json.defaultMinutes === 'number' ? json.defaultMinutes : null;
+    },
+    enabled: !!companyId,
+    staleTime: 5 * 60_000,
   });
 
   // Fetch messages for a conversation
@@ -500,6 +625,20 @@ export function useConversations(filters?: ConversationFilters) {
           return;
         }
 
+        if (data.type === 'execution:log' && data.conversationId) {
+          // Log novo do fluxo de IA: recarrega a aba de logs e aponta o botao
+          // "Abrir execucao" pra ultima execucao, sem refetch da lista.
+          queryClient.invalidateQueries({ queryKey: ['execution-logs', data.conversationId] });
+          queryClient.invalidateQueries({ queryKey: ['ai-turns', data.conversationId] });
+          if (typeof data.executionUrl === 'string') {
+            updateConversationInCache(data.conversationId, (conv) => ({
+              ...conv,
+              execution_url: data.executionUrl,
+            }));
+          }
+          return;
+        }
+
         if (data.type === 'conversation:update') {
           // Mudancas estruturais da conversa (transferencia, status, tags): aqui
           // a invalidacao se justifica porque o conjunto de campos afetados varia.
@@ -683,6 +822,15 @@ export function useConversations(filters?: ConversationFilters) {
     },
   });
 
+  // Mudar atendente/departamento mexe na lista, nos contadores da sidebar
+  // (minhas, fila, nao lidas) e na fila por departamento.
+  const invalidarAposAtribuicao = () => {
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    queryClient.invalidateQueries({ queryKey: ['sidebar-counts'] });
+    queryClient.invalidateQueries({ queryKey: ['total-unread-conversations'] });
+    queryClient.invalidateQueries({ queryKey: ['department-queue'] });
+  };
+
   const transferConversation = useMutation({
     mutationFn: async ({ conversationId, userId }: { conversationId: string; userId: string }) => {
       const res = await apiFetch('/api/conversations', {
@@ -702,7 +850,7 @@ export function useConversations(filters?: ConversationFilters) {
       return await res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      invalidarAposAtribuicao();
       toast({ title: 'Conversa transferida com sucesso' });
     },
     onError: (error: any) => {
@@ -721,11 +869,10 @@ export function useConversations(filters?: ConversationFilters) {
       return data;
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      invalidarAposAtribuicao();
       if (data?.queued) {
         toast({
-          title: 'Conversa na fila',
-          description: `Nenhum agente online no departamento "${data.department?.name}". Conversa aguardando.`,
+          title: `Conversa na fila — nenhum agente online no departamento ${data.department?.name ?? ''}`.trim(),
         });
       } else {
         toast({ title: 'Conversa transferida com sucesso' });
@@ -750,7 +897,7 @@ export function useConversations(filters?: ConversationFilters) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      invalidarAposAtribuicao();
       toast({ title: "Conversa atribuída a você" });
     },
     onError: (error: Error) => {
@@ -1281,32 +1428,80 @@ export function useConversations(filters?: ConversationFilters) {
     },
   });
 
-  // Toggle AI paused for client
-  const toggleClientAIPaused = useMutation({
-    mutationFn: async ({ clientId, currentValue }: { clientId: string; currentValue: boolean }) => {
-      const res = await apiFetch('/api/clients', {
-        method: 'PUT',
+  // Aplica a pausa no cliente da conversa em TODAS as listas em cache. A pausa
+  // e do cliente: outras conversas dele na lista mudam junto.
+  const aplicarPausaNoCache = (conversationId: string, patch: AIPauseClientPatch) => {
+    const listas = queryClient.getQueriesData<CachedConversation[]>({ queryKey: ['conversations', companyId] });
+    const clientId = listas
+      .flatMap(([, data]) => (Array.isArray(data) ? data : []))
+      .find((c) => c.id === conversationId)?.client?.id;
+    if (!clientId) return;
+    queryClient.setQueriesData<CachedConversation[]>({ queryKey: ['conversations', companyId] }, (old) => {
+      if (!Array.isArray(old)) return old;
+      return old.map((c) =>
+        c.client?.id === clientId ? { ...c, client: { ...c.client, ...patch } } : c
+      );
+    });
+  };
+
+  // Pausar (por X min / padrao / ate retomar) ou retomar a IA da conversa.
+  const setAIPause = useMutation({
+    mutationFn: async (req: AIPauseRequest): Promise<AIPauseResponse> => {
+      const res = await apiFetch('/api/conversations/ai-pause', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: clientId, aiPaused: !currentValue }),
+        body: JSON.stringify(req),
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to toggle AI');
-      }
-      return !currentValue;
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || 'Não foi possível alterar a pausa da IA');
+      return {
+        aiPaused: !!json.aiPaused,
+        aiPausedUntil: typeof json.aiPausedUntil === 'string' ? json.aiPausedUntil : null,
+      };
     },
-    onSuccess: (newValue) => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    onMutate: async (req) => {
+      await queryClient.cancelQueries({ queryKey: ['conversations', companyId] });
+      const snapshot = queryClient.getQueriesData({ queryKey: ['conversations', companyId] });
+      aplicarPausaNoCache(
+        req.conversationId,
+        req.action === 'pause'
+          ? {
+              ai_paused: true,
+              ai_paused_until: prazoOtimista(req.minutes, aiPauseDefaultMinutes),
+              ai_paused_at: new Date().toISOString(),
+              ai_paused_by: user?.id ?? 'agent',
+            }
+          : { ai_paused: false, ai_paused_until: null, ai_paused_at: null, ai_paused_by: null },
+      );
+      return { snapshot };
+    },
+    onSuccess: (data, req) => {
+      // Prazo oficial do servidor (o otimista era uma estimativa).
+      aplicarPausaNoCache(req.conversationId, {
+        ai_paused: data.aiPaused,
+        ai_paused_until: data.aiPausedUntil,
+      });
+      const minutosAte = data.aiPausedUntil
+        ? Math.max(1, Math.round((new Date(data.aiPausedUntil).getTime() - Date.now()) / 60_000))
+        : null;
       toast({
-        title: newValue ? 'IA pausada' : 'IA ativada',
-        description: newValue
-          ? 'A IA não responderá automaticamente para este cliente'
-          : 'A IA voltou a responder automaticamente',
+        title: !data.aiPaused
+          ? 'IA retomada'
+          : minutosAte
+            ? `IA pausada por ${formatarDuracao(minutosAte)}`
+            : 'IA pausada até você retomar',
+        description: data.aiPaused
+          ? 'A IA não responde este cliente enquanto estiver pausada.'
+          : 'A IA voltou a responder automaticamente.',
       });
     },
-    onError: () => {
-      toast({ title: 'Erro', description: 'Não foi possível alterar o status da IA', variant: 'destructive' });
-    }
+    onError: (error, _req, context) => {
+      for (const [key, data] of context?.snapshot ?? []) queryClient.setQueryData(key, data);
+      toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
   });
 
   const sendDocumentMessage = {
@@ -1351,7 +1546,12 @@ export function useConversations(filters?: ConversationFilters) {
     usePolling,
     manualRefresh,
     addMessageToConversation,
-    toggleClientAIPaused: toggleClientAIPaused.mutate,
-    isTogglingAIPaused: toggleClientAIPaused.isPending,
+    /** Pausar/retomar a IA da conversa (ver AIPauseRequest). */
+    setAIPause: setAIPause.mutate,
+    isChangingAIPause: setAIPause.isPending,
+    /** Tempo padrao de pausa da empresa em minutos (0 = sem prazo). null enquanto carrega. */
+    aiPauseDefaultMinutes: aiPauseDefaultMinutes ?? null,
+    /** Refetch em andamento (busca/filtro novo), sem esconder a lista atual. */
+    isFetchingConversations,
   };
 }

@@ -3,6 +3,9 @@ import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type N8NWebhookJob } from '../queues'
 import { prisma } from '@/lib/db'
 import { consumirResumeUrl } from '@/lib/conversations/resume-url'
+import { sendCloudTyping } from '@/lib/channels/adapters/whatsapp-cloud'
+import { registrarTurno } from '@/lib/ai/turns'
+import { MOTIVOS } from '@/lib/ai/motivos'
 
 /**
  * So agrupa mensagem recente. A marca `n8n_enviado_em` nao existe em nada que
@@ -123,8 +126,23 @@ async function processN8NWebhook(job: Job<N8NWebhookJob>) {
   const urlFluxo = resolverResumeUrl ? await consumirResumeUrl(conversationId) : null
   const destino = urlFluxo || webhookUrl
 
+  // Registro da IA: so mensagem DO CLIENTE vira turno (a do atendente vai pro
+  // fluxo so como historico). Erro so na ultima tentativa: retry que da certo
+  // nao deixa rastro de falha.
+  const doCliente = corpo.fromMe !== true
+  const ultimaTentativa = job.attemptsMade + 1 >= (job.opts.attempts ?? 1)
+  const baseTurno = {
+    companyId,
+    conversationId,
+    messageIds: ids.length > 0 ? ids : [messageId],
+    texto: texto ?? (typeof payload.conteudo === 'string' ? payload.conteudo : null),
+    aiStatus: typeof corpo.ai_status === 'string' ? corpo.ai_status : null,
+    destino: urlFluxo ? ('fluxo_externo' as const) : ('webhook' as const),
+  }
+
   if (!destino) {
     console.warn(`[N8N Worker] Sem destino pra mensagem ${messageId}: nada enviado`)
+    if (doCliente) await registrarTurno({ ...baseTurno, destino: null, status: 'ignorado', motivo: MOTIVOS.SEM_FLUXO })
     return { skipped: true }
   }
 
@@ -132,15 +150,44 @@ async function processN8NWebhook(job: Job<N8NWebhookJob>) {
     console.log(`[N8N Worker] 🔀 Mensagem ${messageId} desviada pra resumeUrl do fluxo externo`)
   }
 
-  const response = await fetch(destino, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(corpo),
-  })
+  let response: Response
+  try {
+    response = await fetch(destino, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+    })
+  } catch (err) {
+    if (doCliente && ultimaTentativa) await registrarTurno({ ...baseTurno, status: 'erro', motivo: MOTIVOS.FLUXO_FORA })
+    throw err
+  }
 
   if (!response.ok) {
     const errorText = await response.text()
+    if (doCliente && ultimaTentativa) {
+      await registrarTurno({ ...baseTurno, status: 'erro', motivo: `fluxo: HTTP ${response.status}`, httpStatus: response.status })
+    }
     throw new Error(`N8N webhook returned ${response.status}: ${errorText}`)
+  }
+
+  if (doCliente) {
+    // Pausada: o fluxo recebe a mensagem (historico) com ai_status 'paused',
+    // e qualquer resposta da IA e barrada no envio (checarEnvioDaIA).
+    const pausada = corpo.ai_status === 'paused'
+    const pausadoAte = pausada
+      ? (
+          await prisma.conversation.findFirst({
+            where: { id: conversationId, companyId },
+            select: { client: { select: { aiPausedUntil: true } } },
+          })
+        )?.client?.aiPausedUntil ?? null
+      : null
+    await registrarTurno({
+      ...baseTurno,
+      status: pausada ? 'ignorado' : 'enviado',
+      motivo: pausada ? MOTIVOS.IA_PAUSADA : null,
+      pausadoAte,
+    })
   }
 
   console.log(`[N8N Worker] Successfully sent to N8N (status: ${response.status}) for message ${messageId}`)
@@ -166,11 +213,11 @@ async function processN8NWebhook(job: Job<N8NWebhookJob>) {
       const instance = conv?.inboxId
         ? await prisma.inbox.findUnique({
             where: { id: conv.inboxId },
-            select: { id: true, apiUrl: true, instanceApiKey: true, channelType: true, aiAgentId: true },
+            select: { id: true, apiUrl: true, instanceApiKey: true, channelType: true, aiAgentId: true, channelConfig: true },
           })
         : await prisma.inbox.findFirst({
             where: { companyId, isActive: true },
-            select: { id: true, apiUrl: true, instanceApiKey: true, channelType: true, aiAgentId: true },
+            select: { id: true, apiUrl: true, instanceApiKey: true, channelType: true, aiAgentId: true, channelConfig: true },
           })
 
       // Typing indicator hoje so funciona pra UazAPI (endpoint /message/presence
@@ -203,6 +250,20 @@ async function processN8NWebhook(job: Job<N8NWebhookJob>) {
         })
 
         console.log(`[N8N Worker] Typing indicator sent for ${phone}`)
+      } else if (instance?.channelType === 'whatsapp_cloud') {
+        // API oficial: "digitando" e atrelado a ultima mensagem recebida (e ja
+        // marca como lida: visto azul pro cliente).
+        const config = (instance.channelConfig ?? {}) as Record<string, unknown>
+        const phoneNumberId = typeof config.phoneNumberId === 'string' ? config.phoneNumberId : ''
+        const ultima = await prisma.message.findFirst({
+          where: { conversationId, senderType: 'client', uazMessageId: { not: null } },
+          orderBy: { createdAt: 'desc' },
+          select: { uazMessageId: true },
+        })
+        if (phoneNumberId && ultima?.uazMessageId) {
+          await sendCloudTyping(phoneNumberId, ultima.uazMessageId)
+          console.log(`[N8N Worker] Typing indicator (cloud) sent for ${phone}`)
+        }
       }
     } catch (typingError) {
       // Don't fail the job for typing indicator errors

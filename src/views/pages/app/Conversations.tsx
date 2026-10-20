@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button';
 
 // Components
 import { ConversationSidebar } from '@/components/conversations/ConversationSidebar';
+import { periodStart, type PeriodFilter } from '@/components/conversations/ConversationFilters';
 import { ConversationHeader } from '@/components/conversations/ConversationHeader';
 import { MessageBubble } from '@/components/conversations/MessageBubble';
 import { NoteBubble } from '@/components/conversations/NoteBubble';
@@ -34,7 +35,11 @@ import { TypingIndicator } from '@/components/conversations/TypingIndicator';
 import { TagManager } from '@/components/conversations/TagManager';
 import { ImageModal } from '@/components/conversations/ImageModal';
 import { ConversationNotes } from '@/components/conversations/ConversationNotes';
-import { ConversationInfoPanel } from '@/components/conversations/ConversationInfoPanel';
+import {
+  ConversationInfoPanel,
+  ConversationInfoSheet,
+  type ConversationInfoBodyProps,
+} from '@/components/conversations/ConversationInfoPanel';
 import { TransferDialog } from '@/components/conversations/dialogs/TransferDialog';
 import { EditClientDialog } from '@/components/conversations/dialogs/EditClientDialog';
 import { CloseConversationDialog } from '@/components/conversations/dialogs/CloseConversationDialog';
@@ -50,11 +55,24 @@ export default function Conversations() {
     searchParams.get('conversation')
   );
   const [search, setSearch] = useState('');
+  // O que vai pra API: espera 300ms sem digitar, pra nao disparar uma busca por letra.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('conversation') ? 'all' : 'active');
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [userFilter, setUserFilter] = useState<string>('all');
   const [agentFilter, setAgentFilter] = useState<string>('all');
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
+  const [aiPausedFilter, setAiPausedFilter] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Inicio do periodo no comeco do dia: o valor fica estavel durante o dia e
+  // a chave da query nao muda a cada render.
+  const periodStartDate = useMemo(() => periodStart(periodFilter), [periodFilter]);
   
   // Dialog states
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
@@ -62,6 +80,7 @@ export default function Conversations() {
   const [editClientOpen, setEditClientOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [notesSheetOpen, setNotesSheetOpen] = useState(false);
+  const [infoSheetOpen, setInfoSheetOpen] = useState(false);
   const [newConversationDialogOpen, setNewConversationDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
@@ -79,12 +98,14 @@ export default function Conversations() {
   const isUploadingRef = useRef(false);
 
   const filters = {
-    search,
+    search: debouncedSearch || undefined,
     status: statusFilter !== 'all' && statusFilter !== 'unread' && statusFilter !== 'transferred' ? statusFilter : undefined,
     tags: tagFilters.length > 0 ? tagFilters : undefined,
     departmentId: departmentFilter !== 'all' ? departmentFilter : undefined,
     assignedTo: userFilter !== 'all' ? userFilter : undefined,
     inboxId: agentFilter !== 'all' ? agentFilter : undefined,
+    aiPaused: aiPausedFilter || undefined,
+    startDate: periodStartDate,
   };
 
   // Hooks
@@ -119,8 +140,10 @@ export default function Conversations() {
     realtimeStatus,
     usePolling,
     manualRefresh,
-    toggleClientAIPaused,
-    isTogglingAIPaused,
+    setAIPause,
+    isChangingAIPause,
+    aiPauseDefaultMinutes,
+    isFetchingConversations,
   } = useConversations(filters);
 
   const { uploadMedia, isUploading } = useMediaUpload();
@@ -212,9 +235,13 @@ export default function Conversations() {
     },
   });
 
-  // All tags from conversations
+  // All tags from conversations. As ja selecionadas entram sempre: com o
+  // filtro no servidor, a lista pode voltar sem nenhuma conversa delas.
   const allTags: string[] = Array.from(
-    new Set<string>(conversations?.flatMap((c: any) => (c.tags || []) as string[]))
+    new Set<string>([
+      ...(conversations?.flatMap((c: Conversation) => c.tags || []) ?? []),
+      ...tagFilters,
+    ])
   ).sort();
 
   const toggleTagFilter = (tag: string) => {
@@ -521,6 +548,29 @@ export default function Conversations() {
     [messages, virtualizer],
   );
 
+  // Props do painel de informacoes — as mesmas na barra (desktop) e na gaveta (celular).
+  const infoPanelProps: ConversationInfoBodyProps | null = selectedConv
+    ? {
+        conversation: selectedConv,
+        onOpenTagManager: () => setTagManagerOpen(true),
+        // A rota de pickup so assume conversa EM FILA (pending, com trava
+        // contra corrida). Conversa ativa sob a IA nao esta na fila: ai
+        // "atribuir a mim" e uma transferencia pra si mesmo.
+        onAssignToMe: () => {
+          if (selectedConv.status === 'pending') pickupConversation(selectedConv.id);
+          else if (user?.id) transferConversation({ conversationId: selectedConv.id, userId: user.id });
+        },
+        onTransfer: () => setTransferDialogOpen(true),
+        onEditContact: () => setEditClientOpen(true),
+        teamMembers: (teamMembers as TeamMember[]) || [],
+        departments: (departments || []).map((d: any) => ({ id: d.id, name: d.name, color: d.color })),
+        onSelectAgent: (userId) => transferConversation({ conversationId: selectedConv.id, userId }),
+        onSelectDepartment: (departmentId) =>
+          transferToDepartment({ conversationId: selectedConv.id, departmentId }),
+        podeEditarContato: canEditCRM,
+      }
+    : null;
+
   return (
     <div className="flex h-full bg-background">
       {/* Sidebar: hidden on mobile when a conversation is selected */}
@@ -549,6 +599,11 @@ export default function Conversations() {
           tagFilters={tagFilters}
           onToggleTagFilter={toggleTagFilter}
           allTags={allTags}
+          periodFilter={periodFilter}
+          onPeriodFilterChange={setPeriodFilter}
+          aiPausedFilter={aiPausedFilter}
+          onAiPausedFilterChange={setAiPausedFilter}
+          isSearching={isFetchingConversations && !!search.trim()}
           isLoading={isLoading}
           realtimeStatus={realtimeStatus}
           usePolling={usePolling}
@@ -569,11 +624,17 @@ export default function Conversations() {
             <div className="flex-1 flex flex-col min-h-0 min-w-0">
             <ConversationHeader
               conversation={selectedConv}
-              isTogglingAIPaused={isTogglingAIPaused}
-              onToggleAIPaused={() => toggleClientAIPaused({ 
-                clientId: selectedConv.client!.id, 
-                currentValue: selectedConv.client?.ai_paused || false 
-              })}
+              isChangingAIPause={isChangingAIPause}
+              aiPauseDefaultMinutes={aiPauseDefaultMinutes}
+              onPauseAI={(minutes) =>
+                setAIPause(
+                  minutes === undefined
+                    ? { conversationId: selectedConv.id, action: 'pause' }
+                    : { conversationId: selectedConv.id, action: 'pause', minutes }
+                )
+              }
+              onResumeAI={() => setAIPause({ conversationId: selectedConv.id, action: 'resume' })}
+              teamMembers={(teamMembers as TeamMember[]) || []}
               onOpenNotes={() => setNotesSheetOpen(true)}
               onTransfer={() => setTransferDialogOpen(true)}
               onClose={() => setCloseDialogOpen(true)}
@@ -582,6 +643,7 @@ export default function Conversations() {
               onRemoveTag={(tag) => removeTag({ conversationId: selectedConv.id, tag })}
               onEditContact={() => setEditClientOpen(true)}
               onBack={() => setSelectedConversation(null)}
+              onOpenInfo={() => setInfoSheetOpen(true)}
             />
 
             {/* Barra de seleção em massa */}
@@ -726,28 +788,8 @@ export default function Conversations() {
             />
             </div>
 
-            {/* Painel de contexto — some no mobile, onde nao ha largura */}
-            <ConversationInfoPanel
-              conversation={selectedConv}
-              onOpenTagManager={() => setTagManagerOpen(true)}
-              onAssignToMe={() => pickupConversation(selectedConv.id)}
-              onTransfer={() => setTransferDialogOpen(true)}
-              onEditContact={() => setEditClientOpen(true)}
-              teamMembers={(teamMembers as TeamMember[]) || []}
-              departments={(departments || []).map((d: any) => ({
-                id: d.id,
-                name: d.name,
-                color: d.color,
-              }))}
-              onSelectAgent={(userId) =>
-                transferConversation({ conversationId: selectedConv.id, userId })
-              }
-              onSelectDepartment={(departmentId) =>
-                transferToDepartment({ conversationId: selectedConv.id, departmentId })
-              }
-              podeEditarContato={canEditCRM}
-              className="hidden lg:flex"
-            />
+            {/* Painel de contexto fixo — abaixo de lg vira a gaveta (ConversationInfoSheet) */}
+            {infoPanelProps && <ConversationInfoPanel {...infoPanelProps} className="hidden lg:flex" />}
           </div>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -762,6 +804,13 @@ export default function Conversations() {
       {/* Modals */}
       {selectedConv && (
         <>
+          {infoPanelProps && (
+            <ConversationInfoSheet
+              {...infoPanelProps}
+              open={infoSheetOpen}
+              onOpenChange={setInfoSheetOpen}
+            />
+          )}
           <TagManager
             open={tagManagerOpen}
             onOpenChange={setTagManagerOpen}

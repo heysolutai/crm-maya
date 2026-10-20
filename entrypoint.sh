@@ -14,7 +14,7 @@ if [ -n "$DATABASE_URL" ]; then
     # prisma db push NAO cria funcoes SQL. Aplicamos delete_company_cascade aqui
     # (idempotente). Sem isso, deletar empresa quebra em bancos novos.
     echo "[entrypoint] Aplicando funcoes SQL (prisma/db-functions.sql)..."
-    node ./node_modules/prisma/build/index.js db execute --file prisma/db-functions.sql --schema prisma/schema.prisma 2>&1 \
+    node ./node_modules/prisma/build/index.js db execute --file prisma/db-functions.sql 2>&1 \
       && echo "[entrypoint] Funcoes SQL aplicadas com sucesso!" \
       || echo "[entrypoint] AVISO: falha ao aplicar funcoes SQL (delete_company_cascade)."
   else

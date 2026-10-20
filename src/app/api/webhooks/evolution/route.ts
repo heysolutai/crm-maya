@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { findOrCreateConversation } from '@/lib/api/database'
 import { publishEvent } from '@/lib/realtime'
-import { enqueueN8NWebhook } from '@/lib/queue'
+import { despacharParaIA, decidirDestinoIA } from '@/lib/maestro/despacho'
 import { getSystemSetting } from '@/lib/system-settings'
 import { restaurantIdDaInbox } from '@/lib/api/utils'
 
@@ -263,6 +263,7 @@ export async function POST(req: NextRequest) {
                 select: {
                   id: true,
                   name: true,
+                  engine: true,
                   n8nWebhookUrl: true,
                   knowledge: true,
                   memoryKey: true,
@@ -272,11 +273,34 @@ export async function POST(req: NextRequest) {
               },
             },
           })
-          const aiConfig = inboxWithAi?.aiAgent && inboxWithAi.aiAgent.isActive ? inboxWithAi.aiAgent : null
+          const agenteDaInbox = inboxWithAi?.aiAgent ?? null
+          const aiConfig = agenteDaInbox && agenteDaInbox.isActive ? agenteDaInbox : null
+          // IA desligada na tela (chave "IA atendendo"): nao cai no fluxo padrao do sistema.
+          const iaDesligada = agenteDaInbox?.isActive === false
 
-          const webhookUrl =
-            aiConfig?.n8nWebhookUrl || (await getSystemSetting('n8n_ai_webhook_url'))
-          if (webhookUrl) {
+          const webhookUrl = iaDesligada
+            ? null
+            : aiConfig?.n8nWebhookUrl || (await getSystemSetting('n8n_ai_webhook_url'))
+          // Quem responde: n8n (como sempre) ou Maestro (IA do proprio CRM). Agente
+          // 'maestro' ativo recebe um turno e o n8n NAO e chamado (duas IAs na
+          // mesma conversa). Decisao unica em src/lib/maestro/despacho.ts.
+          const destinoIA = await decidirDestinoIA({
+            companyId: agent.companyId,
+            conversationId,
+            // Agente do Maestro desligado segue pro Maestro, que registra "desligado" e nao responde.
+            agente: agenteDaInbox
+              ? { id: agenteDaInbox.id, engine: agenteDaInbox.engine, isActive: agenteDaInbox.isActive }
+              : null,
+          })
+          if (destinoIA === 'maestro') {
+            await despacharParaIA({
+              companyId: agent.companyId,
+              conversationId,
+              messageId: message.id,
+              doCliente: true,
+              destino: 'maestro',
+            }).catch((e) => console.error('[webhook:evolution] enqueue Maestro failed', e))
+          } else if (webhookUrl) {
             // Contrato unificado entre canais: N8N pode ler mesmos campos
             // independente do canal (uazapi/evolution_baileys/etc).
             const n8nPayload = {
@@ -316,12 +340,21 @@ export async function POST(req: NextRequest) {
               timestamp: new Date().toISOString(),
             }
 
-            await enqueueN8NWebhook({
-              webhookUrl,
-              payload: n8nPayload,
+            await despacharParaIA({
               companyId: agent.companyId,
               conversationId,
               messageId: message.id,
+              doCliente: true,
+              destino: 'n8n',
+              n8n: {
+                data: {
+                  webhookUrl,
+                  payload: n8nPayload,
+                  companyId: agent.companyId,
+                  conversationId,
+                  messageId: message.id,
+                },
+              },
             }).catch((e) => console.error('[webhook:evolution] enqueue N8N failed', e))
           }
         }

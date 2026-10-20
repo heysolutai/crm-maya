@@ -61,9 +61,9 @@ export const CHANNEL_REGISTRY: Record<ChannelType, ChannelMeta> = {
   whatsapp_cloud: {
     type: 'whatsapp_cloud',
     label: 'WhatsApp Cloud',
-    description: 'WhatsApp Business Cloud API (Meta): token oficial',
-    status: 'coming_soon',
-    connectionMode: 'oauth',
+    description: 'API oficial do WhatsApp: numero verificado, sem QR Code',
+    status: 'available',
+    connectionMode: 'token',
   },
   instagram: {
     type: 'instagram',

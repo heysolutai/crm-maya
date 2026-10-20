@@ -29,6 +29,7 @@ import {
   X,
   Settings,
   Server,
+  Plug,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import Image from 'next/image';
@@ -40,6 +41,7 @@ const navigation = [
   { name: 'Usuários', href: '/super-admin/users', icon: Users },
   { name: 'Super Admins', href: '/super-admin/admins', icon: Shield },
   { name: 'Custos de IA', href: '/super-admin/token-dashboard', icon: DollarSign },
+  { name: 'Integrações da IA', href: '/super-admin/integrations', icon: Plug },
   { name: 'API Docs', href: '/super-admin/api-docs', icon: Code },
   { name: 'Sistema', href: '/super-admin/system-settings', icon: Server },
   { name: 'Configurações', href: '/super-admin/settings', icon: Settings },
@@ -48,7 +50,7 @@ const navigation = [
 export default function SuperAdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
-  const { branding } = useBranding();
+  const { branding, loading: carregandoMarca } = useBranding();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -70,12 +72,10 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
         {branding.logoUrl ? (
           <Image src={branding.logoUrl} alt={branding.systemName} width={32} height={32} className="rounded-lg" />
         ) : (
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground text-sm font-bold">W</span>
-          </div>
+          <div className="w-8 h-8 rounded-lg bg-muted" aria-hidden />
         )}
         <div className="flex flex-col">
-          <span className="text-sm font-bold leading-tight">{branding.systemName}</span>
+          <span className="text-sm font-bold leading-tight">{carregandoMarca ? ' ' : branding.systemName}</span>
           <span className="text-[10px] text-muted-foreground leading-tight">Management Console</span>
         </div>
         {isMobile && (

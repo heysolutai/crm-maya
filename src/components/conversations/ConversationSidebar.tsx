@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import { Search, Plus, Tag, X, Image, Mic, FileText, MapPin, Video } from 'lucide-react';
+import { Search, Plus, Tag, X, Image, Mic, FileText, MapPin, Video, Loader2, PauseCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,10 +7,15 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RealtimeStatusIndicator } from '@/components/conversations/RealtimeStatusIndicator';
-import { ConversationFilters } from '@/components/conversations/ConversationFilters';
+import {
+  ConversationFilters,
+  PERIOD_OPTIONS,
+  type PeriodFilter,
+} from '@/components/conversations/ConversationFilters';
 import { ConversationListSkeleton } from '@/components/ui/skeleton-list';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { getInitials, type Conversation, type LastMessage, type TeamMember } from './types';
+import { formatarHorario, isAiPausedNow } from './ai-pause';
 import { textoPlano } from '@/lib/whatsapp/texto-whatsapp';
 
 function getMessagePreview(msg: LastMessage | null | undefined): { icon?: React.ReactNode; text: string } {
@@ -71,6 +76,12 @@ interface ConversationSidebarProps {
   tagFilters: string[];
   onToggleTagFilter: (tag: string) => void;
   allTags: string[];
+  periodFilter: PeriodFilter;
+  onPeriodFilterChange: (value: PeriodFilter) => void;
+  aiPausedFilter: boolean;
+  onAiPausedFilterChange: (value: boolean) => void;
+  /** Busca indo ao servidor (mostra o spinner no campo). */
+  isSearching?: boolean;
   isLoading: boolean;
   realtimeStatus: 'connected' | 'connecting' | 'disconnected';
   usePolling: boolean;
@@ -109,6 +120,11 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   tagFilters,
   onToggleTagFilter,
   allTags,
+  periodFilter,
+  onPeriodFilterChange,
+  aiPausedFilter,
+  onAiPausedFilterChange,
+  isSearching = false,
   isLoading,
   realtimeStatus,
   usePolling,
@@ -117,6 +133,8 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   onPickupConversation,
 }: ConversationSidebarProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const agora = Date.now();
+  const rotuloPeriodo = PERIOD_OPTIONS.find((p) => p.value === periodFilter)?.label;
 
   const filteredConversations =
     statusFilter === 'unread'
@@ -146,12 +164,28 @@ export const ConversationSidebar = memo(function ConversationSidebar({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <Input
-            placeholder="Buscar conversas..."
+            placeholder="Buscar por nome ou telefone..."
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-10 h-10"
-            aria-label="Buscar conversas"
+            // pr pra caber o spinner/limpar; >= 16px no celular evita o zoom do iOS.
+            className="pl-10 pr-9 h-10 max-md:text-base"
+            aria-label="Buscar conversas por nome ou telefone"
           />
+          {isSearching ? (
+            <Loader2
+              className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground"
+              aria-label="Buscando"
+            />
+          ) : search ? (
+            <button
+              type="button"
+              onClick={() => onSearchChange('')}
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 inline-flex items-center justify-center text-muted-foreground hover:text-foreground"
+              aria-label="Limpar busca"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-2">
@@ -169,6 +203,10 @@ export const ConversationSidebar = memo(function ConversationSidebar({
               onDepartmentFilterChange={onDepartmentFilterChange}
               userFilter={userFilter}
               onUserFilterChange={onUserFilterChange}
+              periodFilter={periodFilter}
+              onPeriodFilterChange={onPeriodFilterChange}
+              aiPausedFilter={aiPausedFilter}
+              onAiPausedFilterChange={onAiPausedFilterChange}
             />
           </div>
 
@@ -211,8 +249,28 @@ export const ConversationSidebar = memo(function ConversationSidebar({
           </Popover>
         </div>
 
-        {tagFilters.length > 0 && (
+        {/* Filtros simples ativos ficam a vista mesmo com o painel fechado. */}
+        {(tagFilters.length > 0 || periodFilter !== 'all' || aiPausedFilter) && (
           <div className="flex flex-wrap gap-1">
+            {periodFilter !== 'all' && (
+              <Badge variant="secondary" className="gap-1">
+                Período: {rotuloPeriodo}
+                <button onClick={() => onPeriodFilterChange('all')} aria-label="Remover filtro de período">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            {aiPausedFilter && (
+              <Badge
+                variant="secondary"
+                className="gap-1 bg-orange-500/15 text-orange-700 dark:text-orange-300 hover:bg-orange-500/20"
+              >
+                IA pausada
+                <button onClick={() => onAiPausedFilterChange(false)} aria-label="Remover filtro IA pausada">
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
             {tagFilters.map((tag) => (
               <Badge key={tag} variant="secondary" className="gap-1">
                 {tag}
@@ -292,10 +350,21 @@ export const ConversationSidebar = memo(function ConversationSidebar({
         {isLoading ? (
           <ConversationListSkeleton count={6} />
         ) : filteredConversations?.length === 0 ? (
-          <div className="p-4 text-center text-muted-foreground">
-            {statusFilter === 'unread'
-              ? 'Nenhuma mensagem não lida'
-              : 'Nenhuma conversa encontrada'}
+          <div className="p-4 text-center text-muted-foreground space-y-2">
+            <p>
+              {statusFilter === 'unread'
+                ? 'Nenhuma mensagem não lida'
+                : search.trim()
+                  ? `Nenhuma conversa encontrada para “${search.trim()}”`
+                  : 'Nenhuma conversa encontrada'}
+            </p>
+            {/* A busca respeita o status (padrao: Ativas). Conversa encerrada
+                some da busca sem isso — o atalho evita a caca ao filtro. */}
+            {search.trim() && statusFilter !== 'all' && (
+              <Button variant="outline" size="sm" onClick={() => onStatusFilterChange('all')}>
+                Buscar em todas as conversas
+              </Button>
+            )}
           </div>
         ) : (
           filteredConversations?.map((conv) => {
@@ -307,6 +376,10 @@ export const ConversationSidebar = memo(function ConversationSidebar({
             const hasUnread = unreadCount > 0;
             const preview = getMessagePreview(conv.last_message);
             const lastTime = conv.last_message?.created_at || conv.started_at;
+            const iaPausada = isAiPausedNow(conv.client, agora);
+            const iaPausadaAte = iaPausada && conv.client?.ai_paused_until
+              ? formatarHorario(conv.client.ai_paused_until, agora)
+              : null;
 
             return (
               <button
@@ -379,6 +452,16 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                           : 'IA'
                         }
                       </span>
+                      {iaPausada && (
+                        <span
+                          className="shrink-0 inline-flex items-center gap-0.5 rounded px-1 h-4 text-[10px] font-medium bg-orange-500/15 text-orange-700 dark:text-orange-300"
+                          title={iaPausadaAte ? `IA pausada até ${iaPausadaAte}` : 'IA pausada até retomar'}
+                          aria-label={iaPausadaAte ? `IA pausada até ${iaPausadaAte}` : 'IA pausada até retomar'}
+                        >
+                          <PauseCircle className="h-3 w-3" />
+                          IA
+                        </span>
+                      )}
                       {conv.department && (
                         <>
                           <span className="text-muted-foreground/40">·</span>

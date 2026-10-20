@@ -22,7 +22,7 @@ export function WhatsAppConfigCard({ companyId }: WhatsAppConfigCardProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
 
   const {
-    instances,
+    instances: allInstances,
     isLoading,
     connectWhatsApp,
     reconnectWhatsApp,
@@ -35,6 +35,12 @@ export function WhatsAppConfigCard({ companyId }: WhatsAppConfigCardProps) {
     isDeleting,
     isUpdating,
   } = useWhatsAppIntegrationForCompany(companyId);
+
+  // Este card e so do QR Code: numero WhatsApp Cloud tem card proprio
+  // (WhatsAppCloudCard) e nao pode aparecer aqui como "a instancia".
+  const instances = allInstances?.filter(
+    (i: { channel_type?: string }) => i.channel_type !== 'whatsapp_cloud'
+  );
 
   // Polling automático quando modal está aberto
   useEffect(() => {

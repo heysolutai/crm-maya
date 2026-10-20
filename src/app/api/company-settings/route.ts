@@ -1,7 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
+import { isCompanyAdmin } from '@/lib/api/company-admin'
+
+/**
+ * Chaves de settings com formato conhecido. As demais passam como estao
+ * (merge raso), pra nao quebrar as telas que ja gravam outras chaves aqui.
+ */
+const knownSettingsSchema = z
+  .object({
+    /** Minutos que a IA fica pausada quando um humano responde. 0 = so volta manual. */
+    ai_pause_minutes: z.number().int().min(0).max(1440).optional(),
+  })
+  .passthrough()
+
+const patchSchema = z.object({
+  companyId: z.string().uuid().optional(),
+  settings: knownSettingsSchema,
+})
 
 /** GET company settings */
 export async function GET(req: NextRequest) {
@@ -22,20 +41,37 @@ export async function GET(req: NextRequest) {
 
 /**
  * PATCH - Merge-update company settings.
- * Body: { companyId?: string, settings: Record<string, any> }
+ * Body: { companyId?: string, settings: Record<string, unknown> }
  * The provided settings are shallow-merged into the existing settings JSON.
  */
 export async function PATCH(req: NextRequest) {
   try {
-    const { companyId: authCompanyId, isSuperAdmin } = await authenticate(req)
+    const { companyId: authCompanyId, isSuperAdmin, agentId } = await authenticate(req)
     const body = await req.json()
-    const companyId = body.companyId || authCompanyId
 
+    // Valida que `settings` e um objeto simples: evita corromper o JSON
+    // (spread de string/array) e mass-assignment de tipo inesperado.
+    const validation = patchSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const companyId = validation.data.companyId || authCompanyId
     if (!companyId) return NextResponse.json({ error: 'Missing companyId' }, { status: 400 })
 
     // Non-super-admin can only update their own company
     if (!isSuperAdmin && companyId !== authCompanyId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // Configuracao da empresa (pausa da IA, permissoes, setup) e decisao do
+    // administrador. Antes so as telas escondiam isso: atendente mudava
+    // chamando a API direto.
+    if (!(await isCompanyAdmin({ agentId, companyId: authCompanyId, isSuperAdmin }))) {
+      return NextResponse.json({ error: 'Apenas o administrador pode alterar as configurações' }, { status: 403 })
     }
 
     // Get current settings
@@ -45,17 +81,12 @@ export async function PATCH(req: NextRequest) {
     })
     if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 })
 
-    // Valida que `settings` e um objeto simples: evita corromper o JSON
-    // (spread de string/array) e mass-assignment de tipo inesperado.
-    if (body.settings === null || typeof body.settings !== 'object' || Array.isArray(body.settings)) {
-      return NextResponse.json({ error: 'settings deve ser um objeto' }, { status: 400 })
-    }
-    const currentSettings = (company.settings as Record<string, any>) || {}
-    const newSettings = { ...currentSettings, ...body.settings }
+    const currentSettings = (company.settings as Record<string, unknown> | null) || {}
+    const newSettings = { ...currentSettings, ...validation.data.settings }
 
     await prisma.company.update({
       where: { id: companyId },
-      data: { settings: newSettings },
+      data: { settings: newSettings as Prisma.InputJsonValue },
     })
 
     return NextResponse.json({ success: true, settings: newSettings })
