@@ -1,3 +1,5 @@
+import type { Prisma } from '@prisma/client'
+
 /**
  * Motivos do Registro da IA em portugues: "Por que" e "O que fazer".
  *
@@ -36,6 +38,19 @@ export const MOTIVOS = {
 /** Enviado e sem resposta ha mais que isso = problema ("nao respondeu"). */
 export const SEM_RESPOSTA_APOS_MS = 10 * 60 * 1000
 
+/** Resposta do cliente que foi pro fluxo de avaliacao (resumeUrl), nao pra IA de atendimento. */
+export const DESTINO_AVALIACAO = 'fluxo_externo'
+
+/**
+ * Turno que espera resposta da IA de atendimento. O que foi pra avaliacao nao
+ * conta: quem responde e a avaliacao, e a IA normal fica quieta de proposito.
+ * O `destino: null` explicito e porque o `not` do Prisma tambem descarta null.
+ */
+export const ESPERA_RESPOSTA_DA_IA: Prisma.AiTurnWhereInput = {
+  status: 'enviado',
+  OR: [{ destino: null }, { destino: { not: DESTINO_AVALIACAO } }],
+}
+
 export interface Explicacao {
   /** Rotulo curto do resultado (badge). */
   resultado: string
@@ -61,19 +76,18 @@ function hora(d: Date | string | null | undefined): string {
 
 /** Explicacao dos motivos do Maestro (texto gravado -> o que dizer na tela). */
 const EXPLICACOES_MAESTRO: Record<string, Explicacao> = {
+  // IA desligada e escolha do restaurante, nao falha: quem atende e a equipe.
   [MOTIVOS.MAESTRO_AGENTE_DESLIGADO]: {
-    resultado: 'Não respondida',
-    nivel: 'aviso',
-    porque: 'A IA deste WhatsApp está desligada, então ela não respondeu esta mensagem.',
-    oQueFazer:
-      'Responda o cliente pela conversa. Para a IA voltar a responder, ligue a chave "IA atendendo" na aba "Agente de IA" deste WhatsApp.',
+    resultado: 'IA desligada',
+    nivel: 'ok',
+    porque: 'A IA deste WhatsApp está desligada: quem responde é a equipe.',
+    oQueFazer: 'Se a IA deveria estar atendendo, ligue a chave "IA atendendo" na aba "Agente de IA" deste WhatsApp.',
   },
   [MOTIVOS.IA_DESLIGADA]: {
-    resultado: 'Não respondida',
-    nivel: 'aviso',
-    porque: 'A IA deste WhatsApp está desligada, então ela não respondeu esta mensagem.',
-    oQueFazer:
-      'Responda o cliente pela conversa. Para a IA voltar a responder, ligue a chave "IA atendendo" na aba "Agente de IA" deste WhatsApp.',
+    resultado: 'IA desligada',
+    nivel: 'ok',
+    porque: 'A IA deste WhatsApp está desligada: quem responde é a equipe.',
+    oQueFazer: 'Se a IA deveria estar atendendo, ligue a chave "IA atendendo" na aba "Agente de IA" deste WhatsApp.',
   },
   [MOTIVOS.MAESTRO_OUTRO_MOTOR]: {
     resultado: 'Não respondida',
@@ -194,7 +208,26 @@ export function explicarTurno(t: {
   pausadoAte: Date | string | null
   bloqueios: number
   httpStatus: number | null
+  destino?: string | null
 }): Explicacao {
+  // Resposta da avaliacao: a IA de atendimento nao tinha que responder.
+  if (t.destino === DESTINO_AVALIACAO && t.status !== 'erro') {
+    return {
+      resultado: 'Avaliação',
+      nivel: 'ok',
+      porque: 'O cliente estava respondendo a avaliação, então a mensagem foi para a avaliação, e não para a IA de atendimento.',
+      oQueFazer: null,
+    }
+  }
+  if (t.destino === DESTINO_AVALIACAO) {
+    return {
+      resultado: 'Erro na avaliação',
+      nivel: 'problema',
+      porque: 'A avaliação não recebeu a resposta do cliente (o sistema tentou 3 vezes).',
+      oQueFazer: 'Se o cliente estiver esperando, responda pela conversa. Se acontecer de novo, fale com o suporte.',
+    }
+  }
+
   if (t.status === 'respondido') {
     return {
       resultado: 'Respondida',

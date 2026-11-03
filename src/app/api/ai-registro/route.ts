@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
 import { isCompanyAdmin } from '@/lib/api/company-admin'
-import { explicarTurno, MOTIVOS, SEM_RESPOSTA_APOS_MS } from '@/lib/ai/motivos'
+import { ESPERA_RESPOSTA_DA_IA, explicarTurno, MOTIVOS, SEM_RESPOSTA_APOS_MS } from '@/lib/ai/motivos'
 
 /**
  * GET /api/ai-registro — Registro da IA do restaurante (so administrador: as
@@ -28,7 +28,7 @@ const querySchema = z.object({
 
 function filtroWhere(filtro: string): Prisma.AiTurnWhereInput {
   const semResposta: Prisma.AiTurnWhereInput = {
-    status: 'enviado',
+    ...ESPERA_RESPOSTA_DA_IA,
     createdAt: { lt: new Date(Date.now() - SEM_RESPOSTA_APOS_MS) },
   }
   switch (filtro) {

@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { resolveOpenAiKey } from '@/lib/ai/embeddings'
-import { SEM_RESPOSTA_APOS_MS } from '@/lib/ai/motivos'
+import { ESPERA_RESPOSTA_DA_IA, SEM_RESPOSTA_APOS_MS } from '@/lib/ai/motivos'
 import { falhasRecentesDeFerramentas, quandoFoi } from '@/lib/ai-tools/falhas'
 import { enabledNativeNames } from '@/lib/ai-tools/native'
 import { parseConfigFields } from '@/lib/ai-tools/secrets'
@@ -194,8 +194,10 @@ const respostasDaIA: Verificacao = async (ctx) => {
     prisma.aiTurn.count({
       where: {
         ...base,
-        status: 'enviado',
+        ...ESPERA_RESPOSTA_DA_IA,
         createdAt: { gte: new Date(agora - DIA_MS), lt: new Date(agora - SEM_RESPOSTA_APOS_MS) },
+        // IA desligada nao responde de proposito: o aviso "IA desligada" ja conta a historia.
+        NOT: { conversation: { inbox: { aiAgent: { isActive: false } } } },
       },
     }),
   ])
