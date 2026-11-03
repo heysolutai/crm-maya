@@ -2,11 +2,12 @@ import { apiFetch } from '@/lib/api/client';
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Key, Plus, Trash2, Copy, Eye, EyeOff, Power, PowerOff } from 'lucide-react';
+import { Key, Plus, Trash2, Copy, Eye, EyeOff } from 'lucide-react';
 import { useApiKeys } from '@/hooks/useApiKeys';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -221,18 +222,12 @@ export function ApiKeysTab({ companyId }: ApiKeysTabProps) {
                         </div>
 
                         <div className="flex gap-2 ml-4">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => toggleApiKeyStatus({ keyId: key.id, isActive: ((key as any).isActive ?? (key as any).is_active) })}
-                            title={((key as any).isActive ?? (key as any).is_active) ? 'Desativar' : 'Ativar'}
-                          >
-                            {((key as any).isActive ?? (key as any).is_active) ? (
-                              <PowerOff className="h-4 w-4" />
-                            ) : (
-                              <Power className="h-4 w-4" />
-                            )}
-                          </Button>
+                          <Switch
+                            className="self-center"
+                            checked={!!((key as any).isActive ?? (key as any).is_active)}
+                            onCheckedChange={() => toggleApiKeyStatus({ keyId: key.id, isActive: ((key as any).isActive ?? (key as any).is_active) })}
+                            aria-label={((key as any).isActive ?? (key as any).is_active) ? 'Desativar chave' : 'Ativar chave'}
+                          />
                           <Button
                             variant="destructive"
                             size="icon"

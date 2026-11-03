@@ -5,6 +5,7 @@ import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
 import { buildCapabilitiesPrompt, listCompanyTools, toFunctions } from '@/lib/ai-tools/registry'
 import { ensureDefaultIntegrations } from '@/lib/ai-tools/seed'
+import { resolverAgenteDaConversa } from '@/lib/maestro/agente'
 
 /**
  * GET /api/ai-tools?conversation_id=  (x-api-key)
@@ -31,16 +32,20 @@ export async function GET(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: 'Dados invalidos', details: parsed.error.flatten().fieldErrors }, { status: 400 })
     }
+    let agentId: string | null = null
     if (parsed.data.conversation_id) {
       const conv = await prisma.conversation.findFirst({
         where: { id: parsed.data.conversation_id, companyId },
         select: { id: true },
       })
       if (!conv) return NextResponse.json({ error: 'Conversa nao encontrada' }, { status: 404 })
+      // O modo do WhatsApp da conversa (ferramentas do CRM ou servidor MCP):
+      // sem isto o n8n recebia as ferramentas do CRM mesmo no modo MCP.
+      agentId = (await resolverAgenteDaConversa(companyId, conv.id))?.id ?? null
     }
 
     await ensureDefaultIntegrations()
-    const tools = await listCompanyTools(companyId)
+    const tools = await listCompanyTools(companyId, { agentId })
     return NextResponse.json({
       tools: toFunctions(tools),
       prompt: buildCapabilitiesPrompt(tools),

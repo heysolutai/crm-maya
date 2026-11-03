@@ -24,6 +24,8 @@ export interface ResolvedTool {
     configFields: ConfigField[]
     /** Config salva do restaurante (cifrada nos campos secretos). */
     companyConfig: unknown
+    /** Servidor MCP privado: o agente dono. Null = integracao do catalogo. */
+    aiAgentId: string | null
   }
   http?: {
     method: string
@@ -71,6 +73,7 @@ type IntegrationRow = {
   id: string
   name: string
   kind?: string
+  aiAgentId?: string | null
   baseUrl: string
   headers: unknown
   configFields: unknown
@@ -98,6 +101,7 @@ export function fromIntegrationTool(tool: ToolRow, integration: IntegrationRow, 
       headers: integration.headers,
       configFields: parseConfigFields(integration.configFields),
       companyConfig,
+      aiAgentId: integration.aiAgentId ?? null,
     },
     http: {
       method: tool.method,
@@ -137,6 +141,20 @@ function definicaoMcp(name: string, description: string, schema: Record<string, 
 
 /** No modo "Servidor MCP", das nativas so fica a que a IA precisa sempre. */
 export const NATIVAS_NO_MODO_MCP = ['transferir_para_humano']
+
+/**
+ * A ferramenta pertence ao modo ligado no WhatsApp? Um modo por vez, nunca os
+ * dois: no 'mcp', so o servidor MCP DESTE agente (+ NATIVAS_NO_MODO_MCP); no
+ * 'function_calls' (ou sem agente), nativas e catalogo, nunca um servidor MCP
+ * privado. Mesma regra de listCompanyTools, aplicada na hora de EXECUTAR.
+ */
+export function cabeNoModo(tool: ResolvedTool, agente: { id: string; toolMode: string } | null): boolean {
+  const servidorDoAgente = tool.integration?.aiAgentId ?? null
+  if (agente?.toolMode === 'mcp') {
+    return tool.source === 'native' ? NATIVAS_NO_MODO_MCP.includes(tool.name) : servidorDoAgente === agente.id
+  }
+  return servidorDoAgente === null
+}
 
 /**
  * Ferramentas LIGADAS que a IA recebe.

@@ -38,9 +38,25 @@ const normalizarSentimento = (v: unknown) => (typeof v === 'string' ? SENTIMENTO
 /** O n8n manda campo opcional nao preenchido como "": conta como nao informado. */
 const vazioComoAusente = (v: unknown) => (v === '' || v === null ? undefined : v)
 
+/**
+ * A nota e guardada de 1 a 5 (estrelas: media e filtro da tela). Fluxo que
+ * pergunta de 0 a 10 (estilo NPS) manda a nota como veio: acima de 5, ou 0,
+ * so pode ser da escala de 10; de 1 a 5 vale a de 5, a nao ser que venha
+ * `rating_scale: 10`. De 10 pra 5: 9-10 -> 5, 7-8 -> 4, 5-6 -> 3, 3-4 -> 2, 0-2 -> 1.
+ */
+function notaDeCincoEstrelas(nota: number, escala?: number): number {
+  const deDez = escala === 10 || nota > 5 || nota === 0
+  return deDez ? Math.min(5, Math.max(1, Math.round(nota / 2))) : Math.round(nota)
+}
+
 const createSchema = z.object({
   // coerce: o n8n manda body parameters como string ("5")
-  rating: z.coerce.number().int().min(1).max(5),
+  rating: z.coerce.number().min(0).max(10),
+  /// 5 (padrao) ou 10: em que escala a nota foi pedida ao cliente.
+  rating_scale: z.preprocess(
+    vazioComoAusente,
+    z.coerce.number().refine((v) => v === 5 || v === 10, 'Use 5 ou 10').optional()
+  ).optional(),
   // Opcional: se ausente, derivamos da nota. A IA pode mandar explicito quando
   // o texto contradiz a nota (ex: nota 4 com reclamacao seria 'negativo').
   // .optional() por fora: no zod 4 o preprocess sozinho torna o campo obrigatorio.
@@ -63,6 +79,10 @@ const createSchema = z.object({
   reservation_date: z.string().max(40).optional().nullable(),
   reservationDate: z.string().max(40).optional().nullable(),
   reservation_time: z.preprocess(vazioComoAusente, z.string().regex(/^\d{2}:\d{2}$/).optional()).optional(),
+}).superRefine((d, ctx) => {
+  if (d.rating_scale === 5 && (d.rating < 1 || d.rating > 5)) {
+    ctx.addIssue({ code: 'custom', path: ['rating'], message: 'Na escala de 5, a nota vai de 1 a 5' })
+  }
 })
 
 /** "YYYY-MM-DD" (+ "HH:mm") ou ISO → Date no fuso de Brasilia. Null se invalida. */
@@ -258,11 +278,12 @@ export async function POST(req: NextRequest) {
       if (!resv) return NextResponse.json({ error: 'Reserva invalida' }, { status: 400 })
     }
 
+    const rating = notaDeCincoEstrelas(d.rating, d.rating_scale)
     const review = await prisma.review.create({
       data: {
         companyId,
-        rating: d.rating,
-        sentiment: d.sentiment ?? sentimentFromRating(d.rating),
+        rating,
+        sentiment: d.sentiment ?? sentimentFromRating(rating),
         comment: d.comment ?? null,
         customerName: d.customerName ?? null,
         source: d.source ?? 'ai',

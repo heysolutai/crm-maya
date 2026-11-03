@@ -4,11 +4,11 @@ import { Info, Loader2, RefreshCw, Server, Wrench } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { CardListSkeleton } from '@/components/ui/table-skeleton';
 import { IntegrationCard } from '@/components/integrations/IntegrationCard';
 import { NativeToolsSection } from '@/components/integrations/NativeToolsSection';
 import { useIntegrations } from '@/components/integrations/useIntegrations';
-import { cn } from '@/lib/utils';
 import { McpModePanel } from './McpModePanel';
 import { useToolMode, type ToolModeState } from './useToolMode';
 
@@ -70,11 +70,18 @@ export function ToolsTab({ inboxId, agentId }: Props) {
   const restaurantId = data.restaurantIds.find((r) => r.inboxId === inboxId)?.restaurantId ?? null;
   const variosWhatsApp = data.restaurantIds.length > 1;
 
-  const escolher = (novo: ToolModeState['modo']) => {
+  // Sempre um ligado, nunca os dois: ligar um desliga o outro, e desligar o
+  // que esta ligado liga o outro.
+  const alternar = (m: ToolModeState['modo'], ligar: boolean) => {
+    const novo: ToolModeState['modo'] = ligar ? m : m === 'mcp' ? 'function_calls' : 'mcp';
     if (!estado || novo === estado.modo || !data.canEdit) return;
     trocarModo.mutate(novo, {
       onSuccess: () =>
-        toast.success(novo === 'mcp' ? 'Modo Servidor MCP ligado neste WhatsApp.' : 'Modo ferramentas do CRM ligado neste WhatsApp.'),
+        toast.success(
+          novo === 'mcp'
+            ? 'Servidor MCP ligado neste WhatsApp. As ferramentas do CRM foram desligadas.'
+            : 'Ferramentas do CRM ligadas neste WhatsApp. O servidor MCP foi desligado.'
+        ),
       onError: (e) => toast.error(e.message),
     });
   };
@@ -91,32 +98,30 @@ export function ToolsTab({ inboxId, agentId }: Props) {
       {estado && (
       <div className="space-y-2">
         <p className="text-sm font-medium">Como a IA deste WhatsApp usa ferramentas</p>
-        <div role="radiogroup" aria-label="Como a IA usa ferramentas" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="divide-y divide-border/60 rounded-xl border border-border/60">
           {MODOS.map((m) => (
-            <button
-              key={m.value}
-              type="button"
-              role="radio"
-              aria-checked={modo === m.value}
-              disabled={!data.canEdit || trocarModo.isPending}
-              onClick={() => escolher(m.value)}
-              className={cn(
-                'flex items-start gap-3 rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed',
-                modo === m.value ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border/60 hover:border-primary/40'
-              )}
-            >
+            <div key={m.value} className="flex items-center gap-3 p-3">
               {trocarModo.isPending && trocarModo.variables === m.value ? (
-                <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-primary" />
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
               ) : (
-                <m.icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <m.icon className="h-4 w-4 shrink-0 text-primary" />
               )}
-              <span>
-                <span className="block text-sm font-medium">{m.titulo}</span>
-                <span className="block text-xs text-muted-foreground">{m.dica}</span>
-              </span>
-            </button>
+              <div className="min-w-0 flex-1">
+                <label htmlFor={`modo-ferramentas-${m.value}`} className="block text-sm font-medium">
+                  {m.titulo}
+                </label>
+                <p className="text-xs text-muted-foreground">{m.dica}</p>
+              </div>
+              <Switch
+                id={`modo-ferramentas-${m.value}`}
+                checked={modo === m.value}
+                onCheckedChange={(ligar) => alternar(m.value, ligar)}
+                disabled={!data.canEdit || trocarModo.isPending}
+              />
+            </div>
           ))}
         </div>
+        <p className="text-xs text-muted-foreground">Só um fica ligado por vez: ligar um desliga o outro.</p>
         {modo === 'mcp' && !estado.conexao && (
           <p className="text-xs text-amber-700 dark:text-amber-400">
             Enquanto o servidor não for conectado, a IA deste WhatsApp só consegue transferir para um atendente.

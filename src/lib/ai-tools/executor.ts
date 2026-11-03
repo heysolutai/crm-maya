@@ -6,7 +6,8 @@ import { callIntegration, IntegrationHttpError } from './http'
 import { ErroRpcMcp, mcpChamarFerramenta } from './mcp'
 import { validateArgs } from './params'
 import { runPostActions } from './post-actions'
-import { resolveCompanyTool, type ResolvedTool } from './registry'
+import { resolverAgenteDaConversa } from '@/lib/maestro/agente'
+import { cabeNoModo, resolveCompanyTool, type ResolvedTool } from './registry'
 import { decryptConfig, decryptHeaders } from './secrets'
 import { renderText, renderValue, type TemplateVars } from './template'
 import type { ExecuteResult, ToolContext } from './types'
@@ -267,6 +268,19 @@ export async function executeTool(input: ExecuteInput): Promise<ExecuteResult> {
       result: `A ferramenta "${input.name}" não está disponível. Siga sem ela ou ofereça transferir para um atendente.`,
       error: 'ferramenta inexistente ou desligada',
     })
+  }
+
+  // Um modo por WhatsApp (ferramentas do CRM OU servidor MCP): o n8n com lista
+  // antiga, ou o modelo inventando, nao roda ferramenta do outro modo.
+  if (!input.test && input.conversationId) {
+    const agente = await resolverAgenteDaConversa(input.companyId, input.conversationId)
+    if (!cabeNoModo(tool, agente)) {
+      return registrar({
+        ok: false,
+        result: `A ferramenta "${tool.label}" não está ligada neste WhatsApp. Siga sem ela ou ofereça transferir para um atendente.`,
+        error: `ferramenta fora do modo deste WhatsApp (${agente?.toolMode === 'mcp' ? 'servidor MCP' : 'ferramentas do CRM'})`,
+      })
+    }
   }
 
   const validacao = tool.mcp ? validarArgsMcp(tool.mcp.inputSchema, args) : validateArgs(tool.parameters, args)

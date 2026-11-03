@@ -2,6 +2,7 @@
 
 import { Bell, BellOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -106,15 +107,15 @@ export function PushNotificationsToggle({
           </p>
         </div>
       </div>
-      <Button
-        variant={isSubscribed ? 'outline' : 'default'}
-        size="sm"
-        onClick={handleToggle}
-        disabled={isLoading || permission === 'denied'}
-      >
-        {isLoading && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-        {isSubscribed ? 'Desativar' : 'Ativar'}
-      </Button>
+      <div className="flex items-center gap-2">
+        {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+        <Switch
+          checked={isSubscribed}
+          onCheckedChange={handleToggle}
+          disabled={isLoading || permission === 'denied'}
+          aria-label="Notificações push"
+        />
+      </div>
     </div>
   );
 }

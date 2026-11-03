@@ -20,6 +20,8 @@ export interface AgenteIA {
   name: string | null
   engine: string
   isActive: boolean
+  /** 'function_calls' ou 'mcp': quais ferramentas valem neste WhatsApp. */
+  toolMode: string
   prompts: unknown
   behaviorSettings: unknown
   apiKeys: unknown
@@ -31,6 +33,7 @@ const SELECT_AGENTE = {
   name: true,
   engine: true,
   isActive: true,
+  toolMode: true,
   prompts: true,
   behaviorSettings: true,
   apiKeys: true,
