@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { verifyApiKey } from './api-key-utils'
 import { AuthError } from './errors'
 import { IMPERSONATION_HEADER, isValidCompanyId } from './impersonation'
+import { MCP_ADMIN_HEADER, tokenDoLoopbackConfere } from '@/lib/mcp-crm/token'
 import type { AuthResult } from './types'
 
 /**
@@ -63,6 +64,19 @@ export async function authenticate(req: Request): Promise<AuthResult> {
       companyId,
       isSuperAdmin,
     }
+  }
+
+  // MCP do super-admin (src/lib/mcp-crm/admin.ts): as ferramentas chamam esta
+  // API pelo loopback com MCP_ADMIN_TOKEN e o restaurante da vez no header de
+  // personificacao. Vale como a chave de API daquele restaurante: sem usuario
+  // e sem os poderes de super-admin.
+  const mcpAdmin = req.headers.get(MCP_ADMIN_HEADER)
+  if (mcpAdmin) {
+    const companyId = req.headers.get(IMPERSONATION_HEADER)
+    if (!tokenDoLoopbackConfere(mcpAdmin) || !isValidCompanyId(companyId)) {
+      throw new AuthError('Nao autorizado', 401, 'INVALID_MCP_ADMIN')
+    }
+    return { agentId: null, companyId, isSuperAdmin: false }
   }
 
   // Fallback to API key auth. verifyApiKey resolve por prefixo + hash: a

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { authenticate } from '@/lib/api/auth'
 import { handleApiError } from '@/lib/api/errors'
-import { getNativeTool } from '@/lib/ai-tools/native'
+import { rotulosDasChamadas } from '@/lib/ai-tools/rotulos'
 import { explicarFalhaFerramenta } from '@/lib/erros/ferramentas'
 
 /**
@@ -79,23 +79,7 @@ export async function GET(req: NextRequest) {
       }),
     ])
 
-    // Nome amigavel: nativa (codigo) ou IntegrationTool.label (catalogo global),
-    // e o nome do sistema externo (Integration.name) pra explicar a falha.
-    const nomesIntegracao = [...new Set(toolCalls.map((t) => t.toolName).filter((n) => !getNativeTool(n)))]
-    const idsIntegracao = [...new Set(toolCalls.map((t) => t.integrationId).filter((id): id is string => !!id))]
-    const [ferramentas, integracoes] = await Promise.all([
-      nomesIntegracao.length
-        ? prisma.integrationTool.findMany({
-            where: { name: { in: nomesIntegracao } },
-            select: { name: true, label: true },
-          })
-        : Promise.resolve([]),
-      idsIntegracao.length
-        ? prisma.integration.findMany({ where: { id: { in: idsIntegracao } }, select: { id: true, name: true } })
-        : Promise.resolve([]),
-    ])
-    const labelPorNome = new Map(ferramentas.map((f) => [f.name, f.label]))
-    const sistemaPorId = new Map(integracoes.map((i) => [i.id, i.name]))
+    const rotulos = await rotulosDasChamadas(toolCalls)
     const superAdmin = auth.isSuperAdmin === true
 
     const messageIds = logs.map((l) => l.messageId).filter((id): id is string => !!id)
@@ -110,8 +94,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       threadId: conversation.aiThreadId,
       toolCalls: toolCalls.map((t) => {
-        const label = getNativeTool(t.toolName)?.label ?? labelPorNome.get(t.toolName) ?? t.toolName
-        const sistema = t.integrationId ? sistemaPorId.get(t.integrationId) ?? null : null
+        const label = rotulos.label(t)
+        const sistema = rotulos.sistema(t)
         return {
           id: t.id,
           toolName: t.toolName,

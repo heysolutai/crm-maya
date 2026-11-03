@@ -630,6 +630,8 @@ export function useConversations(filters?: ConversationFilters) {
           // "Abrir execucao" pra ultima execucao, sem refetch da lista.
           queryClient.invalidateQueries({ queryKey: ['execution-logs', data.conversationId] });
           queryClient.invalidateQueries({ queryKey: ['ai-turns', data.conversationId] });
+          // Ferramenta que a IA acabou de usar aparece no meio do chat.
+          queryClient.invalidateQueries({ queryKey: ['ai-tool-calls', data.conversationId] });
           if (typeof data.executionUrl === 'string') {
             updateConversationInCache(data.conversationId, (conv) => ({
               ...conv,
@@ -1034,6 +1036,8 @@ export function useConversations(filters?: ConversationFilters) {
 
       const { data, error } = await invokeFn('send-message-text', payload);
       if (error) throw error;
+      // Numero sem WhatsApp volta 200 com success:false (pro n8n nao quebrar).
+      if (data?.success === false) throw data.motivo || data.message;
       return data;
     },
     onMutate: async ({ conversationId, messageText }) => {
@@ -1306,6 +1310,7 @@ export function useConversations(filters?: ConversationFilters) {
         fileSize, mimeType, conversationId, fromAI: false,
       });
       if (error) throw error;
+      if (data?.success === false) throw data.motivo || data.error;
       return data;
     },
     onMutate: async ({ conversationId, mediaType, fileName }) => {
@@ -1387,6 +1392,7 @@ export function useConversations(filters?: ConversationFilters) {
           phone: target.client.phone,
         });
         if (error) throw error;
+        if (data?.success === false) throw data.motivo || data.message;
         return data;
       }
 
@@ -1413,6 +1419,7 @@ export function useConversations(filters?: ConversationFilters) {
         fromAI: false,
       });
       if (error) throw error;
+      if (data?.success === false) throw data.motivo || data.error;
       return data;
     },
     onSuccess: () => {

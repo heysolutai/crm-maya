@@ -46,9 +46,18 @@ function ResultadoTeste({ teste }: { teste: IntegrationLastTest | null }) {
     );
   }
   return (
-    <div className="flex items-start gap-1.5 rounded-md bg-destructive/10 p-2 text-sm text-destructive">
-      <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
-      <span>{teste.error || 'O último teste não deu certo.'}</span>
+    <div className="space-y-1.5 rounded-md bg-destructive/10 p-2 text-sm text-destructive">
+      <p className="flex items-start gap-1.5">
+        <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>{teste.error || 'O último teste não deu certo.'}</span>
+      </p>
+      {/* Só o super-admin recebe: o erro técnico, pra corrigir sem ir no banco. */}
+      {teste.detalhe && (
+        <p className="flex items-start gap-1.5 border-t border-destructive/20 pt-1.5 text-xs text-muted-foreground">
+          <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 break-all font-mono">{teste.detalhe}</span>
+        </p>
+      )}
     </div>
   );
 }
@@ -212,7 +221,7 @@ export function IntegrationCard({ integration, inbox, canEdit }: Props) {
   // Resultado do teste que acabou de rodar vale até a lista recarregar.
   const ultimoTeste: IntegrationLastTest | null =
     test.data && (!integration.lastTest || test.data.at >= integration.lastTest.at)
-      ? { at: test.data.at, ok: test.data.ok, error: test.data.ok ? null : test.data.message }
+      ? { at: test.data.at, ok: test.data.ok, error: test.data.ok ? null : test.data.message, detalhe: test.data.detalhe }
       : integration.lastTest;
 
   const switchId = `integration-${integration.id}`;

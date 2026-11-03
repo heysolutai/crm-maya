@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { handleApiError } from '@/lib/api/errors'
+import { agoraSaoPaulo } from '@/lib/ai-tools/context'
+import { parseParams, validateArgs } from '@/lib/ai-tools/params'
 import { mergeHeaders } from '@/lib/ai-tools/secrets'
+import { renderValue } from '@/lib/ai-tools/template'
 import {
   integrationAsInput,
   integrationInclude,
@@ -81,6 +84,23 @@ export async function PUT(req: NextRequest, { params }: Params) {
         { error: 'A ferramenta de teste precisa ser uma ferramenta desta integração.' },
         { status: 400 }
       )
+    }
+
+    // Teste que nunca passa quebra o botao de todos os restaurantes (ex:
+    // "Consultar reservas" pede o codigo de uma reserva que o teste nao tem).
+    // Mesma checagem que o botao faz antes de chamar o sistema.
+    const testTool = testToolName ? current.tools.find((t) => t.name === testToolName) : null
+    if (testTool && testTool.method !== 'MCP') {
+      const args = renderValue(input.testArgs ?? {}, { agora: agoraSaoPaulo() })
+      const checagem = validateArgs(parseParams(testTool.parameters), args)
+      if (!checagem.ok) {
+        return NextResponse.json(
+          {
+            error: `O teste não roda com "${testTool.label}": ${checagem.problems.join('; ')}. Escolha uma ferramenta que não dependa de dado do cliente (ex.: horários disponíveis) ou corrija os argumentos do teste.`,
+          },
+          { status: 400 }
+        )
+      }
     }
 
     const updated = await prisma.integration.update({

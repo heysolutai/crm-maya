@@ -19,6 +19,7 @@ import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { useInboxes } from '@/hooks/useInboxes';
 import { useDepartmentQueue } from '@/hooks/useDepartmentQueue';
 import { usePresenceContext } from '@/hooks/usePresence';
+import { useAiToolCalls } from '@/hooks/useAiToolCalls';
 import { MessageCircle, Loader2, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -30,6 +31,8 @@ import { periodStart, type PeriodFilter } from '@/components/conversations/Conve
 import { ConversationHeader } from '@/components/conversations/ConversationHeader';
 import { MessageBubble } from '@/components/conversations/MessageBubble';
 import { NoteBubble } from '@/components/conversations/NoteBubble';
+import { FerramentasBubble } from '@/components/conversations/FerramentasBubble';
+import { intercalarFerramentas } from '@/components/conversations/ferramentas';
 import { MessageInput } from '@/components/conversations/MessageInputArea';
 import { TypingIndicator } from '@/components/conversations/TypingIndicator';
 import { TagManager } from '@/components/conversations/TagManager';
@@ -163,6 +166,13 @@ export default function Conversations() {
   const hasMoreMessages = messagesState?.hasMore || false;
   const initialLoaded = messagesState?.initialLoaded || false;
 
+  // O que o chat desenha: mensagens + ferramentas que a IA usou, na ordem em que aconteceram.
+  const { data: chamadasDaIA } = useAiToolCalls(selectedConversation);
+  const itensDoChat = useMemo(
+    () => intercalarFerramentas(messages, chamadasDaIA, hasMoreMessages),
+    [messages, chamadasDaIA, hasMoreMessages]
+  );
+
   // Batch reactions: ONE query for all visible messages
   const messageIds = useMemo(
     () => messages.filter((m: any) => !m._isNote).map((m: Message) => m.id),
@@ -215,7 +225,8 @@ export default function Conversations() {
     registerUserInteraction,
   } = useConversationScroll({
     selectedConversation,
-    messages,
+    // Itens do chat (não só mensagens): ferramenta nova no fim também desce a tela.
+    messages: itensDoChat,
     isLoadingMessages,
     hasMoreMessages,
     initialLoaded,
@@ -481,16 +492,16 @@ export default function Conversations() {
   // Pre-calculado uma vez por render do array de mensagens: evita O(n) em CADA
   // <MessageBubble>. Antes, isFirstInGroup(idx) era chamado 500x por re-render.
   const firstInGroupFlags = useMemo(() => {
-    const flags = new Array(messages.length);
-    for (let i = 0; i < messages.length; i++) {
+    const flags = new Array(itensDoChat.length);
+    for (let i = 0; i < itensDoChat.length; i++) {
       if (i === 0) {
         flags[i] = true;
       } else {
-        flags[i] = messages[i].sender_type !== messages[i - 1].sender_type;
+        flags[i] = itensDoChat[i].sender_type !== itensDoChat[i - 1].sender_type;
       }
     }
     return flags;
-  }, [messages]);
+  }, [itensDoChat]);
 
   // Callbacks estaveis pros MessageBubble nao re-renderizarem em cascata.
   // Antes, arrow inline criava nova funcao a cada render -> memo do MessageBubble
@@ -519,11 +530,11 @@ export default function Conversations() {
   // - estimateSize: 90px (chute razoavel pra texto curto); medidas reais
   //   substituem quando o item entra em vista via measureElement.
   const virtualizer = useVirtualizer({
-    count: messages.length,
+    count: itensDoChat.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: () => 90,
     overscan: 8,
-    getItemKey: (idx) => (messages[idx] as any)?.id ?? idx,
+    getItemKey: (idx) => (itensDoChat[idx] as any)?.id ?? idx,
   });
 
   // scrollToMessage virtualizer-aware: encontra index, scroll, depois highlight.
@@ -531,7 +542,7 @@ export default function Conversations() {
   // no DOM por causa da virtualizacao).
   const handleScrollToMessage = useCallback(
     (messageId: string) => {
-      const idx = messages.findIndex((m: any) => m.id === messageId);
+      const idx = itensDoChat.findIndex((m: any) => m.id === messageId);
       if (idx === -1) return;
       virtualizer.scrollToIndex(idx, { align: 'center', behavior: 'smooth' });
       // Esperar item renderizar antes de highlight
@@ -545,7 +556,7 @@ export default function Conversations() {
         }
       }, 300);
     },
-    [messages, virtualizer],
+    [itensDoChat, virtualizer],
   );
 
   // Props do painel de informacoes — as mesmas na barra (desktop) e na gaveta (celular).
@@ -713,7 +724,7 @@ export default function Conversations() {
                     }}
                   >
                     {virtualizer.getVirtualItems().map((virtualRow) => {
-                      const msg = messages[virtualRow.index] as Message | any;
+                      const msg = itensDoChat[virtualRow.index] as Message | any;
                       if (!msg) return null;
 
                       return (
@@ -733,6 +744,8 @@ export default function Conversations() {
                         >
                           {msg._isNote ? (
                             <NoteBubble note={msg} />
+                          ) : msg._isFerramentas ? (
+                            <FerramentasBubble grupo={msg} />
                           ) : (
                             <MessageBubble
                               message={msg}

@@ -2,25 +2,13 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  AlertCircle,
-  Check,
-  CheckCircle2,
-  Clock,
-  Copy,
-  ExternalLink,
-  Loader2,
-  Info,
-  Settings2,
-  Wrench,
-  XCircle,
-} from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, Clock, Copy, ExternalLink, Loader2, Settings2, Wrench } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { apiFetch } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
-import type { FalhaFerramentaExplicada } from '@/lib/erros/ferramentas';
 import { DecisoesDaIA } from './DecisoesDaIA';
+import { estadoDaAcao, resumoArgumentos, type ChamadaFerramenta } from './ferramentas';
 
 /**
  * Aba "Logs da IA". No topo, "Decisoes da IA" (./DecisoesDaIA): o que a IA
@@ -35,24 +23,16 @@ import { DecisoesDaIA } from './DecisoesDaIA';
  * palavras simples (src/lib/erros/ferramentas.ts). Erro cru so pro super-admin.
  */
 
-interface ToolCallItem {
-  id: string;
-  toolName: string;
-  label: string;
+interface ToolCallItem extends ChamadaFerramenta {
   /** Sistema externo (ex.: Reserve Maya); null = ferramenta do CRM. */
   sistema?: string | null;
   source: string;
-  ok: boolean;
-  /** Falha em palavras simples (null quando deu certo). */
-  explicacao?: FalhaFerramentaExplicada | null;
   result: string | null;
   /** Texto técnico: só vem para o super-admin. */
   error: string | null;
-  arguments: unknown;
   durationMs: number | null;
   httpStatus: number | null;
   runId: string | null;
-  createdAt: string;
 }
 
 interface ExecutionLogItem {
@@ -134,36 +114,6 @@ function IdCopiavel({ rotulo, valor }: { rotulo: string; valor: string }) {
 function formatarDuracao(ms: number): string {
   if (ms < 1000) return `${ms} ms`;
   return `${(ms / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s`;
-}
-
-/** Argumentos em uma linha: "date: 2026-10-08 · people: 2". */
-function resumoArgumentos(args: unknown): string {
-  if (!args || typeof args !== 'object' || Array.isArray(args)) return '';
-  const texto = Object.entries(args as Record<string, unknown>)
-    .filter(([, v]) => v !== null && v !== undefined && v !== '')
-    .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
-    .join(' · ');
-  return texto.length > 300 ? `${texto.slice(0, 300)}…` : texto;
-}
-
-/** Cor e rótulo de cada ação, pelo resultado. */
-function estadoDaAcao(call: ToolCallItem): { rotulo: string; icone: typeof Info; classe: string; caixa: string } {
-  if (call.ok) {
-    return { rotulo: 'Deu certo', icone: CheckCircle2, classe: 'text-emerald-600 dark:text-emerald-400', caixa: '' };
-  }
-  const nivel = call.explicacao?.nivel ?? 'problema';
-  if (nivel === 'normal') {
-    return { rotulo: 'Não feito', icone: Info, classe: 'text-muted-foreground', caixa: 'bg-muted/30' };
-  }
-  if (nivel === 'aviso') {
-    return {
-      rotulo: 'Atenção',
-      icone: AlertCircle,
-      classe: 'text-amber-600 dark:text-amber-400',
-      caixa: 'border-amber-500/40 bg-amber-500/5',
-    };
-  }
-  return { rotulo: 'Falhou', icone: XCircle, classe: 'text-destructive', caixa: 'border-destructive/40 bg-destructive/5' };
 }
 
 function AcaoRow({ call, superAdmin }: { call: ToolCallItem; superAdmin: boolean }) {

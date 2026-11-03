@@ -37,7 +37,8 @@ export interface IntegrationState {
   hasTest: boolean
   /** Alguma ferramenta usa o ID do restaurante da conexão (caixa de entrada). */
   needsRestaurantId: boolean
-  lastTest: { at: string; ok: boolean; error: string | null } | null
+  /** `detalhe`: erro tecnico do teste, so pro super-admin corrigir. */
+  lastTest: { at: string; ok: boolean; error: string | null; detalhe?: string } | null
   /** Falha da IA com esta integração nas últimas 24h que ainda não voltou. */
   problemaRecente: ProblemaRecente | null
   /** De onde vem a configuração (catálogo do super-admin). Só vai para o super-admin. */
@@ -135,6 +136,9 @@ export function friendlyTestMessage(
   // explicacao fala de cliente/atendimento.
   const e = explicarFalhaFerramenta({ error, sistema })
   switch (e.codigo) {
+    // No teste nao ha cliente: faltar dado e erro de configuracao do teste no catalogo.
+    case 'faltou_dado':
+      return 'O teste desta integração está configurado errado: ele pede um dado que só existe numa conversa. Fale com o suporte.'
     case 'recusado':
       return 'O sistema respondeu, mas recusou o teste. Confira se o "ID do restaurante" deste WhatsApp está certo. Se continuar, fale com o suporte.'
     case 'fora_do_ar':
@@ -276,6 +280,7 @@ export async function loadIntegrationsState(
               at: ci.lastTestAt.toISOString(),
               ok: ci.lastTestOk === true,
               error: ci.lastTestOk === true ? null : friendlyTestMessage(false, ci.lastError, fields, i.name),
+              ...(superAdmin && ci.lastTestOk !== true && ci.lastError ? { detalhe: ci.lastError } : {}),
             }
           : null,
         problemaRecente: ci?.enabled ? problemas.get(i.id) ?? null : null,

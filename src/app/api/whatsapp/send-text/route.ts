@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 import { authenticate } from '@/lib/api/auth';
 import { getWhatsAppInstance, findOrCreateConversation, saveMessage, getUAZMessageId, getClientPhoneByConversationId } from '@/lib/api/database';
 import { sendToWhatsApp, marcarFalhaEnvio } from '@/lib/api/whatsapp';
-import { explicarFalhaEnvio } from '@/lib/erros/envio';
+import { explicarFalhaEnvio, type FalhaExplicada } from '@/lib/erros/envio';
 import { validateTextPayload } from '@/lib/api/utils';
 import { handleCors, jsonResponse, errorResponse } from '@/lib/api/cors';
 import { handleApiErrorCors } from '@/lib/api/errors'
@@ -15,6 +15,18 @@ import { checarEnvioDaIA, marcarRespondido, registrarBloqueio } from '@/lib/ai/t
 
 const apiError = (message: string, errorCode: string, status: number, extra?: Record<string, unknown>) =>
   jsonResponse({ success: false, error: errorCode, message, ...extra }, status);
+
+// Numero sem WhatsApp nao e falha do sistema: o WhatsApp recusou o destinatario.
+// Responde 200 com success:false e o motivo, pro fluxo do n8n seguir em vez de
+// quebrar com "Bad gateway". As demais falhas continuam como erro.
+const falhaDeEnvio = (falha: FalhaExplicada, messageId: string, errorCode: string, status: number) => {
+  const numeroSemWhatsApp = falha.codigo === 'numero_invalido';
+  return apiError(falha.motivo, numeroSemWhatsApp ? 'PHONE_NOT_ON_WHATSAPP' : errorCode, numeroSemWhatsApp ? 200 : status, {
+    message_id: messageId,
+    motivo: falha.motivo,
+    o_que_fazer: falha.oQueFazer,
+  });
+};
 
 const sendTextSchema = z.object({
   conversationId: z.string().uuid().optional(),
@@ -180,12 +192,7 @@ export async function POST(req: NextRequest) {
           // Texto cru fica na mensagem (o super-admin ve); quem chamou recebe
           // a explicacao em portugues simples.
           const raw = await marcarFalhaEnvio(message.id, sendErr, { companyId });
-          const falha = explicarFalhaEnvio(raw);
-          return apiError(falha.motivo, 'ADAPTER_SEND_FAILED', 502, {
-            message_id: message.id,
-            motivo: falha.motivo,
-            o_que_fazer: falha.oQueFazer,
-          });
+          return falhaDeEnvio(explicarFalhaEnvio(raw), message.id, 'ADAPTER_SEND_FAILED', 502);
         }
       }
     }
@@ -233,14 +240,7 @@ export async function POST(req: NextRequest) {
 
     console.log('[send-message-text] Total time:', Date.now() - t0, 'ms');
 
-    if (!success) {
-      const falha = explicarFalhaEnvio(error);
-      return apiError(falha.motivo, 'WHATSAPP_SEND_FAILED', 500, {
-        message_id: message.id,
-        motivo: falha.motivo,
-        o_que_fazer: falha.oQueFazer,
-      });
-    }
+    if (!success) return falhaDeEnvio(explicarFalhaEnvio(error), message.id, 'WHATSAPP_SEND_FAILED', 500);
 
     if (payload.fromAI) await marcarRespondido(companyId, conversationId, payload.message);
 

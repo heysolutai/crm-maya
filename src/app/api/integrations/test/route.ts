@@ -113,6 +113,8 @@ export async function POST(req: NextRequest) {
       ok,
       message: friendlyTestMessage(ok, error, parseConfigFields(integration.configFields), integration.name),
       at: at.toISOString(),
+      // Super-admin ve o erro tecnico na tela pra corrigir; o restaurante, so a frase.
+      ...(auth.isSuperAdmin && error ? { detalhe: error } : {}),
     })
   } catch (error) {
     return handleApiError(error, 'Erro ao testar integracao')

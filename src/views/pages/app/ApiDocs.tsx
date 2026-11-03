@@ -286,6 +286,7 @@ Accept: application/json`}
   "sender_type": "agent"
 }`}
                 errors={[
+                  { code: 'PHONE_NOT_ON_WHATSAPP', status: 200, message: 'O número não tem WhatsApp: vem com success=false, motivo e o_que_fazer (o fluxo não quebra)' },
                   { code: 'AI_PAUSED', status: 409, message: 'fromAI=true com a IA pausada para o cliente: resposta não enviada (vem com paused_until)' },
                   { code: 'UNAUTHORIZED', status: 401, message: 'Token inválido ou não fornecido' },
                   { code: 'MISSING_FIELDS', status: 400, message: 'phone ou conversationId e message são obrigatórios' },
@@ -328,6 +329,7 @@ Accept: application/json`}
   "media_type": "image"
 }`}
                 errors={[
+                  { code: 'PHONE_NOT_ON_WHATSAPP', status: 200, message: 'O número não tem WhatsApp: vem com success=false, motivo e o_que_fazer (o fluxo não quebra)' },
                   { code: 'UNAUTHORIZED', status: 401, message: 'Token inválido' },
                   { code: 'MISSING_FIELDS', status: 400, message: 'file e type são obrigatórios' },
                 ]}

@@ -17,7 +17,8 @@ import type { ItemSituacao } from '@/components/situacao/types'
  *
  * Regras: so contagens e campos pequenos (roda a cada minuto por tela aberta);
  * tudo escopado por companyId; nenhuma devolve segredo (chave da IA, URL do
- * fluxo). Detalhe tecnico so vai em `tecnico`, e so pro super-admin.
+ * fluxo). Texto e pro cliente final: conexao pelo nome, nunca ID nem nome de
+ * campo interno.
  */
 
 const DIA_MS = 24 * 60 * 60 * 1000
@@ -46,30 +47,24 @@ export interface Contexto {
   companyId: string
   /** WhatsApp verificados: o pedido (inboxId) ou todos os ativos. */
   inboxes: InboxVerificada[]
-  /** Painel de UM WhatsApp (aba Agente de IA): textos falam "deste WhatsApp". */
+  /** Painel de UMA conexao (aba Agente de IA): textos falam "desta conexão". */
   inboxUnica: string | null
-  superAdmin: boolean
 }
 
 export type Verificacao = (ctx: Contexto) => Promise<ItemSituacao[]>
 
-/** "WhatsApp Loja Centro"; sem repetir quando o nome ja comeca com WhatsApp. */
-function whatsappNomeado(inbox: InboxVerificada): string {
-  const nome = nomeDa(inbox)
-  return /^whats\s?app/i.test(nome) ? nome : `WhatsApp ${nome}`
+/** Conexão "Loja Centro": o nome que o restaurante deu. */
+function conexaoNomeada(inbox: InboxVerificada): string {
+  return `conexão "${inbox.displayName?.trim() || inbox.instanceName}"`
 }
 
-function nomeDa(inbox: InboxVerificada): string {
-  return inbox.displayName?.trim() || inbox.instanceName
+/** "desta conexão" na tela da propria conexao; 'da conexão "Fulano"' no Dashboard. */
+function daConexao(ctx: Contexto, inbox: InboxVerificada): string {
+  return ctx.inboxUnica ? 'desta conexão' : `da ${conexaoNomeada(inbox)}`
 }
 
-/** "deste WhatsApp" na tela do proprio WhatsApp; "do WhatsApp Fulano" no Dashboard. */
-function doWhatsApp(ctx: Contexto, inbox: InboxVerificada): string {
-  return ctx.inboxUnica ? 'deste WhatsApp' : `do ${whatsappNomeado(inbox)}`
-}
-
-function tecnico(ctx: Contexto, texto: string): { tecnico?: string } {
-  return ctx.superAdmin ? { tecnico: texto.slice(0, 500) } : {}
+function maiuscula(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 function plural(n: number, um: string, varios: string): string {
@@ -85,17 +80,16 @@ const conexao: Verificacao = async (ctx) =>
     .filter((inbox) => inbox.status !== 'connected')
     .map((inbox) => {
       const e = explicarErroConexao(inbox.errorMessage)
-      const motivo = inbox.errorMessage?.trim() ? e.motivo : 'Este WhatsApp não está conectado ao sistema.'
+      const motivo = inbox.errorMessage?.trim() ? e.motivo : 'O WhatsApp não está ligado ao sistema.'
       return {
         id: `conexao:${inbox.id}`,
         nivel: 'problema' as const,
-        titulo: `O ${whatsappNomeado(inbox)} está desconectado`,
-        detalhe: `${motivo} Enquanto isso, as mensagens dos clientes não chegam e a IA não responde por ele.`,
+        titulo: `${maiuscula(conexaoNomeada(inbox))} desconectada`,
+        detalhe: `${motivo} Enquanto isso, as mensagens dos clientes não chegam e a IA não responde por ela.`,
         oQueFazer: inbox.errorMessage?.trim()
           ? e.oQueFazer
-          : 'Abra este WhatsApp em Conexões e conecte de novo (QR Code ou botão Conectar).',
+          : `Abra a ${conexaoNomeada(inbox)} em Conexões e conecte de novo (QR Code ou botão Conectar).`,
         acao: { label: 'Conectar', href: `/app/inboxes/${inbox.id}` },
-        ...tecnico(ctx, `status=${inbox.status ?? 'null'}; erro=${inbox.errorMessage ?? '-'}`),
       }
     })
 
@@ -135,17 +129,16 @@ const agente: Verificacao = async (ctx) => {
   const itens: ItemSituacao[] = []
   for (const inbox of ctx.inboxes) {
     const a = inbox.aiAgentId ? porId.get(inbox.aiAgentId) ?? null : padrao
-    const de = doWhatsApp(ctx, inbox)
+    const de = daConexao(ctx, inbox)
 
     if (a && !a.isActive) {
       itens.push({
         id: `ia_desligada:${inbox.id}`,
         nivel: 'aviso',
         titulo: `A IA ${de} está desligada`,
-        detalhe: 'A IA não responde os clientes deste WhatsApp: só a equipe atende.',
-        oQueFazer: 'Se a IA deveria estar atendendo, ligue a chave "IA atendendo" no topo da aba "Agente de IA" deste WhatsApp.',
+        detalhe: 'A IA não responde os clientes desta conexão: só a equipe atende.',
+        oQueFazer: 'Se a IA deveria estar atendendo, ligue a chave "IA atendendo" no topo da aba "Agente de IA" desta conexão.',
         acao: { label: 'Ligar a IA', href: `/app/inboxes/${inbox.id}` },
-        ...tecnico(ctx, `agente=${a.id} (${a.name ?? 'sem nome'}) isActive=false engine=${a.engine}`),
       })
       continue
     }
@@ -161,7 +154,6 @@ const agente: Verificacao = async (ctx) => {
           detalhe: 'O serviço de IA não está liberado para este restaurante. Os clientes que escrevem ficam sem resposta da IA.',
           oQueFazer: 'Fale com o suporte para liberar o acesso da IA. Enquanto isso, responda os clientes pela tela de Atendimentos.',
           acao: SUPORTE,
-          ...tecnico(ctx, `agente=${a.id} engine=maestro: sem apiKeys.openai no agente e sem default_openai_api_key`),
         })
       }
       continue
@@ -174,15 +166,9 @@ const agente: Verificacao = async (ctx) => {
         id: `ia_nao_ligada:${inbox.id}`,
         nivel: 'problema',
         titulo: `A IA ${de} não está ligada`,
-        detalhe: 'A IA ainda não foi ativada para este WhatsApp, então ela não responde os clientes.',
-        oQueFazer: 'Fale com o suporte para ligar a IA neste WhatsApp. Enquanto isso, responda os clientes pela tela de Atendimentos.',
+        detalhe: 'A IA ainda não foi ativada para esta conexão, então ela não responde os clientes.',
+        oQueFazer: 'Fale com o suporte para ligar a IA nesta conexão. Enquanto isso, responda os clientes pela tela de Atendimentos.',
         acao: SUPORTE,
-        ...tecnico(
-          ctx,
-          a
-            ? `agente=${a.id} engine=${a.engine}: sem n8nWebhookUrl e sem n8n_ai_webhook_url`
-            : 'nenhum agente de IA no restaurante e sem n8n_ai_webhook_url'
-        ),
       })
     }
   }
@@ -228,7 +214,6 @@ const respostasDaIA: Verificacao = async (ctx) => {
       detalhe: 'A IA tentou responder, mas algo deu errado. Esses clientes podem estar esperando uma resposta.',
       oQueFazer: 'Veja quais foram e responda quem ainda está esperando. Se continuar acontecendo, fale com o suporte.',
       acao,
-      ...tecnico(ctx, `ai_turns status=erro nas ultimas 24h: ${erros}`),
     })
   }
   if (semResposta > 0) {
@@ -239,7 +224,6 @@ const respostasDaIA: Verificacao = async (ctx) => {
       detalhe: 'Nas últimas 24 horas, a IA recebeu essas mensagens, mas não respondeu em 10 minutos.',
       oQueFazer: 'Veja quais foram e responda quem ainda está esperando. Se continuar acontecendo, fale com o suporte.',
       acao,
-      ...tecnico(ctx, `ai_turns status=enviado ha mais de 10 min (ultimas 24h): ${semResposta}`),
     })
   }
   return itens
@@ -273,23 +257,6 @@ const entregas: Verificacao = async (ctx) => {
   const total = Number(linhas[0]?.total ?? 0)
   if (total === 0) return []
 
-  let detalheTecnico = `mensagens enviadas com falha nas ultimas 24h: ${total}`
-  if (ctx.superAdmin) {
-    const ultima = await prisma.$queryRaw<{ erro: string | null }[]>(Prisma.sql`
-      SELECT COALESCE(NULLIF(m.metadata->>'send_error', ''), NULLIF(m.metadata->>'whatsapp_error', ''), m.read_status) AS erro
-      FROM messages m
-      JOIN conversations c ON c.id = m.conversation_id
-      WHERE c.company_id = ${ctx.companyId}::uuid
-        AND m.created_at >= ${desde}
-        AND m.sender_type <> 'client'
-        AND ${falhou}
-        ${filtroInbox}
-      ORDER BY m.created_at DESC
-      LIMIT 1
-    `)
-    if (ultima[0]?.erro) detalheTecnico += `; ultima: ${ultima[0].erro}`
-  }
-
   return [
     {
       id: 'envio_falhou_24h',
@@ -297,9 +264,8 @@ const entregas: Verificacao = async (ctx) => {
       titulo: plural(total, '1 mensagem não foi entregue ao cliente', '# mensagens não foram entregues aos clientes'),
       detalhe: 'Nas últimas 24 horas, essas mensagens não saíram pelo WhatsApp, então os clientes não receberam.',
       oQueFazer:
-        'Abra as conversas, procure as mensagens marcadas como não entregues e envie de novo. Se continuar, confira se o WhatsApp está conectado.',
+        'Abra as conversas, procure as mensagens marcadas como não entregues e envie de novo. Se continuar, confira se a conexão está conectada.',
       acao: { label: 'Ver conversas', href: '/app/conversations' },
-      ...tecnico(ctx, detalheTecnico),
     },
   ]
 }
@@ -331,7 +297,7 @@ const integracoes: Verificacao = async (ctx) => {
 
   const itens: ItemSituacao[] = []
   const usamIdDoRestaurante: string[] = []
-  // Onde o restaurante confere e testa: Agente de IA > Ferramentas de um WhatsApp.
+  // Onde o restaurante confere e testa: Agente de IA > Ferramentas de uma conexao.
   const ondeTestar = ctx.inboxes[0] ? `/app/inboxes/${ctx.inboxes[0].id}` : '/app/inboxes'
 
   for (const ci of ativas) {
@@ -352,9 +318,8 @@ const integracoes: Verificacao = async (ctx) => {
         titulo: `O último teste da ${ci.integration.name} falhou`,
         detalhe: friendlyTestMessage(false, ci.lastError, parseConfigFields(ci.integration.configFields), ci.integration.name),
         oQueFazer:
-          'Em "Agente de IA" > "Ferramentas" do WhatsApp, corrija o que faltar e clique em "Testar conexão" de novo. Se continuar falhando, fale com o suporte.',
+          'Em "Agente de IA" > "Ferramentas" da conexão, corrija o que faltar e clique em "Testar conexão" de novo. Se continuar falhando, fale com o suporte.',
         acao: { label: 'Abrir', href: ondeTestar },
-        ...tecnico(ctx, `last_error: ${ci.lastError ?? '-'}`),
       })
     }
   }
@@ -366,12 +331,10 @@ const integracoes: Verificacao = async (ctx) => {
       itens.unshift({
         id: `integracao_sem_id:${inbox.id}`,
         nivel: 'problema',
-        titulo: `Falta o ID do restaurante no ${whatsappNomeado(inbox)}`,
-        detalhe: `Sem esse número, a IA não consegue usar ${nomes} com os clientes deste WhatsApp.`,
-        oQueFazer:
-          'Abra este WhatsApp, vá em "Agente de IA" > "Ferramentas" e preencha o campo "ID do restaurante deste WhatsApp". Se não souber o número, fale com o suporte.',
+        titulo: `${maiuscula(conexaoNomeada(inbox))} sem o ID do restaurante`,
+        detalhe: `Sem esse número, a IA não consegue usar ${nomes} com os clientes desta conexão.`,
+        oQueFazer: `Abra a ${conexaoNomeada(inbox)}, vá em "Agente de IA" > "Ferramentas" e preencha o campo "ID do restaurante deste WhatsApp". Se não souber o número, fale com o suporte.`,
         acao: { label: 'Preencher', href: `/app/inboxes/${inbox.id}` },
-        ...tecnico(ctx, `channelConfig.restaurantId vazio; integracoes que usam: ${nomes}`),
       })
     }
   }
@@ -413,10 +376,6 @@ const ferramentas: Verificacao = async (ctx) => {
       detalhe: `${e.motivo}${acoes} Última vez: ${quandoFoi(g.ultimaEm)}.`,
       oQueFazer: e.oQueFazer ?? 'Não precisa fazer nada.',
       acao,
-      ...tecnico(
-        ctx,
-        `ferramenta=${g.tecnico.ferramenta} http=${g.tecnico.httpStatus ?? '-'} erro=${g.tecnico.erro ?? '-'}`
-      ),
     })
   }
   return itens
@@ -450,12 +409,11 @@ const eventos: Verificacao = async (ctx) => {
     {
       id: 'eventos_sem_cadastro',
       nivel: 'aviso',
-      titulo: 'Os eventos estão ligados para a IA, mas não há nenhum evento cadastrado',
-      detalhe: 'Se um cliente perguntar sobre eventos, a IA vai responder que não há nenhum.',
+      titulo: 'Nenhum próximo evento cadastrado',
+      detalhe: 'Os eventos estão ligados para a IA, mas se um cliente perguntar, ela vai responder que não há nenhum.',
       oQueFazer:
         'Cadastre os próximos eventos do restaurante. Se não tiver eventos agora, desligue as opções de eventos em "Agente de IA" > "Ferramentas".',
       acao: { label: 'Cadastrar evento', href: '/app/events' },
-      ...tecnico(ctx, `ferramentas de evento ligadas: ${ligadas.filter((n) => FERRAMENTAS_EVENTO.includes(n)).join(', ')}`),
     },
   ]
 }

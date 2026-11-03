@@ -51,6 +51,11 @@ const ALL = '__todos__';
 const CUSTOM = '__personalizado__';
 const NONE = '__nenhuma__';
 
+/** Texto obrigatório sem lista de opções (código da reserva, nome...): só existe numa conversa, o teste não tem. */
+function pedeDadoDoCliente(params: AdminTool['parameters']): boolean {
+  return params.some((p) => p.required && p.type === 'string' && !p.enum?.length);
+}
+
 interface IntegrationForm {
   name: string;
   slug: string;
@@ -728,7 +733,8 @@ export default function IntegrationEditor() {
                       <SelectItem value={NONE}>Nenhuma</SelectItem>
                       {tools.map((t) => (
                         <SelectItem key={t.id} value={t.name}>
-                          {t.label} ({t.name}){t.isWrite ? ' · altera dados' : ' · recomendado'}
+                          {t.label} ({t.name})
+                          {t.isWrite ? ' · altera dados' : pedeDadoDoCliente(t.parameters) ? ' · pede dado do cliente' : ' · recomendado'}
                         </SelectItem>
                       ))}
                     </SelectContent>

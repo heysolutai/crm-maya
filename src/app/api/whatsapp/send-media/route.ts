@@ -177,8 +177,17 @@ export async function POST(req: NextRequest) {
 
     if (!success) {
       // Texto cru ja ficou na mensagem (send_error); aqui so a explicacao simples.
+      // Numero sem WhatsApp nao e falha do sistema: 200 pro fluxo seguir (ver send-text).
       const falha = explicarFalhaEnvio(error);
-      return jsonResponse({ success: false, message_id: message.id, error: falha.motivo, motivo: falha.motivo, o_que_fazer: falha.oQueFazer }, 500);
+      const numeroSemWhatsApp = falha.codigo === 'numero_invalido';
+      return jsonResponse({
+        success: false,
+        message_id: message.id,
+        error: falha.motivo,
+        ...(numeroSemWhatsApp && { code: 'PHONE_NOT_ON_WHATSAPP' }),
+        motivo: falha.motivo,
+        o_que_fazer: falha.oQueFazer,
+      }, numeroSemWhatsApp ? 200 : 500);
     }
 
     if (payload.fromAI) await marcarRespondido(companyId, conversationId, messageText || `[${payload.type}]`);

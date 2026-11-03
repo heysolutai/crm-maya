@@ -33,6 +33,8 @@ export interface IntegrationLastTest {
   ok: boolean;
   /** Frase amigável quando o teste falhou. */
   error: string | null;
+  /** Erro técnico do teste, pra corrigir. Só chega para o super-admin. */
+  detalhe?: string | null;
 }
 
 export interface IntegrationState {
@@ -97,4 +99,6 @@ export interface IntegrationTestResult {
   ok: boolean;
   message: string;
   at: string;
+  /** Erro técnico do teste. Só chega para o super-admin. */
+  detalhe?: string;
 }

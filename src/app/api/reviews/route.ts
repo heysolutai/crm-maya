@@ -22,15 +22,32 @@ function sentimentFromRating(rating: number): 'positivo' | 'neutro' | 'negativo'
   return 'neutro'
 }
 
+/**
+ * Sentimento do jeito que a IA manda ("Positiva", "negative", "promotor"...)
+ * traduzido pros 3 que a tela mostra. O texto padrao de criterios classifica
+ * no estilo NPS (promotor/neutro/detrator). O que nao reconhecer vira
+ * ausente e a nota decide: a avaliacao nao se perde por causa do rotulo.
+ */
+const SENTIMENTOS = new Map<string, 'positivo' | 'neutro' | 'negativo'>([
+  ['positivo', 'positivo'], ['positiva', 'positivo'], ['positive', 'positivo'], ['promotor', 'positivo'], ['promoter', 'positivo'],
+  ['neutro', 'neutro'], ['neutra', 'neutro'], ['neutral', 'neutro'], ['passivo', 'neutro'], ['passive', 'neutro'],
+  ['negativo', 'negativo'], ['negativa', 'negativo'], ['negative', 'negativo'], ['detrator', 'negativo'], ['detractor', 'negativo'],
+])
+const normalizarSentimento = (v: unknown) => (typeof v === 'string' ? SENTIMENTOS.get(v.trim().toLowerCase()) : undefined)
+
+/** O n8n manda campo opcional nao preenchido como "": conta como nao informado. */
+const vazioComoAusente = (v: unknown) => (v === '' || v === null ? undefined : v)
+
 const createSchema = z.object({
   // coerce: o n8n manda body parameters como string ("5")
   rating: z.coerce.number().int().min(1).max(5),
   // Opcional: se ausente, derivamos da nota. A IA pode mandar explicito quando
   // o texto contradiz a nota (ex: nota 4 com reclamacao seria 'negativo').
-  sentiment: z.enum(['positivo', 'neutro', 'negativo']).optional(),
+  // .optional() por fora: no zod 4 o preprocess sozinho torna o campo obrigatorio.
+  sentiment: z.preprocess(normalizarSentimento, z.enum(['positivo', 'neutro', 'negativo']).optional()).optional(),
   comment: z.string().max(2000).optional().nullable(),
   customerName: z.string().max(255).optional().nullable(),
-  source: z.enum(['ai', 'agent', 'manual']).optional().default('ai'),
+  source: z.preprocess(vazioComoAusente, z.enum(['ai', 'agent', 'manual']).optional()).optional(),
   /// Telefone do cliente: alternativa simples ao clientId: o CRM resolve o
   /// cliente sozinho (mesmo match com/sem 9 usado no resto do sistema).
   phone: z.string().min(5).max(30).optional().nullable(),
@@ -45,7 +62,7 @@ const createSchema = z.object({
   /// "HH:mm") ou ISO completo. Interpretada no fuso de Brasilia.
   reservation_date: z.string().max(40).optional().nullable(),
   reservationDate: z.string().max(40).optional().nullable(),
-  reservation_time: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
+  reservation_time: z.preprocess(vazioComoAusente, z.string().regex(/^\d{2}:\d{2}$/).optional()).optional(),
 })
 
 /** "YYYY-MM-DD" (+ "HH:mm") ou ISO → Date no fuso de Brasilia. Null se invalida. */
@@ -248,7 +265,7 @@ export async function POST(req: NextRequest) {
         sentiment: d.sentiment ?? sentimentFromRating(d.rating),
         comment: d.comment ?? null,
         customerName: d.customerName ?? null,
-        source: d.source,
+        source: d.source ?? 'ai',
         clientId,
         conversationId: d.conversationId ?? null,
         reservationId: d.reservationId ?? null,

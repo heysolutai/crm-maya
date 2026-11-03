@@ -129,6 +129,20 @@ function validarArgsMcp(
   return faltando.length ? { ok: false, problems: faltando.map((k) => `${k} obrigatório`) } : { ok: true, args }
 }
 
+/**
+ * Cabecalhos que o CRM manda sozinho pro servidor MCP: o MCP da Maya sabe por
+ * eles de qual cliente e de qual restaurante e o pedido. Vem da conversa,
+ * nunca da IA. Telefone no formato +55DDDNUMERO. Cabecalho com o mesmo nome
+ * cadastrado na integracao vale mais.
+ */
+function cabecalhosDaConversa(ctx: ToolContext): Record<string, string> {
+  const out: Record<string, string> = {}
+  const tel = ctx.cliente.telefone
+  if (tel) out['X-Maya-Customer-Phone'] = tel.length >= 12 ? `+${tel}` : tel
+  if (ctx.inbox.restaurant_id) out['X-Maya-Restaurant-Id'] = ctx.inbox.restaurant_id
+  return out
+}
+
 /** Ferramenta de servidor MCP (tools/call). Mesmo contrato de runIntegration. */
 async function runMcp(tool: ResolvedTool, ctx: ToolContext, args: Record<string, unknown>): Promise<ExecuteResult> {
   const integ = tool.integration!
@@ -149,6 +163,10 @@ async function runMcp(tool: ResolvedTool, ctx: ToolContext, args: Record<string,
       result: `A integração com ${integ.name} não está configurada por completo. Peça desculpas e ofereça transferir para um atendente.`,
       error: `configuracao incompleta: ${[...faltando].map(rotuloVariavel).join(', ')}`,
     }
+  }
+  const cadastrados = new Set(Object.keys(headers).map((k) => k.toLowerCase()))
+  for (const [k, v] of Object.entries(cabecalhosDaConversa(ctx))) {
+    if (!cadastrados.has(k.toLowerCase())) headers[k] = v
   }
 
   try {

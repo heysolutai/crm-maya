@@ -8,7 +8,8 @@ import { assertSafeUrl, IntegrationHttpError } from './http'
  *
  * Mesma protecao das integracoes HTTP (assertSafeUrl): so https, nunca rede
  * interna, sem seguir redirect. Respostas em JSON ou em SSE (text/event-stream).
- * A sessao (Mcp-Session-Id) e reaproveitada por alguns minutos por servidor.
+ * A sessao (Mcp-Session-Id) e reaproveitada por alguns minutos por servidor e
+ * cabecalhos (ou seja, por cliente, quando o telefone vai no cabecalho).
  */
 
 const VERSAO_PROTOCOLO = '2025-06-18'
@@ -208,6 +209,9 @@ async function chamar(rawUrl: string, headers: Record<string, string>, method: s
     let sessao = sessoes.get(chave) ?? null
     if (!sessao || Date.now() - sessao.criadaEm > SESSAO_TTL_MS) {
       sessao = await abrirSessao(url, headers)
+      // Uma sessao por cliente (o telefone vai no cabecalho): sem isto as
+      // vencidas ficavam no Map pra sempre.
+      for (const [k, s] of sessoes) if (Date.now() - s.criadaEm > SESSAO_TTL_MS) sessoes.delete(k)
       sessoes.set(chave, sessao)
     }
     try {

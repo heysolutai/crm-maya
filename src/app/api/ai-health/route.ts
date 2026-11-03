@@ -54,14 +54,7 @@ function comeca(href: string, rotas: string[]): boolean {
 
 /** O mesmo item, sem o botão e com outro "O que fazer". */
 function semBotao(item: ItemSituacao, oQueFazer: string): ItemSituacao {
-  return {
-    id: item.id,
-    nivel: item.nivel,
-    titulo: item.titulo,
-    detalhe: item.detalhe,
-    oQueFazer,
-    ...(item.tecnico ? { tecnico: item.tecnico } : {}),
-  }
+  return { id: item.id, nivel: item.nivel, titulo: item.titulo, detalhe: item.detalhe, oQueFazer }
 }
 
 /**
@@ -116,7 +109,7 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    const ctx: Contexto = { companyId, inboxes, inboxUnica: inboxId ?? null, superAdmin: auth.isSuperAdmin === true }
+    const ctx: Contexto = { companyId, inboxes, inboxUnica: inboxId ?? null }
 
     const papelP = papelDe(auth)
     const resultados: ItemSituacao[][] = await Promise.all(

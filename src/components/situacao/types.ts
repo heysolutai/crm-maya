@@ -15,15 +15,13 @@ export interface AcaoSituacao {
 }
 
 export interface ItemSituacao {
-  /** Verificação que gerou o item + referência (ex: "conexao:<id>"). O super-admin vê. */
+  /** Chave da lista (verificação + referência). Nunca aparece na tela. */
   id: string;
   nivel: NivelSituacao;
   titulo: string;
   detalhe: string;
   oQueFazer: string;
   acao?: AcaoSituacao;
-  /** Detalhe técnico: só vem para o super-admin. */
-  tecnico?: string;
 }
 
 export interface SituacaoResposta {

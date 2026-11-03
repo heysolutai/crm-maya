@@ -1,11 +1,10 @@
 {
   "mcpServers": {
     "maya-crm": {
-      "command": "node",
-      "args": ["mcp/server.mjs"],
-      "env": {
-        "MAYA_API_URL": "${MAYA_API_URL}",
-        "MAYA_API_KEY": "${MAYA_API_KEY}"
+      "type": "http",
+      "url": "${MAYA_API_URL}/api/mcp",
+      "headers": {
+        "x-api-key": "${MAYA_API_KEY}"
       }
     }
   }

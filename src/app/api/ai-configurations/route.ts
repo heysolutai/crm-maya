@@ -9,6 +9,7 @@ import { handleApiError } from '@/lib/api/errors'
 import { redactAiApiKeys, mergeAiApiKeys } from '@/lib/api/redact'
 import { logSecurityEvent } from '@/lib/security-log'
 import { consolidatePrompt } from '@/lib/promptConsolidation'
+import { historicoComTroca } from '@/lib/promptHistorico'
 import { extractChoices } from '@/lib/agentSimpleConfig'
 
 /**
@@ -278,7 +279,14 @@ export async function PUT(req: NextRequest) {
     // podem ser lidas por fora. Merge preserva tudo; o consolidatePrompt sempre
     // prioriza o prompt_completo editado, entao a edicao tem efeito.
     if (updates.prompts !== undefined) {
-      data.prompts = { ...((existing.prompts as Record<string, unknown>) || {}), ...updates.prompts }
+      const atuais = (existing.prompts as Record<string, unknown>) || {}
+      // O historico e do servidor: o corpo nao reescreve.
+      const enviados: Record<string, unknown> = { ...updates.prompts }
+      delete enviados.historico
+      data.prompts = { ...atuais, ...enviados }
+      if (typeof enviados.prompt_completo === 'string') {
+        data.prompts.historico = historicoComTroca(atuais, enviados.prompt_completo, agentId ? 'tela' : 'api')
+      }
     }
     if (updates.is_active !== undefined) data.isActive = updates.is_active
     if (updates.name !== undefined) data.name = updates.name
