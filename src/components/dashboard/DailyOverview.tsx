@@ -2,16 +2,15 @@
 
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { MessageSquare, UtensilsCrossed, PartyPopper, Headset, CalendarDays } from 'lucide-react';
+import { MessageSquare, UtensilsCrossed, PartyPopper, Headset } from 'lucide-react';
 import { BarChart, Bar, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
 import type { DailySummaryRow, DashboardSummary } from '@/app/api/dashboard-metrics/types';
 
 /**
- * Topo do dashboard: o que o restaurante pediu pra acompanhar por data.
- * Conversas, reservas feitas e encaminhamentos (eventos / humano) no periodo
- * do filtro, com uma barrinha por dia em cada card e a tabela dia a dia.
+ * Os números macro do dashboard: conversas, reservas e encaminhamentos
+ * (eventos / equipe) no periodo do filtro, com uma barrinha por dia em cada
+ * card (o numero do dia aparece ao passar o mouse).
  */
 
 // Inicio da contagem de encaminhamentos (deploy da tabela de eventos).
@@ -138,8 +137,6 @@ export function DailyOverview({
   isLoading?: boolean;
 }) {
   const { daily } = summary;
-  // Mais recente primeiro: e o que a pessoa procura ao abrir.
-  const rows = [...daily].reverse();
 
   return (
     <section className="space-y-3" aria-label="Resumo do período">
@@ -154,7 +151,7 @@ export function DailyOverview({
           isLoading={isLoading}
         />
         <SummaryCard
-          title="Reservas feitas"
+          title="Reservas"
           value={summary.reservations}
           subtitle={periodLabel}
           detail={`${formatNumber(summary.reservationsByAi)} pela IA`}
@@ -164,7 +161,7 @@ export function DailyOverview({
           isLoading={isLoading}
         />
         <SummaryCard
-          title="Encaminhadas p/ eventos"
+          title="Passadas para eventos"
           value={summary.handoffsEvent}
           subtitle={periodLabel}
           icon={PartyPopper}
@@ -173,7 +170,7 @@ export function DailyOverview({
           isLoading={isLoading}
         />
         <SummaryCard
-          title="Encaminhadas p/ humano"
+          title="Passadas para a equipe"
           value={summary.handoffsHuman}
           subtitle={periodLabel}
           icon={Headset}
@@ -184,59 +181,8 @@ export function DailyOverview({
       </div>
 
       <p className="px-1 text-[11px] leading-snug text-muted-foreground">
-        Encaminhamentos contados a partir de {HANDOFFS_SINCE}. Conversas não incluem as pesquisas de avaliação.
+        Conversas não contam as pesquisas de avaliação. Passagens contadas desde {HANDOFFS_SINCE}.
       </p>
-
-      {/* Tabela dia a dia: so faz sentido com mais de um dia no periodo */}
-      {!isLoading && rows.length > 1 && (
-        <div className="rounded-2xl border border-border/60 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
-          <div className="flex items-center gap-2 px-4 pt-4 pb-3 sm:px-5">
-            <CalendarDays className="h-4 w-4 text-primary" />
-            <h3 className="text-[15px] font-semibold tracking-tight">Por dia</h3>
-          </div>
-          <div className="max-h-[320px] overflow-auto">
-            <table className="w-full text-[12.5px] tabular-nums">
-              <thead className="sticky top-0 z-10 bg-card">
-                <tr className="border-b border-border/60 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  <th scope="col" className="py-2 pl-4 pr-2 text-left font-semibold sm:pl-5">Data</th>
-                  <th scope="col" className="px-2 py-2 text-right font-semibold">Conversas</th>
-                  <th scope="col" className="px-2 py-2 text-right font-semibold">Reservas</th>
-                  <th scope="col" className="px-2 py-2 text-right font-semibold">
-                    <span className="hidden sm:inline">Encam. </span>Eventos
-                  </th>
-                  <th scope="col" className="py-2 pl-2 pr-4 text-right font-semibold sm:pr-5">
-                    <span className="hidden sm:inline">Encam. </span>Humano
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const empty =
-                    row.conversations === 0 &&
-                    row.reservations === 0 &&
-                    row.handoffsEvent === 0 &&
-                    row.handoffsHuman === 0;
-                  return (
-                    <tr
-                      key={row.date}
-                      className={cn('border-b border-border/40 last:border-0', empty && 'text-muted-foreground')}
-                    >
-                      <th scope="row" className="whitespace-nowrap py-2 pl-4 pr-2 text-left font-medium sm:pl-5">
-                        <span className="capitalize text-muted-foreground">{formatDay(row.date, 'EEE')}</span>{' '}
-                        {formatDay(row.date, 'dd/MM')}
-                      </th>
-                      <td className="px-2 py-2 text-right font-semibold">{formatNumber(row.conversations)}</td>
-                      <td className="px-2 py-2 text-right">{formatNumber(row.reservations)}</td>
-                      <td className="px-2 py-2 text-right">{formatNumber(row.handoffsEvent)}</td>
-                      <td className="py-2 pl-2 pr-4 text-right sm:pr-5">{formatNumber(row.handoffsHuman)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </section>
   );
 }

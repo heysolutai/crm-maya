@@ -5,6 +5,7 @@ import { enfileirarTurnoMaestro } from '@/lib/queue/queues'
 import { isAiPausedNow } from '@/lib/ai/pause'
 import { atualizarTurno, checarEnvioDaIA, registrarBloqueio, registrarTurno } from '@/lib/ai/turns'
 import { MOTIVOS } from '@/lib/ai/motivos'
+import { motivoIaNaoAtende } from '@/lib/ai/so-um-numero'
 import { buildCapabilitiesPrompt, listCompanyTools, toFunctions } from '@/lib/ai-tools/registry'
 import { executeTool } from '@/lib/ai-tools/executor'
 import { calculateCost } from '@/lib/aiConfig'
@@ -122,14 +123,17 @@ export function pendentesDoCliente(linhas: LinhaMensagem[]): Pendentes | null {
 
 /** Motivo de nao responder, ou null se a conversa pode ser atendida pela IA. Ordem = prioridade. */
 export function motivoDeNaoResponder(p: {
-  agente: Pick<AgenteIA, 'engine' | 'isActive'> | null
+  agente: (Pick<AgenteIA, 'engine' | 'isActive'> & { onlyPhone?: string | null }) | null
   conversa: { status: string; transferredTo: string | null }
   temContato: boolean
   clientePausado: boolean
   /** Um atendente clicou "Retomar IA" depois do ultimo encaminhamento pra humano: a conversa voltou pra IA. */
   devolvidaParaIA?: boolean
+  /** Telefone do cliente: com a IA ligada so para um numero, os outros ficam com a equipe. */
+  telefoneCliente?: string | null
 }): string | null {
   if (!p.agente || !p.agente.isActive) return MOTIVOS.MAESTRO_AGENTE_DESLIGADO
+  if (motivoIaNaoAtende(p.agente, p.telefoneCliente)) return MOTIVOS.IA_SO_OUTRO_NUMERO
   if (p.agente.engine !== 'maestro') return MOTIVOS.MAESTRO_OUTRO_MOTOR
   if (p.conversa.status === 'closed') return MOTIVOS.MAESTRO_CONVERSA_ENCERRADA
   if ((p.conversa.transferredTo || p.conversa.status === 'pending') && !p.devolvidaParaIA) return MOTIVOS.MAESTRO_COM_ATENDENTE
@@ -268,6 +272,7 @@ async function turnoComLock(entrada: EntradaTurno, inicio: number): Promise<Resu
     temContato: Boolean(cliente && cliente.phone && conv.inbox),
     clientePausado: isAiPausedNow(cliente),
     devolvidaParaIA: comHumano ? await devolvidaParaIA(companyId, conversationId) : false,
+    telefoneCliente: cliente?.phone ?? null,
   })
   if (motivoGuarda || !agente || !cliente || !conv.inbox) {
     return ignorar(motivoGuarda ?? MOTIVOS.MAESTRO_SEM_CONTATO, {

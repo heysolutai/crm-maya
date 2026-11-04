@@ -1335,13 +1335,17 @@ model AiAgent {
   /// Quem responde as mensagens deste agente: 'n8n' (fluxo externo) ou
   /// 'maestro' (motor interno do CRM). Muda so o super-admin.
   engine            String   @default("n8n")
-  /// Como a IA usa ferramentas neste WhatsApp: 'function_calls' (ferramentas
-  /// do CRM: nativas + catalogo) ou 'mcp' (servidor MCP do proprio
-  /// restaurante, Integration privada com aiAgentId = este agente).
+  /// Ferramentas EXTERNAS deste WhatsApp: 'function_calls' (integracoes do
+  /// catalogo), 'mcp' (servidor MCP do proprio restaurante, Integration
+  /// privada com aiAgentId = este agente) ou 'none' (nenhuma). As nativas (o
+  /// que a IA faz dentro do CRM) valem em qualquer modo.
   toolMode          String   @default("function_calls") @map("tool_mode")
   followUpEnabled   Boolean  @default(false) @map("follow_up_enabled")
   followUpStages    Json?    @default("[]") @map("follow_up_stages")
   isActive          Boolean  @default(true) @map("is_active")
+  /// IA ligada so para este telefone (teste): os outros clientes ficam com a
+  /// equipe, como IA desligada. null = para todos.
+  onlyPhone         String?  @map("only_phone")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @default(now()) @updatedAt @map("updated_at")
 

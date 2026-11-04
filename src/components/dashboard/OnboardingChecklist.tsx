@@ -10,6 +10,8 @@ interface Step {
   key: keyof OnboardingStatus;
   icon: React.ElementType;
   title: string;
+  /** Título depois de feito. */
+  doneTitle: string;
   desc: string;
   href: string;
   cta: string;
@@ -22,6 +24,7 @@ const STEPS: Step[] = [
     key: 'whatsappConnected',
     icon: MessageSquare,
     title: 'Conecte o WhatsApp',
+    doneTitle: 'WhatsApp conectado',
     desc: 'Conecte o número do seu restaurante (API Reservemaya) e a IA já começa a atender.',
     href: '/app/inboxes',
     cta: 'Conectar',
@@ -30,6 +33,7 @@ const STEPS: Step[] = [
     key: 'agentConfigured',
     icon: Bot,
     title: 'Configure o agente de IA',
+    doneTitle: 'Agente de IA configurado',
     desc: 'Defina como a IA fala com seus clientes: tom, horário e o que ela pode fazer.',
     href: '/app/inboxes',
     cta: 'Configurar',
@@ -38,6 +42,7 @@ const STEPS: Step[] = [
     key: 'knowledgeAdded',
     icon: BookOpen,
     title: 'Adicione o conhecimento',
+    doneTitle: 'Conhecimento adicionado',
     desc: 'Suba um PDF de perguntas e respostas, ou preencha as FAQs aqui mesmo no CRM.',
     href: '/app/inboxes',
     cta: 'Adicionar',
@@ -98,8 +103,8 @@ export function OnboardingChecklist() {
                 )}
               </span>
               <div className="flex-1 min-w-0">
-                <p className={cn('font-medium text-sm', isDone && 'text-muted-foreground line-through')}>
-                  {step.title}
+                <p className={cn('font-medium text-sm', isDone && 'text-muted-foreground')}>
+                  {isDone ? step.doneTitle : step.title}
                 </p>
                 {!isDone && <p className="text-xs text-muted-foreground">{step.desc}</p>}
               </div>

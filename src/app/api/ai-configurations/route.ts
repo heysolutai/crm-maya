@@ -94,6 +94,14 @@ const updateAiConfigurationSchema = z.object({
   name: z.string().min(1, 'Name is required').optional(),
   prompts: z.record(z.string(), z.any()).optional(),
   is_active: z.boolean().optional(),
+  /** IA ligada so para este telefone (teste). null ou vazio = para todos. Guarda so os digitos. */
+  only_phone: z
+    .string()
+    .max(30)
+    .transform((v) => v.replace(/\D/g, ''))
+    .refine((v) => v === '' || (v.length >= 10 && v.length <= 13), 'Telefone inválido: use DDD + número')
+    .nullable()
+    .optional(),
   whatsapp_instance_id: z.string().uuid('Invalid whatsapp_instance_id format').optional().nullable(),
   follow_up_stages: z.array(followUpStageSchema).max(50).optional(),
   follow_up_enabled: z.boolean().optional(),
@@ -289,6 +297,7 @@ export async function PUT(req: NextRequest) {
       }
     }
     if (updates.is_active !== undefined) data.isActive = updates.is_active
+    if (updates.only_phone !== undefined) data.onlyPhone = updates.only_phone || null
     if (updates.name !== undefined) data.name = updates.name
     // whatsapp_instance_id agora e gerenciado no Inbox.aiAgentId: body legado e no-op aqui.
     //

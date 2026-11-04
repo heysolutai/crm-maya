@@ -10,16 +10,18 @@ import { IntegrationHttpError } from '@/lib/ai-tools/http'
 import { ErroRpcMcp } from '@/lib/ai-tools/mcp'
 import { sincronizarMcp } from '@/lib/ai-tools/mcp-sync'
 import { enabledNativeNames } from '@/lib/ai-tools/native'
+import { modoDe } from '@/lib/ai-tools/registry'
 import { encryptSecret } from '@/lib/ai-tools/secrets'
 import { explicarFalhaFerramenta } from '@/lib/erros/ferramentas'
 
 /**
- * Agente de IA > Ferramentas: "Function calls" ou "Servidor MCP" por WhatsApp.
+ * Agente de IA > Ferramentas: "Function calls", "Servidor MCP" ou nenhum dos
+ * dois, por WhatsApp. Nunca os dois juntos.
  *
  * GET    ?agentId=   -> modo, conexao MCP do WhatsApp e as ferramentas dela
  * PUT    { agentId, modo?, ferramentasLigadas? } -> troca o modo / liga e desliga ferramentas
- * POST   { agentId, endereco, chave?, estilo } -> conecta (ou reconecta) e busca as ferramentas
- * DELETE ?agentId=   -> desconecta o servidor e volta pro modo function calls
+ * POST   { agentId, endereco, chave?, estilo } -> conecta (ou reconecta), busca as ferramentas e liga o MCP
+ * DELETE ?agentId=   -> desconecta o servidor (se o MCP estava ligado, fica nenhum)
  *
  * A conexao e uma Integration PRIVADA (companyId + aiAgentId), kind='mcp': o
  * resto do sistema (executor, falhas, Testar a IA) funciona igual ao catalogo.
@@ -35,7 +37,7 @@ const ESTILOS = {
 const putSchema = z
   .object({
     agentId: z.string().uuid(),
-    modo: z.enum(['function_calls', 'mcp']).optional(),
+    modo: z.enum(['function_calls', 'mcp', 'none']).optional(),
     ferramentasLigadas: z.array(z.string().min(1).max(100)).max(200).optional(),
   })
   .refine((d) => d.modo !== undefined || d.ferramentasLigadas !== undefined, { message: 'Nada para salvar' })
@@ -92,7 +94,7 @@ async function estado(companyId: string, agentId: string) {
   }
 
   return {
-    modo: agente?.toolMode === 'mcp' ? 'mcp' : 'function_calls',
+    modo: modoDe(agente?.toolMode),
     conexao: conexao
       ? {
           endereco: conexao.baseUrl,
@@ -282,12 +284,16 @@ export async function DELETE(req: NextRequest) {
   try {
     const agentId = z.string().uuid().safeParse(req.nextUrl.searchParams.get('agentId'))
     if (!agentId.success) return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
-    if (!(await agenteDaEmpresa(companyId, agentId.data))) {
+    const agente = await agenteDaEmpresa(companyId, agentId.data)
+    if (!agente) {
       return NextResponse.json({ error: 'Agente de IA não encontrado' }, { status: 404 })
     }
-    // Apaga a conexao (ferramentas e escolhas vao junto, em cascata) e volta pro function calls.
+    // Apaga a conexao (ferramentas e escolhas vao junto, em cascata). O MCP
+    // desliga junto; as ferramentas do CRM nao ligam sozinhas.
     await prisma.integration.deleteMany({ where: { companyId, aiAgentId: agentId.data, kind: 'mcp' } })
-    await prisma.aiAgent.update({ where: { id: agentId.data }, data: { toolMode: 'function_calls' } })
+    if (modoDe(agente.toolMode) === 'mcp') {
+      await prisma.aiAgent.update({ where: { id: agentId.data }, data: { toolMode: 'none' } })
+    }
     return NextResponse.json(await estado(companyId, agentId.data))
   } catch (error) {
     return handleApiError(error, 'Erro ao desconectar o servidor MCP')

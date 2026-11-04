@@ -41,6 +41,8 @@ export interface AIConfiguration {
   name: string;
   prompts: Prompts;
   is_active: boolean;
+  /** IA ligada só para este telefone (teste). null = para todos. */
+  only_phone: string | null;
   conditions: any;
   variables: any;
   created_at: string;
@@ -66,6 +68,7 @@ function mapConfig(item: any): AIConfiguration {
     company_id: item.companyId ?? item.company_id,
     name: item.name,
     is_active: item.isActive ?? item.is_active,
+    only_phone: item.onlyPhone ?? item.only_phone ?? null,
     conditions: item.conditions,
     variables: item.variables,
     created_at: item.createdAt ?? item.created_at,

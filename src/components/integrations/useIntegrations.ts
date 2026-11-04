@@ -122,28 +122,3 @@ export function useTestIntegration() {
     },
   });
 }
-
-/**
- * Salva o "ID do restaurante" de UM WhatsApp (fica na configuração da conexão,
- * Inbox.channelConfig.restaurantId). Depois recarrega a lista de integrações
- * para o aviso de "falta preencher" e o resultado do teste se atualizarem.
- */
-export function useSaveRestaurantId() {
-  const qc = useQueryClient();
-  const { companyId } = useIntegrationsKey();
-
-  return useMutation({
-    mutationFn: async (params: { inboxId: string; restaurantId: string }): Promise<void> => {
-      const res = await apiFetch(`/api/agents${companyId ? `?companyId=${companyId}` : ''}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: params.inboxId, restaurantId: params.restaurantId.trim() }),
-      });
-      if (!res.ok) throw new Error(await mensagemDeErro(res, 'Não foi possível salvar o ID. Tente de novo.'));
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['company-integrations'] });
-      qc.invalidateQueries({ queryKey: ['inboxes'] });
-    },
-  });
-}

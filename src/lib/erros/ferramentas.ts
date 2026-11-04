@@ -55,6 +55,8 @@ export interface EntradaFalhaFerramenta {
 }
 
 const ONDE_FERRAMENTAS = 'Abra o WhatsApp em Conexões > "Agente de IA" > "Ferramentas"'
+/** O ID do restaurante fica no lápis da conexão, não em Ferramentas. */
+const ONDE_ID = 'Em "Conexões", clique no lápis deste WhatsApp'
 
 function statusDe(e: EntradaFalhaFerramenta, texto: string): number | null {
   if (typeof e.httpStatus === 'number' && e.httpStatus > 0) return e.httpStatus
@@ -107,7 +109,7 @@ export function explicarFalhaFerramenta(e: EntradaFalhaFerramenta): FalhaFerrame
         nivel: 'problema',
         titulo: `Falta o ID do restaurante para usar ${oSistema}`,
         motivo: `Este WhatsApp está sem o ID do restaurante, então a IA não conseguiu usar ${oSistema}.`,
-        oQueFazer: `${ONDE_FERRAMENTAS} e preencha o "ID do restaurante deste WhatsApp". Se não souber o número, fale com o suporte.`,
+        oQueFazer: `${ONDE_ID} e preencha o "ID do restaurante". Se não souber o número, fale com o suporte.`,
         quemResolve: 'restaurante',
       }
     }
@@ -168,7 +170,7 @@ export function explicarFalhaFerramenta(e: EntradaFalhaFerramenta): FalhaFerrame
         nivel: 'problema',
         titulo: `${OSistema} não reconheceu o ID do restaurante`,
         motivo: `${OSistema} não encontrou o restaurante com o ID cadastrado neste WhatsApp, então a ação não foi feita.`,
-        oQueFazer: `${ONDE_FERRAMENTAS} e confira o "ID do restaurante deste WhatsApp". Se não souber o número certo, fale com o suporte.`,
+        oQueFazer: `${ONDE_ID} e confira o "ID do restaurante". Se não souber o número certo, fale com o suporte.`,
         quemResolve: 'restaurante',
       }
     }

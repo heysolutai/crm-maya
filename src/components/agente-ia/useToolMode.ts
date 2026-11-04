@@ -3,7 +3,8 @@ import { apiFetch } from '@/lib/api/client';
 
 /** Estado de GET/PUT/POST/DELETE /api/ai-tools/mcp. */
 export interface ToolModeState {
-  modo: 'function_calls' | 'mcp';
+  /** 'none' = os dois desligados (a IA fica só com o que faz dentro do CRM). */
+  modo: 'function_calls' | 'mcp' | 'none';
   conexao: { endereco: string; temChave: boolean } | null;
   ferramentas: { name: string; label: string; description: string; isWrite: boolean; ligada: boolean }[];
   transferirLigada: boolean;

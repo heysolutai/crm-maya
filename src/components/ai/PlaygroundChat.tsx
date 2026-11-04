@@ -43,26 +43,24 @@ const explicacaoSchema = z.object({
   oQueFazer: z.string().nullable(),
 });
 
+const toolRunSchema = z.object({
+  name: z.string(),
+  label: z.string().optional(),
+  args: z.unknown(),
+  ok: z.boolean(),
+  result: z.unknown(),
+  simulated: z.boolean(),
+  ms: z.number().optional(),
+  explicacao: explicacaoSchema.nullable().optional(),
+  erro: z.string().nullable().optional(),
+});
+
 /** Resposta de POST /api/maestro/playground. */
 const maestroReplySchema = z.object({
   reply: z.string(),
   /** Resposta em balões, como sai no WhatsApp. */
   partes: z.array(z.string()).optional(),
-  tools: z
-    .array(
-      z.object({
-        name: z.string(),
-        label: z.string().optional(),
-        args: z.unknown(),
-        ok: z.boolean(),
-        result: z.unknown(),
-        simulated: z.boolean(),
-        ms: z.number().optional(),
-        explicacao: explicacaoSchema.nullable().optional(),
-        erro: z.string().nullable().optional(),
-      })
-    )
-    .default([]),
+  tools: z.array(toolRunSchema).default([]),
   model: z.string().optional(),
   ms: z.number().optional(),
 });
@@ -108,7 +106,7 @@ function PromptCompleto({ prompt }: { prompt: string }) {
   );
 }
 
-type ToolRun = z.infer<typeof maestroReplySchema>['tools'][number];
+type ToolRun = z.infer<typeof toolRunSchema>;
 
 type Message =
   | { id: string; role: 'user'; content: string; timestamp: Date }
@@ -152,6 +150,53 @@ function gravarCliente(c: ClienteTeste) {
     window.localStorage.setItem(CHAVE_CLIENTE, JSON.stringify(c));
   } catch {
     // sem armazenamento (aba anônima): vale só nesta tela
+  }
+}
+
+/**
+ * A conversa de teste fica neste navegador (por agente e WhatsApp): sair da
+ * aba ou recarregar a página continua a mesma conversa; só "Nova conversa"
+ * começa outra.
+ */
+const CHAVE_CONVERSA = 'maya:testar-ia:conversa';
+/** Guarda as últimas: o bastante pra continuar o teste sem lotar o navegador. */
+const MAX_GUARDADAS = 100;
+
+const mensagemGuardadaSchema = z.discriminatedUnion('role', [
+  z.object({ id: z.string(), role: z.literal('user'), content: z.string(), timestamp: z.coerce.date() }),
+  z.object({
+    id: z.string(),
+    role: z.literal('ai'),
+    content: z.string(),
+    timestamp: z.coerce.date(),
+    model: z.string().optional(),
+    ms: z.number().optional(),
+  }),
+  z.object({ id: z.string(), role: z.literal('tool'), tool: toolRunSchema, timestamp: z.coerce.date() }),
+]);
+
+function lerConversa(chave: string): Message[] {
+  try {
+    const bruto = window.localStorage.getItem(chave);
+    if (!bruto) return [];
+    const lista: unknown = JSON.parse(bruto);
+    if (!Array.isArray(lista)) return [];
+    // Mensagem que nao confere (versao antiga da tela) fica de fora, o resto continua.
+    return lista.flatMap((m): Message[] => {
+      const r = mensagemGuardadaSchema.safeParse(m);
+      return r.success ? [r.data] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function gravarConversa(chave: string, mensagens: Message[]) {
+  try {
+    if (mensagens.length === 0) window.localStorage.removeItem(chave);
+    else window.localStorage.setItem(chave, JSON.stringify(mensagens.slice(-MAX_GUARDADAS)));
+  } catch {
+    // sem armazenamento (aba anônima) ou cheio: a conversa vale só nesta tela
   }
 }
 
@@ -431,6 +476,20 @@ export function PlaygroundChat({ companyId, agentId, inboxId }: PlaygroundChatPr
   useEffect(() => {
     setCliente(lerCliente());
   }, []);
+
+  // Conversa de teste lembrada neste navegador, por agente e WhatsApp. So grava
+  // depois de carregar a da chave atual: senao a lista vazia do primeiro
+  // render apagaria a conversa guardada.
+  const chaveConversa = agenteId ? `${CHAVE_CONVERSA}:${agenteId}:${inboxId ?? 'geral'}` : null;
+  const [conversaCarregada, setConversaCarregada] = useState<string | null>(null);
+  useEffect(() => {
+    if (!chaveConversa) return;
+    setMessages(lerConversa(chaveConversa));
+    setConversaCarregada(chaveConversa);
+  }, [chaveConversa]);
+  useEffect(() => {
+    if (chaveConversa && conversaCarregada === chaveConversa) gravarConversa(chaveConversa, messages);
+  }, [messages, chaveConversa, conversaCarregada]);
 
   const prontidao = useQuery({
     queryKey: ['maestro-playground', agenteId, inboxId ?? null],

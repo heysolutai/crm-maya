@@ -7,7 +7,7 @@ import { ErroRpcMcp, mcpChamarFerramenta } from './mcp'
 import { validateArgs } from './params'
 import { runPostActions } from './post-actions'
 import { resolverAgenteDaConversa } from '@/lib/maestro/agente'
-import { cabeNoModo, resolveCompanyTool, type ResolvedTool } from './registry'
+import { cabeNoModo, MODO_LEGIVEL, modoDe, resolveCompanyTool, type ResolvedTool } from './registry'
 import { decryptConfig, decryptHeaders } from './secrets'
 import { renderText, renderValue, type TemplateVars } from './template'
 import type { ExecuteResult, ToolContext } from './types'
@@ -278,7 +278,7 @@ export async function executeTool(input: ExecuteInput): Promise<ExecuteResult> {
       return registrar({
         ok: false,
         result: `A ferramenta "${tool.label}" não está ligada neste WhatsApp. Siga sem ela ou ofereça transferir para um atendente.`,
-        error: `ferramenta fora do modo deste WhatsApp (${agente?.toolMode === 'mcp' ? 'servidor MCP' : 'ferramentas do CRM'})`,
+        error: `ferramenta fora do modo deste WhatsApp (${MODO_LEGIVEL[modoDe(agente?.toolMode)]})`,
       })
     }
   }

@@ -95,7 +95,7 @@ const conexao: Verificacao = async (ctx) =>
 
 // ─── b. Agente de IA do WhatsApp ────────────────────────────────────────────
 
-const SELECT_AGENTE = { id: true, name: true, engine: true, isActive: true, apiKeys: true, n8nWebhookUrl: true } as const
+const SELECT_AGENTE = { id: true, name: true, engine: true, isActive: true, onlyPhone: true, apiKeys: true, n8nWebhookUrl: true } as const
 
 const agente: Verificacao = async (ctx) => {
   if (ctx.inboxes.length === 0) return []
@@ -141,6 +141,19 @@ const agente: Verificacao = async (ctx) => {
         acao: { label: 'Ligar a IA', href: `/app/inboxes/${inbox.id}` },
       })
       continue
+    }
+
+    // Modo teste esquecido ligado: os clientes ficam sem a IA. Na tela da
+    // propria conexao o card "IA atendendo" ja mostra isso logo acima.
+    if (a?.onlyPhone && !ctx.inboxUnica) {
+      itens.push({
+        id: `ia_so_um_numero:${inbox.id}`,
+        nivel: 'aviso',
+        titulo: `A IA ${de} está ligada só para um número`,
+        detalhe: 'Modo de teste: a IA responde só o número escolhido. Os outros clientes ficam com a equipe.',
+        oQueFazer: 'Quando terminar de testar, clique em "Ligar para todos" no topo da aba "Agente de IA" desta conexão.',
+        acao: { label: 'Abrir', href: `/app/inboxes/${inbox.id}` },
+      })
     }
 
     if (a?.engine === 'maestro') {
@@ -299,8 +312,6 @@ const integracoes: Verificacao = async (ctx) => {
 
   const itens: ItemSituacao[] = []
   const usamIdDoRestaurante: string[] = []
-  // Onde o restaurante confere e testa: Agente de IA > Ferramentas de uma conexao.
-  const ondeTestar = ctx.inboxes[0] ? `/app/inboxes/${ctx.inboxes[0].id}` : '/app/inboxes'
 
   for (const ci of ativas) {
     const ligadas = ci.integration.tools.filter((t) => ci.enabledTools.includes(t.name))
@@ -319,9 +330,9 @@ const integracoes: Verificacao = async (ctx) => {
         nivel: 'aviso',
         titulo: `O último teste da ${ci.integration.name} falhou`,
         detalhe: friendlyTestMessage(false, ci.lastError, parseConfigFields(ci.integration.configFields), ci.integration.name),
-        oQueFazer:
-          'Em "Agente de IA" > "Ferramentas" da conexão, corrija o que faltar e clique em "Testar conexão" de novo. Se continuar falhando, fale com o suporte.',
-        acao: { label: 'Abrir', href: ondeTestar },
+        // O teste fica so com o suporte (super-admin), fora da tela do restaurante.
+        oQueFazer: 'Fale com o suporte para conferir a conexão.',
+        acao: SUPORTE,
       })
     }
   }
@@ -335,8 +346,8 @@ const integracoes: Verificacao = async (ctx) => {
         nivel: 'problema',
         titulo: `${maiuscula(conexaoNomeada(inbox))} sem o ID do restaurante`,
         detalhe: `Sem esse número, a IA não consegue usar ${nomes} com os clientes desta conexão.`,
-        oQueFazer: `Abra a ${conexaoNomeada(inbox)}, vá em "Agente de IA" > "Ferramentas" e preencha o campo "ID do restaurante deste WhatsApp". Se não souber o número, fale com o suporte.`,
-        acao: { label: 'Preencher', href: `/app/inboxes/${inbox.id}` },
+        oQueFazer: `Em "Conexões", clique no lápis da ${conexaoNomeada(inbox)} e preencha "ID do restaurante". Se não souber o número, fale com o suporte.`,
+        acao: { label: 'Abrir Conexões', href: '/app/inboxes' },
       })
     }
   }

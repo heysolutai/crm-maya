@@ -3,6 +3,7 @@ import { getRedisConnection } from '../connection'
 import { QUEUE_NAMES, type CronTickJob } from '../queues'
 import { prisma } from '@/lib/db'
 import { isAiPausedNow } from '@/lib/ai/pause'
+import { motivoIaNaoAtende } from '@/lib/ai/so-um-numero'
 import { sendCloudTextInWindow } from '@/lib/channels/cloud-window'
 import { prepararTextoParaWhatsApp } from '@/lib/whatsapp/texto-whatsapp'
 
@@ -42,13 +43,14 @@ async function conferirEnvio(
   const agente = inbox?.aiAgentId
     ? await prisma.aiAgent.findFirst({
         where: { id: inbox.aiAgentId, companyId: job.companyId, isActive: true },
-        select: { followUpEnabled: true, followUpStages: true },
+        select: { isActive: true, onlyPhone: true, followUpEnabled: true, followUpStages: true },
       })
     : await prisma.aiAgent.findFirst({
         where: { companyId: job.companyId, isActive: true },
-        select: { followUpEnabled: true, followUpStages: true },
+        select: { isActive: true, onlyPhone: true, followUpEnabled: true, followUpStages: true },
       })
   if (!agente?.followUpEnabled) return { cancelar: 'Follow-up desligado no agente' }
+  if (motivoIaNaoAtende(agente, client.phone)) return { cancelar: 'IA ligada so para outro numero (teste)' }
 
   const etapas = Array.isArray(agente.followUpStages) ? (agente.followUpStages as EtapaFollowUp[]) : []
   const etapa = etapas.find((e) => Number(e.order) === job.stageOrder && e.enabled !== false)

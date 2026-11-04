@@ -119,7 +119,7 @@ export function friendlyTestMessage(
     const partes: string[] = []
     if (faltaRestaurante) {
       partes.push(
-        'Falta o ID do restaurante. Preencha o campo "ID do restaurante deste WhatsApp" e salve.'
+        'Falta o ID do restaurante. Em "Conexões", clique no lápis deste WhatsApp e preencha "ID do restaurante".'
       )
     }
     if (campos.length) {

@@ -139,29 +139,45 @@ function definicaoMcp(name: string, description: string, schema: Record<string, 
   }
 }
 
-/** No modo "Servidor MCP", das nativas so fica a que a IA precisa sempre. */
-export const NATIVAS_NO_MODO_MCP = ['transferir_para_humano']
+/**
+ * Modo de ferramentas EXTERNAS do WhatsApp (AiAgent.toolMode): integracoes do
+ * catalogo (function calls), servidor MCP ou nenhum dos dois. Nunca os dois
+ * juntos. As nativas (o que a IA faz dentro do CRM) nao dependem do modo:
+ * valem sempre que o restaurante as liga.
+ */
+export type ModoFerramentas = 'function_calls' | 'mcp' | 'none'
+
+export function modoDe(toolMode: string | null | undefined): ModoFerramentas {
+  return toolMode === 'mcp' || toolMode === 'none' ? toolMode : 'function_calls'
+}
+
+export const MODO_LEGIVEL: Record<ModoFerramentas, string> = {
+  function_calls: 'ferramentas (function calls)',
+  mcp: 'servidor MCP',
+  none: 'nenhuma ferramenta externa ligada',
+}
 
 /**
- * A ferramenta pertence ao modo ligado no WhatsApp? Um modo por vez, nunca os
- * dois: no 'mcp', so o servidor MCP DESTE agente (+ NATIVAS_NO_MODO_MCP); no
- * 'function_calls' (ou sem agente), nativas e catalogo, nunca um servidor MCP
- * privado. Mesma regra de listCompanyTools, aplicada na hora de EXECUTAR.
+ * A ferramenta pertence ao modo ligado no WhatsApp? Nativa: sempre. Externa:
+ * no 'mcp', so o servidor MCP DESTE agente; no 'function_calls' (ou sem
+ * agente), so o catalogo, nunca um servidor MCP privado; no 'none', nenhuma.
+ * Mesma regra de listCompanyTools, aplicada na hora de EXECUTAR.
  */
 export function cabeNoModo(tool: ResolvedTool, agente: { id: string; toolMode: string } | null): boolean {
+  if (tool.source === 'native') return true
   const servidorDoAgente = tool.integration?.aiAgentId ?? null
-  if (agente?.toolMode === 'mcp') {
-    return tool.source === 'native' ? NATIVAS_NO_MODO_MCP.includes(tool.name) : servidorDoAgente === agente.id
-  }
+  const modo = modoDe(agente?.toolMode)
+  if (modo === 'none') return false
+  if (modo === 'mcp') return servidorDoAgente === agente?.id
   return servidorDoAgente === null
 }
 
 /**
- * Ferramentas LIGADAS que a IA recebe.
- *
- * Com `agentId`, vale o modo daquele WhatsApp (AiAgent.toolMode):
- *   - 'function_calls': nativas ligadas + integracoes do catalogo;
- *   - 'mcp': o servidor MCP privado do agente + "transferir para atendente".
+ * Ferramentas LIGADAS que a IA recebe: as nativas ligadas e, conforme o modo
+ * daquele WhatsApp (AiAgent.toolMode):
+ *   - 'function_calls': as integracoes do catalogo;
+ *   - 'mcp': o servidor MCP privado do agente;
+ *   - 'none': nenhuma externa.
  * Sem agente (ex.: fluxo n8n pedindo a lista), e o modo function_calls.
  */
 export async function listCompanyTools(
@@ -171,28 +187,29 @@ export async function listCompanyTools(
   const agente = opcoes.agentId
     ? await prisma.aiAgent.findFirst({ where: { id: opcoes.agentId, companyId }, select: { id: true, toolMode: true } })
     : null
-  const modoMcp = agente?.toolMode === 'mcp'
+  const modo = modoDe(agente?.toolMode)
 
   const [company, ativas] = await Promise.all([
     prisma.company.findUnique({ where: { id: companyId }, select: { settings: true } }),
-    prisma.companyIntegration.findMany({
-      where: {
-        companyId,
-        enabled: true,
-        integration: modoMcp && agente
-          ? { isActive: true, aiAgentId: agente.id }
-          : { isActive: true, companyId: null },
-      },
-      include: {
-        integration: {
-          include: { tools: { where: { isActive: true }, orderBy: { sortOrder: 'asc' } } },
-        },
-      },
-    }),
+    modo === 'none'
+      ? []
+      : prisma.companyIntegration.findMany({
+          where: {
+            companyId,
+            enabled: true,
+            integration: modo === 'mcp' && agente
+              ? { isActive: true, aiAgentId: agente.id }
+              : { isActive: true, companyId: null },
+          },
+          include: {
+            integration: {
+              include: { tools: { where: { isActive: true }, orderBy: { sortOrder: 'asc' } } },
+            },
+          },
+        }),
   ])
 
   const tools: ResolvedTool[] = enabledNativeNames(company?.settings)
-    .filter((n) => !modoMcp || NATIVAS_NO_MODO_MCP.includes(n))
     .map((n) => getNativeTool(n))
     .filter((t): t is NativeTool => !!t)
     .map(fromNative)

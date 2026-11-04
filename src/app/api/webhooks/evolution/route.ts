@@ -5,6 +5,7 @@ import { publishEvent } from '@/lib/realtime'
 import { despacharParaIA, decidirDestinoIA } from '@/lib/maestro/despacho'
 import { getSystemSetting } from '@/lib/system-settings'
 import { restaurantIdDaInbox } from '@/lib/api/utils'
+import { motivoIaNaoAtende } from '@/lib/ai/so-um-numero'
 
 /**
  * Webhook receiver para Evolution API.
@@ -269,14 +270,16 @@ export async function POST(req: NextRequest) {
                   memoryKey: true,
                   productsKnowledge: true,
                   isActive: true,
+                  onlyPhone: true,
                 },
               },
             },
           })
           const agenteDaInbox = inboxWithAi?.aiAgent ?? null
           const aiConfig = agenteDaInbox && agenteDaInbox.isActive ? agenteDaInbox : null
-          // IA desligada na tela (chave "IA atendendo"): nao cai no fluxo padrao do sistema.
-          const iaDesligada = agenteDaInbox?.isActive === false
+          // IA desligada na tela (chave "IA atendendo"), ou ligada so para outro
+          // numero (teste): nao cai no fluxo padrao do sistema.
+          const iaDesligada = !!agenteDaInbox && motivoIaNaoAtende(agenteDaInbox, phone) !== null
 
           const webhookUrl = iaDesligada
             ? null

@@ -20,7 +20,9 @@ export interface AgenteIA {
   name: string | null
   engine: string
   isActive: boolean
-  /** 'function_calls' ou 'mcp': quais ferramentas valem neste WhatsApp. */
+  /** IA ligada so para este telefone (teste). null = para todos. */
+  onlyPhone: string | null
+  /** 'function_calls', 'mcp' ou 'none': quais ferramentas valem neste WhatsApp. */
   toolMode: string
   prompts: unknown
   behaviorSettings: unknown
@@ -33,6 +35,7 @@ const SELECT_AGENTE = {
   name: true,
   engine: true,
   isActive: true,
+  onlyPhone: true,
   toolMode: true,
   prompts: true,
   behaviorSettings: true,

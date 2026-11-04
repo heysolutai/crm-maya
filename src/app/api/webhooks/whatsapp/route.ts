@@ -14,6 +14,7 @@ import { pauseClientAIByConversation } from '@/lib/api/database';
 import { isAiPausedNow } from '@/lib/ai/pause';
 import { registrarTurno } from '@/lib/ai/turns';
 import { MOTIVOS } from '@/lib/ai/motivos';
+import { motivoIaNaoAtende } from '@/lib/ai/so-um-numero';
 import { handleApiErrorCors } from '@/lib/api/errors'
 import { getSystemSetting } from '@/lib/system-settings'
 import { getDecryptedApiKey } from '@/lib/api/api-key-utils'
@@ -1538,7 +1539,7 @@ export async function POST(req: NextRequest) {
       const [clientDataResult, apiKeyResult, companyDataResult, convDataResult] = await Promise.all([
         prisma.client.findUnique({
           where: { id: clientId },
-          select: { firstName: true, lastName: true, aiPaused: true, aiPausedUntil: true },
+          select: { firstName: true, lastName: true, phone: true, aiPaused: true, aiPausedUntil: true },
         }),
         // `apiKey.key` guarda a chave CRIPTOGRAFADA (iv:dados:tag): o n8n
         // precisa da chave real pra chamar a API de volta.
@@ -1577,14 +1578,18 @@ export async function POST(req: NextRequest) {
       const aiConfigResult = convDataResult?.inbox?.aiAgentId
         ? await prisma.aiAgent.findFirst({
             where: { id: convDataResult.inbox.aiAgentId, companyId },
-            select: { id: true, engine: true, isActive: true, n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
+            select: { id: true, engine: true, isActive: true, onlyPhone: true, n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
           })
         : await prisma.aiAgent.findFirst({
             where: { companyId, isActive: true },
-            select: { id: true, engine: true, isActive: true, n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
+            select: { id: true, engine: true, isActive: true, onlyPhone: true, n8nWebhookUrl: true, knowledge: true, memoryKey: true, productsKnowledge: true },
           });
 
-      const iaDesligada = aiConfigResult?.isActive === false;
+      // Desligada, ou ligada so para outro numero (teste): a equipe atende este cliente.
+      const motivoSemIA = aiConfigResult
+        ? motivoIaNaoAtende(aiConfigResult, clientDataResult?.phone || payload.real_phone || payload.phone)
+        : null;
+      const iaDesligada = motivoSemIA !== null;
       const companyAiConfig = aiConfigResult;
       const clientData = clientDataResult;
       const companyApiKey = apiKeyResult;
@@ -1883,7 +1888,7 @@ export async function POST(req: NextRequest) {
             messageIds: [message.id],
             texto: payload.message || null,
             status: 'ignorado',
-            motivo: iaDesligada ? MOTIVOS.IA_DESLIGADA : MOTIVOS.SEM_FLUXO,
+            motivo: motivoSemIA ?? MOTIVOS.SEM_FLUXO,
           });
         }
       }
