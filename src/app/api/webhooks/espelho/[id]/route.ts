@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { enqueueInboundMessage } from '@/lib/queue'
-import { publishEvent } from '@/lib/realtime'
-import { marcarFalhaEnvio } from '@/lib/api/whatsapp'
 import { decryptSecret } from '@/lib/ai-tools/secrets'
 import {
   assinaturaEspelhoValida,
@@ -11,6 +9,7 @@ import {
   statusEspelhoSchema,
   toPipelinePayloadEspelho,
 } from '@/lib/channels/espelho'
+import { aplicarStatusEspelho, guardarStatusPendente } from '@/lib/channels/espelho-status'
 
 /**
  * Receiver da conexao "Espelho (somente leitura)": o sistema de origem (ex.:
@@ -25,44 +24,7 @@ import {
  * recebe 200 + log, pra nao gerar reenvio a toa.
  */
 
-const READ_STATUS: Record<string, 'sent' | 'delivered' | 'read'> = {
-  sent: 'sent',
-  delivered: 'delivered',
-  read: 'read',
-}
-
 const idSchema = z.string().uuid()
-
-async function atualizarStatus(companyId: string, wamid: string, valor: string): Promise<number> {
-  const alvos = await prisma.message.findMany({
-    where: { uazMessageId: wamid, conversation: { companyId } },
-    select: { id: true, conversationId: true },
-  })
-  if (!alvos.length) return 0
-
-  if (valor === 'failed') {
-    for (const m of alvos) await marcarFalhaEnvio(m.id, 'Envio falhou no sistema de origem', { companyId })
-    return alvos.length
-  }
-
-  const readStatus = READ_STATUS[valor]
-  if (!readStatus) return 0
-  await prisma.message.updateMany({
-    where: { id: { in: alvos.map((m) => m.id) } },
-    data: { readStatus, ...(readStatus === 'read' ? { readAt: new Date() } : {}) },
-  })
-  await Promise.all(
-    alvos.map((m) =>
-      publishEvent(companyId, {
-        type: 'message:update',
-        conversationId: m.conversationId,
-        messageId: m.id,
-        patch: { readStatus, ...(readStatus === 'read' ? { readAt: new Date().toISOString() } : {}) },
-      })
-    )
-  )
-  return alvos.length
-}
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -100,14 +62,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const evento = (corpo as { evento?: unknown })?.evento ?? 'mensagem'
 
+    // Status nunca cria contato nem conversa: so atualiza a mensagem pelo id.
+    // Se ela ainda esta na fila, o status fica pendente e entra quando ela for gravada.
     if (evento === 'status') {
       const status = statusEspelhoSchema.safeParse(corpo)
       if (!status.success) {
         console.warn('[Espelho] status invalido', inbox.id, status.error.flatten().fieldErrors)
         return NextResponse.json({ status: 'ignored', reason: 'status_invalido' })
       }
-      const atualizadas = await atualizarStatus(inbox.companyId, status.data.id, status.data.status.toLowerCase())
-      return NextResponse.json({ status: 'ok', atualizadas })
+      const valor = status.data.status.toLowerCase()
+      const atualizadas = await aplicarStatusEspelho(inbox.companyId, status.data.id, valor)
+      if (atualizadas === 0) await guardarStatusPendente(inbox.companyId, status.data.id, valor)
+      return NextResponse.json({ status: atualizadas ? 'ok' : 'pendente', atualizadas })
     }
 
     if (evento !== 'mensagem') {

@@ -21,6 +21,8 @@ import { getDecryptedApiKey } from '@/lib/api/api-key-utils'
 import { instanciaAdotada } from '@/lib/channels/adapters/uazapi'
 import { sistemaDeOrigem } from '@/lib/channels/uazapi-servidores'
 import { dataDaMensagem, ESPELHO_HISTORICO_MS, type EspelhoNoPayload } from '@/lib/channels/espelho'
+import { pegarTravaEsperando } from '@/lib/queue/distributed-lock'
+import { aplicarStatusPendente } from '@/lib/channels/espelho-status'
 
 // Schema de validação para o payload da UAZapi
 const UAZapiPayloadSchema = z.object({
@@ -665,6 +667,8 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // Trava do buscar-ou-criar contato/conversa (passos 2 e 3); solta no catch se der erro.
+  let soltarTravaContato: () => Promise<void> = async () => {};
   try {
     // Seguranca OPT-IN: se WHATSAPP_WEBHOOK_SECRET estiver setado, exige ?token=
     // igual (timing-safe). Sem o env, mantem compat (aceita como hoje): assim
@@ -1053,6 +1057,17 @@ export async function POST(req: NextRequest) {
     const inboxId = instance.id; // FK pra vincular conversa a inbox
     console.log('Found company via inbox:', companyId, 'inbox:', inboxId);
 
+    // Trava por contato: mensagens do MESMO telefone chegam juntas e a fila as
+    // processa em paralelo; cada uma achava "nenhum contato/conversa" e criava
+    // o seu (conversas duplicadas, mensagens espalhadas). Os passos 2 e 3
+    // (buscar-ou-criar contato e conversa) rodam um por vez por restaurante +
+    // telefone. Solta logo depois do passo 3 (e no catch, se der erro).
+    soltarTravaContato = await pegarTravaEsperando(
+      `inbound-contato:${companyId}:${payload.is_lid_phone ? payload.phone : canonicalPhone(payload.phone)}`,
+      30,
+      15_000
+    );
+
     // 2. Buscar ou criar cliente
     let clientId: string;
     let existingClient: any = null;
@@ -1328,6 +1343,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Contato e conversa resolvidos: a proxima mensagem desse telefone ja os encontra.
+    await soltarTravaContato();
+
     // 3.5. Buscar a inbox completa (com API keys para mídia e transcrição)
     // Credenciais da inbox QUE RECEBEU a mensagem. Antes pegava a primeira
     // inbox ativa do restaurante: com dois numeros (ex: QR + WhatsApp Cloud)
@@ -1579,6 +1597,11 @@ export async function POST(req: NextRequest) {
       },
     });
     console.log(`[Realtime] publicado message:new para conversation ${conversationId} (company ${companyId})`);
+
+    // Espelho: o status ("lida"...) costuma chegar antes da mensagem sair da fila.
+    if (espelho && payload.type === 'outgoing') {
+      await aplicarStatusPendente(companyId, payload.uaz_message_id);
+    }
 
     // Push notification: so para mensagens incoming (cliente enviou). Historico
     // do espelho entra em silencio (seriam centenas de notificacoes de uma vez).
@@ -2113,6 +2136,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
+    await soltarTravaContato();
     return handleApiErrorCors(error, 'Error in receive-message function')
   }
 }
