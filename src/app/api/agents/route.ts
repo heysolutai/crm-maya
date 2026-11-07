@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { ensureInboxAiAgent } from '@/lib/api/inbox-ai-agent'
+import { assertSafeUrl } from '@/lib/ai-tools/http'
 
 const createAgentSchema = z.object({
   channelType: z.enum(CHANNEL_TYPES),
@@ -167,6 +168,20 @@ export async function POST(req: NextRequest) {
         { error: 'Informe o token da instancia existente' },
         { status: 400 }
       )
+    }
+
+    // Instancia existente em outro servidor UazAPI (ex.: NicoChat): o endereco
+    // vem do form e o CRM passa a chamar ele. So https publico (SSRF).
+    if (channelType === 'uazapi' && useExisting && serverUrl) {
+      try {
+        await assertSafeUrl(serverUrl)
+      } catch {
+        return NextResponse.json(
+          { error: 'Servidor invalido: use um endereco https publico' },
+          { status: 400 }
+        )
+      }
+      serverUrl = serverUrl.replace(/\/+$/, '')
     }
 
     // Resolve qual AiAgent vinculado: prioridade explicita do user > fallback (primeiro existente / criar novo).
@@ -352,7 +367,9 @@ export async function POST(req: NextRequest) {
             data: { aiAgentId: resolvedAiAgentId },
           }).catch((e) => console.error('[agents:provision] bind aiAgent failed', e))
         } else {
-          await ensureInboxAiAgent(agent.id, companyId, displayName).catch((e) =>
+          // Instancia adotada ja atende em outro lugar (ex.: robo do NicoChat):
+          // a IA nasce desligada pra nao responder em dobro; liga quem quiser.
+          await ensureInboxAiAgent(agent.id, companyId, displayName, { iaLigada: !useExisting }).catch((e) =>
             console.error('[agents:provision] ensureInboxAiAgent failed', e)
           )
         }

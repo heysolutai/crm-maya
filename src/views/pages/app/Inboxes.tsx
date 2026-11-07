@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { WhatsAppCloudCard } from '@/components/super-admin/company-details/WhatsAppCloudCard';
 import { WhatsAppCloudConnect } from '@/components/inboxes/WhatsAppCloudConnect';
+import { ServidorUazapiField, servidorUazapiValido } from '@/components/inboxes/ServidorUazapiField';
 import { useRouter } from 'next/navigation';
 import { useInboxes, type Inbox } from '@/hooks/useInboxes';
 import { useChannelCredentials } from '@/hooks/useChannelCredentials';
@@ -94,6 +95,8 @@ export default function Inboxes() {
   // colando o token dela.
   const [instanceMode, setInstanceMode] = useState<'create' | 'existing'>('create');
   const [instanceToken, setInstanceToken] = useState('');
+  // Servidor UazAPI da instancia existente (padrao Heysolut; ex.: NicoChat).
+  const [instanceServer, setInstanceServer] = useState('');
   // Identificador do restaurante no sistema de reservas.
   const [restaurantId, setRestaurantId] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string | null }>({
@@ -118,6 +121,7 @@ export default function Inboxes() {
   // Só a API Reservemaya (uazapi) implementa adopt() no backend: os outros
   // canais só sabem provisionar instância nova.
   const supportsInstanceMode = selectedChannel === 'uazapi';
+  const adotando = supportsInstanceMode && instanceMode === 'existing';
 
   // Tipo do canal selecionado no dropdown do NotificaMe (whatsapp/instagram/facebook/...).
   // Define se exigimos o "Token do Canal" (so WhatsApp).
@@ -148,6 +152,7 @@ export default function Inboxes() {
     setEditingCredential(false);
     setInstanceMode('create');
     setInstanceToken('');
+    setInstanceServer('');
     setRestaurantId('');
   };
 
@@ -163,6 +168,7 @@ export default function Inboxes() {
     setEditingCredential(false);
     setInstanceMode('create');
     setInstanceToken('');
+    setInstanceServer('');
   };
 
   const fetchNotificameChannels = async () => {
@@ -214,22 +220,24 @@ export default function Inboxes() {
     if (isNotificame && !notificameChannelId.trim()) return;
     if (notificameNeedsChannelToken && !notificameChannelToken.trim()) return;
 
-    // Adotar instancia existente exige o token dela.
-    if (supportsInstanceMode && instanceMode === 'existing' && !instanceToken.trim()) return;
+    // Adotar instancia existente exige o token e o servidor dela.
+    if (adotando && (!instanceToken.trim() || !servidorUazapiValido(instanceServer))) return;
 
     createInbox(
       {
         channelType: selectedChannel,
         displayName: displayName.trim(),
         mode: supportsInstanceMode ? instanceMode : undefined,
-        instanceToken:
-          supportsInstanceMode && instanceMode === 'existing'
-            ? instanceToken.trim()
-            : undefined,
+        instanceToken: adotando ? instanceToken.trim() : undefined,
         restaurantId: restaurantId.trim() || undefined,
-        // Manda URL/token apenas se o user explicitamente preencheu
+        // Instancia existente: o servidor escolhido (Heysolut, NicoChat...).
+        // Demais canais: URL/token apenas se o user explicitamente preencheu
         // (1a vez ou edicao). Se nao mandou, o backend usa a credencial salva.
-        serverUrl: showCredentialInputs ? serverUrl.trim() : undefined,
+        serverUrl: adotando
+          ? instanceServer.trim().replace(/\/+$/, '')
+          : showCredentialInputs
+            ? serverUrl.trim()
+            : undefined,
         serverApiKey: showCredentialInputs || notificameNeedsInputs
           ? serverApiKey.trim()
           : undefined,
@@ -482,19 +490,26 @@ export default function Inboxes() {
                 </div>
 
                 {instanceMode === 'existing' && (
-                  <div className="space-y-2 pt-1">
-                    <Label htmlFor="instance-token">Token da instância</Label>
-                    <Input
-                      id="instance-token"
-                      type="password"
-                      placeholder="Cole aqui o token da instância existente"
-                      value={instanceToken}
-                      onChange={(e) => setInstanceToken(e.target.value)}
+                  <div className="space-y-4 pt-1">
+                    <ServidorUazapiField
+                      id="instance-server"
+                      value={instanceServer}
+                      onChange={setInstanceServer}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      É o token da instância (não o token de administrador). Validamos
-                      o token e apontamos o webhook automaticamente.
-                    </p>
+                    <div className="space-y-2">
+                      <Label htmlFor="instance-token">Token da instância</Label>
+                      <Input
+                        id="instance-token"
+                        type="password"
+                        placeholder="Cole aqui o token da instância existente"
+                        value={instanceToken}
+                        onChange={(e) => setInstanceToken(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        É o token da instância (não o token de administrador). Validamos
+                        o token e apontamos o webhook automaticamente.
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -741,10 +756,18 @@ export default function Inboxes() {
                 conexao, na aba "Prompts". Por isso nao pedimos agente aqui. */}
             <div className="rounded-lg border border-dashed p-3 bg-muted/30 flex items-start gap-2">
               <Bot className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <p className="text-xs text-muted-foreground">
-                Esta conexão terá seu próprio Agente IA, criado automaticamente.
-                Você configura os prompts depois, na aba <strong>Prompts</strong> da conexão.
-              </p>
+              {adotando ? (
+                <p className="text-xs text-muted-foreground">
+                  Esta conexão terá seu próprio Agente IA, criado <strong>desligado</strong>: as
+                  conversas chegam aqui, mas a IA não responde ninguém até você ligar na aba{' '}
+                  <strong>Agente de IA</strong> da conexão.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Esta conexão terá seu próprio Agente IA, criado automaticamente.
+                  Você configura os prompts depois, na aba <strong>Prompts</strong> da conexão.
+                </p>
+              )}
             </div>
           </div>
 
@@ -762,6 +785,7 @@ export default function Inboxes() {
                   (!notificameChannelId.trim() ||
                     ((!hasSavedCred || editingCredential) && !serverApiKey.trim()) ||
                     (notificameNeedsChannelToken && !notificameChannelToken.trim()))) ||
+                (adotando && (!instanceToken.trim() || !servidorUazapiValido(instanceServer))) ||
                 isCreating
               }
             >

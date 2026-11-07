@@ -52,19 +52,30 @@ async function processOutboundMessage(job: Job<OutboundMessageJob>) {
 
   // If we need to save the message to DB (e.g., follow-up, reminder)
   if (conversationId && !messageId) {
-    await prisma.message.create({
-      data: {
-        conversationId: conversationId,
-        senderType: fromAI ? 'ai' : 'agent',
-        messageText: text,
-        messageType: 'text',
-        metadata: {
-          ...metadata,
-          sent_via_queue: true,
-          wa_message_id: result?.key?.id,
-        },
+    const waId: string | undefined = result?.key?.id
+    const dados = {
+      senderType: fromAI ? ('ai' as const) : ('agent' as const),
+      messageText: text,
+      messageType: 'text',
+      metadata: {
+        ...metadata,
+        sent_via_queue: true,
+        wa_message_id: waId,
       },
-    })
+    }
+    // Instancia de outro sistema (ex.: NicoChat): o eco pode ter chegado antes
+    // e sido gravado como "via outro sistema". Reaproveita em vez de duplicar.
+    const eco = waId
+      ? await prisma.message.findFirst({
+          where: { conversationId, OR: [{ uazMessageId: waId }, { uazMessageId: { endsWith: `:${waId}` } }] },
+          select: { id: true },
+        })
+      : null
+    if (eco) {
+      await prisma.message.update({ where: { id: eco.id }, data: dados })
+    } else {
+      await prisma.message.create({ data: { conversationId, ...dados } })
+    }
   }
 
   return { phone, waMessageId: result?.key?.id }

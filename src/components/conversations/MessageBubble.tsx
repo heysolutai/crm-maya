@@ -330,7 +330,10 @@ export const MessageBubble = memo(function MessageBubble({
             {isClient
               ? clientName
               : isAI
-                ? 'Assistente IA'
+                ? // Enviada pelo outro sistema da instancia adotada (ex.: robo do NicoChat)
+                  meta.origem_externa
+                  ? `Via ${meta.origem_externa}`
+                  : 'Assistente IA'
                 : (msg.sender as any)?.full_name || 'Agente'
             }
           </span>

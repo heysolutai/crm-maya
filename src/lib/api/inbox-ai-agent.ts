@@ -8,8 +8,16 @@ import { normalizeCompanySlug, buildAgentMemoryKey } from '@/lib/api/utils'
  * Cada instancia conectada = seu proprio agente, nunca compartilhado: no
  * produto restaurante "conexao" e "agente" sao a mesma coisa. Por isso sempre
  * cria um agente novo (em branco) e vincula a esta inbox.
+ *
+ * `iaLigada: false` cria o agente com a chave "IA atendendo" desligada
+ * (AiAgent.isActive): as mensagens chegam, mas a IA nao responde.
  */
-export async function ensureInboxAiAgent(inboxId: string, companyId: string, displayName: string) {
+export async function ensureInboxAiAgent(
+  inboxId: string,
+  companyId: string,
+  displayName: string,
+  opcoes: { iaLigada?: boolean } = {}
+) {
   const inbox = await prisma.inbox.findUnique({
     where: { id: inboxId },
     select: { aiAgentId: true },
@@ -36,7 +44,7 @@ export async function ensureInboxAiAgent(inboxId: string, companyId: string, dis
       n8nWebhookUrl: null,
       followUpEnabled: false,
       followUpStages: [] as Prisma.InputJsonValue,
-      isActive: true,
+      isActive: opcoes.iaLigada ?? true,
     },
   })
 

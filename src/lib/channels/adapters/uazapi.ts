@@ -32,10 +32,21 @@ import { prepararTextoParaWhatsApp } from '@/lib/whatsapp/texto-whatsapp';
 interface UazapiChannelConfig {
   serverApiKey?: string; // admintoken
   webhookUrl?: string;
+  /** Instancia adotada pelo token (veio de outro sistema, ex.: NicoChat). */
+  adopted?: boolean;
 }
 
 function getInstanceToken(agent: ChannelAgent): string {
   return agent.instanceApiKey || '';
+}
+
+/**
+ * Instancia adotada pelo token: NAO e nossa. O CRM nunca desloga nem apaga
+ * ela no servidor (derrubaria o numero no sistema de origem); no maximo tira
+ * o proprio webhook.
+ */
+export function instanciaAdotada(channelConfig: unknown): boolean {
+  return (channelConfig as UazapiChannelConfig | null)?.adopted === true;
 }
 
 function getAdminToken(agent: ChannelAgent): string {
@@ -167,6 +178,36 @@ function normalizeQr(code: string | null | undefined): string | null {
   if (code.startsWith('data:image')) return code;
   if (code.startsWith('http')) return code;
   return `data:image/png;base64,${code}`;
+}
+
+/**
+ * Tira da instancia o webhook que o CRM adicionou (o do sistema de origem
+ * fica). Best-effort: falha so vai pro log.
+ */
+async function removerNossoWebhook(agent: ChannelAgent): Promise<void> {
+  const token = getInstanceToken(agent);
+  if (!agent.apiUrl || !token) return;
+  const nosso = (agent.channelConfig as UazapiChannelConfig | null)?.webhookUrl;
+  const ehNosso = (url: unknown) =>
+    typeof url === 'string' && (url === nosso || url.includes(`agentId=${agent.id}`));
+
+  try {
+    const res = await uazapiFetch(agent.apiUrl, 'instance', token, 'GET', '/webhook');
+    const lista: any[] = Array.isArray(res.data)
+      ? res.data
+      : Array.isArray(res.data?.webhooks)
+        ? res.data.webhooks
+        : [];
+    for (const w of lista.filter((w) => ehNosso(w?.url))) {
+      if (!w.id) {
+        console.warn('[uazapi:adotada] webhook do CRM sem id; remova no painel do servidor:', w.url);
+        continue;
+      }
+      await uazapiFetch(agent.apiUrl, 'instance', token, 'POST', '/webhook', { action: 'delete', id: w.id });
+    }
+  } catch (e) {
+    console.warn('[uazapi:adotada] falha ao remover o webhook do CRM (ignorado):', (e as Error).message);
+  }
 }
 
 /**
@@ -412,6 +453,10 @@ export const uazapiAdapter: ChannelAdapter = {
     if (!agent.apiUrl) return;
     const token = getInstanceToken(agent);
     if (!token) return;
+    if (instanciaAdotada(agent.channelConfig)) {
+      console.warn('[uazapi] instancia adotada: logout nao enviado', agent.id);
+      return;
+    }
 
     try {
       await uazapiFetch(agent.apiUrl, 'instance', token, 'DELETE', '/instance/logout');
@@ -422,6 +467,12 @@ export const uazapiAdapter: ChannelAdapter = {
 
   async remove(agent: ChannelAgent): Promise<void> {
     if (!agent.apiUrl) return;
+
+    // Adotada: a instancia continua viva no servidor de origem; so sai o nosso webhook.
+    if (instanciaAdotada(agent.channelConfig)) {
+      await removerNossoWebhook(agent);
+      return;
+    }
 
     // Tenta com token da instancia primeiro; cai pro admin se falhar
     const instanceToken = getInstanceToken(agent);

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Loader2, QrCode } from 'lucide-react';
+import { ServidorUazapiField, servidorUazapiValido } from '@/components/inboxes/ServidorUazapiField';
 import { sendJson, withCompany } from './setup-api';
 
 interface Props {
@@ -32,10 +33,13 @@ export function QrInboxCreator({ companyId, defaultName, onCreated }: Props) {
   const [displayName, setDisplayName] = useState(defaultName);
   const [useExisting, setUseExisting] = useState(false);
   const [instanceToken, setInstanceToken] = useState('');
+  const [instanceServer, setInstanceServer] = useState('');
   const [restaurantId, setRestaurantId] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const canCreate = displayName.trim().length > 0 && (!useExisting || instanceToken.trim().length > 0);
+  const canCreate =
+    displayName.trim().length > 0 &&
+    (!useExisting || (instanceToken.trim().length > 0 && servidorUazapiValido(instanceServer)));
 
   const handleCreate = async () => {
     if (!canCreate) return;
@@ -49,6 +53,7 @@ export function QrInboxCreator({ companyId, defaultName, onCreated }: Props) {
           displayName: displayName.trim(),
           mode: useExisting ? 'existing' : 'create',
           instanceToken: useExisting ? instanceToken.trim() : undefined,
+          serverUrl: useExisting ? instanceServer.trim().replace(/\/+$/, '') : undefined,
           restaurantId: restaurantId.trim() || undefined,
         },
         'Erro ao criar a conexão'
@@ -112,16 +117,27 @@ export function QrInboxCreator({ companyId, defaultName, onCreated }: Props) {
         </div>
 
         {useExisting && (
-          <div className="space-y-2">
-            <Label htmlFor="qr-instance-token">Token da instância</Label>
-            <Input
-              id="qr-instance-token"
-              value={instanceToken}
-              onChange={(e) => setInstanceToken(e.target.value)}
-              placeholder="Token da instância existente"
-              autoComplete="off"
+          <>
+            <ServidorUazapiField
+              id="qr-instance-server"
+              value={instanceServer}
+              onChange={setInstanceServer}
+              companyId={companyId}
             />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="qr-instance-token">Token da instância</Label>
+              <Input
+                id="qr-instance-token"
+                value={instanceToken}
+                onChange={(e) => setInstanceToken(e.target.value)}
+                placeholder="Token da instância existente"
+                autoComplete="off"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              A IA desta conexão começa desligada: as conversas chegam, mas ninguém recebe resposta até ligar.
+            </p>
+          </>
         )}
 
         <Button className="w-full" onClick={handleCreate} disabled={!canCreate || creating}>

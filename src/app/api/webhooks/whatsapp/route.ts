@@ -18,6 +18,8 @@ import { motivoIaNaoAtende } from '@/lib/ai/so-um-numero';
 import { handleApiErrorCors } from '@/lib/api/errors'
 import { getSystemSetting } from '@/lib/system-settings'
 import { getDecryptedApiKey } from '@/lib/api/api-key-utils'
+import { instanciaAdotada } from '@/lib/channels/adapters/uazapi'
+import { sistemaDeOrigem } from '@/lib/channels/uazapi-servidores'
 
 // Schema de validação para o payload da UAZapi
 const UAZapiPayloadSchema = z.object({
@@ -1331,7 +1333,7 @@ export async function POST(req: NextRequest) {
     // a midia era baixada com o token do numero errado.
     const whatsappInstance = await prisma.inbox.findFirst({
       where: { id: inboxId, companyId, isActive: true },
-      select: { instanceApiKey: true, apiUrl: true },
+      select: { instanceApiKey: true, apiUrl: true, channelConfig: true },
     });
 
     const aiConfig = await prisma.aiAgent.findFirst({
@@ -1372,8 +1374,37 @@ export async function POST(req: NextRequest) {
       payload.message = payload.message || '[Áudio - transcrevendo...]';
     }
 
-    // 4. Verificar duplicatas: ignorar apenas mensagens enviadas VIA API
-    if (payload.type === 'outgoing' && payload.was_sent_by_api) {
+    // 4. Verificar duplicatas: ignorar apenas mensagens enviadas VIA API.
+    // Excecao: instancia adotada de OUTRO sistema (ex.: NicoChat). Ali "via API"
+    // tambem e o robo/atendente de la; so ignora se a mensagem for NOSSA, o
+    // resto e gravado pra mapear a conversa (ver `origemExterna` abaixo).
+    const origemExterna =
+      payload.type === 'outgoing' && payload.was_sent_by_api && whatsappInstance
+        ? sistemaDeOrigem(whatsappInstance.apiUrl, instanciaAdotada(whatsappInstance.channelConfig))
+        : null;
+
+    if (origemExterna) {
+      // O CRM grava o id sem o prefixo "numero:" (e a fila, em metadata.wa_message_id).
+      const idCurto = payload.uaz_message_id.split(':').pop() || payload.uaz_message_id;
+      const nossa = await prisma.message.findFirst({
+        where: {
+          conversationId,
+          OR: [
+            { uazMessageId: { in: [payload.uaz_message_id, idCurto] } },
+            { uazMessageId: { endsWith: `:${idCurto}` } },
+            { metadata: { path: ['wa_message_id'], equals: idCurto } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (nossa) {
+        return jsonResponse({
+          success: true,
+          message: 'API-sent message ignored (already processed)',
+          uaz_message_id: payload.uaz_message_id,
+        });
+      }
+    } else if (payload.type === 'outgoing' && payload.was_sent_by_api) {
       console.log('[Duplicate Prevention] Ignoring API-sent message (already saved by send-message)');
       console.log('[Duplicate Prevention] UAZ Message ID:', payload.uaz_message_id);
 
@@ -1428,8 +1459,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 5. Determinar sender_type e inserir mensagem
-    const senderType = payload.type === 'incoming' ? 'client' : 'agent';
+    // 5. Determinar sender_type e inserir mensagem.
+    // Do outro sistema entra como 'ai': como 'agent' pausaria a NOSSA IA pra
+    // esse cliente (o cadastro e compartilhado entre os WhatsApp do restaurante).
+    // Quem responde ou nao por aqui continua sendo a chave "IA atendendo".
+    const senderType: 'client' | 'agent' | 'ai' =
+      payload.type === 'incoming' ? 'client' : origemExterna ? 'ai' : 'agent';
+    const metadataMensagem = {
+      ...payload.metadata,
+      ...(origemExterna ? { origem_externa: origemExterna } : {}),
+    };
     let message: { id: string; createdAt: Date };
     try {
       message = await prisma.message.create({
@@ -1442,7 +1481,7 @@ export async function POST(req: NextRequest) {
           uazMessageId: payload.uaz_message_id,
           quotedMessageId: payload.quoted_message_id,
           metadata: {
-            ...payload.metadata,
+            ...metadataMensagem,
             channel: payload.channel as any,
             profile_picture_url: payload.profile_picture_url,
             uaz_message_id: payload.uaz_message_id,
@@ -1505,7 +1544,7 @@ export async function POST(req: NextRequest) {
         uazMessageId: payload.uaz_message_id,
         quotedMessageId: payload.quoted_message_id,
         createdAt: message.createdAt,
-        metadata: payload.metadata,
+        metadata: metadataMensagem,
       },
     });
     console.log(`[Realtime] publicado message:new para conversation ${conversationId} (company ${companyId})`);
