@@ -20,6 +20,7 @@ import { getSystemSetting } from '@/lib/system-settings'
 import { getDecryptedApiKey } from '@/lib/api/api-key-utils'
 import { instanciaAdotada } from '@/lib/channels/adapters/uazapi'
 import { sistemaDeOrigem } from '@/lib/channels/uazapi-servidores'
+import { dataDaMensagem, ESPELHO_HISTORICO_MS, type EspelhoNoPayload } from '@/lib/channels/espelho'
 
 // Schema de validação para o payload da UAZapi
 const UAZapiPayloadSchema = z.object({
@@ -1333,8 +1334,16 @@ export async function POST(req: NextRequest) {
     // a midia era baixada com o token do numero errado.
     const whatsappInstance = await prisma.inbox.findFirst({
       where: { id: inboxId, companyId, isActive: true },
-      select: { instanceApiKey: true, apiUrl: true, channelConfig: true },
+      select: { instanceApiKey: true, apiUrl: true, channelConfig: true, channelType: true },
     });
+
+    // Conexao "Espelho (somente leitura)": copia das conversas de outro sistema
+    // (src/lib/channels/espelho.ts). Os dados extras so valem pra essa conexao.
+    const espelho: EspelhoNoPayload | null =
+      whatsappInstance?.channelType === 'espelho' ? ((rawPayload?.espelho ?? {}) as EspelhoNoPayload) : null;
+    const dataEspelho = espelho ? dataDaMensagem(espelho.data) : null;
+    // Historico (ou reenvio atrasado): entra sem notificar a equipe.
+    const ehHistorico = !!dataEspelho && Date.now() - dataEspelho.getTime() > ESPELHO_HISTORICO_MS;
 
     const aiConfig = await prisma.aiAgent.findFirst({
       where: { companyId },
@@ -1366,11 +1375,12 @@ export async function POST(req: NextRequest) {
     const mediaMessageId = rawPayload.message?.messageid || rawPayload.message?.id;
 
     const shouldQueueMedia = isMediaMessage && mediaMessageId && hasInstance && conversationId;
-    let shouldQueueTranscription = isAudioMessage && openAiKey && hasInstance && mediaMessageId;
+    // Espelho: sem API do provedor pra transcrever; o audio entra como midia.
+    let shouldQueueTranscription = isAudioMessage && openAiKey && hasInstance && mediaMessageId && !espelho;
     if (isAudioMessage && !openAiKey) {
       console.warn('[Audio Transcription] Skipped! openAiKey not available');
     }
-    if (isAudioMessage) {
+    if (isAudioMessage && !espelho) {
       payload.message = payload.message || '[Áudio - transcrevendo...]';
     }
 
@@ -1378,10 +1388,15 @@ export async function POST(req: NextRequest) {
     // Excecao: instancia adotada de OUTRO sistema (ex.: NicoChat). Ali "via API"
     // tambem e o robo/atendente de la; so ignora se a mensagem for NOSSA, o
     // resto e gravado pra mapear a conversa (ver `origemExterna` abaixo).
+    // Espelho: toda enviada e do outro sistema (o CRM nunca envia por ela).
     const origemExterna =
-      payload.type === 'outgoing' && payload.was_sent_by_api && whatsappInstance
-        ? sistemaDeOrigem(whatsappInstance.apiUrl, instanciaAdotada(whatsappInstance.channelConfig))
-        : null;
+      payload.type !== 'outgoing'
+        ? null
+        : espelho
+          ? espelho.origem_externa || 'outro sistema'
+          : payload.was_sent_by_api && whatsappInstance
+            ? sistemaDeOrigem(whatsappInstance.apiUrl, instanciaAdotada(whatsappInstance.channelConfig))
+            : null;
 
     if (origemExterna) {
       // O CRM grava o id sem o prefixo "numero:" (e a fila, em metadata.wa_message_id).
@@ -1468,6 +1483,17 @@ export async function POST(req: NextRequest) {
     const metadataMensagem = {
       ...payload.metadata,
       ...(origemExterna ? { origem_externa: origemExterna } : {}),
+      // Espelho: o que o sistema de origem mandou alem da mensagem (etapa, botoes...).
+      ...(espelho
+        ? {
+            espelho: {
+              enviado_por: espelho.enviado_por ?? null,
+              origem: espelho.origem ?? null,
+              botoes: espelho.botoes ?? null,
+              etapa: espelho.etapa ?? null,
+            },
+          }
+        : {}),
     };
     let message: { id: string; createdAt: Date };
     try {
@@ -1475,6 +1501,8 @@ export async function POST(req: NextRequest) {
         data: {
           conversationId,
           senderType,
+          // Espelho: horario real da mensagem (reenvio e historico chegam fora de ordem).
+          ...(dataEspelho ? { createdAt: dataEspelho } : {}),
           messageText: payload.message,
           messageType: payload.message_type || 'text',
           mediaUrl: payload.media_url,
@@ -1520,13 +1548,16 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    try {
-      await prisma.conversation.update({
-        where: { id: conversationId },
-        data: { updatedAt: new Date() },
-      });
-    } catch (bumpErr) {
-      console.error('[Conversation Update] failed to bump updatedAt', bumpErr);
+    // Historico do espelho nao sobe a conversa pro topo da lista.
+    if (!ehHistorico) {
+      try {
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data: { updatedAt: new Date() },
+        });
+      } catch (bumpErr) {
+        console.error('[Conversation Update] failed to bump updatedAt', bumpErr);
+      }
     }
 
     // Publica evento realtime para clientes SSE conectados (awaited: fire-and-forget
@@ -1549,8 +1580,9 @@ export async function POST(req: NextRequest) {
     });
     console.log(`[Realtime] publicado message:new para conversation ${conversationId} (company ${companyId})`);
 
-    // Push notification: so para mensagens incoming (cliente enviou)
-    if (payload.type === 'incoming') {
+    // Push notification: so para mensagens incoming (cliente enviou). Historico
+    // do espelho entra em silencio (seriam centenas de notificacoes de uma vez).
+    if (payload.type === 'incoming' && !ehHistorico) {
       const notifTitle = payload.sender_name || payload.metadata?.chat_name || 'Nova mensagem';
       const notifBody =
         payload.message_type === 'image' ? '📷 Imagem' :
@@ -1628,7 +1660,8 @@ export async function POST(req: NextRequest) {
       const motivoSemIA = aiConfigResult
         ? motivoIaNaoAtende(aiConfigResult, clientDataResult?.phone || payload.real_phone || payload.phone)
         : null;
-      const iaDesligada = motivoSemIA !== null;
+      // Espelho nunca tem IA: nao ha por onde responder (somente leitura).
+      const iaDesligada = motivoSemIA !== null || !!espelho;
       const companyAiConfig = aiConfigResult;
       const clientData = clientDataResult;
       const companyApiKey = apiKeyResult;
@@ -1682,7 +1715,7 @@ export async function POST(req: NextRequest) {
         conversationId,
         // Agente do Maestro desligado segue pro Maestro, que registra "desligado" e nao responde.
         agente: companyAiConfig
-          ? { id: companyAiConfig.id, engine: companyAiConfig.engine, isActive: companyAiConfig.isActive }
+          ? { id: companyAiConfig.id, engine: companyAiConfig.engine, isActive: companyAiConfig.isActive && !espelho }
           : null,
         conversa: conversationData
           ? { resumeUrl: conversationData.resumeUrl, resumeUrlExpiresAt: conversationData.resumeUrlExpiresAt }

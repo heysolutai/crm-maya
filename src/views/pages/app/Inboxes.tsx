@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { WhatsAppCloudCard } from '@/components/super-admin/company-details/WhatsAppCloudCard';
 import { WhatsAppCloudConnect } from '@/components/inboxes/WhatsAppCloudConnect';
 import { ServidorUazapiField, servidorUazapiValido } from '@/components/inboxes/ServidorUazapiField';
+import { EspelhoCredenciais } from '@/components/inboxes/EspelhoConexao';
 import { useRouter } from 'next/navigation';
 import { useInboxes, type Inbox } from '@/hooks/useInboxes';
 import { useChannelCredentials } from '@/hooks/useChannelCredentials';
@@ -43,6 +44,7 @@ import {
   CheckCircle2,
   Pencil,
   Bot,
+  Eye,
 } from 'lucide-react';
 import { CHANNEL_REGISTRY, type ChannelType } from '@/lib/channels/types';
 import { cn } from '@/lib/utils';
@@ -55,6 +57,7 @@ const channelIcon: Record<ChannelType, typeof Smartphone> = {
   whatsapp_cloud: Cloud,
   instagram: Instagram,
   notificame: Cloud,
+  espelho: Eye,
 };
 
 const statusStyles: Record<string, { dot: string; label: string }> = {
@@ -105,7 +108,11 @@ export default function Inboxes() {
   });
 
   // Restaurante: so 2 canais: API Reservemaya (uazapi) e WhatsApp Cloud.
-  const ALLOWED_CHANNELS: ChannelType[] = ['uazapi', 'whatsapp_cloud'];
+  // Espelho (copia somente leitura de outro sistema): configuracao interna, so super-admin.
+  const ALLOWED_CHANNELS: ChannelType[] = ['uazapi', 'whatsapp_cloud', ...(isSuperAdmin ? (['espelho'] as const) : [])];
+  const ehEspelho = selectedChannel === 'espelho';
+  // URL + chave da conexao espelho recem-criada (a chave so aparece agora).
+  const [credenciaisEspelho, setCredenciaisEspelho] = useState<{ inboxId: string; chave: string } | null>(null);
   const channels = Object.values(CHANNEL_REGISTRY).filter((c) => ALLOWED_CHANNELS.includes(c.type));
 
   // Canais que precisam de URL + API key/admin token do servidor self-hosted.
@@ -259,9 +266,14 @@ export default function Inboxes() {
         // (backend ensureInboxAiAgent). Nao enviamos aiAgentId/createAiAgentNamed.
       },
       {
-        onSuccess: (inbox: Inbox) => {
+        onSuccess: (inbox: Inbox & { espelho_chave?: string }) => {
           setDialogOpen(false);
           resetForm();
+          // Espelho: mostra URL + chave uma vez; a tela da conexao abre ao fechar.
+          if (inbox.espelho_chave) {
+            setCredenciaisEspelho({ inboxId: inbox.id, chave: inbox.espelho_chave });
+            return;
+          }
           // Canal de QR: a tela de detalhe ja abre o QR Code (?conectar=1).
           const isQr = CHANNEL_REGISTRY[inbox.channel_type as ChannelType]?.connectionMode === 'qr';
           router.push(`/app/inboxes/${inbox.id}${isQr ? '?conectar=1' : ''}`);
@@ -515,18 +527,20 @@ export default function Inboxes() {
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="restaurant-id">ID do restaurante</Label>
-              <Input
-                id="restaurant-id"
-                placeholder="Ex: 1042"
-                value={restaurantId}
-                onChange={(e) => setRestaurantId(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Identificador do restaurante no sistema de reservas. Opcional.
-              </p>
-            </div>
+            {!ehEspelho && (
+              <div className="space-y-2">
+                <Label htmlFor="restaurant-id">ID do restaurante</Label>
+                <Input
+                  id="restaurant-id"
+                  placeholder="Ex: 1042"
+                  value={restaurantId}
+                  onChange={(e) => setRestaurantId(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Identificador do restaurante no sistema de reservas. Opcional.
+                </p>
+              </div>
+            )}
 
             {isNotificame && (
               <div className="space-y-3 rounded-lg border border-dashed p-3 bg-muted/30">
@@ -756,7 +770,13 @@ export default function Inboxes() {
                 conexao, na aba "Prompts". Por isso nao pedimos agente aqui. */}
             <div className="rounded-lg border border-dashed p-3 bg-muted/30 flex items-start gap-2">
               <Bot className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              {adotando ? (
+              {ehEspelho ? (
+                <p className="text-xs text-muted-foreground">
+                  <strong>Somente leitura:</strong> o outro sistema manda uma cópia de cada mensagem para cá. A IA
+                  fica sempre desligada e não dá para responder por esta conexão. Depois de criar, você recebe a URL e
+                  a chave para configurar lá.
+                </p>
+              ) : adotando ? (
                 <p className="text-xs text-muted-foreground">
                   Esta conexão terá seu próprio Agente IA, criado <strong>desligado</strong>: as
                   conversas chegam aqui, mas a IA não responde ninguém até você ligar na aba{' '}
@@ -791,6 +811,40 @@ export default function Inboxes() {
             >
               {isCreating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Criar caixa de entrada
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!credenciaisEspelho}
+        onOpenChange={(aberto) => {
+          if (aberto || !credenciaisEspelho) return;
+          const { inboxId } = credenciaisEspelho;
+          setCredenciaisEspelho(null);
+          router.push(`/app/inboxes/${inboxId}`);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Conexão espelho criada</DialogTitle>
+            <DialogDescription>
+              Configure estes dados no sistema de origem. Ele passa a mandar as mensagens para cá.
+            </DialogDescription>
+          </DialogHeader>
+          {credenciaisEspelho && (
+            <EspelhoCredenciais inboxId={credenciaisEspelho.inboxId} chave={credenciaisEspelho.chave} />
+          )}
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                if (!credenciaisEspelho) return;
+                const { inboxId } = credenciaisEspelho;
+                setCredenciaisEspelho(null);
+                router.push(`/app/inboxes/${inboxId}`);
+              }}
+            >
+              Já salvei a chave
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -7,6 +7,7 @@ import { uploadToB2, buildB2Key, MIME_TO_EXT } from '@/lib/storage'
 import { prepararAudioParaWeb } from '@/lib/audio-transcode'
 import { publishEvent } from '@/lib/realtime'
 import { isCovercutMediaRef, downloadCovercutMedia } from '@/lib/channels/covercut'
+import { isEspelhoMediaRef, downloadEspelhoMedia } from '@/lib/channels/espelho'
 
 // Download media via UazAPI /message/download endpoint (only reliable method: WhatsApp URLs are encrypted)
 async function downloadViaUazAPI(
@@ -129,9 +130,12 @@ async function processMedia(job: Job<MediaProcessingJob>) {
 
   // Download via UazAPI (only reliable method: WhatsApp URLs are encrypted).
   // WhatsApp Cloud: referencia covercut-media:// (media_id da Meta).
+  // Espelho: referencia espelho-media:// (link publico do sistema de origem).
   const mediaData = isCovercutMediaRef(job.data.mediaUrl)
     ? await downloadCovercutMedia(job.data.mediaUrl)
-    : await downloadViaUazAPI(messageKey, instanceApiKey, instanceApiUrl)
+    : isEspelhoMediaRef(job.data.mediaUrl)
+      ? await downloadEspelhoMedia(job.data.mediaUrl)
+      : await downloadViaUazAPI(messageKey, instanceApiKey, instanceApiUrl)
 
   if (!mediaData || mediaData.buffer.length === 0) {
     throw new Error(`Failed to download media for message ${messageId} (key: ${messageKey})`)

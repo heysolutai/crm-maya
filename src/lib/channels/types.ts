@@ -14,6 +14,7 @@ export const CHANNEL_TYPES = [
   'whatsapp_cloud',
   'instagram',
   'notificame',
+  'espelho',
 ] as const;
 
 export type ChannelType = (typeof CHANNEL_TYPES)[number];
@@ -76,6 +77,14 @@ export const CHANNEL_REGISTRY: Record<ChannelType, ChannelMeta> = {
     type: 'notificame',
     label: 'NotificaMe Hub',
     description: 'NotificaMe Hub: WhatsApp via API token (sem QR Code)',
+    status: 'available',
+    connectionMode: 'token',
+  },
+  espelho: {
+    type: 'espelho',
+    label: 'Espelho (somente leitura)',
+    description:
+      'Recebe uma cópia das conversas de outro sistema (ex.: WhatsApp oficial no Hermes). Não envia mensagens.',
     status: 'available',
     connectionMode: 'token',
   },

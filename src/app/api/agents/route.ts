@@ -13,6 +13,8 @@ import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { ensureInboxAiAgent } from '@/lib/api/inbox-ai-agent'
 import { assertSafeUrl } from '@/lib/ai-tools/http'
+import { encryptSecret } from '@/lib/ai-tools/secrets'
+import { espelhoInstanceName, gerarChaveEspelho } from '@/lib/channels/espelho'
 
 const createAgentSchema = z.object({
   channelType: z.enum(CHANNEL_TYPES),
@@ -257,6 +259,35 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Espelho (somente leitura): outro sistema manda copia das conversas pro
+    // webhook /api/webhooks/espelho/<id>, assinado com a chave gerada aqui. A
+    // chave vai em texto puro SO nesta resposta (a tela mostra uma vez); no
+    // banco fica cifrada. So super-admin cria (configuracao interna).
+    if (channelType === 'espelho') {
+      if (!isSuperAdmin) {
+        return NextResponse.json({ error: 'So a equipe Maya cria conexoes espelho.' }, { status: 403 })
+      }
+      const chave = gerarChaveEspelho()
+      const espelho = await prisma.inbox.create({
+        data: {
+          companyId,
+          instanceName: espelhoInstanceName(),
+          displayName,
+          channelType,
+          instanceApiKey: encryptSecret(chave),
+          channelConfig: { espelho: true } as Prisma.InputJsonValue,
+          status: 'connected',
+          isActive: true,
+        },
+      })
+      // Nunca responde por aqui: o agente nasce (e o pipeline mantem) desligado.
+      await ensureInboxAiAgent(espelho.id, companyId, displayName, { iaLigada: false }).catch((e) =>
+        console.error('[agents:create espelho] ensureInboxAiAgent failed', e)
+      )
+      const criado = await prisma.inbox.findUnique({ where: { id: espelho.id } })
+      return NextResponse.json({ ...mapAgent(criado || espelho), espelho_chave: chave }, { status: 201 })
+    }
+
     // NotificaMe usa URL fixa: preenche aqui pra a upsert de channelCredential
     // funcionar e pra UI nao precisar coletar.
     if (channelType === 'notificame' && !serverUrl) {
@@ -469,8 +500,14 @@ export async function PUT(req: NextRequest) {
     const ehValorNovo = (v: string | undefined) =>
       typeof v === 'string' && v.trim().length > 0 && v !== REDACTED && !v.startsWith('••••')
 
-    if (ehValorNovo(instanceApiKey)) dataToUpdate.instanceApiKey = instanceApiKey!.trim()
-    if (ehValorNovo(adminToken)) dataToUpdate.adminToken = adminToken!.trim()
+    // Espelho: a chave e cifrada e so muda por "Gerar nova chave"
+    // (/api/agents/[id]/espelho-chave); servidor e token nao existem nele.
+    if (existing.channelType === 'espelho') {
+      delete dataToUpdate.apiUrl
+    } else {
+      if (ehValorNovo(instanceApiKey)) dataToUpdate.instanceApiKey = instanceApiKey!.trim()
+      if (ehValorNovo(adminToken)) dataToUpdate.adminToken = adminToken!.trim()
+    }
 
     // restaurantId mora dentro do Json channelConfig: precisa de merge, nao
     // de substituicao: gravar o objeto inteiro apagaria serverApiKey e

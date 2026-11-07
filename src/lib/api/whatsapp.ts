@@ -133,6 +133,20 @@ export async function sendToWhatsApp(
   const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
 
   try {
+    // Conversa de conexao "Espelho" e somente leitura. Sem isso a mensagem
+    // sairia pela `instance` (primeira inbox ativa), ou seja, por OUTRO numero.
+    const espelho = await prisma.message.findFirst({
+      where: { id: messageId, conversation: { inbox: { channelType: 'espelho' } } },
+      select: { id: true },
+    });
+    if (espelho) {
+      const erro = await marcarFalhaEnvio(
+        messageId,
+        'Conexão espelho (somente leitura): esta conversa não envia mensagens pelo CRM.'
+      );
+      return { success: false, error: erro };
+    }
+
     if (payload.replyToMessageId) {
       const uazMessageId = await getUAZMessageId(payload.replyToMessageId);
       if (uazMessageId) {

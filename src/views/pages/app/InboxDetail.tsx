@@ -33,7 +33,9 @@ import {
   Square,
   BookOpen,
   FlaskConical,
+  Eye,
 } from 'lucide-react';
+import { EspelhoConexaoCard } from '@/components/inboxes/EspelhoConexao';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { CHANNEL_REGISTRY, type ChannelType } from '@/lib/channels/types';
 import { explicarErroConexao } from '@/lib/erros/envio';
@@ -54,6 +56,7 @@ const channelIcon: Record<ChannelType, typeof Smartphone> = {
   whatsapp_cloud: Cloud,
   instagram: Instagram,
   notificame: Cloud,
+  espelho: Eye,
 };
 
 const statusStyles: Record<string, { dot: string; label: string; badge: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -330,6 +333,21 @@ function ConnectionTab({ inbox }: { inbox: ReturnType<typeof useInboxes>['inboxe
       setDisconnecting(false);
     }
   };
+
+  // Espelho: nao conecta nada (sem QR, sem token); so URL e chave do outro sistema.
+  if (inbox.channel_type === 'espelho') {
+    return (
+      <Card>
+        <CardContent className="p-6 space-y-5">
+          <div>
+            <h3 className="text-lg font-semibold">Conexão do canal</h3>
+            <p className="text-sm text-muted-foreground">{channelMeta?.description}</p>
+          </div>
+          <EspelhoConexaoCard inboxId={inbox.id} companyId={companyId} isSuperAdmin={isSuperAdmin} />
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!isAvailable) {
     return (
