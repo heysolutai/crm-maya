@@ -1231,38 +1231,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Buscar conversa (fechada OU ativa) ou criar nova
+    // 3. Buscar conversa ATIVA; sem ativa, reabrir a fechada; sem nenhuma, criar.
+    // A ativa vem primeiro: antes, mensagem do cliente reabria uma fechada
+    // MESMO havendo ativa, e cliente com 2+ conversas fechadas tinha as
+    // mensagens novas espalhadas (cada mensagem reabria uma).
     let conversationId: string | undefined;
     let conversationReopened = false;
-
-    if (payload.type === 'incoming') {
-      const closedConversation = await prisma.conversation.findFirst({
-        where: {
-          companyId,
-          clientId,
-          channel: (payload.channel || 'whatsapp') as any,
-          status: 'closed',
-        },
-        select: { id: true, status: true },
-        orderBy: { endedAt: 'desc' },
-      });
-
-      if (closedConversation) {
-        const reopenedConv = await prisma.conversation.update({
-          where: { id: closedConversation.id },
-          data: {
-            status: 'active',
-            endedAt: null,
-            updatedAt: new Date(),
-          },
-          select: { id: true },
-        });
-
-        conversationId = reopenedConv.id;
-        conversationReopened = true;
-        console.log('Reopened closed conversation:', conversationId);
-      }
-    }
 
     if (!conversationId) {
       // Filtra "nao fechadas" em vez de lista explicita de status. Cobre qualquer
@@ -1294,6 +1268,36 @@ export async function POST(req: NextRequest) {
           where: { id: conversationId, inboxId: null },
           data: { inboxId },
         }).catch(() => {});
+      }
+    }
+
+    // Sem conversa ativa: mensagem do cliente reabre a ultima fechada.
+    if (!conversationId && payload.type === 'incoming') {
+      const closedConversation = await prisma.conversation.findFirst({
+        where: {
+          companyId,
+          clientId,
+          channel: (payload.channel || 'whatsapp') as any,
+          status: 'closed',
+        },
+        select: { id: true, status: true },
+        orderBy: { endedAt: 'desc' },
+      });
+
+      if (closedConversation) {
+        const reopenedConv = await prisma.conversation.update({
+          where: { id: closedConversation.id },
+          data: {
+            status: 'active',
+            endedAt: null,
+            updatedAt: new Date(),
+          },
+          select: { id: true },
+        });
+
+        conversationId = reopenedConv.id;
+        conversationReopened = true;
+        console.log('Reopened closed conversation:', conversationId);
       }
     }
 

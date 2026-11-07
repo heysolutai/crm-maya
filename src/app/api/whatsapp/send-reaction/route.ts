@@ -67,6 +67,14 @@ export async function POST(req: NextRequest) {
       where: { id: message.conversationId, companyId },
       select: { inbox: { select: { channelType: true, channelConfig: true } } },
     });
+    // Conversa espelho e somente leitura: a reacao sairia pela primeira inbox
+    // ativa (outro numero).
+    if (convInbox?.inbox?.channelType === 'espelho') {
+      return jsonResponse(
+        { success: false, error: 'Conversa espelho (somente leitura): não dá para reagir pelo CRM.' },
+        409
+      );
+    }
     if (convInbox?.inbox?.channelType === 'whatsapp_cloud') {
       const config = (convInbox.inbox.channelConfig ?? {}) as Record<string, unknown>;
       await covercutRequest('POST', '/messages/send', {

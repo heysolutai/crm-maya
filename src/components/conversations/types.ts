@@ -82,6 +82,18 @@ export interface Conversation {
   resume_url_expires_at?: string | null;
   /** Link pra abrir a execucao no n8n. So pra diagnostico; nunca e chamado. */
   execution_url?: string | null;
+  /** Conexao (inbox) da conversa, normalizada em useConversations. */
+  agent?: {
+    id: string;
+    display_name: string | null;
+    channel_type: string;
+    phone_number: string | null;
+  } | null;
+}
+
+/** Conversa da conexao Espelho: copia de outro sistema, o CRM nao envia nada por ela. */
+export function conversaSomenteLeitura(conversation: Pick<Conversation, 'agent'>): boolean {
+  return conversation.agent?.channel_type === 'espelho';
 }
 
 export interface TeamMember {

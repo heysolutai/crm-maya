@@ -25,11 +25,14 @@ const PENDENTE_TTL_S = 60 * 60
 
 const chavePendente = (companyId: string, wamid: string) => `espelho:status-pendente:${companyId}:${wamid}`
 
-/** Aplica o status nas mensagens com esse wamid. Devolve quantas mudou (0 = mensagem ainda nao existe). */
+/**
+ * Aplica o status nas mensagens com esse wamid. Devolve quantas EXISTEM
+ * (0 = ainda nao gravada: o status fica pendente).
+ */
 export async function aplicarStatusEspelho(companyId: string, wamid: string, valor: string): Promise<number> {
   const alvos = await prisma.message.findMany({
     where: { uazMessageId: wamid, conversation: { companyId } },
-    select: { id: true, conversationId: true },
+    select: { id: true, conversationId: true, readStatus: true },
   })
   if (!alvos.length) return 0
 
@@ -39,13 +42,18 @@ export async function aplicarStatusEspelho(companyId: string, wamid: string, val
   }
 
   const readStatus = READ_STATUS[valor]
-  if (!readStatus) return 0
+  if (!readStatus) return alvos.length
+  // So avanca: um "entregue" reenviado (o sistema de origem reenvia por ate 2 h)
+  // depois do "lida" nao rebaixa a mensagem nem a tela aberta.
+  const avancam = alvos.filter((m) => !m.readStatus || (ORDEM[m.readStatus] ?? 0) < ORDEM[readStatus])
+  if (!avancam.length) return alvos.length
+
   await prisma.message.updateMany({
-    where: { id: { in: alvos.map((m) => m.id) } },
+    where: { id: { in: avancam.map((m) => m.id) } },
     data: { readStatus, ...(readStatus === 'read' ? { readAt: new Date() } : {}) },
   })
   await Promise.all(
-    alvos.map((m) =>
+    avancam.map((m) =>
       publishEvent(companyId, {
         type: 'message:update',
         conversationId: m.conversationId,
@@ -57,29 +65,40 @@ export async function aplicarStatusEspelho(companyId: string, wamid: string, val
   return alvos.length
 }
 
-/** Mensagem ainda nao gravada: guarda o status (o mais adiantado) pra aplicar quando ela chegar. */
+/**
+ * Mensagem ainda nao gravada: guarda o status (o mais adiantado) e confere
+ * DE NOVO. Os dois lados gravam primeiro e conferem depois (aqui: guarda o
+ * status e procura a mensagem; no pipeline: grava a mensagem e procura o
+ * status), entao um sempre enxerga o outro. Sem isso, a mensagem podia ser
+ * gravada entre a busca e o "guardar", e o status ficava esquecido.
+ */
 export async function guardarStatusPendente(companyId: string, wamid: string, valor: string): Promise<void> {
   if (!ORDEM[valor]) return
   try {
     const redis = getRedisConnection()
     const chave = chavePendente(companyId, wamid)
     const atual = await redis.get(chave)
-    if (atual && (ORDEM[atual] ?? 0) >= ORDEM[valor]) return
-    await redis.set(chave, valor, 'EX', PENDENTE_TTL_S)
+    if (!atual || (ORDEM[atual] ?? 0) < ORDEM[valor]) await redis.set(chave, valor, 'EX', PENDENTE_TTL_S)
   } catch (e) {
     console.warn('[Espelho] nao guardou status pendente:', (e as Error).message)
+    return
   }
+  await aplicarStatusPendente(companyId, wamid)
 }
 
-/** Chamado pelo pipeline ao gravar a mensagem: aplica o status que chegou antes dela. */
+/**
+ * Aplica o status pendente, se a mensagem ja existir. Chamado pelo pipeline
+ * ao gravar a mensagem e pelo guardarStatusPendente (segunda conferencia).
+ * So apaga a pendencia depois de aplicar de verdade.
+ */
 export async function aplicarStatusPendente(companyId: string, wamid: string): Promise<void> {
   try {
     const redis = getRedisConnection()
     const chave = chavePendente(companyId, wamid)
     const valor = await redis.get(chave)
     if (!valor) return
-    await redis.del(chave)
-    await aplicarStatusEspelho(companyId, wamid, valor)
+    const aplicadas = await aplicarStatusEspelho(companyId, wamid, valor)
+    if (aplicadas > 0) await redis.del(chave)
   } catch (e) {
     console.warn('[Espelho] nao aplicou status pendente:', (e as Error).message)
   }

@@ -42,7 +42,14 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { createWhatsAppLink } from '@/lib/linkify';
 import { cn } from '@/lib/utils';
-import { statusColors, statusLabels, type Conversation, type ConversationStatus, type TeamMember } from './types';
+import {
+  conversaSomenteLeitura,
+  statusColors,
+  statusLabels,
+  type Conversation,
+  type ConversationStatus,
+  type TeamMember,
+} from './types';
 import {
   OPCOES_PAUSA,
   formatarDuracao,
@@ -136,6 +143,8 @@ export const ConversationHeader = memo(function ConversationHeader({
 
   // ── Pausa da IA ──
   const cliente = conversation.client;
+  // Espelho: a IA nunca responde por essa conexao, entao "Pausar IA" nao se aplica.
+  const somenteLeitura = conversaSomenteLeitura(conversation);
   const prazoPausa = cliente?.ai_paused ? cliente.ai_paused_until ?? null : null;
   const agora = useAgora(!!prazoPausa, prazoPausa);
   const iaPausada = isAiPausedNow(cliente, agora);
@@ -318,7 +327,7 @@ export const ConversationHeader = memo(function ConversationHeader({
         )}
 
         {/* Pausa da IA: estado sempre visivel + menu com os prazos. */}
-        {cliente?.id && (
+        {cliente?.id && !somenteLeitura && (
           <>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

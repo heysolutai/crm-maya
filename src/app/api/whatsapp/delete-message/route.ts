@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
         uazMessageId: true,
         conversationId: true,
         mediaUrl: true,
+        conversation: { select: { inbox: { select: { channelType: true } } } },
       },
     });
 
@@ -51,8 +52,12 @@ export async function POST(req: NextRequest) {
       return jsonResponse({ error: 'Mensagem nao encontrada' }, 404);
     }
 
+    // Conversa espelho: apaga so no CRM. O revoke abaixo usa a primeira inbox
+    // ativa (outro numero) e a mensagem nem existe la.
+    const ehEspelho = message.conversation?.inbox?.channelType === 'espelho';
+
     // Se tem uazMessageId, manda o revoke pro WhatsApp antes de deletar
-    if (message.uazMessageId) {
+    if (message.uazMessageId && !ehEspelho) {
       const instance = await prisma.inbox.findFirst({
         where: { companyId: auth.companyId, isActive: true },
         select: { apiUrl: true, instanceApiKey: true },

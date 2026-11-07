@@ -20,7 +20,7 @@ import { useInboxes } from '@/hooks/useInboxes';
 import { useDepartmentQueue } from '@/hooks/useDepartmentQueue';
 import { usePresenceContext } from '@/hooks/usePresence';
 import { useAiToolCalls } from '@/hooks/useAiToolCalls';
-import { MessageCircle, Loader2, Trash2, X } from 'lucide-react';
+import { Eye, MessageCircle, Loader2, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -50,6 +50,7 @@ import { NewConversationDialog } from '@/components/conversations/dialogs/NewCon
 import { DeleteMessageDialog } from '@/components/conversations/dialogs/DeleteMessageDialog';
 import { ForwardMessageDialog } from '@/components/conversations/dialogs/ForwardMessageDialog';
 import type { Message, Conversation, TeamMember } from '@/components/conversations/types';
+import { conversaSomenteLeitura } from '@/components/conversations/types';
 
 export default function Conversations() {
   const searchParams = useSearchParams();
@@ -780,6 +781,13 @@ export default function Conversations() {
 
             <TypingIndicator typingAgents={typingAgents} />
 
+            {/* Espelho: copia de outro sistema; o CRM nao envia nada por ela. */}
+            {conversaSomenteLeitura(selectedConv) ? (
+              <div className="flex items-center justify-center gap-2 border-t bg-muted/30 px-4 py-3 text-center text-sm text-muted-foreground">
+                <Eye className="h-4 w-4 shrink-0" />
+                <span>Conversa espelho (somente leitura): as respostas são feitas no sistema de origem.</span>
+              </div>
+            ) : (
             <MessageInput
               messageText={messageText}
               onInputChange={handleInputChange}
@@ -799,6 +807,7 @@ export default function Conversations() {
               isSendingMedia={isSendingMedia}
               onFileSelect={setSelectedFile}
             />
+            )}
             </div>
 
             {/* Painel de contexto fixo — abaixo de lg vira a gaveta (ConversationInfoSheet) */}
