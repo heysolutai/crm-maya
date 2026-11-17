@@ -15,7 +15,7 @@ export const MOTIVOS = {
   RESPOSTA_BLOQUEADA: 'resposta da IA bloqueada: IA pausada',
   /** O restaurante desligou a IA do WhatsApp (chave "IA atendendo"). */
   IA_DESLIGADA: 'IA desligada neste WhatsApp',
-  /** IA ligada so para um numero (teste) e a mensagem veio de outro cliente. */
+  /** IA ligada so para numeros de teste e a mensagem veio de outro cliente (texto fixo: nao mudar). */
   IA_SO_OUTRO_NUMERO: 'IA ligada so para outro numero',
 
   // Maestro (IA do proprio CRM). Textos FIXOS: o banco guarda estes e a tela
@@ -92,9 +92,9 @@ const EXPLICACOES_MAESTRO: Record<string, Explicacao> = {
     oQueFazer: 'Se a IA deveria estar atendendo, ligue a chave "IA atendendo" na aba "Agente de IA" deste WhatsApp.',
   },
   [MOTIVOS.IA_SO_OUTRO_NUMERO]: {
-    resultado: 'IA só para um número',
+    resultado: 'IA só para números de teste',
     nivel: 'ok',
-    porque: 'A IA deste WhatsApp está ligada só para um número de teste: este cliente é atendido pela equipe.',
+    porque: 'A IA deste WhatsApp está ligada só para os números de teste, e este cliente não está na lista: ele é atendido pela equipe.',
     oQueFazer: 'Quando terminar de testar, deixe a IA "Para todos" na aba "Agente de IA" deste WhatsApp.',
   },
   [MOTIVOS.MAESTRO_OUTRO_MOTOR]: {

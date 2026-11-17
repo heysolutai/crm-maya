@@ -11,6 +11,7 @@ import { logSecurityEvent } from '@/lib/security-log'
 import { consolidatePrompt } from '@/lib/promptConsolidation'
 import { historicoComTroca } from '@/lib/promptHistorico'
 import { extractChoices } from '@/lib/agentSimpleConfig'
+import { juntarNumerosTeste, MAX_NUMEROS_TESTE, numerosDoTeste } from '@/lib/ai/so-um-numero'
 
 /**
  * Normaliza o campo `prompts` do agente pra resposta: consolida os esquemas
@@ -94,12 +95,18 @@ const updateAiConfigurationSchema = z.object({
   name: z.string().min(1, 'Name is required').optional(),
   prompts: z.record(z.string(), z.any()).optional(),
   is_active: z.boolean().optional(),
-  /** IA ligada so para este telefone (teste). null ou vazio = para todos. Guarda so os digitos. */
+  /**
+   * IA ligada so para estes telefones (teste). Lista ou texto separado por
+   * virgula. null, vazio ou lista vazia = para todos. Guarda so os digitos,
+   * sem repetidos, separados por virgula.
+   */
   only_phone: z
-    .string()
-    .max(30)
-    .transform((v) => v.replace(/\D/g, ''))
-    .refine((v) => v === '' || (v.length >= 10 && v.length <= 13), 'Telefone inválido: use DDD + número')
+    // Teto alto so contra abuso: o limite de verdade (MAX_NUMEROS_TESTE) e o refine abaixo, com mensagem clara.
+    .union([z.string().max(2000), z.array(z.string().max(30)).max(200)])
+    .transform((v) => numerosDoTeste(Array.isArray(v) ? v.join(',') : v))
+    .refine((ns) => ns.every((n) => n.length >= 10 && n.length <= 13), 'Telefone inválido: use DDD + número')
+    .refine((ns) => ns.length <= MAX_NUMEROS_TESTE, `No máximo ${MAX_NUMEROS_TESTE} números de teste`)
+    .transform((ns) => juntarNumerosTeste(ns))
     .nullable()
     .optional(),
   whatsapp_instance_id: z.string().uuid('Invalid whatsapp_instance_id format').optional().nullable(),

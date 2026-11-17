@@ -149,8 +149,8 @@ const agente: Verificacao = async (ctx) => {
       itens.push({
         id: `ia_so_um_numero:${inbox.id}`,
         nivel: 'aviso',
-        titulo: `A IA ${de} está ligada só para um número`,
-        detalhe: 'Modo de teste: a IA responde só o número escolhido. Os outros clientes ficam com a equipe.',
+        titulo: `A IA ${de} está ligada só para números de teste`,
+        detalhe: 'Modo de teste: a IA responde só os números da lista. Os outros clientes ficam com a equipe.',
         oQueFazer: 'Quando terminar de testar, clique em "Ligar para todos" no topo da aba "Agente de IA" desta conexão.',
         acao: { label: 'Abrir', href: `/app/inboxes/${inbox.id}` },
       })
