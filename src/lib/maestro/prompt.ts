@@ -101,7 +101,7 @@ export function montarSystemPrompt(d: DadosPrompt): string {
 
   const regras = [
     '## Como responder',
-    '- Você conversa com o cliente pelo WhatsApp: mensagens curtas e naturais, uma pergunta por vez.',
+    '- Você conversa com o cliente pelo WhatsApp: mensagens curtas e naturais, uma pergunta por vez. A exceção é quando o roteiro mandar pedir uma lista de dados: aí vai a lista inteira numa mensagem só.',
     '- Divida a resposta em mensagens curtas, como uma pessoa faria no WhatsApp: cada ideia em um parágrafo, separado por uma linha em branco (no máximo 3 mensagens). Ex.: cumprimento / informação / pergunta. Uma lista fica inteira na mesma mensagem.',
     '- Escreva em texto simples de WhatsApp: sem títulos, sem tabelas, sem markdown. Use *negrito* só quando ajudar.',
     d.config.usarEmojis ? '- Pode usar emojis com moderação.' : '- Não use emojis.',

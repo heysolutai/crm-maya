@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { useEvents } from '@/hooks/useEvents';
 import { AbilityRow, AmberHint } from './AbilityRow';
@@ -17,6 +18,12 @@ interface Props {
 
 /** Habilidades que falam dos eventos do restaurante. */
 const EVENT_TOOLS = ['consultar_eventos', 'registrar_inscricao_evento'];
+
+/** Encaminhamentos: as regras (quando, o que responder, quem avisar) ficam no CRM. */
+const REGRAS_DO_CRM: Record<string, 'atendimento' | 'eventos'> = {
+  transferir_para_humano: 'atendimento',
+  encaminhar_para_eventos: 'eventos',
+};
 
 /** Uma linha por habilidade, cada chave salva na hora. */
 export function NativeToolsSection({ native, tools, canEdit }: Props) {
@@ -59,6 +66,15 @@ export function NativeToolsSection({ native, tools, canEdit }: Props) {
             )}
             {tool.name === 'transferir_para_humano' && !tool.enabled && (
               <AmberHint>Recomendado deixar ligado.</AmberHint>
+            )}
+            {REGRAS_DO_CRM[tool.name] && (
+              <Link
+                href={`/app/crm?funil=${REGRAS_DO_CRM[tool.name]}&regras=1`}
+                className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                Ver regras e avisos
+                <ArrowRight className="h-3 w-3" />
+              </Link>
             )}
           </AbilityRow>
         );

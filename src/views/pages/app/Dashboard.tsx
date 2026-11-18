@@ -11,9 +11,9 @@ import { DailyOverview } from '@/components/dashboard/DailyOverview';
 import { SituacaoCard } from '@/components/situacao/SituacaoCard';
 
 /**
- * Dashboard do restaurante: só os números macro do período (conversas,
- * reservas e o que foi passado para eventos e para a equipe). Detalhe fica
- * nas telas próprias.
+ * Dashboard do restaurante: só os números macro do período (conversas e o
+ * que foi passado para eventos e para a equipe). Reservas ficam no Reserve
+ * Maya. Detalhe fica nas telas próprias (CRM).
  */
 
 type PresetKey = '1d' | '7d' | '15d' | '30d' | 'custom';
@@ -81,7 +81,7 @@ export default function CompanyDashboard() {
         <div>
           <h1 className="text-[28px] font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground text-[14px] mt-1">
-            Como foi o período: conversas, reservas e o que foi passado para a equipe.
+            Como foi o período: conversas, eventos personalizados e o que foi passado para a equipe.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

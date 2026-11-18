@@ -1,8 +1,10 @@
 import { prisma } from '@/lib/db'
-import { enabledNativeNames, getNativeTool, NATIVE_TOOLS, type NativeTool } from './native'
+import { apresentarEventoPersonalizado, enabledNativeNames, getNativeTool, NATIVE_TOOLS, type NativeTool } from './native'
 import { parseParams, toFunctionDefinition } from './params'
 import { parsePostActions } from './post-actions'
 import { montarRoteiro } from './roteiro'
+import { regrasDaIA } from '@/lib/solicitacoes/servico'
+import { roteiroAtendimento, roteiroEventos } from '@/lib/solicitacoes/roteiro-regras'
 import { parseConfigFields } from './secrets'
 import type { ConfigField, FunctionDefinition, PostAction, ToolParam } from './types'
 
@@ -15,6 +17,8 @@ export interface ResolvedTool {
   parameters: ToolParam[]
   isWrite: boolean
   source: 'native' | 'integration'
+  /** Linhas proprias no roteiro do prompt (regras de encaminhamento do restaurante). */
+  roteiro?: string[]
   native?: NativeTool
   integration?: {
     id: string
@@ -223,7 +227,56 @@ export async function listCompanyTools(
   // Com uma ferramenta de reserva de integracao ligada, a nativa
   // "registrar_reserva" so confundiria a IA (duas formas de reservar).
   const temReservaExterna = tools.some((t) => t.source === 'integration' && t.http?.postActions.some((a) => a.type === 'registrar_reserva'))
-  return temReservaExterna ? tools.filter((t) => t.name !== 'registrar_reserva') : tools
+  return comRegrasDeEncaminhamento(companyId, temReservaExterna ? tools.filter((t) => t.name !== 'registrar_reserva') : tools)
+}
+
+/**
+ * Transferir e encaminhar para eventos ganham as regras do restaurante
+ * (Solicitacoes): a categoria vira uma lista fechada e o roteiro do prompt diz
+ * quando usar cada uma. Falha ao ler as regras: segue com a ferramenta como
+ * sempre foi (a execucao cai na categoria padrao).
+ */
+async function comRegrasDeEncaminhamento(companyId: string, tools: ResolvedTool[]): Promise<ResolvedTool[]> {
+  const nomes = ['transferir_para_humano', 'encaminhar_para_eventos']
+  if (!tools.some((t) => nomes.includes(t.name))) return tools
+  let regras: Awaited<ReturnType<typeof regrasDaIA>>
+  try {
+    regras = await regrasDaIA(companyId)
+  } catch (err) {
+    console.error('[ai-tools] falha ao ler as regras de encaminhamento:', (err as Error)?.message)
+    return tools
+  }
+  const resultado = tools.map((t) => {
+    const funil = t.name === 'transferir_para_humano' ? 'atendimento' : t.name === 'encaminhar_para_eventos' ? 'eventos' : null
+    if (!funil) return t
+    const doFunil = regras.filter((r) => r.funnel === funil)
+    if (!doFunil.length) return t
+    return {
+      ...t,
+      parameters: t.parameters.map((p) =>
+        p.key === 'categoria' ? { ...p, enum: doFunil.map((r) => r.key), required: funil === 'atendimento' } : p
+      ),
+      roteiro: funil === 'atendimento' ? roteiroAtendimento(doFunil) : roteiroEventos(doFunil),
+    }
+  })
+
+  // Triagem com apresentacao: a ferramenta que manda a apresentacao vem junto
+  // com "Encaminhar eventos", so com as regras que a usam.
+  const comApresentacao = regras.filter((r) => r.funnel === 'eventos' && r.flowMode === 'apresentar' && r.introMessage.trim())
+  if (comApresentacao.length && tools.some((t) => t.name === 'encaminhar_para_eventos')) {
+    const base = fromNative(apresentarEventoPersonalizado)
+    resultado.push({
+      ...base,
+      parameters: base.parameters.map((p) => (p.key === 'categoria' ? { ...p, enum: comApresentacao.map((r) => r.key) } : p)),
+    })
+  }
+  return resultado
+}
+
+/** A "apresentar" vale se "Encaminhar eventos" estiver ligada (ela nao tem chave propria). */
+async function apresentarLigada(companyId: string): Promise<boolean> {
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { settings: true } })
+  return enabledNativeNames(company?.settings).includes('encaminhar_para_eventos')
 }
 
 /**
@@ -233,6 +286,9 @@ export async function listCompanyTools(
  * cada WhatsApp so decide o que e OFERECIDO a IA (listCompanyTools).
  */
 export async function resolveCompanyTool(companyId: string, name: string): Promise<ResolvedTool | null> {
+  if (name === apresentarEventoPersonalizado.name) {
+    return (await apresentarLigada(companyId)) ? fromNative(apresentarEventoPersonalizado) : null
+  }
   const native = getNativeTool(name)
   if (native) {
     const company = await prisma.company.findUnique({ where: { id: companyId }, select: { settings: true } })
@@ -258,6 +314,7 @@ export async function resolveCompanyTool(companyId: string, name: string): Promi
  * "Testar" do super-admin e do restaurante).
  */
 export async function resolveToolForTest(companyId: string, name: string): Promise<ResolvedTool | null> {
+  if (name === apresentarEventoPersonalizado.name) return fromNative(apresentarEventoPersonalizado)
   const native = getNativeTool(name)
   if (native) return fromNative(native)
   const tool = await prisma.integrationTool.findUnique({ where: { name }, include: { integration: true } })

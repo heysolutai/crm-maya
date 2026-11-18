@@ -6,6 +6,11 @@ import { generateEmbedding, resolveOpenAiKey } from '@/lib/ai/embeddings'
 import { searchFaq } from '@/lib/vector-db'
 import { registrarReserva } from './post-actions'
 import { consultarEventos, registrarInscricaoEvento } from './eventos'
+import { abrirSolicitacao, regrasDaIA, respostaParaIA, type DadosSolicitacao } from '@/lib/solicitacoes/servico'
+import { REGRA_ATENDIMENTO_PADRAO, REGRA_EVENTO_PADRAO } from '@/lib/solicitacoes/regras-padrao'
+import { valorEmReais } from '@/lib/solicitacoes/funis'
+import { mensagemPedindoDados } from '@/lib/solicitacoes/perguntas'
+import { enviarImagensDaIA } from './enviar-midia'
 import type { ToolContext, ToolParam } from './types'
 
 /**
@@ -27,18 +32,83 @@ export interface NativeTool {
   run(ctx: ToolContext, args: Record<string, string | number | boolean>): Promise<{ ok: boolean; result: string; error?: string }>
 }
 
+/** Primeiro nome para a resposta ({nome}). Nome que e so telefone fica vazio. */
+function primeiroNome(nome: string | null | undefined): string {
+  const n = (nome || '').trim()
+  if (!n || /^[\d\s+()-]+$/.test(n)) return ''
+  return n.split(/\s+/)[0]
+}
+
+/** "Data: 12/12; Pessoas: 30" -> { Data: '12/12', Pessoas: '30' }. Ate 12 campos curtos. */
+function lerDados(texto: unknown): DadosSolicitacao {
+  if (typeof texto !== 'string' || !texto.trim()) return {}
+  const dados: DadosSolicitacao = {}
+  for (const parte of texto.split(/[;\n]+/).slice(0, 12)) {
+    const i = parte.indexOf(':')
+    if (i <= 0) continue
+    const campo = parte.slice(0, i).trim().slice(0, 60)
+    const valor = parte.slice(i + 1).trim().slice(0, 300)
+    if (campo && valor) dados[campo] = valor
+  }
+  return dados
+}
+
+function texto(v: unknown): string {
+  return typeof v === 'string' ? v.trim() : typeof v === 'number' ? String(v) : ''
+}
+
+/**
+ * Regra escolhida pela IA no funil, ou a padrao. null = o restaurante desligou
+ * todas as regras do funil.
+ */
+async function regraDoFunil(companyId: string, funil: 'eventos' | 'atendimento', pedida: string, padrao: string) {
+  const regras = (await regrasDaIA(companyId)).filter((r) => r.funnel === funil)
+  return regras.find((r) => r.key === pedida) ?? regras.find((r) => r.key === padrao) ?? regras[0] ?? null
+}
+
 const transferirParaHumano: NativeTool = {
   name: 'transferir_para_humano',
   label: 'Transferir para um atendente',
-  help: 'A IA passa a conversa para a equipe quando não souber resolver ou o cliente pedir.',
+  help: 'A IA abre uma solicitação no CRM, em Atendimento humano (dúvida sem resposta, reclamação…), e passa a conversa para a equipe.',
   description:
-    'Transfere a conversa para um atendente humano. Use quando o cliente pedir para falar com uma pessoa, reclamar, ou quando você não conseguir resolver.',
+    'Passa a conversa para a equipe e abre uma solicitação em Atendimento humano, na categoria certa. Use quando o cliente pedir uma pessoa, reclamar, tiver um problema que as ferramentas não resolvem, ou você não souber a resposta depois de consultar as ferramentas. Não use para fazer, consultar, alterar ou cancelar reserva que as ferramentas de reserva resolvem.',
   promptHint:
-    'Se o cliente pedir um atendente, reclamar ou você não souber resolver, use transferir_para_humano e avise que um atendente vai continuar.',
-  parameters: [{ key: 'motivo', type: 'string', description: 'Motivo da transferência, em uma frase', required: false }],
+    'Se o cliente pedir um atendente, reclamar ou você não souber resolver, use transferir_para_humano com a categoria certa e responda como a ferramenta indicar.',
+  parameters: [
+    { key: 'categoria', type: 'string', description: 'Categoria do encaminhamento (veja o roteiro de quando usar cada uma)', required: false },
+    { key: 'motivo', type: 'string', description: 'O que o cliente pediu ou perguntou, em uma frase, com as palavras dele (vai para a equipe)', required: false },
+    {
+      key: 'dados',
+      type: 'string',
+      description: 'Só os dados que o cliente informou nesta conversa, no formato "Campo: valor; Campo: valor". Nunca deduza nem invente',
+      required: false,
+    },
+  ],
   isWrite: true,
   async run(ctx, args) {
     if (!ctx.conversa.id) return { ok: false, result: 'Sem conversa para transferir.', error: 'sem conversa' }
+    const regra = await regraDoFunil(ctx.empresa.id, 'atendimento', texto(args.categoria), REGRA_ATENDIMENTO_PADRAO)
+    if (regra) {
+      const motivo = texto(args.motivo) || null
+      await abrirSolicitacao({
+        companyId: ctx.empresa.id,
+        regra,
+        conversationId: ctx.conversa.id,
+        clientId: ctx.cliente.id,
+        clienteNome: ctx.cliente.nome || null,
+        clienteTelefone: ctx.cliente.telefone || null,
+        resumo: motivo,
+        dados: lerDados(args.dados),
+        origem: 'ia',
+        actor: 'ai',
+      })
+      return {
+        ok: true,
+        result: respostaParaIA(regra, { nome: primeiroNome(ctx.cliente.nome), resumo: motivo, restaurante: ctx.empresa.nome }),
+      }
+    }
+
+    // Todas as regras de atendimento desligadas: transfere como sempre, sem card.
     const conv = await prisma.conversation.update({
       where: { id: ctx.conversa.id },
       data: { status: 'pending', transferredTo: null, aiHandled: false, updatedAt: new Date() },
@@ -77,18 +147,72 @@ const transferirParaHumano: NativeTool = {
 
 const encaminharParaEventos: NativeTool = {
   name: 'encaminhar_para_eventos',
-  label: 'Encaminhar pedidos de eventos',
-  help: 'Registra quando o cliente quer um evento (aniversário, confraternização) para a equipe de eventos.',
+  label: 'Encaminhar eventos personalizados',
+  help: 'Aniversário com cardápio fechado, corporativo, casamento, grupo grande: a IA coleta os dados e abre uma solicitação no CRM, em Eventos personalizados.',
   description:
-    'Registra que o cliente quer um evento especial (aniversário, confraternização, evento fechado) para a equipe de eventos entrar em contato.',
+    'Abre uma solicitação em Eventos personalizados para a equipe de eventos montar a proposta. Use quando o cliente quer montar o próprio evento (aniversário com cardápio fechado, corporativo, palestra, casamento, fechar o espaço) ou quando o sistema de reservas recusou o grupo pelo tamanho. Não use para reserva de um evento especial da programação da casa (show, réveillon, data comemorativa): isso é reserva.',
   promptHint:
-    'Pedidos de eventos especiais (aniversário, confraternização, evento fechado): colete um resumo e use encaminhar_para_eventos.',
+    'Evento que o cliente quer montar (particular, corporativo, casamento, fechar o espaço): colete os dados e use encaminhar_para_eventos. Evento especial da programação da casa é reserva.',
   parameters: [
-    { key: 'resumo', type: 'string', description: 'Resumo do pedido: tipo de evento, data, número de pessoas', required: true },
+    {
+      key: 'resumo',
+      type: 'string',
+      description: 'Resumo curto do pedido com as palavras do cliente. Só o que ele disse nesta conversa, sem deduzir nada',
+      required: true,
+    },
+    { key: 'categoria', type: 'string', description: 'Tipo de solicitação de evento (veja o roteiro)', required: false },
+    { key: 'tipo_evento', type: 'string', description: 'Tipo de evento, se o cliente disse (aniversário, corporativo, casamento...)', required: false },
+    { key: 'data', type: 'date', description: 'Data desejada, só se o cliente disse', required: false },
+    { key: 'pessoas', type: 'integer', description: 'Número de pessoas, só se o cliente disse. Nunca estime', required: false },
+    { key: 'orcamento', type: 'string', description: 'Orçamento, só se o cliente comentou, do jeito que ele disse (ex.: "uns 3 mil")', required: false },
+    {
+      key: 'dados',
+      type: 'string',
+      description: 'Outros dados que o cliente informou nesta conversa, no formato "Campo: valor; Campo: valor". Nunca invente',
+      required: false,
+    },
+    {
+      key: 'origem',
+      type: 'string',
+      description: 'sistema_de_reservas quando uma ferramenta de reserva disse que o pedido foge da regra; senão cliente',
+      required: false,
+      enum: ['cliente', 'sistema_de_reservas'],
+    },
   ],
   isWrite: true,
   async run(ctx, args) {
     if (!ctx.conversa.id) return { ok: false, result: 'Sem conversa para encaminhar.', error: 'sem conversa' }
+    const regra = await regraDoFunil(ctx.empresa.id, 'eventos', texto(args.categoria), REGRA_EVENTO_PADRAO)
+    if (regra) {
+      const resumo = texto(args.resumo) || null
+      const orcamento = texto(args.orcamento)
+      const dados: DadosSolicitacao = {
+        ...(texto(args.tipo_evento) ? { 'Tipo de evento': texto(args.tipo_evento) } : {}),
+        ...(texto(args.data) ? { Data: texto(args.data) } : {}),
+        ...(typeof args.pessoas === 'number' ? { 'Número de pessoas': args.pessoas } : {}),
+        ...(orcamento ? { Orçamento: orcamento } : {}),
+        ...lerDados(args.dados),
+      }
+      await abrirSolicitacao({
+        companyId: ctx.empresa.id,
+        regra,
+        conversationId: ctx.conversa.id,
+        clientId: ctx.cliente.id,
+        clienteNome: ctx.cliente.nome || null,
+        clienteTelefone: ctx.cliente.telefone || null,
+        resumo,
+        dados,
+        valorEstimado: valorEmReais(orcamento),
+        origem: args.origem === 'sistema_de_reservas' ? 'sistema_reservas' : 'ia',
+        actor: 'ai',
+      })
+      return {
+        ok: true,
+        result: respostaParaIA(regra, { nome: primeiroNome(ctx.cliente.nome), resumo, restaurante: ctx.empresa.nome }),
+      }
+    }
+
+    // Regras de eventos desligadas: registra como antes (etiqueta + metrica), sem card.
     await logConversationEvent({
       companyId: ctx.empresa.id,
       conversationId: ctx.conversa.id,
@@ -108,6 +232,58 @@ const encaminharParaEventos: NativeTool = {
       ok: true,
       result: 'Pedido de evento registrado. Avise o cliente que a equipe de eventos vai entrar em contato.',
     }
+  },
+}
+
+/** O que a IA faz depois da apresentacao: pedir os dados (sempre numa mensagem so) ou encaminhar. */
+export function proximoPassoDaColeta(regra: { collectFields: string[]; askMessage: string }): string {
+  if (!regra.collectFields.length) return 'Depois, se o cliente quiser seguir, chame encaminhar_para_eventos.'
+  return `Agora peça os dados numa única mensagem, exatamente assim: "${mensagemPedindoDados(regra.collectFields, regra.askMessage)}". Se ele responder só uma parte, peça apenas o que faltou.`
+}
+
+/**
+ * Triagem com apresentacao (regra de evento no modo 'apresentar'): manda a
+ * apresentacao EXATAMENTE como o restaurante escreveu e as fotos, e devolve a
+ * primeira pergunta. Nao aparece na aba Ferramentas: vem junto com
+ * "Encaminhar eventos personalizados" quando alguma regra usa apresentacao.
+ */
+export const apresentarEventoPersonalizado: NativeTool = {
+  name: 'apresentar_evento_personalizado',
+  label: 'Apresentar evento personalizado',
+  help: 'Envia a apresentação (texto e fotos) da regra de evento antes de coletar os dados.',
+  description:
+    'Envia ao cliente a apresentação do evento personalizado (texto e fotos cadastrados pelo restaurante) antes de coletar os dados. Use só nas regras que pedem apresentação, uma vez por conversa.',
+  promptHint: 'Use só nas regras de evento que pedem apresentação, antes das perguntas (veja o roteiro).',
+  parameters: [{ key: 'categoria', type: 'string', description: 'Categoria da regra de evento (veja o roteiro)', required: true }],
+  isWrite: true,
+  async run(ctx, args) {
+    if (!ctx.conversa.id) return { ok: false, result: 'Sem conversa para apresentar.', error: 'sem conversa' }
+    const regras = (await regrasDaIA(ctx.empresa.id)).filter((r) => r.funnel === 'eventos' && r.flowMode === 'apresentar')
+    const regra = regras.find((r) => r.key === texto(args.categoria)) ?? regras[0]
+    if (!regra || !regra.introMessage.trim()) {
+      return { ok: false, result: 'Esta regra não tem apresentação cadastrada. Siga direto para as perguntas.', error: 'sem apresentacao' }
+    }
+    const depois = proximoPassoDaColeta(regra)
+
+    if (regra.introImages.length) {
+      // A apresentacao vai como legenda da primeira foto: chega exatamente como foi escrita.
+      const r = await enviarImagensDaIA({
+        companyId: ctx.empresa.id,
+        conversationId: ctx.conversa.id,
+        urls: regra.introImages,
+        legendaPrimeira: regra.introMessage.trim(),
+      })
+      if (r.enviadas > 0) {
+        return { ok: true, result: `A apresentação e ${r.enviadas === 1 ? 'a foto foram enviadas' : `as ${r.enviadas} fotos foram enviadas`} ao cliente. Não repita a apresentação. ${depois}` }
+      }
+      // Fotos falharam: segue so com o texto, para o cliente nao ficar sem resposta.
+      return {
+        ok: true,
+        result: `Não consegui enviar as fotos. Envie ao cliente exatamente esta apresentação: "${regra.introMessage.trim()}". ${depois}`,
+        error: `fotos nao enviadas: ${r.motivo ?? 'motivo desconhecido'}`,
+      }
+    }
+    return { ok: true, result: `Envie ao cliente exatamente esta apresentação, sem mudar nada: "${regra.introMessage.trim()}". ${depois}` }
   },
 }
 
@@ -168,14 +344,16 @@ const registrarReservaNativa: NativeTool = {
   },
 }
 
-export const NATIVE_TOOLS: NativeTool[] = [
-  buscarConhecimento,
-  transferirParaHumano,
-  encaminharParaEventos,
-  registrarReservaNativa,
-  consultarEventos,
-  registrarInscricaoEvento,
-]
+export const NATIVE_TOOLS: NativeTool[] = [buscarConhecimento, transferirParaHumano, encaminharParaEventos]
+
+/**
+ * Aposentadas no produto restaurante: reservas (normais e especiais) e as
+ * datas com eventos especiais vem do Reserve Maya (MCP). O CRM fica com os
+ * eventos PERSONALIZADOS e os encaminhamentos. Fora de NATIVE_TOOLS, nao
+ * aparecem na tela nem chegam a IA, mesmo para quem as tinha ligado. O codigo
+ * e os dados ficam, caso voltem.
+ */
+export const NATIVE_TOOLS_APOSENTADAS: NativeTool[] = [registrarReservaNativa, consultarEventos, registrarInscricaoEvento]
 
 export const NATIVE_TOOL_NAMES = NATIVE_TOOLS.map((t) => t.name)
 

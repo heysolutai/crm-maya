@@ -126,6 +126,13 @@ export const DEFAULT_BEHAVIOR_SETTINGS: BehaviorSettings = {
   audio_response_percentage: 0,
 };
 
+/**
+ * "Esperar o cliente terminar de escrever" (message_debounce_seconds) quando o
+ * agente e do Maestro e nunca salvou um valor. O padrao acima (35 s) e o do
+ * fluxo do n8n, que tem o proprio debounce e le este mesmo campo pela API.
+ */
+export const ESPERA_PADRAO_MAESTRO_S = 10;
+
 export const DEFAULT_PROMPTS: Prompts = {
   prompt_completo: '',
   first_message: '',

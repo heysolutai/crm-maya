@@ -6,6 +6,7 @@ import { phoneVariants, canonicalPhone } from '@/lib/api/utils'
 import { publishEvent } from '@/lib/realtime'
 import { z } from 'zod'
 import { handleApiError } from '@/lib/api/errors'
+import { concluirAtendimentosDaConversa } from '@/lib/solicitacoes/servico'
 import type { Prisma } from '@prisma/client'
 
 const createConversationSchema = z.object({
@@ -443,6 +444,12 @@ export async function PUT(req: NextRequest) {
       type: 'conversation:update',
       conversationId: conversation.id,
     })
+
+    // Conversa encerrada: o atendimento humano aberto dela vira "resolvido"
+    // em Solicitacoes (eventos seguem: a venda continua). Nunca lanca.
+    if (statusChanged && updates.status === 'closed') {
+      await concluirAtendimentosDaConversa(companyId, conversation.id)
+    }
 
     // Transferencia direta a um agente (muda transferredTo): notifica o alvo.
     // Transferencia pra fila/departamento passa pelo /api/messaging/transfer.

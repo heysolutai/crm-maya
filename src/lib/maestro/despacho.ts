@@ -141,7 +141,7 @@ export async function despacharParaIA(e: EntradaDespacho): Promise<DestinoDespac
     try {
       await enfileirarTurnoMaestro(
         { companyId: e.companyId, conversationId: e.conversationId, messageId: e.messageId },
-        await esperaAgrupamentoSegundos(e.companyId)
+        await esperaAgrupamentoSegundos(e.companyId, e.conversationId)
       )
     } catch (err) {
       await registrarTurno({

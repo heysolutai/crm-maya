@@ -5,6 +5,8 @@ import { logConversationEvent } from '@/lib/conversations/events'
 import { publishEvent } from '@/lib/realtime'
 import { getRedisConnection } from '@/lib/queue/connection'
 import { enviarTexto, type DestinoEnvio } from './enviar'
+import { abrirSolicitacao, garantirRegras } from '@/lib/solicitacoes/servico'
+import { REGRA_FALHA_IA } from '@/lib/solicitacoes/regras-padrao'
 
 /**
  * Falha da IA = passa pra um humano. Nunca silencio e nunca erro cru ao
@@ -83,6 +85,36 @@ async function registrarNotaFalha(p: PassarParaHumanoInput): Promise<void> {
 }
 
 /**
+ * Card em Solicitacoes > Atendimento humano, categoria "Falha tecnica da IA"
+ * (regra automatica). A fila, a pausa e a nota ja foram feitas aqui: so
+ * registra. Falha repetida na mesma conversa atualiza o mesmo card. Nunca lanca.
+ */
+async function registrarSolicitacaoFalha(p: PassarParaHumanoInput): Promise<void> {
+  try {
+    await garantirRegras(p.companyId)
+    const regra = await prisma.handoffRule.findFirst({ where: { companyId: p.companyId, key: REGRA_FALHA_IA, isActive: true } })
+    if (!regra) return
+    const cliente = p.clientId
+      ? await prisma.client.findFirst({ where: { id: p.clientId, companyId: p.companyId }, select: { phone: true } })
+      : null
+    await abrirSolicitacao({
+      companyId: p.companyId,
+      regra,
+      conversationId: p.conversationId,
+      clientId: p.clientId,
+      clienteNome: p.clientName,
+      clienteTelefone: cliente?.phone ?? null,
+      resumo: `A IA não conseguiu responder: ${motivoCurto(p.motivo)}.`,
+      origem: 'sistema',
+      actor: 'system',
+      soRegistrar: true,
+    })
+  } catch (err) {
+    console.error('[maestro] falha ao registrar a solicitacao da falha:', (err as Error)?.message)
+  }
+}
+
+/**
  * Conversa vai pra fila dos atendentes: status pending, sem atendente, IA
  * pausada sem prazo, evento 'handoff_human' (metrica), nota interna com o
  * motivo e aviso em tempo real.
@@ -122,6 +154,7 @@ export async function passarParaHumano(p: PassarParaHumanoInput): Promise<void> 
   })
 
   await registrarNotaFalha(p)
+  await registrarSolicitacaoFalha(p)
 
   await publishEvent(p.companyId, {
     type: 'conversation:transferred',

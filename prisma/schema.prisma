@@ -139,6 +139,9 @@ model Company {
   departments            Department[]
   pipelines              Pipeline[]
   catalogProducts        CatalogProduct[]
+  handoffRules           HandoffRule[]
+  handoffRequests        HandoffRequest[]
+  handoffNotifies        HandoffNotify[]
 
   @@index([planId], map: "idx_companies_plan")
   @@index([isActive], map: "idx_companies_active")
@@ -203,6 +206,7 @@ model User {
   inboxMemberships       InboxMember[]
   doctorSchedules        DoctorSchedule[]
   authTokens             AuthToken[]
+  handoffRequestsAssigned HandoffRequest[]   @relation("HandoffRequestAssignee")
 
   @@index([companyId], map: "idx_users_company")
   @@index([email], map: "idx_users_email")
@@ -508,6 +512,7 @@ model Client {
   followUpJobs   FollowUpJob[]
   aiTokenUsage   AiTokenUsage[]
   reviews        Review[]
+  handoffRequests HandoffRequest[]
 
   @@index([companyId], map: "idx_clients_company")
   @@index([assignedTo], map: "idx_clients_assigned")
@@ -615,6 +620,7 @@ model Conversation {
   executionLogs     ExecutionLog[]
   aiToolCalls       AiToolCall[]
   aiTurns           AiTurn[]
+  handoffRequests   HandoffRequest[]
 
   @@index([companyId], map: "idx_conversations_company")
   @@index([companyId, status], map: "idx_conversations_company_status")
@@ -1216,6 +1222,7 @@ model Inbox {
   conversations   Conversation[]
   members         InboxMember[]
   leadDistributionStates LeadDistributionState[]
+  handoffNotifies HandoffNotify[]
 
   @@index([companyId], map: "idx_inboxes_company")
   @@index([channelType], map: "idx_inboxes_channel")
@@ -1486,6 +1493,139 @@ model LeadDistributionState {
   @@index([companyId], map: "idx_lead_dist_company")
   @@index([inboxId], map: "idx_lead_dist_inbox")
   @@map("lead_distribution_state")
+}
+
+// ─── Solicitacoes (encaminhamentos da IA) ───────────
+//
+// Tudo que foge da reserva normal (o Reserve Maya cuida das reservas, inclusive
+// com pagamento antecipado) vira uma SOLICITACAO num de dois funis:
+//   - 'eventos': eventos personalizados (aniversario com cardapio fechado,
+//     corporativo, palestra, casamento, grupo acima do limite);
+//   - 'atendimento': o que a IA passou para a equipe (duvida sem resposta,
+//     reclamacao...), uma categoria por regra.
+// O card e a solicitacao, nao o cliente: a mesma pessoa pode ter varias.
+
+/// Regra de encaminhamento: quando a IA abre a solicitacao, com qual etiqueta e
+/// o que responde ao cliente. Os padroes nascem na primeira leitura.
+model HandoffRule {
+  id              String   @id @default(uuid()) @db.Uuid
+  companyId       String   @map("company_id") @db.Uuid
+  /// 'eventos' | 'atendimento'
+  funnel          String
+  /// Identificador estavel que a IA usa (ex.: 'reclamacao'). Nao muda ao renomear.
+  key             String
+  name            String
+  /// Etiqueta aplicada na conversa (filtro em Atendimentos).
+  tag             String
+  /// Quando a IA usa a regra, em linguagem natural.
+  trigger         String
+  /// Quando a IA NAO deve usar (o que parece, mas nao e). Evita encaminhar errado.
+  notWhen         String   @default("") @map("not_when")
+  /// Frases de exemplo do cliente.
+  examples        String[] @default([])
+  /// O que a IA pede antes de encaminhar (ex.: "Data", "Numero de pessoas").
+  /// Sempre numa mensagem so, com a lista numerada; depois, so o que faltar.
+  collectFields   String[] @default([]) @map("collect_fields")
+  /// Frase que abre o pedido de dados, antes da lista ("" = a padrao).
+  askMessage      String   @default("") @map("ask_message")
+  /// Como a IA conduz: 'coletar' (pergunta os dados direto) ou 'apresentar'
+  /// (manda a apresentacao, com ou sem fotos, e depois pergunta os dados).
+  flowMode        String   @default("coletar") @map("flow_mode")
+  /// Apresentacao enviada antes das perguntas (modo 'apresentar'). Vai exatamente assim.
+  introMessage    String   @default("") @map("intro_message")
+  /// Fotos da apresentacao (URLs https), ate 5.
+  introImages     String[] @default([]) @map("intro_images")
+  /// Modelo da resposta ao cliente. Variaveis: {nome}, {resumo}, {restaurante}.
+  responseMessage String   @default("") @map("response_message")
+  /// 'adaptar' (a IA adapta ao contexto) | 'exato' (envia o texto como esta).
+  responseMode    String   @default("adaptar") @map("response_mode")
+  /// true = a conversa vai para a equipe e a IA para de responder o cliente.
+  pauseAi         Boolean  @default(true) @map("pause_ai")
+  /// Numeros extras avisados no WhatsApp so nesta categoria (alem dos do funil).
+  notifyPhones    String[] @default([]) @map("notify_phones")
+  /// Regra automatica do sistema (falha da IA): a IA nao escolhe e nao se apaga.
+  isSystem        Boolean  @default(false) @map("is_system")
+  isActive        Boolean  @default(true) @map("is_active")
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requests HandoffRequest[]
+
+  @@unique([companyId, key], map: "uq_handoff_rules_company_key")
+  @@index([companyId, funnel], map: "idx_handoff_rules_company_funnel")
+  @@map("handoff_rules")
+}
+
+/// Solicitacao: um card do funil. Cada encaminhamento conta um.
+model HandoffRequest {
+  id              String    @id @default(uuid()) @db.Uuid
+  companyId       String    @map("company_id") @db.Uuid
+  /// 'eventos' | 'atendimento'
+  funnel          String
+  /// Etapa do funil (chaves em src/lib/solicitacoes/funis.ts).
+  stage           String
+  ruleId          String?   @map("rule_id") @db.Uuid
+  /// Nome da categoria na hora da abertura (a regra pode mudar ou sumir).
+  category        String
+  tag             String?
+  clientId        String?   @map("client_id") @db.Uuid
+  conversationId  String?   @map("conversation_id") @db.Uuid
+  customerName    String?   @map("customer_name")
+  customerPhone   String?   @map("customer_phone")
+  /// Resumo do pedido (da IA ou de quem abriu).
+  summary         String?
+  /// Dados coletados: { "Data": "2026-12-12", "Número de pessoas": 30 }.
+  data            Json      @default("{}")
+  estimatedValue  Decimal?  @map("estimated_value") @db.Decimal(12, 2)
+  assignedTo      String?   @map("assigned_to") @db.Uuid
+  /// 'ia' | 'sistema_reservas' (o Reserve Maya sinalizou) | 'sistema' (falha da IA) | 'atendente'
+  origin          String    @default("ia")
+  /// Primeira resposta da equipe (tempo ate atender).
+  firstResponseAt DateTime? @map("first_response_at")
+  /// Chegou numa etapa final (fechado, perdido, resolvido). Voltar limpa.
+  closedAt        DateTime? @map("closed_at")
+  /// Aviso no WhatsApp da equipe: quando saiu e o resultado em palavras.
+  notifiedAt      DateTime? @map("notified_at")
+  notifyResult    String?   @map("notify_result")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  rule         HandoffRule?  @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  client       Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  assignedUser User?         @relation("HandoffRequestAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+
+  @@index([companyId, funnel, stage], map: "idx_handoff_requests_company_funnel_stage")
+  @@index([companyId, createdAt], map: "idx_handoff_requests_company_created")
+  @@index([conversationId], map: "idx_handoff_requests_conversation")
+  @@map("handoff_requests")
+}
+
+/// Aviso no WhatsApp da equipe quando uma solicitacao nova chega (um por funil).
+model HandoffNotify {
+  id               String   @id @default(uuid()) @db.Uuid
+  companyId        String   @map("company_id") @db.Uuid
+  /// 'eventos' | 'atendimento'
+  funnel           String
+  enabled          Boolean  @default(false)
+  /// Conexao que envia o aviso. Null = a mesma conexao em que o cliente falou.
+  inboxId          String?  @map("inbox_id") @db.Uuid
+  /// Numeros da equipe que recebem (so digitos).
+  phones           String[] @default([])
+  /// API oficial: template aprovado na Meta (4 variaveis: funil, cliente, resumo, link).
+  templateName     String?  @map("template_name")
+  templateLanguage String   @default("pt_BR") @map("template_language")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  inbox   Inbox?  @relation(fields: [inboxId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, funnel], map: "uq_handoff_notify_company_funnel")
+  @@map("handoff_notify")
 }
 
 // ─── Departments & Pipelines ────────────────────────

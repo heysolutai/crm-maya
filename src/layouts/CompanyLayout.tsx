@@ -71,6 +71,7 @@ import {
   TrendingUp,
   ScrollText,
   PartyPopper,
+  ClipboardList,
   type LucideIcon,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -106,7 +107,9 @@ const navGroups: NavGroup[] = [
     items: [
       { name: 'Dashboard', href: '/app/dashboard', icon: LayoutDashboard, roles: ['viewer', 'agent', 'manager', 'company_admin'] },
       { name: 'Atendimentos', href: '/app/conversations', icon: MessageSquare, roles: ['agent', 'manager', 'company_admin'], countKey: 'unread' },
-      { name: 'Reservas', href: '/app/reservations', icon: CalendarCheck, roles: ['agent', 'manager', 'company_admin'] },
+      // CRM = eventos personalizados + atendimento humano (Solicitacoes). O
+      // funil antigo de clientes, Reservas e Eventos especiais sairam do menu:
+      // reservas e datas especiais ficam no Reserve Maya (MCP).
       { name: 'CRM', href: '/app/crm', icon: Kanban, roles: ['agent', 'manager', 'company_admin'] },
       { name: 'Clientes', href: '/app/clients', icon: Users, roles: ['viewer', 'agent', 'manager', 'company_admin'], requirePermission: 'can_access_crm' },
       { name: 'Avaliações', href: '/app/reviews', icon: Star, roles: ['agent', 'manager', 'company_admin'], requireReviewModule: true },
@@ -119,7 +122,6 @@ const navGroups: NavGroup[] = [
       { name: 'Equipe', href: '/app/team', icon: UserCog, roles: ['company_admin'] },
       { name: 'Conexões', href: '/app/inboxes', icon: Inbox, roles: ['company_admin'] },
       { name: 'Registro da IA', href: '/app/ai-registro', icon: ScrollText, roles: ['company_admin'] },
-      { name: 'Eventos', href: '/app/events', icon: PartyPopper, roles: ['company_admin'] },
     ],
   },
 ];

@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AiPauseCard } from '@/components/integrations/AiPauseCard';
 import { useAuth } from '@/hooks/useAuth';
 import { useAIConfigurations, type AgentEngine, type AIConfiguration } from '@/hooks/useAIConfigurations';
-import { DEFAULT_BEHAVIOR_SETTINGS, type BehaviorSettings } from '@/lib/aiConfig';
+import { DEFAULT_BEHAVIOR_SETTINGS, ESPERA_PADRAO_MAESTRO_S, type BehaviorSettings } from '@/lib/aiConfig';
 import { useSyncedDraft } from './useSyncedDraft';
 
 interface Props {
@@ -60,9 +60,14 @@ function limitar(n: number, min: number, max: number): number {
 function doServidor(config: AIConfiguration | undefined): Draft {
   if (!config) return RASCUNHO_INICIAL;
   const b: BehaviorSettings = { ...DEFAULT_BEHAVIOR_SETTINGS, ...config.behavior_settings };
+  // Mesma regra da tela antiga: 0 ou vazio volta para o padrão de espera. O
+  // padrão depende de quem responde: o Maestro usa 10 s (src/lib/maestro/espera.ts);
+  // os 35 s são o padrão do fluxo do n8n.
+  const esperaSalva = Number(config.behavior_settings?.message_debounce_seconds);
+  const esperaPadrao =
+    config.engine === 'maestro' ? ESPERA_PADRAO_MAESTRO_S : DEFAULT_BEHAVIOR_SETTINGS.message_debounce_seconds;
   return {
-    // Mesma regra da tela antiga: 0 ou vazio volta para o padrão de espera.
-    espera: limitar(b.message_debounce_seconds || DEFAULT_BEHAVIOR_SETTINGS.message_debounce_seconds, ESPERA_MIN, ESPERA_MAX),
+    espera: limitar(esperaSalva > 0 ? esperaSalva : esperaPadrao, ESPERA_MIN, ESPERA_MAX),
     digitacao: limitar(b.response_delay_seconds ?? DEFAULT_BEHAVIOR_SETTINGS.response_delay_seconds, 0, DIGITACAO_MAX),
     emojis: b.use_emojis ?? DEFAULT_BEHAVIOR_SETTINGS.use_emojis,
     maxMensagens: String(b.max_messages_before_transfer ?? DEFAULT_BEHAVIOR_SETTINGS.max_messages_before_transfer),

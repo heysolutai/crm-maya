@@ -17,6 +17,8 @@ export const MOTIVOS = {
   IA_DESLIGADA: 'IA desligada neste WhatsApp',
   /** IA ligada so para numeros de teste e a mensagem veio de outro cliente (texto fixo: nao mudar). */
   IA_SO_OUTRO_NUMERO: 'IA ligada so para outro numero',
+  /** Mensagem de um numero da equipe (recebe os avisos do CRM): a IA nao atende. */
+  NUMERO_DA_EQUIPE: 'numero da equipe (avisos do CRM)',
 
   // Maestro (IA do proprio CRM). Textos FIXOS: o banco guarda estes e a tela
   // explica pelo texto, entao nao mude um existente (registro antigo perderia
@@ -96,6 +98,12 @@ const EXPLICACOES_MAESTRO: Record<string, Explicacao> = {
     nivel: 'ok',
     porque: 'A IA deste WhatsApp está ligada só para os números de teste, e este cliente não está na lista: ele é atendido pela equipe.',
     oQueFazer: 'Quando terminar de testar, deixe a IA "Para todos" na aba "Agente de IA" deste WhatsApp.',
+  },
+  [MOTIVOS.NUMERO_DA_EQUIPE]: {
+    resultado: 'Número da equipe',
+    nivel: 'ok',
+    porque: 'Este número recebe os avisos do CRM (é da equipe), então a IA não responde como se fosse um cliente.',
+    oQueFazer: 'Se este número for de um cliente, tire-o dos avisos em CRM › Regras.',
   },
   [MOTIVOS.MAESTRO_OUTRO_MOTOR]: {
     resultado: 'Não respondida',

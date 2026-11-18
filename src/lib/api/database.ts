@@ -3,6 +3,7 @@ import type { WhatsAppInstance } from './types';
 import { phoneVariants, canonicalPhone } from './utils';
 import { publishEvent } from '@/lib/realtime';
 import { pauseClientAI } from '@/lib/ai/pause';
+import { marcarAtendimentoIniciado } from '@/lib/solicitacoes/servico';
 
 export async function getWhatsAppInstance(companyId: string): Promise<WhatsAppInstance> {
   const instance = await prisma.inbox.findFirst({
@@ -489,6 +490,9 @@ export async function pauseClientAIByConversation(
     });
 
     console.log('[AI Pause] AI automatically paused for client:', conversation.clientId, 'until:', until?.toISOString() ?? 'manual');
+    // A equipe respondeu: a solicitacao aberta desta conversa sai da entrada
+    // ("aguardando" / "novo") e marca o primeiro atendimento. Nunca lanca.
+    await marcarAtendimentoIniciado(conversationId);
     return true;
   } catch (error) {
     console.error('[AI Pause] Exception:', error);

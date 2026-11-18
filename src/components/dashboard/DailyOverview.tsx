@@ -140,7 +140,8 @@ export function DailyOverview({
 
   return (
     <section className="space-y-3" aria-label="Resumo do período">
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      {/* Reservas sairam daqui: ficam no Reserve Maya (o CRM nao recebe mais copia no modo MCP). */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         <SummaryCard
           title="Conversas"
           value={summary.conversations}
@@ -151,17 +152,7 @@ export function DailyOverview({
           isLoading={isLoading}
         />
         <SummaryCard
-          title="Reservas"
-          value={summary.reservations}
-          subtitle={periodLabel}
-          detail={`${formatNumber(summary.reservationsByAi)} pela IA`}
-          icon={UtensilsCrossed}
-          daily={daily}
-          dataKey="reservations"
-          isLoading={isLoading}
-        />
-        <SummaryCard
-          title="Passadas para eventos"
+          title="Eventos personalizados"
           value={summary.handoffsEvent}
           subtitle={periodLabel}
           icon={PartyPopper}
@@ -170,7 +161,7 @@ export function DailyOverview({
           isLoading={isLoading}
         />
         <SummaryCard
-          title="Passadas para a equipe"
+          title="Atendimento humano"
           value={summary.handoffsHuman}
           subtitle={periodLabel}
           icon={Headset}

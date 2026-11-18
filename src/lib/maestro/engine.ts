@@ -576,7 +576,7 @@ async function existeMensagemNova(companyId: string, conversationId: string, dep
 
 async function reagendarProximoTurno(companyId: string, conversationId: string) {
   try {
-    await enfileirarTurnoMaestro({ companyId, conversationId }, await esperaAgrupamentoSegundos(companyId))
+    await enfileirarTurnoMaestro({ companyId, conversationId }, await esperaAgrupamentoSegundos(companyId, conversationId))
   } catch (err) {
     console.error('[maestro] falha ao agendar o proximo turno:', (err as Error)?.message)
   }

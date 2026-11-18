@@ -15,6 +15,7 @@ import { isAiPausedNow } from '@/lib/ai/pause';
 import { registrarTurno } from '@/lib/ai/turns';
 import { MOTIVOS } from '@/lib/ai/motivos';
 import { motivoIaNaoAtende } from '@/lib/ai/so-um-numero';
+import { ehEcoDeAviso, ehNumeroDaEquipe } from '@/lib/solicitacoes/avisos';
 import { handleApiErrorCors } from '@/lib/api/errors'
 import { getSystemSetting } from '@/lib/system-settings'
 import { getDecryptedApiKey } from '@/lib/api/api-key-utils'
@@ -1057,6 +1058,12 @@ export async function POST(req: NextRequest) {
     const inboxId = instance.id; // FK pra vincular conversa a inbox
     console.log('Found company via inbox:', companyId, 'inbox:', inboxId);
 
+    // Eco do aviso que o CRM mandou para a equipe (Solicitacoes): nao e conversa
+    // de cliente. Ignora ANTES de criar contato/conversa para o numero da equipe.
+    if (payload.type === 'outgoing' && (await ehEcoDeAviso(payload.uaz_message_id))) {
+      return jsonResponse({ success: true, message: 'Aviso da equipe ignorado', uaz_message_id: payload.uaz_message_id });
+    }
+
     // Trava por contato: mensagens do MESMO telefone chegam juntas e a fila as
     // processa em paralelo; cada uma achava "nenhum contato/conversa" e criava
     // o seu (conversas duplicadas, mensagens espalhadas). Os passos 2 e 3
@@ -1684,9 +1691,15 @@ export async function POST(req: NextRequest) {
           });
 
       // Desligada, ou ligada so para outro numero (teste): a equipe atende este cliente.
-      const motivoSemIA = aiConfigResult
-        ? motivoIaNaoAtende(aiConfigResult, clientDataResult?.phone || payload.real_phone || payload.phone)
-        : null;
+      const telefoneDoCliente = clientDataResult?.phone || payload.real_phone || payload.phone;
+      const motivoDesligada = aiConfigResult ? motivoIaNaoAtende(aiConfigResult, telefoneDoCliente) : null;
+      // Numero da equipe (recebe os avisos do CRM): se o gerente responder o
+      // aviso, a IA nao atende ele como cliente. A lista de teste da IA ganha.
+      const numeroDaEquipe =
+        !motivoDesligada && !espelho && payload.type === 'incoming'
+          ? await ehNumeroDaEquipe(companyId, telefoneDoCliente, aiConfigResult?.onlyPhone)
+          : false;
+      const motivoSemIA = motivoDesligada ?? (numeroDaEquipe ? MOTIVOS.NUMERO_DA_EQUIPE : null);
       // Espelho nunca tem IA: nao ha por onde responder (somente leitura).
       const iaDesligada = motivoSemIA !== null || !!espelho;
       const companyAiConfig = aiConfigResult;
@@ -1741,7 +1754,8 @@ export async function POST(req: NextRequest) {
         companyId,
         conversationId,
         // Agente do Maestro desligado segue pro Maestro, que registra "desligado" e nao responde.
-        agente: companyAiConfig
+        // Numero da equipe nao vai pra nenhuma IA: fica no registro abaixo como "numero da equipe".
+        agente: companyAiConfig && !numeroDaEquipe
           ? { id: companyAiConfig.id, engine: companyAiConfig.engine, isActive: companyAiConfig.isActive && !espelho }
           : null,
         conversa: conversationData

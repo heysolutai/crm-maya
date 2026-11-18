@@ -201,6 +201,31 @@ export async function fetchCloudWebhookSecret(phoneNumberId: string, webhookUrl:
   return res.webhook?.webhook_secret ?? null
 }
 
+/**
+ * Mensagem de template aprovado (unica forma de iniciar conversa fora da
+ * janela de 24h). Variaveis so no corpo, na ordem; a Meta recusa quebra de
+ * linha e tabulacao dentro da variavel, entao viram " · ".
+ */
+export async function sendCloudTemplate(
+  agent: ChannelAgent,
+  input: { to: string; name: string; language: string; params: string[] }
+): Promise<SendTextResult> {
+  const parameters = input.params.map((p) => ({
+    type: 'text',
+    text: (p || '-').replace(/[\r\n\t]+/g, ' · ').replace(/ {4,}/g, '   ').slice(0, 1000),
+  }))
+  return sendMessage({
+    from: phoneNumberIdOf(agent),
+    to: input.to.replace(/\D/g, ''),
+    type: 'template',
+    template: {
+      name: input.name,
+      language: { code: input.language },
+      ...(parameters.length ? { components: [{ type: 'body', parameters }] } : {}),
+    },
+  })
+}
+
 /** Marca como lida + mostra "digitando..." (some no envio ou em 25s). */
 export async function sendCloudTyping(phoneNumberId: string, messageId: string): Promise<void> {
   await covercutRequest('POST', '/messages/typing', {

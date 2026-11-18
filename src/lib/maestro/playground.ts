@@ -11,6 +11,9 @@ import { historicoSimulado, type MensagemChat } from './historico'
 import { quebrarResposta } from './enviar'
 import { argsComoObjeto, conversar, type ChamadaTool, type ResultadoFerramenta } from './llm'
 import { montarSystemPrompt } from './prompt'
+import { proximoPassoDaColeta } from '@/lib/ai-tools/native'
+import { regrasDaIA, respostaParaIA } from '@/lib/solicitacoes/servico'
+import { REGRA_ATENDIMENTO_PADRAO, REGRA_EVENTO_PADRAO } from '@/lib/solicitacoes/regras-padrao'
 
 /**
  * Playground do Maestro ("Testar a IA"): o MESMO prompt, modelo e ferramentas
@@ -28,7 +31,59 @@ import { montarSystemPrompt } from './prompt'
  */
 
 /** Ferramentas que so existem dentro de uma conversa real: no teste, simuladas. */
-export const SO_EM_CONVERSA = new Set(['transferir_para_humano', 'encaminhar_para_eventos', 'registrar_reserva'])
+export const SO_EM_CONVERSA = new Set([
+  'transferir_para_humano',
+  'encaminhar_para_eventos',
+  'apresentar_evento_personalizado',
+  'registrar_reserva',
+])
+
+/**
+ * Simulação fiel às regras de encaminhamento do restaurante: a IA do teste
+ * recebe a MESMA instrução de resposta que receberia de verdade (mensagem da
+ * regra, pausa ou não), e a apresentação mostra o texto cadastrado. Nada é
+ * gravado e nenhuma mensagem sai.
+ */
+async function simularEncaminhamento(
+  companyId: string,
+  tool: Pick<ResolvedTool, 'name' | 'label'>,
+  args: Record<string, string | number | boolean>,
+  cliente: ClienteDoTeste | null
+): Promise<{ texto: string; encerra: boolean }> {
+  const categoria = typeof args.categoria === 'string' ? args.categoria : ''
+  try {
+    const regras = await regrasDaIA(companyId)
+    if (tool.name === 'apresentar_evento_personalizado') {
+      const comApresentacao = regras.filter((r) => r.funnel === 'eventos' && r.flowMode === 'apresentar')
+      const regra = comApresentacao.find((r) => r.key === categoria) ?? comApresentacao[0]
+      if (regra?.introMessage.trim()) {
+        const fotos = regra.introImages.length
+        return {
+          texto: `(simulação) A apresentação foi enviada ao cliente${fotos ? ` com ${fotos === 1 ? '1 foto' : `${fotos} fotos`}` : ''}: "${regra.introMessage.trim()}". Não repita a apresentação. ${proximoPassoDaColeta(regra)}`,
+          encerra: false,
+        }
+      }
+    }
+    const funil = tool.name === 'transferir_para_humano' ? 'atendimento' : tool.name === 'encaminhar_para_eventos' ? 'eventos' : null
+    if (funil) {
+      const doFunil = regras.filter((r) => r.funnel === funil)
+      const padrao = funil === 'atendimento' ? REGRA_ATENDIMENTO_PADRAO : REGRA_EVENTO_PADRAO
+      const regra = doFunil.find((r) => r.key === categoria) ?? doFunil.find((r) => r.key === padrao) ?? doFunil[0]
+      if (regra) {
+        const empresa = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true, tradeName: true } })
+        const resumo = typeof args.resumo === 'string' ? args.resumo : typeof args.motivo === 'string' ? args.motivo : null
+        const nome = (cliente?.nome || '').trim().split(/\s+/)[0] || null
+        return {
+          texto: `(simulação) ${respostaParaIA(regra, { nome, resumo, restaurante: empresa?.tradeName || empresa?.name || null })}`,
+          encerra: regra.pauseAi,
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[playground] falha ao simular com as regras:', (err as Error)?.message)
+  }
+  return { texto: textoSimulado(tool), encerra: tool.name === 'transferir_para_humano' }
+}
 
 export interface ClienteDoTeste {
   nome?: string | null
@@ -140,8 +195,9 @@ async function executarNoPlayground(
 
   // So existe numa conversa de verdade (transferir, encaminhar, anotar no CRM).
   if (SO_EM_CONVERSA.has(tool.name)) {
+    const sim = await simularEncaminhamento(ctx.companyId, tool, validacao.args, ctx.cliente)
     return {
-      r: { ok: true, texto: textoSimulado(tool), simulada: true, encerra: tool.name === 'transferir_para_humano' },
+      r: { ok: true, texto: sim.texto, simulada: true, encerra: sim.encerra },
       erro: null,
       httpStatus: null,
       ...base,
