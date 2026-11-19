@@ -15,7 +15,6 @@ export interface ConfigMaestro {
   /** null = nao enviar (modelos de raciocinio so aceitam o padrao). */
   temperatura: number | null
   usarEmojis: boolean
-  formalidade: 'formal' | 'casual' | 'neutral'
   /** Quanto tempo o "digitando..." fica no ar enquanto a IA prepara a resposta. 0 = desligado. */
   digitandoMs: number
   /** Mensagem ao cliente quando a IA falha e a conversa vai pra um atendente. */
@@ -57,7 +56,6 @@ function numeroEntre(v: unknown, min: number, max: number, padrao: number): numb
 export function lerConfigMaestro(agente: { prompts: unknown; behaviorSettings: unknown }): ConfigMaestro {
   const b = comoRecord(agente.behaviorSettings)
   const modelo = resolverModelo(b.preferred_model)
-  const formalidade = b.formality_level === 'formal' || b.formality_level === 'neutral' ? b.formality_level : 'casual'
   const erro = typeof b.error_message === 'string' ? b.error_message.trim() : ''
   return {
     modelo,
@@ -65,7 +63,6 @@ export function lerConfigMaestro(agente: { prompts: unknown; behaviorSettings: u
       ? numeroEntre(b.temperature, 0, 1, DEFAULT_BEHAVIOR_SETTINGS.temperature)
       : null,
     usarEmojis: typeof b.use_emojis === 'boolean' ? b.use_emojis : DEFAULT_BEHAVIOR_SETTINGS.use_emojis,
-    formalidade,
     digitandoMs: numeroEntre(b.typing_indicator_delay_ms, 0, 30_000, DEFAULT_BEHAVIOR_SETTINGS.typing_indicator_delay_ms),
     mensagemErro: (erro || MENSAGEM_ERRO_PADRAO).slice(0, 500),
     promptBase: consolidatePrompt(comoRecord(agente.prompts)),

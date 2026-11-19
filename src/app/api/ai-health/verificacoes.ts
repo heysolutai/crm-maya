@@ -132,14 +132,18 @@ const agente: Verificacao = async (ctx) => {
     const de = daConexao(ctx, inbox)
 
     if (a && !a.isActive) {
-      itens.push({
-        id: `ia_desligada:${inbox.id}`,
-        nivel: 'aviso',
-        titulo: `A IA ${de} está desligada`,
-        detalhe: 'A IA não responde os clientes desta conexão: só a equipe atende.',
-        oQueFazer: 'Se a IA deveria estar atendendo, ligue a chave "IA atendendo" no topo da aba "Agente de IA" desta conexão.',
-        acao: { label: 'Ligar a IA', href: `/app/inboxes/${inbox.id}` },
-      })
+      // Na tela da propria conexao o card "IA desligada" (com a chave) ja diz
+      // isso logo acima: repetir aqui so duplicava a informacao.
+      if (!ctx.inboxUnica) {
+        itens.push({
+          id: `ia_desligada:${inbox.id}`,
+          nivel: 'aviso',
+          titulo: `A IA ${de} está desligada`,
+          detalhe: 'A IA não responde os clientes desta conexão: só a equipe atende.',
+          oQueFazer: 'Se a IA deveria estar atendendo, ligue a chave "IA atendendo" no topo da aba "Agente de IA" desta conexão.',
+          acao: { label: 'Ligar a IA', href: `/app/inboxes/${inbox.id}` },
+        })
+      }
       continue
     }
 

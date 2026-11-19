@@ -7,8 +7,10 @@ import { SimpleAgentConfig } from '@/components/ai/SimpleAgentConfig';
 import { APIKeysSubTab } from '@/components/super-admin/company-details/ai-config/APIKeysSubTab';
 import { SituacaoCard } from '@/components/situacao/SituacaoCard';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
+import { useAIConfigurations } from '@/hooks/useAIConfigurations';
 import { BehaviorTab } from './BehaviorTab';
 import { IaLigadaCard } from './IaLigadaCard';
+import { CabecalhoPrompt } from './CabecalhoPrompt';
 import { ToolsTab } from './ToolsTab';
 
 type SubTabId = 'prompt' | 'tools' | 'behavior' | 'providers';
@@ -39,6 +41,9 @@ interface Props {
  */
 export function AgentTab({ inboxId, companyId, agentId, isSuperAdmin, canProviders, canTechnical }: Props) {
   const { setDirty } = useUnsavedChanges();
+  // Mesmo dado do card "IA ligada" (cache do React Query): sem consulta extra.
+  const { configurations } = useAIConfigurations({ companyId, agentId });
+  const iaDesligada = configurations?.[0]?.is_active === false;
 
   const subTabs: SubTab[] = [
     { id: 'prompt', label: 'Prompt', icon: MessageSquareText },
@@ -85,8 +90,9 @@ export function AgentTab({ inboxId, companyId, agentId, isSuperAdmin, canProvide
       {/* Liga/desliga geral da IA neste WhatsApp */}
       <IaLigadaCard companyId={companyId} agentId={agentId} />
 
-      {/* Situação deste WhatsApp: o que impede a IA de atender (ou "Tudo funcionando") */}
-      <SituacaoCard inboxId={inboxId} />
+      {/* Situação deste WhatsApp: o que impede a IA de atender (ou "Tudo funcionando").
+          IA desligada: o card acima já diz; aqui só aparece outro problema, se houver. */}
+      <SituacaoCard inboxId={inboxId} ocultarSeOk={iaDesligada} />
 
       <Tabs value={ativa} onValueChange={trocar} className="space-y-4">
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto p-1">
@@ -103,11 +109,14 @@ export function AgentTab({ inboxId, companyId, agentId, isSuperAdmin, canProvide
             {abertas.has(t.id) && (
               <>
                 {t.id === 'prompt' && (
-                  <SimpleAgentConfig
-                    companyId={companyId}
-                    agentId={agentId}
-                    onDirtyChange={avisarPrompt}
-                  />
+                  <div className="space-y-4">
+                    <CabecalhoPrompt companyId={companyId} agentId={agentId} />
+                    <SimpleAgentConfig
+                      companyId={companyId}
+                      agentId={agentId}
+                      onDirtyChange={avisarPrompt}
+                    />
+                  </div>
                 )}
                 {t.id === 'tools' && <ToolsTab inboxId={inboxId} agentId={agentId} />}
                 {t.id === 'behavior' && (

@@ -266,14 +266,14 @@ export function FAQManager({ companyId }: FAQManagerProps) {
     <>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <HelpCircle className="h-5 w-5" />
-                Perguntas Frequentes (FAQ)
+                Base de conhecimento
               </CardTitle>
               <CardDescription>
-                Configure perguntas e respostas para a IA responder automaticamente
+                O que a IA consulta para responder dúvidas sobre a casa. Vale para todos os WhatsApp da empresa.
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -380,6 +380,22 @@ export function FAQManager({ companyId }: FAQManagerProps) {
               </Dialog>
             </div>
           </div>
+
+          {/* Como a base chega na IA: os três pontos que mais confundem. */}
+          <ul className="mt-4 space-y-1 rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+            <li>
+              • Depois de adicionar, editar ou importar, clique em <span className="font-medium text-foreground">Sincronizar</span>:
+              só então a IA passa a usar.
+            </li>
+            <li>
+              • A IA só consulta esta base se &quot;Responder com a base de conhecimento&quot; estiver ligada em Agente de
+              IA › Ferramentas.
+            </li>
+            <li>
+              • Restaurantes do Reserve Maya: horários, turnos e regras de reserva já vêm do Reserve Maya. Cadastre aqui
+              o resto (cardápio, formas de pagamento, estacionamento...).
+            </li>
+          </ul>
 
           {/* Upload/Processing Status Card */}
           {(isUploading || isProcessing || processingStatus === 'success' || processingStatus === 'error') && (

@@ -14,15 +14,17 @@ import type { ItemSituacao, NivelSituacao, SituacaoResposta } from './types';
 /** Quantos itens aparecem antes de "Ver todos". */
 const VISIVEIS = 3;
 
-const ESTILO: Record<NivelSituacao, { icone: LucideIcon; cor: string; card: string }> = {
+const ESTILO: Record<NivelSituacao, { icone: LucideIcon; cor: string; fundoIcone: string; card: string }> = {
   problema: {
     icone: AlertCircle,
     cor: 'text-red-600 dark:text-red-400',
+    fundoIcone: 'bg-red-500/10',
     card: 'border-red-500/40 bg-red-500/[0.04] dark:bg-red-500/[0.08]',
   },
   aviso: {
     icone: AlertTriangle,
     cor: 'text-amber-600 dark:text-amber-400',
+    fundoIcone: 'bg-amber-500/10',
     card: 'border-amber-500/40 bg-amber-500/[0.05] dark:bg-amber-500/[0.08]',
   },
 };
@@ -35,8 +37,8 @@ function tituloDoCard(problemas: number, avisos: number): string {
 }
 
 /**
- * Uma linha: o que está errado + o botão que resolve. O porquê e o passo a
- * passo ficam escondidos e abrem ao clicar no título.
+ * Um item: o que está errado e por quê (sempre à vista), o botão que resolve
+ * alinhado à direita e o passo a passo em "O que fazer?".
  */
 function Item({ item, paginaAtual }: { item: ItemSituacao; paginaAtual: string | null }) {
   const [aberto, setAberto] = useState(false);
@@ -46,36 +48,35 @@ function Item({ item, paginaAtual }: { item: ItemSituacao; paginaAtual: string |
   const acao = item.acao && item.acao.href.split('?')[0] !== paginaAtual ? item.acao : null;
 
   return (
-    <li className="py-2.5 first:pt-0 last:pb-0">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <button
-          type="button"
-          onClick={() => setAberto((v) => !v)}
-          aria-expanded={aberto}
-          className="flex min-w-[12rem] flex-1 items-start gap-2.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Icone className={cn('mt-0.5 h-4 w-4 shrink-0', estilo.cor)} aria-hidden />
-          <span className="min-w-0 flex-1 text-sm font-medium leading-snug">{item.titulo}</span>
-          <ChevronDown
-            className={cn('mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform', aberto && 'rotate-180')}
-            aria-hidden
-          />
-        </button>
-        {acao && (
-          <Button asChild size="sm" variant="outline" className="ml-[26px] h-8 shrink-0 bg-background sm:ml-0">
-            <Link href={acao.href}>{acao.label}</Link>
-          </Button>
-        )}
-      </div>
-
-      {aberto && (
-        <div className="mt-2 space-y-1 pl-[26px] text-sm leading-snug">
-          <p className="text-muted-foreground">{item.detalhe}</p>
-          <p>
-            <span className="font-medium">O que fazer: </span>
-            {item.oQueFazer}
-          </p>
+    <li className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-full', estilo.fundoIcone)}>
+          <Icone className={cn('h-4 w-4', estilo.cor)} aria-hidden />
+        </span>
+        <div className="min-w-0 space-y-0.5">
+          <p className="text-sm font-medium leading-snug">{item.titulo}</p>
+          <p className="text-[13px] leading-snug text-muted-foreground">{item.detalhe}</p>
+          {aberto && (
+            <p className="pt-1 text-[13px] leading-snug">
+              <span className="font-medium">O que fazer: </span>
+              {item.oQueFazer}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => setAberto((v) => !v)}
+            aria-expanded={aberto}
+            className="inline-flex items-center gap-1 rounded pt-0.5 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {aberto ? 'Ocultar' : 'O que fazer?'}
+            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', aberto && 'rotate-180')} aria-hidden />
+          </button>
         </div>
+      </div>
+      {acao && (
+        <Button asChild size="sm" variant="outline" className="ml-10 shrink-0 bg-background sm:ml-0">
+          <Link href={acao.href}>{acao.label}</Link>
+        </Button>
       )}
     </li>
   );
@@ -84,6 +85,12 @@ function Item({ item, paginaAtual }: { item: ItemSituacao; paginaAtual: string |
 interface Props {
   /** Só este WhatsApp (aba "Agente de IA"). Sem valor: o restaurante todo. */
   inboxId?: string;
+  /**
+   * Sem nada a conferir, não mostra "Tudo funcionando". Na aba da conexão com
+   * a IA desligada, o card "IA desligada" já diz a situação: o verde ali
+   * soaria como se a IA estivesse atendendo.
+   */
+  ocultarSeOk?: boolean;
   className?: string;
 }
 
@@ -92,7 +99,7 @@ interface Props {
  * o WhatsApp de atender, com um botão que leva até lá (o detalhe abre ao
  * clicar). Tudo certo = uma linha verde. Atualiza sozinho a cada minuto.
  */
-export function SituacaoCard({ inboxId, className }: Props) {
+export function SituacaoCard({ inboxId, ocultarSeOk = false, className }: Props) {
   const { effectiveCompanyId } = useEffectiveCompanyId();
   const pathname = usePathname();
   const [todos, setTodos] = useState(false);
@@ -117,6 +124,7 @@ export function SituacaoCard({ inboxId, className }: Props) {
   if (!data) return null;
 
   if (data.status === 'ok' || data.itens.length === 0) {
+    if (ocultarSeOk) return null;
     return (
       <div
         role="status"
@@ -138,9 +146,9 @@ export function SituacaoCard({ inboxId, className }: Props) {
   return (
     <section
       aria-label="Situação do atendimento"
-      className={cn('rounded-xl border p-3 text-card-foreground sm:p-4', estilo.card, className)}
+      className={cn('rounded-xl border p-4 text-card-foreground sm:p-5', estilo.card, className)}
     >
-      <h2 className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-base font-semibold">
+      <h2 className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-base font-semibold">
         <Icone className={cn('h-5 w-5 shrink-0', estilo.cor)} aria-hidden />
         {tituloDoCard(problemas, avisos)}
         {problemas > 0 && avisos > 0 && (

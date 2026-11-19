@@ -213,7 +213,7 @@ export function IaLigadaCard({ companyId, agentId }: Props) {
               </Label>
               <p className="text-sm text-muted-foreground">
                 {!mostrada
-                  ? 'A IA não responde ninguém neste WhatsApp: só a equipe atende. As mensagens continuam chegando em Atendimentos.'
+                  ? 'A IA não responde ninguém neste WhatsApp: só a equipe atende. As mensagens continuam chegando em Atendimentos. Para a IA voltar a atender, ligue a chave ao lado.'
                   : emTeste
                     ? numerosSalvos.length === 1
                       ? 'A IA responde só este número. Os outros clientes ficam com a equipe.'

@@ -13,6 +13,8 @@ import { useAIConfigurations, type Prompts } from '@/hooks/useAIConfigurations';
 import { AIPromptsEditor } from '@/components/ai/AIPromptsEditor';
 import { useSyncedDraft } from '@/components/agente-ia/useSyncedDraft';
 import { cn } from '@/lib/utils';
+import { useInboxes } from '@/hooks/useInboxes';
+import { perfilDoAgente } from '@/lib/agentProfile';
 import {
   TONES,
   VERBOSITY,
@@ -48,6 +50,8 @@ export function SimpleAgentConfig({ companyId, agentId, onDirtyChange }: Props) 
     agentId ? { companyId, agentId } : companyId
   );
   const existingConfig = configurations?.[0];
+  // Tipo do agente: vem da conexão (com ID do Reserve Maya = restaurante Reserve Maya).
+  const { inboxes } = useInboxes();
 
   const [confirmarOpen, setConfirmarOpen] = useState(false);
   // Modo escolhido na tela. null = ainda não escolheu: segue o que gerou o texto salvo.
@@ -118,28 +122,60 @@ export function SimpleAgentConfig({ companyId, agentId, onDirtyChange }: Props) 
   // Texto escrito no prompt avançado (ou pelo suporte) abre no avançado; o
   // gerado pelo formulário abre no simples. A pessoa troca quando quiser.
   const modo: Modo = modoEscolhido ?? (textoVeioDeFora() ? 'avancado' : 'simples');
+  // O modo cujo texto está salvo e indo para a IA (só um vale de cada vez).
+  // Sem texto salvo, nenhum: a IA usa um texto padrão curto.
+  const temTextoSalvo = !!limpar(existingConfig?.prompts.prompt_completo);
+  const emUso: Modo | null = temTextoSalvo ? (textoVeioDeFora() ? 'avancado' : 'simples') : null;
 
+  // Restaurante do Reserve Maya: horários, reservas e preços vêm do sistema de
+  // reservas e da base de conhecimento. Os campos somem do formulário; quem já
+  // tinha preenchido continua vendo (com aviso), para o texto da IA não mudar
+  // sem ninguém pedir.
+  const reserveMaya = perfilDoAgente(existingConfig?.id, inboxes) === 'reserve_maya';
+  const mostrarCampo = (campo: 'hours' | 'reservationHours' | 'prices') =>
+    !reserveMaya || !!server[campo].trim() || !!form[campo].trim();
+  const avisoReserveMaya = reserveMaya ? (
+    <p className="text-xs text-amber-700 dark:text-amber-300">
+      Já vem do Reserve Maya ou da base de conhecimento. Recomendamos deixar em branco: escrever aqui pode contradizer
+      o sistema.
+    </p>
+  ) : null;
+
+  // Seletor compacto (tipo abas). A bolinha verde marca o modo em uso.
   const seletorDeModo = (
-    <div role="radiogroup" aria-label="Como configurar a IA" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      {MODOS.map((m) => (
-        <button
-          key={m.value}
-          type="button"
-          role="radio"
-          aria-checked={modo === m.value}
-          onClick={() => setModoEscolhido(m.value)}
-          className={cn(
-            'flex items-start gap-3 rounded-xl border p-3 text-left transition-colors',
-            modo === m.value ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border/60 hover:border-primary/40'
-          )}
-        >
-          <m.icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-          <span>
-            <span className="block text-sm font-medium">{m.label}</span>
-            <span className="block text-xs text-muted-foreground">{m.hint}</span>
-          </span>
-        </button>
-      ))}
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div role="radiogroup" aria-label="Como configurar a IA" className="inline-flex rounded-lg bg-muted p-1">
+        {MODOS.map((m) => (
+          <button
+            key={m.value}
+            type="button"
+            role="radio"
+            aria-checked={modo === m.value}
+            title={m.hint}
+            onClick={() => setModoEscolhido(m.value)}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              modo === m.value ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <m.icon className="h-4 w-4 shrink-0" />
+            {m.label}
+            {emUso === m.value && (
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-label="em uso" />
+            )}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {emUso ? (
+          <>
+            <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 align-middle" aria-hidden />
+            Em uso. Só um modo vale de cada vez: salvar um substitui o texto do outro.
+          </>
+        ) : (
+          'Nenhum texto salvo ainda: a IA usa um texto padrão curto.'
+        )}
+      </p>
     </div>
   );
 
@@ -153,6 +189,8 @@ export function SimpleAgentConfig({ companyId, agentId, onDirtyChange }: Props) 
             Aqui você escreve o texto da IA do seu jeito. O sistema continua somando sozinho o roteiro das ferramentas,
             as regras do WhatsApp e a data de hoje. Se voltar para o modo simples e salvar o formulário, este texto é
             substituído.
+            {reserveMaya &&
+              ' Restaurante do Reserve Maya: horários, turnos, regras de reserva e preços já vêm do Reserve Maya e da base de conhecimento; não precisam estar neste texto.'}
           </AlertDescription>
         </Alert>
         {existingConfig ? (
@@ -269,41 +307,51 @@ export function SimpleAgentConfig({ companyId, agentId, onDirtyChange }: Props) 
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="hours">Horário de funcionamento</Label>
-            <Textarea
-              id="hours"
-              rows={2}
-              placeholder="Ex: Seg a sex 11h-15h e 18h-23h. Sáb e dom 12h-23h."
-              value={form.hours}
-              onChange={(e) => set({ hours: e.target.value })}
-            />
-          </div>
+          {mostrarCampo('hours') && (
+            <div className="space-y-2">
+              <Label htmlFor="hours">Horário de funcionamento</Label>
+              <Textarea
+                id="hours"
+                rows={2}
+                placeholder="Ex: Seg a sex 11h-15h e 18h-23h. Sáb e dom 12h-23h."
+                value={form.hours}
+                onChange={(e) => set({ hours: e.target.value })}
+              />
+              {avisoReserveMaya}
+            </div>
+          )}
 
-          <div className="space-y-2">
-            <Label htmlFor="reservation-hours">Horários para reserva</Label>
-            <Input
-              id="reservation-hours"
-              placeholder="Ex: 19h às 22h, de terça a domingo"
-              value={form.reservationHours}
-              onChange={(e) => set({ reservationHours: e.target.value })}
-            />
-            <p className="text-xs text-muted-foreground">
-              Preenchido, a IA fica proibida de oferecer reserva fora dessa janela. Em branco,
-              ela usa o horário de funcionamento como referência.
-            </p>
-          </div>
+          {mostrarCampo('reservationHours') && (
+            <div className="space-y-2">
+              <Label htmlFor="reservation-hours">Horários para reserva</Label>
+              <Input
+                id="reservation-hours"
+                placeholder="Ex: 19h às 22h, de terça a domingo"
+                value={form.reservationHours}
+                onChange={(e) => set({ reservationHours: e.target.value })}
+              />
+              {avisoReserveMaya ?? (
+                <p className="text-xs text-muted-foreground">
+                  Preenchido, a IA fica proibida de oferecer reserva fora dessa janela. Em branco,
+                  ela usa o horário de funcionamento como referência.
+                </p>
+              )}
+            </div>
+          )}
 
-          <div className="space-y-2">
-            <Label htmlFor="prices">Preços</Label>
-            <Textarea
-              id="prices"
-              rows={2}
-              placeholder="Ex: Pratos de R$ 45 a R$ 90. Couvert R$ 18. Taxa de serviço 10%."
-              value={form.prices}
-              onChange={(e) => set({ prices: e.target.value })}
-            />
-          </div>
+          {mostrarCampo('prices') && (
+            <div className="space-y-2">
+              <Label htmlFor="prices">Preços</Label>
+              <Textarea
+                id="prices"
+                rows={2}
+                placeholder="Ex: Pratos de R$ 45 a R$ 90. Couvert R$ 18. Taxa de serviço 10%."
+                value={form.prices}
+                onChange={(e) => set({ prices: e.target.value })}
+              />
+              {avisoReserveMaya}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="about">Instruções extras (opcional)</Label>
@@ -315,7 +363,9 @@ export function SimpleAgentConfig({ companyId, agentId, onDirtyChange }: Props) 
               onChange={(e) => set({ about: e.target.value })}
             />
             <p className="text-xs text-muted-foreground">
-              Qualquer regra ou informação que a IA deve seguir. Ex.: não aceitamos reservas para mais de 12 pessoas.
+              {reserveMaya
+                ? 'Só o que não está no Reserve Maya nem na base de conhecimento. Ex.: temos opções sem glúten.'
+                : 'Qualquer regra ou informação que a IA deve seguir. Ex.: não aceitamos reservas para mais de 12 pessoas.'}
             </p>
           </div>
 

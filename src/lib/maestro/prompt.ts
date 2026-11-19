@@ -26,7 +26,7 @@ const PROMPT_PADRAO =
   'Você é a assistente virtual do restaurante [company_name]. Atenda os clientes pelo WhatsApp com educação e objetividade: tire dúvidas sobre o restaurante e ajude com reservas. Se não souber algo, diga que vai verificar com a equipe.'
 
 export interface DadosPrompt {
-  config: Pick<ConfigMaestro, 'promptBase' | 'usarEmojis' | 'formalidade'>
+  config: Pick<ConfigMaestro, 'promptBase' | 'usarEmojis'>
   empresaNome: string
   clienteNome: string | null
   /** Conversation.friendlyId (codigo amigavel), se houver. */
@@ -87,13 +87,27 @@ export function aplicarVariaveis(
     .replace(/\[date\]/g, d.data)
 }
 
-const TOM: Record<ConfigMaestro['formalidade'], string> = {
-  formal: 'Tom formal e educado (trate o cliente por "senhor/senhora" quando souber o gênero; senão, de forma neutra).',
-  casual: 'Tom amigável e descontraído, sem exagero.',
-  neutral: 'Tom cordial e neutro.',
+/**
+ * As 4 partes do prompt, separadas (a tela "Ver o que a IA recebe" mostra
+ * cada uma com a origem). montarSystemPrompt junta exatamente estas partes.
+ */
+export interface PartesDoPrompt {
+  /** 1. Texto do agente (modo simples ou prompt avançado), com as variáveis trocadas. */
+  agente: string
+  /** 2. Regras fixas de conversa no WhatsApp. */
+  regras: string
+  /** 3. Roteiro das ferramentas ligadas (vazio quando não há ferramenta). */
+  ferramentas: string
+  /** 4. Data, calendário e cliente. */
+  contexto: string
 }
 
 export function montarSystemPrompt(d: DadosPrompt): string {
+  const p = montarPartesDoPrompt(d)
+  return [p.agente, p.regras, p.ferramentas, p.contexto].filter(Boolean).join('\n\n')
+}
+
+export function montarPartesDoPrompt(d: DadosPrompt): PartesDoPrompt {
   const agora = d.agora ?? new Date()
   const base = d.config.promptBase.trim() || PROMPT_PADRAO
   const prompt = aplicarVariaveis(base, { clienteNome: d.clienteNome, empresaNome: d.empresaNome, agora })
@@ -105,7 +119,9 @@ export function montarSystemPrompt(d: DadosPrompt): string {
     '- Divida a resposta em mensagens curtas, como uma pessoa faria no WhatsApp: cada ideia em um parágrafo, separado por uma linha em branco (no máximo 3 mensagens). Ex.: cumprimento / informação / pergunta. Uma lista fica inteira na mesma mensagem.',
     '- Escreva em texto simples de WhatsApp: sem títulos, sem tabelas, sem markdown. Use *negrito* só quando ajudar.',
     d.config.usarEmojis ? '- Pode usar emojis com moderação.' : '- Não use emojis.',
-    `- ${TOM[d.config.formalidade]}`,
+    // Sem linha de tom aqui: o tom vem só do texto do agente (parte 1, "Tom de
+    // voz" do modo simples ou o prompt avançado). Antes havia um tom fixo aqui
+    // que nenhuma tela mudava e contradizia o escolhido (ex.: "Formal").
     '- Nunca invente cardápio, preço, horário, disponibilidade ou política: use as ferramentas e, se não tiver a informação, diga que vai verificar com a equipe.',
     '- Nunca diga que fez algo (reserva, cancelamento, transferência) sem a ferramenta ter confirmado nesta conversa.',
     '- Se a mensagem do cliente for só um marcador como [áudio] ou [imagem], você não consegue ver nem ouvir esse conteúdo: peça com educação que ele escreva.',
@@ -123,5 +139,5 @@ export function montarSystemPrompt(d: DadosPrompt): string {
     ...(d.codigoConversa ? [`- Código da conversa: ${d.codigoConversa}`] : []),
   ].join('\n')
 
-  return [prompt, regras, d.capacidades.trim(), contexto].filter(Boolean).join('\n\n')
+  return { agente: prompt, regras, ferramentas: d.capacidades.trim(), contexto }
 }
