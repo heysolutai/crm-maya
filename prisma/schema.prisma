@@ -142,6 +142,7 @@ model Company {
   handoffRules           HandoffRule[]
   handoffRequests        HandoffRequest[]
   handoffNotifies        HandoffNotify[]
+  configChanges          ConfigChange[]
 
   @@index([planId], map: "idx_companies_plan")
   @@index([isActive], map: "idx_companies_active")
@@ -1626,6 +1627,36 @@ model HandoffNotify {
 
   @@unique([companyId, funnel], map: "uq_handoff_notify_company_funnel")
   @@map("handoff_notify")
+}
+
+/// Alteracao de configuracao feita pelo MCP (Hermes): base de conhecimento,
+/// regras de encaminhamento e ferramentas. Guarda o antes e o depois para
+/// auditar e desfazer. O prompt tem historico proprio (AiAgent.prompts.historico).
+model ConfigChange {
+  id        String    @id @default(uuid()) @db.Uuid
+  companyId String    @map("company_id") @db.Uuid
+  /// 'faq' | 'regra' | 'ferramentas'
+  entity    String
+  /// Id do registro alterado (FAQ, regra). null = configuracao do restaurante (ferramentas).
+  entityId  String?   @map("entity_id")
+  /// 'criar' | 'editar' | 'apagar' | 'desfazer'
+  action    String
+  /// Como estava antes (null ao criar).
+  before    Json?
+  /// Como ficou (null ao apagar).
+  after     Json?
+  reason    String
+  /// 'mcp' (Hermes). Fica aberto para outras origens.
+  origin    String    @default("mcp")
+  /// Quando foi desfeita (pela alteracao `undoneById`).
+  undoneAt  DateTime? @map("undone_at")
+  undoneById String?  @map("undone_by_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt], map: "idx_config_changes_company_created")
+  @@map("config_changes")
 }
 
 // ─── Departments & Pipelines ────────────────────────

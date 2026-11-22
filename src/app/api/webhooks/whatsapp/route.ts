@@ -1319,6 +1319,8 @@ export async function POST(req: NextRequest) {
             aiHandled: payload.type === 'outgoing',
             stage: 'mensagem_fixa',
             inboxId,
+            // Sem isto a conversa ficava sem data de inicio (filtros por periodo).
+            startedAt: new Date(),
           },
           select: { id: true },
         });

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { consolidatePrompt } from '@/lib/promptConsolidation'
+import { geradoPeloModoSimples } from '@/lib/promptModo'
 
 /**
  * Historico do prompt do agente: as versoes anteriores ficam no proprio
@@ -26,6 +27,12 @@ export interface VersaoPrompt {
   /** Por onde veio a troca. */
   origem: OrigemPrompt
   motivo?: string
+  /**
+   * Formulario do modo simples que gerou `prompt` (so quando o texto era do
+   * modo simples). Voltar para esta versao restaura os campos junto, e o
+   * agente continua no modo simples.
+   */
+  simple?: Record<string, unknown>
 }
 
 const ORIGENS = new Set<string>(['tela', 'api', 'mcp'])
@@ -46,6 +53,9 @@ export function lerHistorico(prompts: unknown): VersaoPrompt[] {
       trocadoEm: v.trocadoEm,
       origem: typeof v.origem === 'string' && ORIGENS.has(v.origem) ? (v.origem as OrigemPrompt) : 'api',
       ...(typeof v.motivo === 'string' && v.motivo ? { motivo: v.motivo } : {}),
+      ...(v.simple && typeof v.simple === 'object' && !Array.isArray(v.simple)
+        ? { simple: v.simple as Record<string, unknown> }
+        : {}),
     })
   }
   return out
@@ -64,13 +74,16 @@ export function historicoComTroca(
   agora: Date = new Date()
 ): VersaoPrompt[] {
   const historico = lerHistorico(atuais)
-  const anterior = consolidatePrompt(comoRecord(atuais))
+  const p = comoRecord(atuais)
+  const anterior = consolidatePrompt(p)
   if (!anterior || anterior.trim() === novo.trim()) return historico
+  const simple = geradoPeloModoSimples(p, anterior) ? comoRecord(p.simple) : null
   const versao: VersaoPrompt = {
     prompt: anterior,
     trocadoEm: agora.toISOString(),
     origem,
     ...(motivo ? { motivo } : {}),
+    ...(simple ? { simple } : {}),
   }
   return [versao, ...historico].slice(0, MAX_VERSOES)
 }

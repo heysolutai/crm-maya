@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { idDoReserveMaya } from '@/lib/agentProfile'
 import { chaveTelefone } from './telefone.mjs'
 
 /**
@@ -118,7 +119,7 @@ export async function ondeApareceTelefone(telefone: string): Promise<OndeAparece
 
 export interface RestauranteListado extends Restaurante {
   ativo: boolean
-  conexoes: { nome: string; telefone: string | null; status: string | null }[]
+  conexoes: { nome: string; telefone: string | null; status: string | null; idReserveMaya: string | null }[]
 }
 
 export async function listarRestaurantes(busca?: string): Promise<RestauranteListado[]> {
@@ -134,7 +135,7 @@ export async function listarRestaurantes(busca?: string): Promise<RestauranteLis
       inboxes: {
         where: { isActive: true },
         orderBy: { createdAt: 'asc' },
-        select: { displayName: true, instanceName: true, phoneNumber: true, status: true },
+        select: { displayName: true, instanceName: true, phoneNumber: true, status: true, channelConfig: true },
       },
     },
   })
@@ -142,6 +143,11 @@ export async function listarRestaurantes(busca?: string): Promise<RestauranteLis
     id: e.id,
     nome: e.name,
     ativo: e.isActive,
-    conexoes: e.inboxes.map((i) => ({ nome: i.displayName?.trim() || i.instanceName, telefone: i.phoneNumber, status: i.status })),
+    conexoes: e.inboxes.map((i) => ({
+      nome: i.displayName?.trim() || i.instanceName,
+      telefone: i.phoneNumber,
+      status: i.status,
+      idReserveMaya: idDoReserveMaya(i.channelConfig),
+    })),
   }))
 }

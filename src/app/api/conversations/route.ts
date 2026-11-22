@@ -122,10 +122,13 @@ export async function GET(req: NextRequest) {
     if (q.status) where.status = q.status
     if (q.aiHandled) where.aiHandled = q.aiHandled === 'true'
     if (q.startDate || q.endDate) {
-      where.startedAt = {
+      const periodo = {
         ...(q.startDate ? { gte: new Date(q.startDate) } : {}),
         ...(q.endDate ? { lte: new Date(q.endDate) } : {}),
       }
+      // Inicio da conversa: startedAt quando gravado. As abertas pelo webhook
+      // do WhatsApp ficavam sem startedAt (so createdAt) e sumiam do filtro.
+      and.push({ OR: [{ startedAt: periodo }, { startedAt: null, createdAt: periodo }] })
     }
     if (q.assignedTo) where.transferredTo = q.assignedTo
     if (q.departmentId) where.departmentId = q.departmentId

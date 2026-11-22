@@ -51,4 +51,10 @@ export interface AuthResult {
   agentId: string | null;
   companyId: string | null;
   isSuperAdmin?: boolean;
+  /**
+   * Chamada do MCP do super-admin (Hermes) pelo loopback, com o token completo.
+   * Distingue da chave de API do restaurante (n8n): as rotas de configuracao
+   * do MCP (/api/mcp-config) so aceitam escrita por aqui ou pelo admin logado.
+   */
+  viaMcpAdmin?: boolean;
 }

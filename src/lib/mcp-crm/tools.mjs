@@ -9,11 +9,15 @@
  * e a API so devolve o que e dela. Um MCP com acesso direto ao Postgres
  * contornaria essa barreira.
  *
- * Le conversas, funil e o prompt do agente de IA (pra auditar se a IA segue o
- * prompt). A UNICA escrita e o prompt do agente, e com trava: exige a versao
- * lida (se alguem mexeu no meio, recusa em vez de sobrescrever), um motivo, e
- * o texto anterior vai pro historico, de onde `restaurar_prompt` traz de volta.
- * Funil, clientes e conversas continuam so leitura.
+ * Le conversas, funil, a configuracao do agente de IA e as solicitacoes.
+ * Escreve, sempre com trava:
+ *   - prompt do agente, NO FORMATO DO MODO EM USO (modo simples: campos;
+ *     avancado: texto). O modo so se troca na plataforma;
+ *   - base de conhecimento, regras de encaminhamento e ferramentas nativas
+ *     (so no modo super-admin com o token completo).
+ * Toda escrita: primeiro a previa (sem `aplicar`, nada e gravado), depois a
+ * mesma chamada com aplicar=true. Exige a versao lida (se alguem mexeu no
+ * meio, recusa) e um motivo; fica no historico e da pra desfazer.
  *
  * Dois modos:
  *   - restaurante: chave de API de um restaurante; tudo e daquele restaurante.
@@ -47,6 +51,29 @@ const QUEM = {
 };
 
 /**
+ * Guia geral que o cliente MCP recebe ao conectar (instructions): como alterar
+ * com seguranca e onde fica cada informacao.
+ */
+const INSTRUCOES = `MCP do CRM Maya (Chat): conversas, configuração da IA de atendimento e solicitações de cada restaurante.
+
+ORDEM SEGURA PARA QUALQUER ALTERAÇÃO
+1. Leia antes: ver_agente (prompt), listar_base_conhecimento, listar_regras, listar_ferramentas. Cada leitura traz a "versao" que a alteração exige.
+2. Chame a ferramenta de alteração SEM aplicar: ela devolve a prévia (antes → depois) e nada é gravado. Mostre a prévia para aprovação.
+3. Só depois da aprovação, repita a MESMA chamada com aplicar=true. Tudo fica no histórico e dá para voltar (restaurar_prompt; desfazer_alteracao).
+
+PROMPT DO AGENTE
+- O modo (simples ou avançado) é escolhido só na plataforma; ver_agente mostra qual está em uso.
+- Modo simples (restaurantes): altere campo a campo com alterar_campos. Modo avançado (outros segmentos): altere o texto com alterar_prompt. A ferramenta do outro modo é recusada.
+- Antes de escrever, veja ver_o_que_a_ia_recebe: o sistema já manda regras fixas de WhatsApp (mensagens curtas, sem markdown, não inventar, idioma do cliente, despedida), o roteiro das ferramentas, as regras de encaminhamento, data, calendário e nome do cliente. Não repita isso no prompt.
+
+ONDE FICA CADA INFORMAÇÃO
+- Restaurante Reserve Maya: horários, turnos, regras e limites de reserva, preços de entrada e eventos especiais (com reserva paga) vêm do Reserve Maya em tempo real, pelas ferramentas. Nunca escreva isso no prompt nem na base de conhecimento (esses campos ficam bloqueados).
+- Base de conhecimento: perguntas e respostas fixas da casa (pagamento, pet, estacionamento, rolha, capacidade de eventos...). É a do Chat; o FAQ do link de reservas é outro, do Reserve Maya.
+- Saudação inicial, tom, limitações, links e o jeito da casa: campos do modo simples.
+- Quando encaminhar para eventos personalizados ou para um atendente, o que perguntar antes e o que responder: regras de encaminhamento (listar_regras / alterar_regra), não o prompt.
+- Reservas (criar, consultar, alterar, cancelar) não passam por este MCP: são do Reserve Maya.`;
+
+/**
  * Monta um servidor MCP ja com as ferramentas registradas.
  *
  * Um servidor por requisicao (a rota e sem sessao): no modo super-admin,
@@ -67,7 +94,7 @@ export function criarServidor({ base, chave, admin }) {
  * O erro devolvido ao cliente MCP e curto e sem corpo bruto: a resposta de erro
  * da API pode trazer detalhe interno, e isso iria parar no contexto do modelo.
  * Excecao: o `error` de 400/404/409, que e frase das nossas rotas (validacao,
- * conflito de versao do prompt) e diz o que corrigir.
+ * conflito de versao) e diz o que corrigir.
  */
 async function api(caminho, params = {}, { metodo = 'GET', corpo } = {}) {
   const url = new URL(`${BASE}${caminho}`);
@@ -96,9 +123,9 @@ async function api(caminho, params = {}, { metodo = 'GET', corpo } = {}) {
           ? 'acesso recusado — confira MCP_ADMIN_TOKEN no servidor'
           : 'chave de API recusada — confira MAYA_API_KEY'
         : `a API respondeu ${res.status}`;
-    if ([400, 404, 409].includes(res.status)) {
+    if ([400, 403, 404, 409].includes(res.status)) {
       const erro = await res.json().then((j) => j?.error).catch(() => null);
-      if (typeof erro === 'string' && erro) motivo = erro.slice(0, 400);
+      if (typeof erro === 'string' && erro) motivo = erro.slice(0, 600);
     }
     throw new Error(`Falha em ${caminho}: ${motivo}`);
   }
@@ -119,12 +146,69 @@ function data(iso) {
 
 const corta = (s, max) => (s.length > max ? `${s.slice(0, max)}… [cortado]` : s);
 
+/** "2026-09-01" vira o comeco (ou o fim) daquele dia em Sao Paulo; ISO completo passa como esta. */
+const DIA = /^\d{4}-\d{2}-\d{2}$/;
+const inicioDoDia = (v) => (v && DIA.test(v) ? `${v}T00:00:00-03:00` : v);
+const fimDoDia = (v) => (v && DIA.test(v) ? `${v}T23:59:59.999-03:00` : v);
+
 /** Valores dos argumentos numa linha: `date=2026-11-03, people=2`. */
 function argsEmLinha(args) {
   if (!args || typeof args !== 'object') return '';
   return Object.entries(args)
     .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
     .join(', ');
+}
+
+/** Um valor de configuracao pra leitura: texto entre aspas, lista, sim/nao. */
+function valor(v, max = 2000) {
+  if (v === null || v === undefined || v === '') return '(vazio)';
+  if (typeof v === 'boolean') return v ? 'sim' : 'não';
+  if (Array.isArray(v)) return v.length ? v.map((x) => `"${corta(String(x), 300)}"`).join(', ') : '(nenhum)';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return `"${corta(String(v), max)}"`;
+}
+
+/**
+ * Antes/depois de uma alteracao (resposta de /api/mcp-config): criar mostra
+ * o que entra, apagar o que sai, editar so o que muda.
+ */
+function linhasDaMudanca(r) {
+  const a = r.antes || null;
+  const d = r.depois || null;
+  if (!a && d) return Object.entries(d).map(([k, v]) => `  ${k}: ${valor(v)}`);
+  if (a && !d) return Object.entries(a).map(([k, v]) => `  ${k}: ${valor(v)}`);
+  if (!a || !d) return [];
+  const linhas = [];
+  for (const k of new Set([...Object.keys(a), ...Object.keys(d)])) {
+    if (JSON.stringify(a[k]) === JSON.stringify(d[k])) continue;
+    linhas.push(`  ${k}:\n    antes:  ${valor(a[k])}\n    depois: ${valor(d[k])}`);
+  }
+  return linhas;
+}
+
+const ENTIDADE = { faq: 'Base de conhecimento', regra: 'Regra de encaminhamento', ferramentas: 'Ferramentas nativas' };
+const ACAO = { criar: 'criar', editar: 'editar', apagar: 'apagar', desfazer: 'voltar ao que era antes' };
+
+/** Texto da resposta de uma alteracao (previa ou aplicada). */
+function relatorioDaAlteracao(r) {
+  const linhas = linhasDaMudanca(r);
+  const oQue = `${ENTIDADE[r.entidade] || r.entidade}: ${ACAO[r.acao] || r.acao}${r.id ? ` (id ${r.id})` : ''}`;
+  if (r.simulado) {
+    return [
+      `PRÉVIA — nada foi gravado. ${oQue}.`,
+      linhas.length ? linhas.join('\n') : '  (sem detalhes)',
+      'Mostre esta prévia para aprovação. Para gravar, repita a mesma chamada com aplicar=true.',
+    ].join('\n');
+  }
+  return [
+    `Aplicado. ${oQue}.`,
+    linhas.length ? linhas.join('\n') : null,
+    r.versao ? `Versão nova: ${r.versao}` : null,
+    // Uma volta nao se desfaz (o servidor recusa): para refazer, altera de novo.
+    r.alteracaoId && r.acao !== 'desfazer' ? `Para desfazer: desfazer_alteracao com alteracao_id=${r.alteracaoId}.` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 /**
@@ -229,11 +313,32 @@ function versaoEm(historico, instante) {
 
 const ORIGEM = { tela: 'pela tela do CRM', api: 'pela API', mcp: 'pelo MCP' };
 
-const AVISO_MODO_SIMPLES =
-  'Este prompt foi gerado pelo modo simples da tela. Se alguem salvar o modo simples de novo, ' +
-  'a tela avisa que o texto foi editado fora e, se confirmarem, gera tudo de novo e apaga a alteracao.';
+const MODO = {
+  simples: 'SIMPLES (formulário da plataforma) → altere com alterar_campos',
+  avancado: 'AVANÇADO (texto livre) → altere com alterar_prompt',
+  nenhum: 'NENHUM (nada salvo; a IA usa um texto padrão curto) → escolha e salve o modo na plataforma antes de alterar por aqui',
+};
 
-  const server = new McpServer({ name: admin ? 'maya-crm-admin' : 'maya-crm', version: '1.2.0' });
+const TIPO = { reserve_maya: 'Restaurante Reserve Maya', personalizado: 'Personalizado' };
+
+/** Situacao da IA numa linha: ligada para todos, so para numeros de teste ou desligada. */
+function situacaoIa(a) {
+  if (!a.ativo) return 'IA DESLIGADA';
+  return a.numerosDeTeste?.length ? `IA ligada só para os números de teste: ${a.numerosDeTeste.join(', ')}` : 'IA ligada para todos';
+}
+
+function conexoesEmLinha(a) {
+  return (
+    a.conexoes
+      .map((c) => `${c.nome}${c.telefone ? ` (${c.telefone})` : ''}${c.idReserveMaya ? ` — ID Reserve Maya: ${c.idReserveMaya}` : ''}`)
+      .join('; ') || 'nenhuma — não atende ninguém'
+  );
+}
+
+  const server = new McpServer(
+    { name: admin ? 'maya-crm-admin' : 'maya-crm', version: '1.3.0' },
+    { instructions: INSTRUCOES }
+  );
 
 const nomeRestaurante = (r) => `${r.nome} (${r.id})`;
 
@@ -267,10 +372,14 @@ async function escolherRestaurante(args) {
 /**
  * registerTool com o modo super-admin: acrescenta `restaurante_id`, escolhe o
  * restaurante antes de rodar e diz qual foi no topo da resposta. Ferramenta
- * que escreve some com o token de leitura.
+ * que escreve some com o token de leitura. `soAdmin`: so existe no modo
+ * super-admin (a chave de API do restaurante nao altera essa configuracao).
  */
-function registrar(nome, definicao, executar, { escreve = false } = {}) {
-  if (!admin) return server.registerTool(nome, definicao, executar);
+function registrar(nome, definicao, executar, { escreve = false, soAdmin = false } = {}) {
+  if (!admin) {
+    if (soAdmin) return;
+    return server.registerTool(nome, definicao, executar);
+  }
   if (escreve && !admin.podeAlterar) return;
   const inputSchema = {
     restaurante_id: z.string().uuid().optional()
@@ -287,6 +396,12 @@ function registrar(nome, definicao, executar, { escreve = false } = {}) {
   });
 }
 
+/** Parametro comum das ferramentas que escrevem. */
+const APLICAR = z.boolean().optional()
+  .describe('false/omitido = só a prévia (nada é gravado). true = grava. Aplique só depois de mostrar a prévia e ter aprovação.');
+const MOTIVO = z.string().min(3).max(300)
+  .describe('Por que esta mudança (fica no histórico). Ex.: "Casa Brisa: limitações vindas do prompt do NicoChat".');
+
 // ─── Conversas ───────────────────────────────────────────────
 
 registrar(
@@ -301,8 +416,8 @@ registrar(
       status: z.enum(['active', 'pending', 'closed']).optional()
         .describe('Situacao da conversa.'),
       desde: z.string().optional()
-        .describe('Data inicial (ISO 8601, ex: 2026-09-01). Filtra pelo inicio da conversa.'),
-      ate: z.string().optional().describe('Data final (ISO 8601).'),
+        .describe('Data inicial (AAAA-MM-DD = desde o comeco do dia em Sao Paulo, ou ISO completo). Filtra pelo inicio da conversa.'),
+      ate: z.string().optional().describe('Data final (AAAA-MM-DD = ate o fim do dia em Sao Paulo, ou ISO completo).'),
       limite: z.number().int().min(1).max(MAX_CONVERSAS).optional()
         .describe(`Quantas conversas trazer (padrao 25, maximo ${MAX_CONVERSAS}).`),
       pular: z.number().int().min(0).optional().describe('Quantas pular, para paginar.'),
@@ -315,8 +430,8 @@ registrar(
     const conversas = await api('/api/conversations', {
       status,
       inboxId: conexao_id,
-      startDate: desde,
-      endDate: ate,
+      startDate: inicioDoDia(desde),
+      endDate: fimDoDia(ate),
       limit: limite ?? 25,
       offset: pular ?? 0,
     });
@@ -332,7 +447,8 @@ registrar(
       return [
         `- id: ${c.id}`,
         `  cliente: ${cliente || 'sem nome'} (${c.client?.phone || 'sem telefone'})`,
-        `  status: ${c.status} | iniciada: ${data(c.startedAt)}`,
+        // Conversa antiga do webhook ficou sem startedAt: a criacao e o inicio.
+        `  status: ${c.status} | iniciada: ${data(c.startedAt || c.createdAt)}`,
         `  canal: ${c.inbox?.displayName || c.channel || '—'}`,
         `  departamento: ${c.department?.name || 'Triagem'}`,
         previa ? `  ultima: "${previa}"` : null,
@@ -382,7 +498,7 @@ registrar(
     const avisos = [
       outras.length
         ? `(Este cliente tem mais ${outras.length} conversa(s): ` +
-          `${outras.map((c) => `${c.id} de ${data(c.startedAt)}`).join(', ')}. Use conversa_id pra abrir.)`
+          `${outras.map((c) => `${c.id} de ${data(c.startedAt || c.createdAt)}`).join(', ')}. Use conversa_id pra abrir.)`
         : null,
       t.cortada ? '(Atingiu o limite — ha mensagens mais antigas. Aumente `limite` para ver o resto.)' : null,
       t.semFerramentas ? '(Nao deu pra carregar as ferramentas usadas pela IA: so as mensagens.)' : null,
@@ -460,16 +576,17 @@ registrar(
   }
 );
 
-// ─── Agente de IA: prompt ────────────────────────────────────
+// ─── Agente de IA ────────────────────────────────────────────
 
 registrar(
   'listar_agentes',
   {
     title: 'Listar agentes de IA',
     description:
-      'Agentes de IA do restaurante: id, conexoes (WhatsApp) que cada um atende, motor ' +
-      '(maestro = motor do CRM, n8n = fluxo externo) e tamanho do prompt. Ponto de partida ' +
-      'pra ver_prompt e auditar_conversas.',
+      'Agentes de IA do restaurante: id, conexoes (WhatsApp) com o ID do Reserve Maya de cada ' +
+      'uma, se a IA esta ligada (para todos ou so numeros de teste), motor (maestro = motor do ' +
+      'CRM, n8n = fluxo externo), tipo e o modo do prompt em uso. Ponto de partida pra ' +
+      'ver_agente, ver_prompt e auditar_conversas.',
     inputSchema: {},
     annotations: { readOnlyHint: true, openWorldHint: true },
   },
@@ -480,13 +597,107 @@ registrar(
     const linhas = agentes.map((a) =>
       [
         `- id: ${a.id}`,
-        `  nome: ${a.nome}${a.ativo ? '' : ' (DESATIVADO)'} | motor: ${a.motor}`,
-        `  conexoes: ${a.conexoes.map((c) => `${c.nome} (${c.id})`).join(', ') || 'nenhuma — nao atende ninguem'}`,
-        `  prompt: ${a.tamanho} caracteres | ${a.valeDesde ? `alterado em ${data(a.valeDesde)}` : 'sem troca registrada'}` +
-          `${a.modoSimples ? ' | gerado pelo modo simples' : ''}`,
+        `  nome: ${a.nome} | motor: ${a.motor} | ${situacaoIa(a)}`,
+        `  tipo: ${TIPO[a.tipo] || a.tipo} | modo do prompt: ${MODO[a.modo] || a.modo}`,
+        `  conexoes: ${conexoesEmLinha(a)}`,
+        `  prompt: ${a.tamanho} caracteres | ${a.valeDesde ? `alterado em ${data(a.valeDesde)}` : 'sem troca registrada'}`,
       ].join('\n')
     );
     return texto(`${agentes.length} agente(s):\n\n${linhas.join('\n\n')}`);
+  }
+);
+
+registrar(
+  'ver_agente',
+  {
+    title: 'Ver configuração do agente',
+    description:
+      'Configuração do agente de IA por partes: modo do prompt em uso (e com qual ferramenta ' +
+      'se altera), tipo (Reserve Maya ou personalizado), ID do Reserve Maya de cada conexão, ' +
+      'motor, modelo, temperatura, se a IA está ligada e, no modo simples, cada campo com o ' +
+      'valor atual, para que serve e o limite de tamanho. Traz a "versao" que alterar_campos ' +
+      'exige. Comece por aqui antes de propor mudança no prompt.',
+    inputSchema: {
+      agente_id: z.string().uuid().optional()
+        .describe('id do agente (listar_agentes). Opcional se o restaurante tiver um so.'),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ agente_id }) => {
+    const agente = await resolverAgente(agente_id);
+    const p = await api('/api/ai-configurations/prompt', { id: agente.id });
+
+    const cabecalho = [
+      `Agente "${p.nome}" (${p.id}) | motor: ${p.motor} | ${situacaoIa(p)}`,
+      `Modelo: ${p.modelo}${p.temperatura !== null && p.temperatura !== undefined ? ` | temperatura: ${p.temperatura}` : ''}`,
+      `Tipo: ${TIPO[p.tipo] || p.tipo} — ${p.tipoExplicado}`,
+      `Conexões: ${conexoesEmLinha(p)}`,
+      `MODO EM USO: ${MODO[p.modo] || p.modo}`,
+      `Versão do prompt: ${p.versao} | ${p.tamanho} caracteres | ${p.valeDesde ? `vale desde ${data(p.valeDesde)}` : 'sem troca registrada'}`,
+      p.motor !== 'maestro'
+        ? 'Atenção: este agente responde pelo n8n, que monta o próprio prompt no fluxo. Os campos abaixo valem para o Maestro.'
+        : null,
+    ].filter(Boolean);
+
+    if (p.modo !== 'simples') {
+      return texto(
+        `${cabecalho.join('\n')}\n\n` +
+          (p.modo === 'avancado'
+            ? 'O texto livre está em ver_prompt. Os campos do modo simples não valem enquanto o modo avançado estiver em uso.'
+            : 'Nada salvo ainda. Peça para escolher e salvar o modo na aba Prompt da plataforma.')
+      );
+    }
+
+    const campos = p.campos.map((c) => {
+      const regra = c.bloqueado
+        ? 'BLOQUEADO: vem do Reserve Maya em tempo real; deixe em branco'
+        : c.opcoes
+          ? `opções: ${c.opcoes.map((o) => `${o.valor} (${o.rotulo}: ${o.descricao})`).join(' | ')}`
+          : `até ${c.max} caracteres`;
+      return [`- ${c.nome} — ${c.rotulo} [${regra}]`, `  para que serve: ${c.paraQueServe}`, `  valor atual: ${valor(c.valor, 4000)}`].join('\n');
+    });
+
+    return texto(
+      `${cabecalho.join('\n')}\n\nCampos do modo simples (nome para alterar_campos):\n${campos.join('\n')}\n\n` +
+        'Para alterar: alterar_campos com agente_id, versao, motivo e só os campos que mudam. ' +
+        'Antes de escrever, veja ver_o_que_a_ia_recebe para não repetir o que o sistema já manda.'
+    );
+  }
+);
+
+registrar(
+  'ver_o_que_a_ia_recebe',
+  {
+    title: 'Ver o que a IA recebe',
+    description:
+      'O prompt inteiro que o motor Maestro monta, nas 4 partes e na ordem em que a IA recebe: ' +
+      '1) texto do agente (o que se altera), 2) regras fixas de WhatsApp, 3) roteiro das ' +
+      'ferramentas ligadas e das regras de encaminhamento, 4) contexto (data, calendário, ' +
+      'cliente). Use antes de alterar o prompt, para não repetir o que o sistema já manda.',
+    inputSchema: {
+      agente_id: z.string().uuid().optional()
+        .describe('id do agente (listar_agentes). Opcional se o restaurante tiver um so.'),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ agente_id }) => {
+    const agente = await resolverAgente(agente_id);
+    const p = await api('/api/ai-configurations/prompt', { id: agente.id, partes: 1 });
+    const partes = p.partes || {};
+    const secao = (titulo, origem, corpo) => `════ ${titulo} ════\n(${origem})\n${corpo?.trim() || '(vazio)'}`;
+    return texto(
+      [
+        `Agente "${p.nome}" | motor: ${p.motor}${p.motor !== 'maestro' ? ' — este agente responde pelo n8n; abaixo está o que o Maestro mandaria' : ''}`,
+        secao('1. TEXTO DO AGENTE', `vem da aba Prompt (modo em uso: ${p.modo}); é a única parte que se altera`, partes.agente),
+        secao('2. REGRAS DE CONVERSA NO WHATSAPP', 'fixas do sistema, iguais para todo agente: não repita no prompt', partes.regras),
+        secao('3. FERRAMENTAS E ENCAMINHAMENTOS', 'montado sozinho das ferramentas ligadas e das regras de encaminhamento', partes.ferramentas),
+        secao('4. CONTEXTO DO ATENDIMENTO', 'preenchido a cada conversa; aqui, exemplo de primeira resposta', partes.contexto),
+        'DADOS QUE ENTRAM SOZINHOS a cada conversa: data e hora atuais (São Paulo), calendário dos próximos 14 dias, ' +
+          'primeiro nome do cliente, se é a primeira resposta (decide a saudação) e o código da conversa. O telefone do ' +
+          'cliente não entra no texto: vai direto para as ferramentas de reserva. Horários, turnos, limites e eventos ' +
+          'do Reserve Maya são consultados na hora, pelas ferramentas.',
+      ].join('\n\n')
+    );
   }
 );
 
@@ -495,8 +706,8 @@ registrar(
   {
     title: 'Ver prompt do agente',
     description:
-      'Prompt do agente de IA (o texto que o restaurante escreveu), com a marca de versao ' +
-      'exigida por alterar_prompt e o historico de trocas (quando, por onde, por que). ' +
+      'Prompt do agente de IA (o texto que vai na parte 1), com o modo em uso, a marca de ' +
+      'versao exigida para alterar e o historico de trocas (quando, por onde, por que). ' +
       'Com versao_anterior=N mostra o texto que valia antes da troca N.',
     inputSchema: {
       agente_id: z.string().uuid().optional()
@@ -515,19 +726,19 @@ registrar(
           .map(
             (v) =>
               `  ${v.numero}. valia ${v.valiaDesde ? `de ${data(v.valiaDesde)} ` : ''}ate ${data(v.trocadoEm)}, ` +
-              `trocado ${ORIGEM[v.origem] || v.origem}${v.motivo ? ` — "${v.motivo}"` : ''} (${v.tamanho} caracteres)`
+              `trocado ${ORIGEM[v.origem] || v.origem}${v.motivo ? ` — "${v.motivo}"` : ''} (${v.tamanho} caracteres` +
+              `${v.doModoSimples ? ', do modo simples' : ''})`
           )
           .join('\n')
       : '  (nenhuma troca registrada ainda)';
 
     const cabecalho = [
       `Agente "${p.nome}" (${p.id})${p.ativo ? '' : ' — DESATIVADO'} | motor: ${p.motor}`,
-      `Conexoes: ${p.conexoes.map((c) => c.nome).join(', ') || 'nenhuma'}`,
+      `Conexoes: ${conexoesEmLinha(p)}`,
+      `MODO EM USO: ${MODO[p.modo] || p.modo}`,
       `Versao atual: ${p.versao} | ${p.tamanho} caracteres | ${p.valeDesde ? `vale desde ${data(p.valeDesde)}` : 'sem troca registrada'}`,
-      p.modoSimples ? `Atencao: ${AVISO_MODO_SIMPLES}` : null,
       p.motor === 'maestro'
-        ? 'O motor maestro soma a este texto regras fixas (mensagens curtas de WhatsApp, sem markdown, ' +
-          'nao inventar, nao dizer que fez algo sem a ferramenta confirmar) e o roteiro das ferramentas ligadas.'
+        ? 'O motor maestro soma a este texto regras fixas e o roteiro das ferramentas ligadas (ver_o_que_a_ia_recebe).'
         : null,
       `Historico:\n${historico}`,
     ].filter(Boolean);
@@ -554,14 +765,14 @@ registrar(
       'que a IA fez que o prompt nao cobre e trechos do prompt ambiguos ou conflitantes. ' +
       'Conversa marcada com versao anterior deve ser julgada contra aquela versao (ver_prompt). ' +
       'Com telefone, audita so as conversas daquele cliente (e acha o agente pela conexao). ' +
-      'Proponha ajustes de texto, mas so altere com alterar_prompt depois do usuario aprovar.',
+      'Proponha ajustes, mas so altere (alterar_campos ou alterar_prompt, conforme o modo) depois do usuario aprovar.',
     inputSchema: {
       telefone: z.string().optional()
         .describe('So as conversas deste cliente. Com DDD, ex: 62999197953 (com ou sem 55, com ou sem o 9).'),
       agente_id: z.string().uuid().optional()
         .describe('id do agente (listar_agentes). Opcional se o restaurante tiver um so ou se vier telefone.'),
-      desde: z.string().optional().describe('Data inicial (ISO 8601). Filtra pelo inicio da conversa.'),
-      ate: z.string().optional().describe('Data final (ISO 8601).'),
+      desde: z.string().optional().describe('Data inicial (AAAA-MM-DD ou ISO). Filtra pelo inicio da conversa.'),
+      ate: z.string().optional().describe('Data final (AAAA-MM-DD ou ISO).'),
       quantidade: z.number().int().min(1).max(MAX_AUDITADAS).optional()
         .describe(`Quantas conversas com resposta da IA (padrao 6, maximo ${MAX_AUDITADAS}).`),
       mensagens_por_conversa: z.number().int().min(10).max(MAX_MENSAGENS).optional()
@@ -610,7 +821,12 @@ registrar(
     } else {
       const listas = await Promise.all(
         p.conexoes.map((c) =>
-          api('/api/conversations', { inboxId: c.id, startDate: desde, endDate: ate, limit: Math.min(alvo * 3, MAX_CONVERSAS) })
+          api('/api/conversations', {
+            inboxId: c.id,
+            startDate: inicioDoDia(desde),
+            endDate: fimDoDia(ate),
+            limit: Math.min(alvo * 3, MAX_CONVERSAS),
+          })
         )
       );
       candidatas = listas
@@ -630,11 +846,12 @@ registrar(
 
     const cabecalho = [
       `AUDITORIA — agente "${p.nome}" | motor: ${p.motor} | conexoes: ${p.conexoes.map((c) => c.nome).join(', ')}`,
-      `Prompt atual: versao ${p.versao}, ${p.tamanho} caracteres, ` +
+      `Prompt atual: versao ${p.versao}, ${p.tamanho} caracteres, modo ${p.modo}, ` +
         `${p.valeDesde ? `vale desde ${data(p.valeDesde)}` : 'sem troca registrada'}.`,
       p.motor === 'maestro'
         ? 'Alem do prompt, o motor maestro manda regras fixas (mensagens curtas, sem markdown, uma pergunta por vez, ' +
-          'nao inventar, nao dizer que fez sem a ferramenta confirmar) e o roteiro das ferramentas: nao culpe o prompt por elas.'
+          'nao inventar, nao dizer que fez sem a ferramenta confirmar, idioma do cliente) e o roteiro das ferramentas e ' +
+          'das regras de encaminhamento: nao culpe o prompt por elas (ver_o_que_a_ia_recebe).'
         : null,
       `${auditadas.length} conversa(s) com resposta da IA (de ${candidatas.length} olhada(s)).`,
     ].filter(Boolean);
@@ -683,29 +900,101 @@ registrar(
 );
 
 registrar(
+  'alterar_campos',
+  {
+    title: 'Alterar campos do modo simples',
+    description:
+      'ALTERA o prompt de um agente no MODO SIMPLES, campo a campo (o texto da IA é gerado de ' +
+      'novo, igual quando se salva pela plataforma). Só funciona com o modo simples em uso ' +
+      '(ver_agente); no avançado use alterar_prompt. Mande só os campos que mudam. Sem ' +
+      'aplicar=true devolve a prévia (antes → depois) e nada é gravado. Em restaurante Reserve ' +
+      'Maya, horario_funcionamento, horarios_reserva e precos ficam bloqueados (vêm do sistema ' +
+      'de reservas). O texto anterior vai para o histórico (restaurar_prompt volta).',
+    inputSchema: {
+      agente_id: z.string().uuid().describe('id do agente (listar_agentes).'),
+      versao: z.string().describe('Versão do prompt lida em ver_agente (ex.: 3f9a1c0b7d2e).'),
+      motivo: MOTIVO,
+      campos: z
+        .object({
+          nome_ia: z.string().optional().describe('Como a IA se apresenta.'),
+          nome_restaurante: z.string().optional().describe('Nome da casa, como o cliente conhece.'),
+          tom: z.enum(['amigavel', 'formal', 'descontraido']).optional().describe('Jeito de falar.'),
+          como_responde: z.enum(['objetivo', 'equilibrado', 'detalhado']).optional()
+            .describe('Tamanho das respostas: objetivo (fala pouco), equilibrado, detalhado (fala muito).'),
+          saudacao_inicial: z.string().optional()
+            .describe('Texto da primeira resposta da conversa, do jeito que vai. {nome} = primeiro nome do cliente; {resposta} = onde entra a resposta ao que ele perguntou.'),
+          endereco: z.string().optional().describe('Endereço completo.'),
+          horario_funcionamento: z.string().optional().describe('Só para quem NÃO usa Reserve Maya.'),
+          horarios_reserva: z.string().optional().describe('Só para quem NÃO usa Reserve Maya.'),
+          precos: z.string().optional().describe('Só para quem NÃO usa Reserve Maya.'),
+          sobre_a_casa: z.string().optional().describe('A proposta e o jeito da casa. Perguntas e respostas vão na base de conhecimento.'),
+          links: z.string().optional().describe('Um por linha: "Cardápio: https://...".'),
+          limitacoes: z.string().optional().describe('O que a IA nunca diz nem faz, um por linha. Vale acima do resto do texto.'),
+          instrucoes_extras: z.string().optional().describe('Regras ou exceções que não cabem nos outros campos.'),
+        })
+        .describe('Só os campos que mudam. "" limpa o campo.'),
+      aplicar: APLICAR,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  },
+  async ({ agente_id, versao, motivo, campos, aplicar }) => {
+    const agente = await resolverAgente(agente_id);
+    const enviados = Object.fromEntries(Object.entries(campos || {}).filter(([, v]) => v !== undefined));
+    if (Object.keys(enviados).length === 0) throw new Error('Informe ao menos um campo em "campos".');
+    const r = await api('/api/ai-configurations/prompt', {}, {
+      metodo: 'PATCH',
+      corpo: { id: agente.id, versao, motivo, campos: enviados, simular: !aplicar },
+    });
+
+    const mudancas = (r.mudancas || []).map(
+      (m) => `- ${m.campo} (${m.rotulo}):\n    antes:  ${valor(m.antes, 3000)}\n    depois: ${valor(m.depois, 3000)}`
+    );
+    if (r.simulado) {
+      return texto(
+        [
+          `PRÉVIA — nada foi gravado. Agente "${agente.nome}": ${mudancas.length} campo(s) mudam.`,
+          ...mudancas,
+          `Texto da IA: ${r.tamanhoAntes} → ${r.tamanhoDepois} caracteres.`,
+          'Mostre esta prévia para aprovação. Para gravar, repita a mesma chamada com aplicar=true.',
+        ].join('\n')
+      );
+    }
+    return texto(
+      [
+        `Aplicado em ${data(r.trocadoEm)}. Agente "${agente.nome}": ${mudancas.length} campo(s) alterado(s).`,
+        ...mudancas,
+        `Texto da IA: ${r.tamanhoAntes} → ${r.tamanhoDepois} caracteres. Versão nova: ${r.versao}.`,
+        'Vale a partir da próxima resposta da IA.',
+        `Para desfazer: restaurar_prompt com agente_id=${agente.id}, versao=${r.versao}, voltar_para=1.`,
+      ].join('\n')
+    );
+  },
+  { escreve: true }
+);
+
+registrar(
   'alterar_prompt',
   {
-    title: 'Alterar prompt do agente',
+    title: 'Alterar texto do prompt (modo avançado)',
     description:
-      'ALTERA o prompt do agente de IA: muda como a IA atende os clientes a partir da proxima ' +
-      'resposta. Antes: ver_prompt (pra pegar a versao) e mostrar ao usuario exatamente o que ' +
-      'vai mudar, pedindo confirmacao. Prefira trocar+por (troca so um trecho, que precisa ' +
-      'aparecer uma vez no texto atual); prompt_novo reescreve tudo. O texto anterior vai pro ' +
-      'historico e restaurar_prompt traz de volta. Se alguem mexeu no prompt depois da leitura, ' +
-      'a alteracao e recusada: leia de novo.',
+      'ALTERA o texto do prompt de um agente no MODO AVANÇADO (texto livre). No modo simples ' +
+      'é recusado: use alterar_campos. Prefira trocar+por (troca só um trecho, que precisa ' +
+      'aparecer uma vez no texto atual); prompt_novo reescreve tudo. Sem aplicar=true devolve ' +
+      'a prévia e nada é gravado. O texto anterior vai para o histórico e restaurar_prompt ' +
+      'traz de volta. Se alguém mexeu no prompt depois da leitura, a alteração é recusada: leia de novo.',
     inputSchema: {
       agente_id: z.string().uuid().describe('id do agente (listar_agentes).'),
       versao: z.string().describe('Marca de versao mostrada por ver_prompt (ex: 3f9a1c0b7d2e).'),
-      motivo: z.string().min(3).max(300)
-        .describe('Por que esta mudanca (fica no historico). Ex: "IA confirmava reserva sem a ferramenta".'),
+      motivo: MOTIVO,
       trocar: z.string().optional()
         .describe('Trecho EXATO do prompt atual a substituir (com as mesmas quebras de linha).'),
       por: z.string().optional().describe('Texto que entra no lugar do trecho. Vazio remove o trecho.'),
       prompt_novo: z.string().optional().describe('Prompt inteiro novo, no lugar de trocar+por.'),
+      aplicar: APLICAR,
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   },
-  async ({ agente_id, versao, motivo, trocar, por, prompt_novo }) => {
+  async ({ agente_id, versao, motivo, trocar, por, prompt_novo, aplicar }) => {
     if ((trocar === undefined) === (prompt_novo === undefined)) {
       throw new Error('Use trocar+por (um trecho) OU prompt_novo (tudo), um dos dois.');
     }
@@ -715,19 +1004,34 @@ registrar(
     const agente = await resolverAgente(agente_id);
     const r = await api('/api/ai-configurations/prompt', {}, {
       metodo: 'PATCH',
-      corpo: { id: agente.id, versao, motivo, ...(trocar !== undefined ? { trocar, por } : { prompt_novo }) },
+      corpo: {
+        id: agente.id,
+        versao,
+        motivo,
+        ...(trocar !== undefined ? { trocar, por } : { prompt_novo }),
+        simular: !aplicar,
+      },
     });
 
+    if (r.simulado) {
+      return texto(
+        [
+          `PRÉVIA — nada foi gravado. Agente "${agente.nome}" (modo avançado).`,
+          trocar !== undefined
+            ? `Trecho que sai:\n${corta(trocar, 3000)}\n\nTrecho que entra:\n${corta(por || '(remove o trecho)', 3000)}`
+            : 'O texto inteiro é substituído pelo prompt_novo enviado.',
+          `Tamanho: ${r.tamanhoAntes} → ${r.tamanhoDepois} caracteres.`,
+          'Mostre esta prévia para aprovação. Para gravar, repita a mesma chamada com aplicar=true.',
+        ].join('\n')
+      );
+    }
     return texto(
       [
         `Prompt do agente "${agente.nome}" alterado em ${data(r.trocadoEm)}.`,
         `Tamanho: ${r.tamanhoAntes} → ${r.tamanhoDepois} caracteres. Versao nova: ${r.versao}.`,
         'Vale a partir da proxima resposta da IA.',
         `Pra desfazer: restaurar_prompt com agente_id=${agente.id}, versao=${r.versao}, voltar_para=1.`,
-        agente.modoSimples ? `Atencao: ${AVISO_MODO_SIMPLES}` : null,
-      ]
-        .filter(Boolean)
-        .join('\n')
+      ].join('\n')
     );
   },
   { escreve: true }
@@ -739,24 +1043,34 @@ registrar(
     title: 'Restaurar versao anterior do prompt',
     description:
       'Volta o prompt do agente pra uma versao do historico (1 = a que valia antes da ultima ' +
-      'troca). O texto atual tambem vai pro historico, entao da pra voltar de novo. Confirme ' +
-      'com o usuario antes.',
+      'troca), sem trocar o modo: no modo simples volta os campos junto. Uma versao de outro ' +
+      'modo e recusada (troca de modo so pela plataforma). O texto atual tambem vai pro ' +
+      'historico, entao da pra voltar de novo. Sem aplicar=true so mostra a previa.',
     inputSchema: {
       agente_id: z.string().uuid().describe('id do agente (listar_agentes).'),
       versao: z.string().describe('Marca da versao ATUAL, mostrada por ver_prompt.'),
       voltar_para: z.number().int().min(1).max(10).optional()
         .describe('Numero da versao anterior no historico (padrao 1).'),
-      motivo: z.string().min(3).max(300).describe('Por que esta voltando (fica no historico).'),
+      motivo: MOTIVO,
+      aplicar: APLICAR,
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   },
-  async ({ agente_id, versao, voltar_para, motivo }) => {
+  async ({ agente_id, versao, voltar_para, motivo, aplicar }) => {
     const agente = await resolverAgente(agente_id);
     const n = voltar_para ?? 1;
     const r = await api('/api/ai-configurations/prompt', {}, {
       metodo: 'PATCH',
-      corpo: { id: agente.id, versao, motivo, restaurar: n },
+      corpo: { id: agente.id, versao, motivo, restaurar: n, simular: !aplicar },
     });
+    if (r.simulado) {
+      return texto(
+        `PRÉVIA — nada foi gravado. Agente "${agente.nome}" voltaria para a versao anterior ${n} ` +
+          `(modo ${r.modo}${r.modo === 'simples' ? ', com os campos daquela versao' : ''}).\n` +
+          `Tamanho: ${r.tamanhoAntes} → ${r.tamanhoDepois} caracteres. Texto que voltaria (ver_prompt com versao_anterior=${n} mostra inteiro).\n` +
+          'Para gravar, repita a mesma chamada com aplicar=true.'
+      );
+    }
     return texto(
       `Prompt do agente "${agente.nome}" voltou pra versao anterior ${n} em ${data(r.trocadoEm)}.\n` +
         `Tamanho: ${r.tamanhoAntes} → ${r.tamanhoDepois} caracteres. Versao nova: ${r.versao}.\n` +
@@ -764,6 +1078,337 @@ registrar(
     );
   },
   { escreve: true }
+);
+
+// ─── Base de conhecimento ────────────────────────────────────
+
+registrar(
+  'listar_base_conhecimento',
+  {
+    title: 'Listar base de conhecimento',
+    description:
+      'Perguntas e respostas da base de conhecimento do Chat (a IA consulta quando o cliente ' +
+      'pergunta), com id e versao de cada uma. Vale para todos os WhatsApps do restaurante. ' +
+      'Não é o FAQ do link de reservas (esse é do Reserve Maya).',
+    inputSchema: {
+      busca: z.string().optional().describe('Filtra por texto na pergunta ou na resposta.'),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ busca }) => {
+    const r = await api('/api/mcp-config/faq');
+    const termo = (busca || '').trim().toLowerCase();
+    const itens = (r.data || []).filter(
+      (f) => !termo || f.pergunta.toLowerCase().includes(termo) || f.resposta.toLowerCase().includes(termo)
+    );
+    if (itens.length === 0) return texto(termo ? `Nenhuma pergunta com "${busca}".` : 'Base de conhecimento vazia.');
+    const linhas = itens.map((f) =>
+      [
+        `- id: ${f.id} | versao: ${f.versao}${f.ativa ? '' : ' | DESATIVADA'}`,
+        `  P: ${f.pergunta}`,
+        `  R: ${f.resposta}`,
+        f.categoria || f.palavrasChave?.length
+          ? `  categoria: ${f.categoria || '—'} | palavras-chave: ${f.palavrasChave?.join(', ') || '—'}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join('\n')
+    );
+    return texto(`${itens.length} pergunta(s)${termo ? ` com "${busca}"` : ''}:\n\n${linhas.join('\n\n')}`);
+  }
+);
+
+registrar(
+  'alterar_base_conhecimento',
+  {
+    title: 'Alterar base de conhecimento',
+    description:
+      'Cria, edita ou apaga uma pergunta da base de conhecimento do Chat. A busca da IA é ' +
+      'atualizada na hora (não precisa sincronizar). Uma pergunta por assunto; resposta pronta ' +
+      'para o cliente. Não cadastre horários, turnos, limites de reserva, preços de entrada nem ' +
+      'eventos especiais de restaurante Reserve Maya: vêm do sistema em tempo real. Sem ' +
+      'aplicar=true devolve a prévia. Editar e apagar exigem a versao de listar_base_conhecimento. ' +
+      'Para desligar sem apagar, edite com ativa=false.',
+    inputSchema: {
+      acao: z.enum(['criar', 'editar', 'apagar']),
+      id: z.string().uuid().optional().describe('editar/apagar: id da pergunta.'),
+      versao: z.string().optional().describe('editar/apagar: versao lida em listar_base_conhecimento.'),
+      pergunta: z.string().optional().describe('criar (obrigatória) / editar: a pergunta, como o cliente faria.'),
+      resposta: z.string().optional().describe('criar (obrigatória) / editar: a resposta que a IA dá. Até 4000 caracteres.'),
+      categoria: z.string().nullable().optional().describe('Categoria (opcional). null limpa.'),
+      palavras_chave: z.array(z.string()).optional().describe('Palavras que ajudam a achar (até 20).'),
+      ativa: z.boolean().optional().describe('false = a IA deixa de usar (sem apagar).'),
+      motivo: MOTIVO,
+      aplicar: APLICAR,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  },
+  async ({ acao, id, versao, pergunta, resposta, categoria, palavras_chave, ativa, motivo, aplicar }) => {
+    if (acao !== 'criar' && (!id || !versao)) throw new Error('Para editar ou apagar, informe id e versao (listar_base_conhecimento).');
+    const alteracao =
+      acao === 'criar'
+        ? { acao, pergunta, resposta, categoria, palavras_chave, ativa }
+        : acao === 'editar'
+          ? { acao, id, versao, pergunta, resposta, categoria, palavras_chave, ativa }
+          : { acao, id, versao };
+    const r = await api('/api/mcp-config/faq', {}, { metodo: 'POST', corpo: { motivo, simular: !aplicar, alteracao } });
+    return texto(relatorioDaAlteracao(r));
+  },
+  { escreve: true, soAdmin: true }
+);
+
+// ─── Regras de encaminhamento ────────────────────────────────
+
+registrar(
+  'listar_regras',
+  {
+    title: 'Listar regras de encaminhamento',
+    description:
+      'Regras de encaminhamento da IA: funil "eventos" (eventos personalizados: casamento, ' +
+      'aniversário fechado, corporativo, cardápio fechado, exclusividade do espaço) e ' +
+      '"atendimento" (passar para um atendente: reclamação, dúvida sem resposta...). Cada regra ' +
+      'diz QUANDO a IA encaminha (gatilho e não-gatilho), o que pergunta antes, o caminho ' +
+      '(coletar direto ou apresentar com texto e fotos), o que responde e quem é avisado. Traz ' +
+      'a versao de cada regra, os avisos do funil e o guia dos campos. É aqui, e não no prompt, ' +
+      'que se define quando encaminhar.',
+    inputSchema: {
+      funil: z.enum(['eventos', 'atendimento']).optional().describe('Só um funil.'),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ funil }) => {
+    const r = await api('/api/mcp-config/regras');
+    const regras = (r.regras || []).filter((x) => !funil || x.funil === funil);
+    const guia = (r.guia || []).map((g) => `- ${g.nome}: ${g.explicacao}`).join('\n');
+    const avisos = (r.avisosDoFunil || [])
+      .filter((a) => !funil || a.funil === funil)
+      .map((a) => `- ${a.funil}: ${a.ligado ? 'ligado' : 'desligado'} | números: ${a.numeros.join(', ') || 'nenhum'} | enviado por: ${a.enviadoPor || '—'}`)
+      .join('\n');
+    const blocos = regras.map((x) => {
+      const campos = (r.guia || []).map((g) => `  ${g.nome}: ${valor(x[g.nome], 1500)}`).join('\n');
+      return `── ${x.nome} | funil: ${x.funil} | id: ${x.id} | versao: ${x.versao}${x.automatica ? ' | AUTOMÁTICA (falha da IA: só ativa, etiqueta e numeros_aviso mudam)' : ''}\n${campos}`;
+    });
+    return texto(
+      [
+        `GUIA DOS CAMPOS (nomes para alterar_regra):\n${guia}`,
+        `AVISOS DO FUNIL (números que recebem toda solicitação do funil; mudam na plataforma, CRM > Regras):\n${avisos || '- nenhum configurado'}`,
+        `${regras.length} regra(s)${funil ? ` no funil ${funil}` : ''}:\n\n${blocos.join('\n\n') || '(nenhuma)'}`,
+      ].join('\n\n')
+    );
+  }
+);
+
+registrar(
+  'alterar_regra',
+  {
+    title: 'Alterar regra de encaminhamento',
+    description:
+      'Cria, edita ou apaga uma regra de encaminhamento (eventos personalizados ou atendimento ' +
+      'humano), com a mesma validação da tela CRM > Regras. Para a IA acertar: quando_usar ' +
+      'específico, quando_nao_usar com o que parece mas não é (ex.: reserva normal de ' +
+      'aniversário; evento especial da casa é reserva) e exemplos de frases. Caminho ' +
+      '"coletar" pede os dados direto; "apresentar" manda antes a apresentação (texto e até 5 ' +
+      'fotos https) e depois pede os dados. dados_a_coletar vão numa mensagem só. ' +
+      'resposta_final e frase_pedido_dados levam o jeito de falar da casa. Sem aplicar=true ' +
+      'devolve a prévia. Editar e apagar exigem a versao de listar_regras. Para desligar sem ' +
+      'apagar, edite com ativa=false.',
+    inputSchema: {
+      acao: z.enum(['criar', 'editar', 'apagar']),
+      funil: z.enum(['eventos', 'atendimento']).optional().describe('criar: em qual funil.'),
+      id: z.string().uuid().optional().describe('editar/apagar: id da regra.'),
+      versao: z.string().optional().describe('editar/apagar: versao lida em listar_regras.'),
+      nome: z.string().optional().describe('criar (obrigatório): nome da categoria, ex.: "Casamento".'),
+      etiqueta: z.string().optional().describe('criar (obrigatório): etiqueta da conversa.'),
+      quando_usar: z.string().optional().describe('criar (obrigatório): GATILHO, quando a IA usa a regra (10 a 1000 caracteres).'),
+      quando_nao_usar: z.string().optional().describe('NÃO-GATILHO: o que parece, mas não é.'),
+      exemplos: z.array(z.string()).optional().describe('Frases de cliente (até 10).'),
+      dados_a_coletar: z.array(z.string()).optional().describe('O que perguntar antes de encaminhar (até 8, 60 caracteres cada).'),
+      frase_pedido_dados: z.string().optional().describe('Frase que abre o pedido de dados, no tom da casa.'),
+      caminho: z.enum(['coletar', 'apresentar']).optional().describe('coletar = pergunta direto; apresentar = apresentação antes.'),
+      apresentacao: z.string().optional().describe('Texto da apresentação (caminho apresentar). Vai exatamente assim.'),
+      fotos: z.array(z.string()).optional().describe('Até 5 URLs https de fotos da apresentação.'),
+      resposta_final: z.string().optional().describe('O que a IA diz depois de encaminhar. Variáveis: {nome}, {resumo}, {restaurante}.'),
+      jeito_resposta_final: z.enum(['adaptar', 'exato']).optional().describe('exato = envia como está; adaptar = a IA adapta.'),
+      pausar_ia: z.boolean().optional().describe('true = a conversa fica com a equipe e a IA para de responder.'),
+      numeros_aviso: z.array(z.string()).optional().describe('Números avisados só nesta categoria (DDD + número).'),
+      ativa: z.boolean().optional().describe('Liga/desliga a regra.'),
+      motivo: MOTIVO,
+      aplicar: APLICAR,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  },
+  async ({ acao, funil, id, versao, motivo, aplicar, ...campos }) => {
+    if (acao === 'criar' && !funil) throw new Error('Para criar, informe o funil (eventos ou atendimento).');
+    if (acao !== 'criar' && (!id || !versao)) throw new Error('Para editar ou apagar, informe id e versao (listar_regras).');
+    const enviados = Object.fromEntries(
+      Object.entries(campos).filter(([k, v]) => v !== undefined && k !== 'restaurante_id')
+    );
+    const alteracao =
+      acao === 'criar'
+        ? { acao, funil, ...enviados }
+        : acao === 'editar'
+          ? { acao, id, versao, ...enviados }
+          : { acao, id, versao };
+    const r = await api('/api/mcp-config/regras', {}, { metodo: 'POST', corpo: { motivo, simular: !aplicar, alteracao } });
+    return texto(relatorioDaAlteracao(r));
+  },
+  { escreve: true, soAdmin: true }
+);
+
+registrar(
+  'listar_solicitacoes',
+  {
+    title: 'Listar solicitações (leads)',
+    description:
+      'Solicitações abertas pela IA ou pela equipe num funil (eventos personalizados ou ' +
+      'atendimento humano): cliente, categoria, etapa, dados coletados, resumo e se a equipe ' +
+      'foi avisada no WhatsApp. Serve para a supervisão conferir se cada pedido chegou à equipe.',
+    inputSchema: {
+      funil: z.enum(['eventos', 'atendimento']),
+      desde: z.string().optional().describe('AAAA-MM-DD (padrão: últimos 30 dias).'),
+      ate: z.string().optional().describe('AAAA-MM-DD (padrão: hoje).'),
+      busca: z.string().optional().describe('Nome ou telefone do cliente.'),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ funil, desde, ate, busca }) => {
+    const r = await api('/api/solicitacoes', { funil, desde, ate, busca });
+    const etapas = new Map((r.etapas || []).map((e) => [e.key, e.label]));
+    const itens = r.itens || [];
+    if (itens.length === 0) return texto(`Nenhuma solicitação em ${funil} de ${r.periodo?.desde} a ${r.periodo?.ate}.`);
+    const linhas = itens.map((s) => {
+      const dados = Object.entries(s.data || {}).map(([k, v]) => `${k}: ${v}`).join(' | ');
+      const aviso = s.notifiedAt ? `aviso: enviado ${data(s.notifiedAt)}${s.notifyResult ? ` (${s.notifyResult})` : ''}` : `aviso: não enviado${s.notifyResult ? ` (${s.notifyResult})` : ''}`;
+      return [
+        `- ${data(s.createdAt)} | ${s.category} | etapa: ${etapas.get(s.stage) || s.stage} | origem: ${s.origin}`,
+        `  cliente: ${s.customerName || 'sem nome'} (${s.customerPhone || 'sem telefone'}) | ${aviso}`,
+        s.summary ? `  resumo: ${corta(s.summary, 500)}` : null,
+        dados ? `  dados: ${corta(dados, 800)}` : null,
+        s.conversationId ? `  conversa: ${s.conversationId}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n');
+    });
+    return texto(`${itens.length} solicitação(ões) em ${funil}, de ${r.periodo?.desde} a ${r.periodo?.ate}:\n\n${linhas.join('\n\n')}`);
+  }
+);
+
+// ─── Ferramentas ─────────────────────────────────────────────
+
+registrar(
+  'listar_ferramentas',
+  {
+    title: 'Listar ferramentas da IA',
+    description:
+      'Ferramentas nativas do CRM (base de conhecimento, transferir para atendente, eventos ' +
+      'personalizados) ligadas ou não no restaurante, o modo de ferramentas do WhatsApp do ' +
+      'agente (CRM ou servidor MCP como o Reserve Maya) e a lista do que a IA recebe de fato. ' +
+      'Traz a versao que ligar_ferramentas exige.',
+    inputSchema: {
+      agente_id: z.string().uuid().optional().describe('Mostra também o modo e o que a IA desse agente recebe.'),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ agente_id }) => {
+    const agente = agente_id ? await resolverAgente(agente_id) : null;
+    const r = await api('/api/mcp-config/ferramentas', { agentId: agente?.id });
+    const nativas = r.nativas.map((t) => `- ${t.nome} — ${t.rotulo}: ${t.ligada ? 'LIGADA' : 'desligada'}\n  ${t.oQueFaz}`).join('\n');
+    const recebe = r.iaRecebe.map((t) => `- ${t.rotulo || t.nome} (${t.nome}, ${t.origem}${t.alteraDados ? ', altera dados' : ''})`).join('\n');
+    return texto(
+      [
+        `Versão (para ligar_ferramentas): ${r.versao || '(nenhuma ligada)'}`,
+        `NATIVAS (valem para o restaurante todo):\n${nativas}`,
+        r.agente ? `MODO DO WHATSAPP do agente "${r.agente.nome}": ${r.agente.modo} — ${r.agente.modoExplicado}. Muda só na plataforma.` : null,
+        `A IA RECEBE${r.agente ? ` (agente "${r.agente.nome}")` : ''}:\n${recebe || '- nada'}`,
+      ]
+        .filter(Boolean)
+        .join('\n\n')
+    );
+  }
+);
+
+registrar(
+  'ligar_ferramentas',
+  {
+    title: 'Ligar ou desligar ferramentas nativas',
+    description:
+      'Liga ou desliga ferramentas nativas do restaurante (buscar_conhecimento, ' +
+      'transferir_para_humano, encaminhar_para_eventos). Sem encaminhar_para_eventos ligada, a ' +
+      'IA não abre solicitação de evento personalizado (passa para um atendente). Integrações e ' +
+      'o modo do WhatsApp mudam só na plataforma. Sem aplicar=true devolve a prévia.',
+    inputSchema: {
+      versao: z.string().describe('Versão lida em listar_ferramentas.'),
+      ligar: z.array(z.enum(['buscar_conhecimento', 'transferir_para_humano', 'encaminhar_para_eventos'])).optional(),
+      desligar: z.array(z.enum(['buscar_conhecimento', 'transferir_para_humano', 'encaminhar_para_eventos'])).optional(),
+      motivo: MOTIVO,
+      aplicar: APLICAR,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  },
+  async ({ versao, ligar, desligar, motivo, aplicar }) => {
+    const r = await api('/api/mcp-config/ferramentas', {}, {
+      metodo: 'POST',
+      corpo: { versao, ligar: ligar || [], desligar: desligar || [], motivo, simular: !aplicar },
+    });
+    return texto(relatorioDaAlteracao(r));
+  },
+  { escreve: true, soAdmin: true }
+);
+
+// ─── Historico das alteracoes ────────────────────────────────
+
+registrar(
+  'listar_alteracoes',
+  {
+    title: 'Listar alterações feitas pelo MCP',
+    description:
+      'Histórico das alterações feitas por este MCP na base de conhecimento, nas regras e nas ' +
+      'ferramentas, com o antes, o depois e o motivo. O id de cada uma é o que ' +
+      'desfazer_alteracao recebe. O prompt tem histórico próprio (ver_prompt).',
+    inputSchema: {
+      entidade: z.enum(['faq', 'regra', 'ferramentas']).optional(),
+      limite: z.number().int().min(1).max(100).optional().describe('Padrão 30.'),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ entidade, limite }) => {
+    const r = await api('/api/mcp-config/alteracoes', { entidade, limite });
+    const itens = r.data || [];
+    if (itens.length === 0) return texto('Nenhuma alteração registrada.');
+    const linhas = itens.map((c) =>
+      [
+        `- id: ${c.id} | ${data(c.quando)} | ${c.entidade} | ${c.acao}${c.registro ? ` | registro ${c.registro}` : ''}${c.desfeitaEm ? ` | DESFEITA em ${data(c.desfeitaEm)}` : ''}`,
+        `  motivo: "${c.motivo}"`,
+        ...linhasDaMudanca(c),
+      ].join('\n')
+    );
+    return texto(`${itens.length} alteração(ões):\n\n${linhas.join('\n\n')}`);
+  }
+);
+
+registrar(
+  'desfazer_alteracao',
+  {
+    title: 'Desfazer alteração',
+    description:
+      'Volta uma alteração da base de conhecimento, de uma regra ou das ferramentas ' +
+      '(listar_alteracoes). Só funciona se o registro ainda está como a alteração deixou; se ' +
+      'mudou depois, é recusado para não apagar a mudança nova. Sem aplicar=true devolve a prévia.',
+    inputSchema: {
+      alteracao_id: z.string().uuid().describe('id em listar_alteracoes (ou o que a alteração devolveu).'),
+      motivo: MOTIVO,
+      aplicar: APLICAR,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  },
+  async ({ alteracao_id, motivo, aplicar }) => {
+    const r = await api('/api/mcp-config/alteracoes', {}, {
+      metodo: 'POST',
+      corpo: { id: alteracao_id, motivo, simular: !aplicar },
+    });
+    return texto(relatorioDaAlteracao(r));
+  },
+  { escreve: true, soAdmin: true }
 );
 
 // ─── Super-admin: entre restaurantes ─────────────────────────
@@ -826,7 +1471,9 @@ if (admin) {
     'listar_restaurantes',
     {
       title: 'Listar restaurantes',
-      description: 'Restaurantes da plataforma com id e os WhatsApps (conexoes) de cada um. Filtre pelo nome.',
+      description:
+        'Restaurantes da plataforma com id e os WhatsApps (conexoes) de cada um, com o ID do ' +
+        'restaurante no Reserve Maya quando a conexao tem. Filtre pelo nome.',
       inputSchema: {
         busca: z.string().optional().describe('Parte do nome do restaurante.'),
       },
@@ -838,7 +1485,15 @@ if (admin) {
       const linhas = lista.map(
         (r) =>
           `- ${nomeRestaurante(r)}${r.ativo ? '' : ' — DESATIVADO'}\n` +
-          `  WhatsApp: ${r.conexoes.map((c) => `${c.nome} (${c.telefone || 'sem numero'}, ${c.status || 'sem status'})`).join('; ') || 'nenhum'}`
+          `  WhatsApp: ${
+            r.conexoes
+              .map(
+                (c) =>
+                  `${c.nome} (${c.telefone || 'sem numero'}, ${c.status || 'sem status'}` +
+                  `${c.idReserveMaya ? `, ID Reserve Maya: ${c.idReserveMaya}` : ''})`
+              )
+              .join('; ') || 'nenhum'
+          }`
       );
       return texto(`${lista.length} restaurante(s):\n\n${linhas.join('\n')}`);
     }

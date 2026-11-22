@@ -76,7 +76,7 @@ export async function authenticate(req: Request): Promise<AuthResult> {
     if (!tokenDoLoopbackConfere(mcpAdmin) || !isValidCompanyId(companyId)) {
       throw new AuthError('Nao autorizado', 401, 'INVALID_MCP_ADMIN')
     }
-    return { agentId: null, companyId, isSuperAdmin: false }
+    return { agentId: null, companyId, isSuperAdmin: false, viaMcpAdmin: true }
   }
 
   // Fallback to API key auth. verifyApiKey resolve por prefixo + hash: a

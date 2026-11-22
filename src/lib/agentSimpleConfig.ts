@@ -168,6 +168,29 @@ export const CAMPOS_TEXTO: Record<CampoTextoSimples, InfoCampo> = {
   },
 }
 
+/** Campos que o MCP pode alterar: os de texto livre mais tom e "como a IA responde". */
+export type CampoEditavel = CampoTextoSimples | 'tone' | 'verbosity'
+
+/**
+ * Nome de cada campo no MCP (o Hermes fala portugues). A ordem e a da tela.
+ * `capabilities` fica de fora: nao aparece mais na tela.
+ */
+export const CAMPOS_MCP: { nome: string; campo: CampoEditavel }[] = [
+  { nome: 'nome_ia', campo: 'aiName' },
+  { nome: 'nome_restaurante', campo: 'restaurantName' },
+  { nome: 'tom', campo: 'tone' },
+  { nome: 'como_responde', campo: 'verbosity' },
+  { nome: 'saudacao_inicial', campo: 'greeting' },
+  { nome: 'endereco', campo: 'address' },
+  { nome: 'horario_funcionamento', campo: 'hours' },
+  { nome: 'horarios_reserva', campo: 'reservationHours' },
+  { nome: 'precos', campo: 'prices' },
+  { nome: 'sobre_a_casa', campo: 'about' },
+  { nome: 'links', campo: 'links' },
+  { nome: 'limitacoes', campo: 'limitations' },
+  { nome: 'instrucoes_extras', campo: 'instructions' },
+]
+
 /**
  * Monta o prompt_completo a partir das escolhas do modo simples.
  *

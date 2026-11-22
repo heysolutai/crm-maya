@@ -28,6 +28,13 @@ export const PERFIS: Record<PerfilAgente, { label: string; hint: string; porque:
   },
 }
 
+/** ID do restaurante no Reserve Maya gravado na conexao (Inbox.channelConfig.restaurantId). */
+export function idDoReserveMaya(channelConfig: unknown): string | null {
+  if (!channelConfig || typeof channelConfig !== 'object' || Array.isArray(channelConfig)) return null
+  const id = (channelConfig as Record<string, unknown>).restaurantId
+  return typeof id === 'string' && id.trim() ? id.trim() : null
+}
+
 interface ConexaoDoAgente {
   ai_agent_id: string | null
   restaurant_id?: string | null
