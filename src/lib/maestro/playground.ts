@@ -11,6 +11,7 @@ import { historicoSimulado, type MensagemChat } from './historico'
 import { quebrarResposta } from './enviar'
 import { argsComoObjeto, conversar, type ChamadaTool, type ResultadoFerramenta } from './llm'
 import { montarSystemPrompt } from './prompt'
+import { lerSilencio } from './silencio'
 import { proximoPassoDaColeta } from '@/lib/ai-tools/native'
 import { regrasDaIA, respostaParaIA } from '@/lib/solicitacoes/servico'
 import { REGRA_ATENDIMENTO_PADRAO, REGRA_EVENTO_PADRAO } from '@/lib/solicitacoes/regras-padrao'
@@ -119,6 +120,8 @@ export interface ResultadoPlayground {
   reply: string
   /** A resposta em balões, exatamente como sai no WhatsApp (quebrarResposta). */
   partes: string[]
+  /** A IA ficou quieta de propósito (cliente só mandou emoji depois da despedida): nada sairia no WhatsApp. */
+  silencio?: boolean
   tools: FerramentaUsada[]
   model: string
   ms: number
@@ -347,6 +350,7 @@ export async function prontidaoPlayground(p: {
             clienteNome: 'Cliente Teste',
             codigoConversa: null,
             capacidades: buildCapabilitiesPrompt(tools),
+            primeiraResposta: true,
           }),
         }
       : {}),
@@ -393,6 +397,8 @@ export async function simularTurno(p: {
     clienteNome: p.cliente?.nome?.trim() || 'Cliente Teste',
     codigoConversa: null,
     capacidades: buildCapabilitiesPrompt(tools),
+    // Mesma regra do atendimento real: a saudação só na primeira resposta.
+    primeiraResposta: !historico.some((m) => m.role === 'assistant'),
   })
 
   // Uma entrada por chamada, na ordem em que o modelo pede (o llm executa uma
@@ -423,13 +429,17 @@ export async function simularTurno(p: {
   })
 
   const rotulos = new Map(tools.map((t) => [t.name, t.label]))
-  const reply = conversa.texto || (conversa.encerrou ? config.mensagemErro : '')
-  if (!reply) throw new ErroPlayground('A IA não gerou resposta. Tente escrever a mensagem de outro jeito.', 502)
+  // Mesma leitura do atendimento real (./silencio): só emoji depois da despedida = quieta.
+  const lida = lerSilencio(conversa.texto, historico[historico.length - 1].content)
+  const silencio = lida.silencio && !conversa.encerrou
+  const reply = silencio ? '' : lida.texto || (conversa.encerrou ? config.mensagemErro : '')
+  if (!reply && !silencio) throw new ErroPlayground('A IA não gerou resposta. Tente escrever a mensagem de outro jeito.', 502)
 
-  const partes = quebrarResposta(reply)
+  const partes = silencio ? [] : quebrarResposta(reply)
   return {
     reply,
-    partes: partes.length ? partes : [reply],
+    partes: silencio ? [] : partes.length ? partes : [reply],
+    ...(silencio ? { silencio: true } : {}),
     tools: conversa.chamadas.map((c, i) => {
       const e = execucoes[i] ?? null
       const label = rotulos.get(c.nome) ?? e?.label

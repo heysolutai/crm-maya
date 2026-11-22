@@ -63,6 +63,8 @@ const maestroReplySchema = z.object({
   tools: z.array(toolRunSchema).default([]),
   model: z.string().optional(),
   ms: z.number().optional(),
+  /** A IA ficou quieta de propósito (só emoji depois da despedida). */
+  silencio: z.boolean().optional(),
 });
 
 /** Resposta de GET /api/maestro/playground (dá pra testar?). */
@@ -111,7 +113,9 @@ type ToolRun = z.infer<typeof toolRunSchema>;
 type Message =
   | { id: string; role: 'user'; content: string; timestamp: Date }
   | { id: string; role: 'ai'; content: string; timestamp: Date; model?: string; ms?: number }
-  | { id: string; role: 'tool'; tool: ToolRun; timestamp: Date };
+  | { id: string; role: 'tool'; tool: ToolRun; timestamp: Date }
+  /** Aviso do teste (ex.: a IA ficou quieta). Não é fala: não volta para a IA. */
+  | { id: string; role: 'nota'; content: string; timestamp: Date };
 
 interface ClienteTeste {
   nome: string;
@@ -173,6 +177,7 @@ const mensagemGuardadaSchema = z.discriminatedUnion('role', [
     ms: z.number().optional(),
   }),
   z.object({ id: z.string(), role: z.literal('tool'), tool: toolRunSchema, timestamp: z.coerce.date() }),
+  z.object({ id: z.string(), role: z.literal('nota'), content: z.string(), timestamp: z.coerce.date() }),
 ]);
 
 function lerConversa(chave: string): Message[] {
@@ -532,9 +537,9 @@ export function PlaygroundChat({ companyId, agentId, inboxId }: PlaygroundChatPr
         agentId: agenteId,
         ...(inboxId ? { inboxId } : {}),
         cliente: { nome: cliente.nome, ...(cliente.telefone ? { telefone: cliente.telefone } : {}) },
-        // Só o que foi dito: os passos (ferramentas) não voltam como histórico.
+        // Só o que foi dito: os passos (ferramentas) e os avisos não voltam como histórico.
         messages: historico
-          .filter((m): m is Extract<Message, { role: 'user' | 'ai' }> => m.role !== 'tool')
+          .filter((m): m is Extract<Message, { role: 'user' | 'ai' }> => m.role === 'user' || m.role === 'ai')
           .map((m) => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })),
       }),
     });
@@ -550,6 +555,16 @@ export function PlaygroundChat({ companyId, agentId, inboxId }: PlaygroundChatPr
       tool,
       timestamp: agora,
     }));
+    if (parsed.data.silencio) {
+      const nota: Message = {
+        id: crypto.randomUUID(),
+        role: 'nota',
+        content: 'A IA não respondeu, de propósito: o cliente só mandou emoji depois da despedida. No WhatsApp, nada seria enviado.',
+        timestamp: agora,
+      };
+      return [...passos, nota];
+    }
+
     // Um balão por mensagem, como o cliente recebe no WhatsApp.
     const partes = parsed.data.partes?.length ? parsed.data.partes : [parsed.data.reply || 'Sem resposta da IA.'];
     const baloes: Message[] = partes.map((texto, i) => ({
@@ -660,6 +675,13 @@ export function PlaygroundChat({ companyId, agentId, inboxId }: PlaygroundChatPr
           {messages.map((msg) => {
             if (msg.role === 'tool') {
               return <PassoDaFerramenta key={msg.id} tool={msg.tool} quando={msg.timestamp} superAdmin={isSuperAdmin} />;
+            }
+            if (msg.role === 'nota') {
+              return (
+                <p key={msg.id} className="mx-auto max-w-md text-center text-xs text-muted-foreground">
+                  {msg.content}
+                </p>
+              );
             }
             return (
               <div

@@ -101,6 +101,23 @@ export async function carregarLinhas(
   return linhas.reverse()
 }
 
+/**
+ * Cliente que some por mais que isso e volta ganha a saudacao de novo; dentro
+ * da janela (almoco e jantar do mesmo dia, por exemplo) ela nao se repete.
+ */
+export const JANELA_SAUDACAO_MS = 12 * 60 * 60 * 1000
+
+/**
+ * A IA ainda nao falou com o cliente nesta conversa (decide a saudacao)?
+ * Conta fala da IA ou de um atendente nas ultimas 12 horas: se a equipe ja
+ * conversou, a IA tambem nao se apresenta como se fosse o primeiro contato.
+ */
+export function ehPrimeiraResposta(linhas: LinhaMensagem[], agora: number = Date.now()): boolean {
+  return !linhas.some(
+    (m) => (m.senderType === 'ai' || m.senderType === 'agent') && agora - m.createdAt.getTime() < JANELA_SAUDACAO_MS
+  )
+}
+
 /** Playground: mensagens do formulario -> historico (sem banco). */
 export function historicoSimulado(msgs: { role: 'user' | 'assistant'; content: string }[]): MensagemChat[] {
   const saida: MensagemChat[] = []

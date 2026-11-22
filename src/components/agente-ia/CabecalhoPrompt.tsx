@@ -46,7 +46,8 @@ const SECOES: { chave: keyof PartesDoPrompt; titulo: string; origem: string }[] 
   {
     chave: 'contexto',
     titulo: '4. Contexto do atendimento',
-    origem: 'Data, calendário e nome do cliente, preenchidos a cada conversa (aqui, um exemplo).',
+    origem:
+      'Data, calendário, nome do cliente e se é a primeira resposta da conversa (é o que decide a saudação), preenchidos a cada conversa (aqui, um exemplo de primeira resposta).',
   },
 ];
 

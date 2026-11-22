@@ -22,6 +22,7 @@ import {
 import { falharParaHumano } from './fallback'
 import {
   carregarLinhas,
+  ehPrimeiraResposta,
   montarHistorico,
   temTranscricaoPendente,
   textoDaMensagem,
@@ -29,6 +30,7 @@ import {
 } from './historico'
 import { conversar, ErroModelo, type ChamadaTool, type ResultadoConversa, type ResultadoFerramenta } from './llm'
 import { montarSystemPrompt } from './prompt'
+import { lerSilencio } from './silencio'
 
 /**
  * Engine do Maestro: roda UM turno de atendimento numa conversa.
@@ -351,6 +353,7 @@ async function turnoComLock(entrada: EntradaTurno, inicio: number): Promise<Resu
       clienteNome,
       codigoConversa: conv.friendlyId,
       capacidades: buildCapabilitiesPrompt(tools),
+      primeiraResposta: ehPrimeiraResposta(linhas),
     })
 
     // "Digitando..." enquanto a IA pensa (nunca derruba o turno).
@@ -384,8 +387,16 @@ async function turnoComLock(entrada: EntradaTurno, inicio: number): Promise<Resu
       ferramentas: conversa.chamadas.length,
     })
 
+    // Cliente so mandou mais um emoji depois da despedida: a IA fica quieta de
+    // proposito (o sistema confere que nao ha pergunta; ver ./silencio).
+    const lida = lerSilencio(conversa.texto, textoCliente)
+    if (lida.silencio && !conversa.encerrou) {
+      await atualizarTurno(companyId, turnoId, { status: 'ignorado', motivo: MOTIVOS.MAESTRO_SO_EMOJI })
+      return resultado('ignorado', inicio, { motivo: MOTIVOS.MAESTRO_SO_EMOJI, turnoId, chamadas: conversa.chamadas.length })
+    }
+
     // Transferiu pra humano e a IA nao escreveu a despedida: usa a frase padrao.
-    const textoFinal = conversa.texto || (conversa.encerrou ? config.mensagemErro : '')
+    const textoFinal = lida.texto || (conversa.encerrou ? config.mensagemErro : '')
     const partes = quebrarResposta(textoFinal)
     if (partes.length === 0) return await falhar(MOTIVOS.MAESTRO_SEM_RESPOSTA, { avisar: true })
 

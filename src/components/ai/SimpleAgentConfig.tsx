@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, Bot, FileText, Info, Loader2, Save } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,9 +18,11 @@ import { perfilDoAgente } from '@/lib/agentProfile';
 import {
   TONES,
   VERBOSITY,
+  CAMPOS_TEXTO,
   DEFAULT_SIMPLE_FORM as DEFAULT_FORM,
   buildPromptCompleto,
   normalizeSimpleForm,
+  type CampoTextoSimples,
   type SimpleForm,
 } from '@/lib/agentSimpleConfig';
 
@@ -43,6 +45,63 @@ type PromptsComSimple = Prompts & { simple?: unknown };
 /** Compara textos ignorando diferença de quebra de linha e espaços nas pontas. */
 function limpar(texto: string | undefined): string {
   return (texto ?? '').replace(/\r\n/g, '\n').trim();
+}
+
+/** Grupo de campos do formulário, com um título discreto. */
+function Secao({ titulo, separada, children }: { titulo: string; separada?: boolean; children: ReactNode }) {
+  return (
+    <section className={cn('space-y-4', separada && 'border-t pt-6')}>
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{titulo}</h4>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Campo de texto livre opcional. Rótulo, explicação, exemplo e limite vêm de
+ * CAMPOS_TEXTO (a mesma fonte que o MCP usa). O contador só aparece perto do limite.
+ */
+function CampoTexto({
+  id,
+  campo,
+  valor,
+  onChange,
+  rows = 3,
+  dica,
+}: {
+  id: string;
+  campo: CampoTextoSimples;
+  valor: string;
+  onChange: (valor: string) => void;
+  rows?: number;
+  /** Troca a explicação padrão (ex.: texto próprio para restaurante do Reserve Maya). */
+  dica?: string;
+}) {
+  const info = CAMPOS_TEXTO[campo];
+  const pertoDoLimite = valor.length > info.max * 0.8;
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>
+        {info.rotulo} <span className="font-normal text-muted-foreground">(opcional)</span>
+      </Label>
+      <Textarea
+        id={id}
+        rows={rows}
+        maxLength={info.max}
+        placeholder={`Ex.: ${info.exemplo}`}
+        value={valor}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <div className="flex items-start justify-between gap-3 text-xs text-muted-foreground">
+        <p>{dica ?? info.paraQueServe}</p>
+        {pertoDoLimite && (
+          <span className="shrink-0 tabular-nums">
+            {valor.length}/{info.max}
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function SimpleAgentConfig({ companyId, agentId, onDirtyChange }: Props) {
@@ -232,142 +291,176 @@ export function SimpleAgentConfig({ companyId, agentId, onDirtyChange }: Props) 
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <Secao titulo="Como a IA se apresenta">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="ai-name">Nome da IA</Label>
+                <Input
+                  id="ai-name"
+                  placeholder="Ex: Sofia"
+                  value={form.aiName}
+                  onChange={(e) => set({ aiName: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rest-name">Nome do restaurante</Label>
+                <Input
+                  id="rest-name"
+                  placeholder="Ex: Cantina da Nonna"
+                  value={form.restaurantName}
+                  onChange={(e) => set({ restaurantName: e.target.value })}
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="ai-name">Nome da IA</Label>
-              <Input
-                id="ai-name"
-                placeholder="Ex: Sofia"
-                value={form.aiName}
-                onChange={(e) => set({ aiName: e.target.value })}
-              />
+              <Label>Tom de voz</Label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {TONES.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => set({ tone: t.value })}
+                    className={cn(
+                      'rounded-xl border p-3 text-left transition-colors',
+                      form.tone === t.value
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : 'border-border/60 hover:border-primary/40'
+                    )}
+                  >
+                    <p className="text-sm font-medium">{t.label}</p>
+                    <p className="text-xs text-muted-foreground">{t.hint}</p>
+                  </button>
+                ))}
+              </div>
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="rest-name">Nome do restaurante</Label>
-              <Input
-                id="rest-name"
-                placeholder="Ex: Cantina da Nonna"
-                value={form.restaurantName}
-                onChange={(e) => set({ restaurantName: e.target.value })}
-              />
+              <Label>Como a IA responde</Label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {VERBOSITY.map((v) => (
+                  <button
+                    key={v.value}
+                    type="button"
+                    onClick={() => set({ verbosity: v.value })}
+                    className={cn(
+                      'rounded-xl border p-3 text-left transition-colors',
+                      form.verbosity === v.value
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : 'border-border/60 hover:border-primary/40'
+                    )}
+                  >
+                    <p className="text-sm font-medium">{v.label}</p>
+                    <p className="text-xs text-muted-foreground">{v.hint}</p>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label>Tom de voz</Label>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {TONES.map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  onClick={() => set({ tone: t.value })}
-                  className={cn(
-                    'rounded-xl border p-3 text-left transition-colors',
-                    form.tone === t.value
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'border-border/60 hover:border-primary/40'
-                  )}
-                >
-                  <p className="text-sm font-medium">{t.label}</p>
-                  <p className="text-xs text-muted-foreground">{t.hint}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Como a IA responde</Label>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {VERBOSITY.map((v) => (
-                <button
-                  key={v.value}
-                  type="button"
-                  onClick={() => set({ verbosity: v.value })}
-                  className={cn(
-                    'rounded-xl border p-3 text-left transition-colors',
-                    form.verbosity === v.value
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'border-border/60 hover:border-primary/40'
-                  )}
-                >
-                  <p className="text-sm font-medium">{v.label}</p>
-                  <p className="text-xs text-muted-foreground">{v.hint}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="address">Endereço</Label>
-            <Input
-              id="address"
-              placeholder="Ex: Rua das Flores, 120, Setor Bueno, Goiânia"
-              value={form.address}
-              onChange={(e) => set({ address: e.target.value })}
+            <CampoTexto
+              id="greeting"
+              campo="greeting"
+              rows={5}
+              valor={form.greeting}
+              onChange={(greeting) => set({ greeting })}
             />
-          </div>
+          </Secao>
 
-          {mostrarCampo('hours') && (
+          <Secao titulo="A casa" separada>
             <div className="space-y-2">
-              <Label htmlFor="hours">Horário de funcionamento</Label>
-              <Textarea
-                id="hours"
-                rows={2}
-                placeholder="Ex: Seg a sex 11h-15h e 18h-23h. Sáb e dom 12h-23h."
-                value={form.hours}
-                onChange={(e) => set({ hours: e.target.value })}
-              />
-              {avisoReserveMaya}
-            </div>
-          )}
-
-          {mostrarCampo('reservationHours') && (
-            <div className="space-y-2">
-              <Label htmlFor="reservation-hours">Horários para reserva</Label>
+              <Label htmlFor="address">Endereço</Label>
               <Input
-                id="reservation-hours"
-                placeholder="Ex: 19h às 22h, de terça a domingo"
-                value={form.reservationHours}
-                onChange={(e) => set({ reservationHours: e.target.value })}
+                id="address"
+                placeholder="Ex: Rua das Flores, 120, Setor Bueno, Goiânia"
+                value={form.address}
+                onChange={(e) => set({ address: e.target.value })}
               />
-              {avisoReserveMaya ?? (
-                <p className="text-xs text-muted-foreground">
-                  Preenchido, a IA fica proibida de oferecer reserva fora dessa janela. Em branco,
-                  ela usa o horário de funcionamento como referência.
-                </p>
-              )}
             </div>
-          )}
 
-          {mostrarCampo('prices') && (
-            <div className="space-y-2">
-              <Label htmlFor="prices">Preços</Label>
-              <Textarea
-                id="prices"
-                rows={2}
-                placeholder="Ex: Pratos de R$ 45 a R$ 90. Couvert R$ 18. Taxa de serviço 10%."
-                value={form.prices}
-                onChange={(e) => set({ prices: e.target.value })}
-              />
-              {avisoReserveMaya}
-            </div>
-          )}
+            {mostrarCampo('hours') && (
+              <div className="space-y-2">
+                <Label htmlFor="hours">Horário de funcionamento</Label>
+                <Textarea
+                  id="hours"
+                  rows={2}
+                  placeholder="Ex: Seg a sex 11h-15h e 18h-23h. Sáb e dom 12h-23h."
+                  value={form.hours}
+                  onChange={(e) => set({ hours: e.target.value })}
+                />
+                {avisoReserveMaya}
+              </div>
+            )}
 
-          <div className="space-y-2">
-            <Label htmlFor="about">Instruções extras (opcional)</Label>
-            <Textarea
-              id="about"
+            {mostrarCampo('reservationHours') && (
+              <div className="space-y-2">
+                <Label htmlFor="reservation-hours">Horários para reserva</Label>
+                <Input
+                  id="reservation-hours"
+                  placeholder="Ex: 19h às 22h, de terça a domingo"
+                  value={form.reservationHours}
+                  onChange={(e) => set({ reservationHours: e.target.value })}
+                />
+                {avisoReserveMaya ?? (
+                  <p className="text-xs text-muted-foreground">
+                    Preenchido, a IA fica proibida de oferecer reserva fora dessa janela. Em branco,
+                    ela usa o horário de funcionamento como referência.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {mostrarCampo('prices') && (
+              <div className="space-y-2">
+                <Label htmlFor="prices">Preços</Label>
+                <Textarea
+                  id="prices"
+                  rows={2}
+                  placeholder="Ex: Pratos de R$ 45 a R$ 90. Couvert R$ 18. Taxa de serviço 10%."
+                  value={form.prices}
+                  onChange={(e) => set({ prices: e.target.value })}
+                />
+                {avisoReserveMaya}
+              </div>
+            )}
+
+            <CampoTexto id="about" campo="about" rows={4} valor={form.about} onChange={(about) => set({ about })} />
+
+            <CampoTexto
+              id="links"
+              campo="links"
+              rows={3}
+              valor={form.links}
+              onChange={(links) => set({ links })}
+              dica={
+                reserveMaya
+                  ? `${CAMPOS_TEXTO.links.paraQueServe} O link de reserva é opcional: com o Reserve Maya, a IA também reserva sozinha.`
+                  : undefined
+              }
+            />
+          </Secao>
+
+          <Secao titulo="Regras" separada>
+            <CampoTexto
+              id="limitations"
+              campo="limitations"
               rows={4}
-              placeholder="Ex: Não aceitamos reservas para mais de 12 pessoas. Temos opções sem glúten."
-              value={form.about}
-              onChange={(e) => set({ about: e.target.value })}
+              valor={form.limitations}
+              onChange={(limitations) => set({ limitations })}
             />
-            <p className="text-xs text-muted-foreground">
-              {reserveMaya
-                ? 'Só o que não está no Reserve Maya nem na base de conhecimento. Ex.: temos opções sem glúten.'
-                : 'Qualquer regra ou informação que a IA deve seguir. Ex.: não aceitamos reservas para mais de 12 pessoas.'}
-            </p>
-          </div>
+
+            <CampoTexto
+              id="instructions"
+              campo="instructions"
+              rows={3}
+              valor={form.instructions}
+              onChange={(instructions) => set({ instructions })}
+              dica={
+                reserveMaya
+                  ? `${CAMPOS_TEXTO.instructions.paraQueServe} Só o que não está no Reserve Maya nem na base de conhecimento.`
+                  : undefined
+              }
+            />
+          </Secao>
 
           <div className="flex items-center justify-end pt-2 border-t">
             <Button onClick={handleSave} disabled={isUpdating || !existingConfig} className="w-full sm:w-auto">

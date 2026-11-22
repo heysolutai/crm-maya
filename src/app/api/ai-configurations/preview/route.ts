@@ -61,6 +61,8 @@ export async function GET(req: NextRequest) {
       clienteNome: 'Cliente',
       codigoConversa: null,
       capacidades: buildCapabilitiesPrompt(tools),
+      // Exemplo da primeira resposta (a que usa a saudação).
+      primeiraResposta: true,
     })
 
     return NextResponse.json({

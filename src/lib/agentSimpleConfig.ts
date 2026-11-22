@@ -29,7 +29,19 @@ export interface SimpleForm {
   /** Faixa de preco, couvert, taxa de servico: o que evita pergunta repetida. */
   prices: string
   capabilities: string[]
+  /** "Sobre a casa": proposta, historia, jeito da casa (sai no texto como "MAIS SOBRE A CASA"). */
   about: string
+  /**
+   * Saudacao da primeira resposta da conversa. {nome} = primeiro nome do
+   * cliente; {resposta} = onde entra a resposta ao que o cliente disse.
+   */
+  greeting: string
+  /** Links que a IA pode mandar (cardapio, Instagram, delivery, mapa...), um por linha. */
+  links: string
+  /** O que a IA nunca diz nem faz. Vale acima do resto do texto. */
+  limitations: string
+  /** Regras e excecoes que nao cabem nos outros campos. */
+  instructions: string
 }
 
 export const TONES = [
@@ -63,6 +75,97 @@ export const DEFAULT_SIMPLE_FORM: SimpleForm = {
   prices: '',
   capabilities: ['duvidas', 'cardapio', 'reservas', 'agendar'],
   about: '',
+  greeting: '',
+  links: '',
+  limitations: '',
+  instructions: '',
+}
+
+/** Campos de texto livre do modo simples. */
+export type CampoTextoSimples =
+  | 'aiName'
+  | 'restaurantName'
+  | 'address'
+  | 'hours'
+  | 'reservationHours'
+  | 'prices'
+  | 'about'
+  | 'greeting'
+  | 'links'
+  | 'limitations'
+  | 'instructions'
+
+export interface InfoCampo {
+  rotulo: string
+  /** Para que serve: o que a tela mostra embaixo do campo (e o MCP explica). */
+  paraQueServe: string
+  exemplo: string
+  /** Limite de caracteres (a tela e o MCP recusam acima disso). */
+  max: number
+  /** Restaurante do Reserve Maya: este dado ja vem do sistema de reservas. */
+  vemDoReserveMaya?: boolean
+}
+
+/**
+ * Fonte unica de rotulo, explicacao e limite de cada campo de texto: a tela
+ * usa daqui e o MCP vai usar os mesmos (sem isso, cada lado teria um limite).
+ */
+export const CAMPOS_TEXTO: Record<CampoTextoSimples, InfoCampo> = {
+  aiName: { rotulo: 'Nome da IA', paraQueServe: 'Como a IA se apresenta.', exemplo: 'Sofia', max: 60 },
+  restaurantName: { rotulo: 'Nome do restaurante', paraQueServe: 'Nome da casa, como o cliente conhece.', exemplo: 'Cantina da Nonna', max: 120 },
+  address: { rotulo: 'Endereço', paraQueServe: 'Endereço completo, para a IA informar como chegar.', exemplo: 'Rua das Flores, 120, Setor Bueno, Goiânia', max: 300 },
+  hours: {
+    rotulo: 'Horário de funcionamento',
+    paraQueServe: 'Dias e horários em que a casa abre.',
+    exemplo: 'Seg a sex 11h-15h e 18h-23h. Sáb e dom 12h-23h.',
+    max: 600,
+    vemDoReserveMaya: true,
+  },
+  reservationHours: {
+    rotulo: 'Horários para reserva',
+    paraQueServe: 'Janela em que a IA pode oferecer reserva (costuma ser menor que o funcionamento).',
+    exemplo: '19h às 22h, de terça a domingo',
+    max: 300,
+    vemDoReserveMaya: true,
+  },
+  prices: {
+    rotulo: 'Preços',
+    paraQueServe: 'Faixa de preço, couvert, taxa de serviço.',
+    exemplo: 'Pratos de R$ 45 a R$ 90. Couvert R$ 18. Taxa de serviço 10%.',
+    max: 600,
+    vemDoReserveMaya: true,
+  },
+  about: {
+    rotulo: 'Sobre a casa',
+    paraQueServe: 'A proposta e o jeito da casa, para a IA falar como alguém de lá. Perguntas e respostas vão na base de conhecimento.',
+    exemplo: 'Restaurante saudável e health hub em Brasília, criado por quatro sócias. Ambiente leve e acolhedor.',
+    max: 3000,
+  },
+  greeting: {
+    rotulo: 'Saudação inicial',
+    paraQueServe:
+      'Vai só na primeira resposta da conversa, do jeito que está escrita. {nome} vira o primeiro nome do cliente; {resposta} marca onde entra a resposta ao que ele perguntou (sem {resposta}, ela vem logo depois da saudação).',
+    exemplo: 'Oii {nome}! Me chamo Sofia e é um prazer ter você aqui. 🧡\n\n{resposta}\n\nGostaria de fazer uma reserva?',
+    max: 1500,
+  },
+  links: {
+    rotulo: 'Links',
+    paraQueServe: 'Um por linha. A IA manda quando o cliente pedir ou quando ajudar na resposta.',
+    exemplo: 'Cardápio: https://...\nInstagram: @suacasa\nDelivery: https://...',
+    max: 1000,
+  },
+  limitations: {
+    rotulo: 'Limitações',
+    paraQueServe: 'O que a IA nunca diz nem faz, um item por linha. Vale acima de qualquer outra instrução deste texto.',
+    exemplo: 'Nunca informar valores de eventos\nNão indicar pratos: mandar o link do cardápio\nNão usar a palavra "memorável"',
+    max: 2000,
+  },
+  instructions: {
+    rotulo: 'Instruções extras',
+    paraQueServe: 'Regras ou exceções que não cabem nos outros campos.',
+    exemplo: 'Aos domingos o almoço é só por ordem de chegada.',
+    max: 3000,
+  },
 }
 
 /**
@@ -112,16 +215,54 @@ export function buildPromptCompleto(s: SimpleForm): string {
     '- Se a informação não estiver aqui, diga que vai verificar e ofereça encaminhar para um atendente humano. Não invente.',
   ].filter(Boolean)
 
+  // Campos novos: cada um so vira secao quando preenchido. Vazios, o texto sai
+  // IDENTICO ao de antes deles existirem; e isso que mantem os agentes ja
+  // salvos reconhecidos como "modo simples" (a tela compara o texto salvo com
+  // o que este formulario gera).
+  const saudacao = s.greeting.trim()
+  const links = s.links.trim()
+  const limitacoes = s.limitations.trim()
+  const extras = s.instructions.trim()
+
   return [
     `Você é ${nome}, atendente virtual${rest ? ` do restaurante ${rest}` : ''}. Atenda os clientes pelo WhatsApp.`,
     estilo && `\n## COMO FALAR\n${estilo}`,
+    saudacao && `\n## SAUDAÇÃO INICIAL\n${instrucaoDaSaudacao(saudacao)}`,
     fatos.length && `\n## O RESTAURANTE\n${fatos.join('\n')}`,
     s.about.trim() && `\n## MAIS SOBRE A CASA\n${s.about.trim()}`,
+    links &&
+      `\n## LINKS\nMande o link quando o cliente pedir ou quando ajudar na resposta, com o endereço completo e sem formatação:\n${links}`,
     caps && `\n## O QUE VOCÊ PODE FAZER\n${caps}`,
     `\n## REGRAS\n${regras.join('\n')}`,
+    limitacoes &&
+      `\n## LIMITAÇÕES\nNunca faça nem diga o que está abaixo, mesmo que outra parte deste texto pareça permitir:\n${limitacoes}`,
+    extras && `\n## INSTRUÇÕES EXTRAS\n${extras}`,
   ]
     .filter(Boolean)
     .join('\n')
+}
+
+/**
+ * Como usar a saudacao. O texto vai como esta (e decisao do restaurante); o
+ * que a IA adapta e so o nome, o idioma e a resposta no lugar de {resposta}.
+ * "Primeira resposta" quem decide no Maestro e o sistema (linha no Contexto),
+ * nao a memoria do modelo: assim ela nao se repete.
+ */
+function instrucaoDaSaudacao(saudacao: string): string {
+  const temResposta = saudacao.includes('{resposta}')
+  return [
+    'Na sua primeira resposta da conversa, use a saudação abaixo do jeito que está escrita, sem resumir nem reescrever.',
+    '- Troque {nome} pelo primeiro nome do cliente. Sem o nome, tire o {nome} e ajuste só o necessário para a frase ficar natural.',
+    temResposta
+      ? '- No lugar de {resposta}, responda ao que o cliente disse, adaptando ao contexto. Se ele só cumprimentou, tire o {resposta}.'
+      : '- Se o cliente já perguntou ou pediu algo, responda logo depois da saudação, na mesma resposta.',
+    '- Se o cliente escrever em outro idioma, traduza a saudação mantendo o sentido.',
+    '- Nas respostas seguintes, não repita a saudação nem se apresente de novo.',
+    'Saudação (entre as linhas ---):',
+    '---',
+    saudacao,
+    '---',
+  ].join('\n')
 }
 
 /**
@@ -155,6 +296,10 @@ export function normalizeSimpleForm(bruto: unknown): SimpleForm {
       ? s.capabilities.filter((c) => CAPABILITIES.some((cap) => cap.value === c))
       : DEFAULT_SIMPLE_FORM.capabilities,
     about: texto(s.about),
+    greeting: texto(s.greeting),
+    links: texto(s.links),
+    limitations: texto(s.limitations),
+    instructions: texto(s.instructions),
   }
 }
 
@@ -176,6 +321,10 @@ export interface AgentChoices {
 /**
  * Extrai as escolhas do cliente (com rotulos legiveis) a partir do JSON de
  * prompts. Retorna null se a config nunca passou pelo modo simples.
+ *
+ * Saudacao, links, limitacoes e instrucoes extras ficam de fora DE PROPOSITO:
+ * isto sai no GET /api/ai-configurations que o n8n le, e a resposta dele nao
+ * muda. O texto delas ja vai dentro do prompt_completo.
  */
 export function extractChoices(prompts: unknown): AgentChoices | null {
   const simple = (prompts as { simple?: Partial<SimpleForm> } | null)?.simple

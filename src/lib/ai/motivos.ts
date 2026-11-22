@@ -37,6 +37,8 @@ export const MOTIVOS = {
   MAESTRO_ENVIO_FALHOU: 'maestro: falha ao enviar pelo canal',
   MAESTRO_ERRO_INTERNO: 'maestro: erro interno',
   MAESTRO_FALHA_FILA: 'maestro: falha ao enfileirar o turno',
+  /** Depois da despedida o cliente mandou so mais um emoji: a IA nao responde de proposito. */
+  MAESTRO_SO_EMOJI: 'maestro: cliente so mandou emoji depois da despedida',
 } as const
 
 /** Enviado e sem resposta ha mais que isso = problema ("nao respondeu"). */
@@ -184,6 +186,13 @@ const EXPLICACOES_MAESTRO: Record<string, Explicacao> = {
     nivel: 'problema',
     porque: 'A mensagem não chegou até a IA porque uma parte do sistema estava fora do ar.',
     oQueFazer: 'Responda o cliente pela conversa e avise o suporte.',
+  },
+  [MOTIVOS.MAESTRO_SO_EMOJI]: {
+    resultado: 'Sem resposta (de propósito)',
+    nivel: 'ok',
+    porque:
+      'O cliente só mandou um emoji depois que a IA já tinha se despedido. Para não ficar repetindo despedida, a IA não respondeu.',
+    oQueFazer: null,
   },
 }
 
