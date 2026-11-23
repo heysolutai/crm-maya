@@ -18,7 +18,7 @@ export type PerfilAgente = 'reserve_maya' | 'personalizado'
 export const PERFIS: Record<PerfilAgente, { label: string; hint: string; porque: string }> = {
   reserve_maya: {
     label: 'Restaurante Reserve Maya',
-    hint: 'Horários, reservas e preços vêm do Reserve Maya.',
+    hint: 'Horários e reservas vêm do Reserve Maya.',
     porque: 'Definido pelo ID do restaurante no Reserve Maya, nesta conexão.',
   },
   personalizado: {

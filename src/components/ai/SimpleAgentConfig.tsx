@@ -186,13 +186,17 @@ export function SimpleAgentConfig({ companyId, agentId, onDirtyChange }: Props) 
   const temTextoSalvo = !!limpar(existingConfig?.prompts.prompt_completo);
   const emUso: Modo | null = temTextoSalvo ? (textoVeioDeFora() ? 'avancado' : 'simples') : null;
 
-  // Restaurante do Reserve Maya: horários, reservas e preços vêm do sistema de
-  // reservas e da base de conhecimento. Os campos somem do formulário; quem já
-  // tinha preenchido continua vendo (com aviso), para o texto da IA não mudar
-  // sem ninguém pedir.
+  // Restaurante do Reserve Maya: horários e regras de reserva vêm só do sistema
+  // de reservas. Esses campos somem do formulário; quem já tinha preenchido
+  // continua vendo (com aviso), para o texto da IA não mudar sem ninguém pedir.
+  // Endereço: o Reserve Maya vale primeiro (muitos ainda não têm lá; o campo
+  // completa). Preços da casa ficam aqui: o Reserve Maya só informa valores de
+  // eventos especiais.
   const reserveMaya = perfilDoAgente(existingConfig?.id, inboxes) === 'reserve_maya';
-  const mostrarCampo = (campo: 'hours' | 'reservationHours' | 'prices') =>
+  const mostrarCampo = (campo: 'hours' | 'reservationHours') =>
     !reserveMaya || !!server[campo].trim() || !!form[campo].trim();
+  const dicaReserveMaya = (texto: string) =>
+    reserveMaya ? <p className="text-xs text-muted-foreground">{texto}</p> : null;
   const avisoReserveMaya = reserveMaya ? (
     <p className="text-xs text-amber-700 dark:text-amber-300">
       Já vem do Reserve Maya ou da base de conhecimento. Recomendamos deixar em branco: escrever aqui pode contradizer
@@ -249,7 +253,7 @@ export function SimpleAgentConfig({ companyId, agentId, onDirtyChange }: Props) 
             as regras do WhatsApp e a data de hoje. Se voltar para o modo simples e salvar o formulário, este texto é
             substituído.
             {reserveMaya &&
-              ' Restaurante do Reserve Maya: horários, turnos, regras de reserva e preços já vêm do Reserve Maya e da base de conhecimento; não precisam estar neste texto.'}
+              ' Restaurante do Reserve Maya: horários, turnos e regras de reserva já vêm do Reserve Maya; não precisam estar neste texto. Endereço: o do Reserve Maya vale primeiro. Preços da casa (entrada, couvert, consumação) ficam neste texto ou na base de conhecimento: o Reserve Maya informa só valores de eventos especiais.'}
           </AlertDescription>
         </Alert>
         {existingConfig ? (
@@ -375,6 +379,7 @@ export function SimpleAgentConfig({ companyId, agentId, onDirtyChange }: Props) 
                 value={form.address}
                 onChange={(e) => set({ address: e.target.value })}
               />
+              {dicaReserveMaya('O Reserve Maya vale primeiro: preencha só se o endereço ainda não estiver cadastrado lá.')}
             </div>
 
             {mostrarCampo('hours') && (
@@ -409,19 +414,17 @@ export function SimpleAgentConfig({ companyId, agentId, onDirtyChange }: Props) 
               </div>
             )}
 
-            {mostrarCampo('prices') && (
-              <div className="space-y-2">
-                <Label htmlFor="prices">Preços</Label>
-                <Textarea
-                  id="prices"
-                  rows={2}
-                  placeholder="Ex: Pratos de R$ 45 a R$ 90. Couvert R$ 18. Taxa de serviço 10%."
-                  value={form.prices}
-                  onChange={(e) => set({ prices: e.target.value })}
-                />
-                {avisoReserveMaya}
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="prices">Preços</Label>
+              <Textarea
+                id="prices"
+                rows={2}
+                placeholder="Ex: Entrada R$ 30 após as 20h. Couvert R$ 18. Taxa de serviço 10%."
+                value={form.prices}
+                onChange={(e) => set({ prices: e.target.value })}
+              />
+              {dicaReserveMaya(CAMPOS_TEXTO.prices.notaReserveMaya ?? '')}
+            </div>
 
             <CampoTexto id="about" campo="about" rows={4} valor={form.about} onChange={(about) => set({ about })} />
 

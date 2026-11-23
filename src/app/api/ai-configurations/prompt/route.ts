@@ -163,15 +163,39 @@ function infoDoCampo(campo: CampoEditavel) {
   return { rotulo: info.rotulo, paraQueServe: info.paraQueServe, max: info.max, exemplo: info.exemplo }
 }
 
+/**
+ * De onde a IA tira o dado do campo:
+ *   reserve_maya         -> so do sistema de reservas (campo bloqueado);
+ *   reserve_maya_primeiro -> do sistema de reservas se la tiver; senao, deste campo;
+ *   prompt               -> deste campo.
+ */
+type FonteDoCampo = 'reserve_maya' | 'reserve_maya_primeiro' | 'prompt'
+
+function fonteDoCampo(campo: CampoEditavel, tipo: PerfilAgente): FonteDoCampo {
+  if (tipo !== 'reserve_maya' || campo === 'tone' || campo === 'verbosity') return 'prompt'
+  const info = CAMPOS_TEXTO[campo]
+  if (info.vemDoReserveMaya) return 'reserve_maya'
+  if (info.reserveMayaPrimeiro) return 'reserve_maya_primeiro'
+  return 'prompt'
+}
+
 function camposDoAgente(prompts: Record<string, unknown>, tipo: PerfilAgente) {
   const form = normalizeSimpleForm(prompts.simple)
-  return CAMPOS_MCP.map(({ nome, campo }) => ({
-    nome,
-    ...infoDoCampo(campo),
-    valor: form[campo],
-    /** Restaurante Reserve Maya: o dado vem do sistema de reservas e o campo nao se preenche. */
-    bloqueado: tipo === 'reserve_maya' && campo !== 'tone' && campo !== 'verbosity' && !!CAMPOS_TEXTO[campo].vemDoReserveMaya,
-  }))
+  return CAMPOS_MCP.map(({ nome, campo }) => {
+    const fonte = fonteDoCampo(campo, tipo)
+    const nota =
+      tipo === 'reserve_maya' && campo !== 'tone' && campo !== 'verbosity' ? CAMPOS_TEXTO[campo].notaReserveMaya ?? null : null
+    return {
+      nome,
+      ...infoDoCampo(campo),
+      valor: form[campo],
+      fonte,
+      /** Observacao para restaurante Reserve Maya (ex.: precos ficam aqui; eventos especiais vem de la). */
+      nota,
+      /** Restaurante Reserve Maya: o dado vem do sistema de reservas e o campo nao se preenche. */
+      bloqueado: fonte === 'reserve_maya',
+    }
+  })
 }
 
 export async function GET(req: NextRequest) {
@@ -340,16 +364,10 @@ export async function PATCH(req: NextRequest) {
       for (const { nome, campo } of CAMPOS_MCP) {
         const valor = (d.campos as Record<string, string | undefined>)[nome]
         if (valor === undefined) continue
-        if (
-          tipo === 'reserve_maya' &&
-          campo !== 'tone' &&
-          campo !== 'verbosity' &&
-          CAMPOS_TEXTO[campo].vemDoReserveMaya &&
-          valor.trim()
-        ) {
+        if (fonteDoCampo(campo, tipo) === 'reserve_maya' && valor.trim()) {
           return NextResponse.json(
             {
-              error: `${CAMPOS_TEXTO[campo].rotulo}: este restaurante usa o Reserve Maya, e esse dado vem de lá em tempo real. Deixe o campo em branco (pode mandar "" para limpar).`,
+              error: `${infoDoCampo(campo).rotulo}: este restaurante usa o Reserve Maya, e esse dado vem de lá em tempo real. Deixe o campo em branco (pode mandar "" para limpar).`,
             },
             { status: 400 }
           )

@@ -393,7 +393,8 @@ export function FAQManager({ companyId }: FAQManagerProps) {
             </li>
             <li>
               • Restaurantes do Reserve Maya: horários, turnos e regras de reserva já vêm do Reserve Maya. Cadastre aqui
-              o resto (cardápio, formas de pagamento, estacionamento...).
+              o resto (cardápio, formas de pagamento, estacionamento, preço de entrada, couvert...). O Reserve Maya
+              informa só os valores de eventos especiais.
             </li>
           </ul>
 

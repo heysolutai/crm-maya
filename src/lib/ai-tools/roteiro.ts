@@ -205,6 +205,12 @@ function secaoDuvidas(p: Nomes, tem: (n: string) => boolean): string[] {
   if (faq && info) {
     linhas.push(
       `- Horários e turnos de funcionamento, antecedência e regras de reserva: chame ${info} (sistema de reservas). Neste assunto ele vale mais que a base de conhecimento.`,
+      // Muitos restaurantes ainda nao tem o endereco no sistema de reservas:
+      // ele vale primeiro, e o restaurante completa aqui.
+      `- Endereço: chame ${info} primeiro e, se vier, use o que veio. Se não vier, use o que estiver no texto do agente, acima, ou chame buscar_conhecimento.`,
+      // Precos da casa ficam na plataforma; o sistema de reservas so informa
+      // os valores de eventos especiais (secao Eventos).
+      `- Preço de entrada, couvert, consumação mínima, taxa de serviço e demais preços da casa: use os dados do restaurante no texto do agente, acima, ou chame buscar_conhecimento. O sistema de reservas informa só os valores de eventos especiais.`,
       '- Cardápio, pratos, preços, opções vegetarianas, bebidas, formas de pagamento, estacionamento, pet, crianças, acessibilidade e as demais regras da casa: chame buscar_conhecimento com a pergunta do cliente ANTES de responder, mesmo que pareça simples.',
       `- Se a primeira consulta não trouxer a resposta, consulte a outra (${info} ou buscar_conhecimento) antes de dizer que vai verificar.`,
       '- Responda só com o que vier. Se nenhuma das duas trouxer a resposta, diga que vai confirmar com a equipe; não complete com suposição.'
@@ -217,6 +223,8 @@ function secaoDuvidas(p: Nomes, tem: (n: string) => boolean): string[] {
   } else {
     linhas.push(
       `- Horários, turnos, regras de reserva e informações da casa: chame ${info} ANTES de responder.`,
+      `- Endereço: se ${info} não trouxer, use o que estiver no texto do agente, acima.`,
+      `- Preço de entrada, couvert, consumação mínima e demais preços da casa: use os dados do restaurante no texto do agente, acima. O sistema de reservas informa só os valores de eventos especiais.`,
       '- Responda só com o que vier. Se não vier a resposta, diga que vai confirmar com a equipe; não complete com suposição.'
     )
   }

@@ -102,8 +102,15 @@ export interface InfoCampo {
   exemplo: string
   /** Limite de caracteres (a tela e o MCP recusam acima disso). */
   max: number
-  /** Restaurante do Reserve Maya: este dado ja vem do sistema de reservas. */
+  /** Restaurante do Reserve Maya: este dado ja vem do sistema de reservas (o campo nao se preenche). */
   vemDoReserveMaya?: boolean
+  /**
+   * Restaurante do Reserve Maya: se o sistema de reservas tiver o dado, ele
+   * vale; o campo completa quando la estiver vazio (muitos ainda nao tem).
+   */
+  reserveMayaPrimeiro?: boolean
+  /** Restaurante do Reserve Maya: observacao sobre o que fica aqui e o que vem de la. */
+  notaReserveMaya?: string
 }
 
 /**
@@ -113,7 +120,13 @@ export interface InfoCampo {
 export const CAMPOS_TEXTO: Record<CampoTextoSimples, InfoCampo> = {
   aiName: { rotulo: 'Nome da IA', paraQueServe: 'Como a IA se apresenta.', exemplo: 'Sofia', max: 60 },
   restaurantName: { rotulo: 'Nome do restaurante', paraQueServe: 'Nome da casa, como o cliente conhece.', exemplo: 'Cantina da Nonna', max: 120 },
-  address: { rotulo: 'Endereço', paraQueServe: 'Endereço completo, para a IA informar como chegar.', exemplo: 'Rua das Flores, 120, Setor Bueno, Goiânia', max: 300 },
+  address: {
+    rotulo: 'Endereço',
+    paraQueServe: 'Endereço completo, para a IA informar como chegar.',
+    exemplo: 'Rua das Flores, 120, Setor Bueno, Goiânia',
+    max: 300,
+    reserveMayaPrimeiro: true,
+  },
   hours: {
     rotulo: 'Horário de funcionamento',
     paraQueServe: 'Dias e horários em que a casa abre.',
@@ -130,10 +143,11 @@ export const CAMPOS_TEXTO: Record<CampoTextoSimples, InfoCampo> = {
   },
   prices: {
     rotulo: 'Preços',
-    paraQueServe: 'Faixa de preço, couvert, taxa de serviço.',
-    exemplo: 'Pratos de R$ 45 a R$ 90. Couvert R$ 18. Taxa de serviço 10%.',
+    paraQueServe: 'Preço de entrada, couvert, consumação mínima, faixa de preço e taxa de serviço.',
+    exemplo: 'Entrada R$ 30 após as 20h. Couvert R$ 18. Taxa de serviço 10%.',
     max: 600,
-    vemDoReserveMaya: true,
+    // Os precos da casa ficam na plataforma: o Reserve Maya informa so valores de eventos especiais.
+    notaReserveMaya: 'Os preços da casa ficam aqui (ou na base de conhecimento). O Reserve Maya informa só os valores de eventos especiais.',
   },
   about: {
     rotulo: 'Sobre a casa',

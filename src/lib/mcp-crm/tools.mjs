@@ -67,7 +67,9 @@ PROMPT DO AGENTE
 - Antes de escrever, veja ver_o_que_a_ia_recebe: o sistema já manda regras fixas de WhatsApp (mensagens curtas, sem markdown, não inventar, idioma do cliente, despedida), o roteiro das ferramentas, as regras de encaminhamento, data, calendário e nome do cliente. Não repita isso no prompt.
 
 ONDE FICA CADA INFORMAÇÃO
-- Restaurante Reserve Maya: horários, turnos, regras e limites de reserva, preços de entrada e eventos especiais (com reserva paga) vêm do Reserve Maya em tempo real, pelas ferramentas. Nunca escreva isso no prompt nem na base de conhecimento (esses campos ficam bloqueados).
+- Restaurante Reserve Maya: horários, turnos, regras e limites de reserva e eventos especiais (com reserva paga) vêm SÓ do Reserve Maya, em tempo real, pelas ferramentas. Nunca escreva isso no prompt nem na base de conhecimento (esses campos ficam bloqueados).
+- Preços da casa (entrada, couvert, consumação mínima, taxa de serviço): ficam SÓ aqui, no campo precos do modo simples ou na base de conhecimento. O Reserve Maya informa só os valores de eventos especiais.
+- Endereço: o Reserve Maya vale primeiro; se lá estiver vazio, a IA usa o campo endereco do prompt ou a base de conhecimento. Preencha aqui só se o Reserve Maya ainda não tiver (confira lá antes).
 - Base de conhecimento: perguntas e respostas fixas da casa (pagamento, pet, estacionamento, rolha, capacidade de eventos...). É a do Chat; o FAQ do link de reservas é outro, do Reserve Maya.
 - Saudação inicial, tom, limitações, links e o jeito da casa: campos do modo simples.
 - Quando encaminhar para eventos personalizados ou para um atendente, o que perguntar antes e o que responder: regras de encaminhamento (listar_regras / alterar_regra), não o prompt.
@@ -648,13 +650,27 @@ registrar(
       );
     }
 
+    const FONTE = {
+      reserve_maya: 'fonte: SÓ o Reserve Maya, em tempo real (campo bloqueado; deixe em branco)',
+      reserve_maya_primeiro:
+        'fonte: o Reserve Maya vale primeiro; este campo só é usado quando lá estiver vazio',
+      prompt: null,
+    };
     const campos = p.campos.map((c) => {
       const regra = c.bloqueado
-        ? 'BLOQUEADO: vem do Reserve Maya em tempo real; deixe em branco'
+        ? 'BLOQUEADO'
         : c.opcoes
           ? `opções: ${c.opcoes.map((o) => `${o.valor} (${o.rotulo}: ${o.descricao})`).join(' | ')}`
           : `até ${c.max} caracteres`;
-      return [`- ${c.nome} — ${c.rotulo} [${regra}]`, `  para que serve: ${c.paraQueServe}`, `  valor atual: ${valor(c.valor, 4000)}`].join('\n');
+      return [
+        `- ${c.nome} — ${c.rotulo} [${regra}]`,
+        `  para que serve: ${c.paraQueServe}`,
+        FONTE[c.fonte] ? `  ${FONTE[c.fonte]}` : null,
+        c.nota ? `  observação: ${c.nota}` : null,
+        `  valor atual: ${valor(c.valor, 4000)}`,
+      ]
+        .filter(Boolean)
+        .join('\n');
     });
 
     return texto(
@@ -695,7 +711,9 @@ registrar(
         'DADOS QUE ENTRAM SOZINHOS a cada conversa: data e hora atuais (São Paulo), calendário dos próximos 14 dias, ' +
           'primeiro nome do cliente, se é a primeira resposta (decide a saudação) e o código da conversa. O telefone do ' +
           'cliente não entra no texto: vai direto para as ferramentas de reserva. Horários, turnos, limites e eventos ' +
-          'do Reserve Maya são consultados na hora, pelas ferramentas.',
+          'do Reserve Maya são consultados na hora, pelas ferramentas. Endereço: a IA consulta o Reserve Maya primeiro e, ' +
+          'se não vier, usa o texto do agente ou a base. Preços da casa (entrada, couvert, consumação): só do texto do ' +
+          'agente ou da base; o Reserve Maya informa só valores de eventos especiais.',
       ].join('\n\n')
     );
   }
@@ -908,8 +926,10 @@ registrar(
       'novo, igual quando se salva pela plataforma). Só funciona com o modo simples em uso ' +
       '(ver_agente); no avançado use alterar_prompt. Mande só os campos que mudam. Sem ' +
       'aplicar=true devolve a prévia (antes → depois) e nada é gravado. Em restaurante Reserve ' +
-      'Maya, horario_funcionamento, horarios_reserva e precos ficam bloqueados (vêm do sistema ' +
-      'de reservas). O texto anterior vai para o histórico (restaurar_prompt volta).',
+      'Maya, horario_funcionamento e horarios_reserva ficam bloqueados (vêm só do sistema de ' +
+      'reservas). precos é aqui mesmo (o Reserve Maya só informa valores de eventos especiais). ' +
+      'endereco: o Reserve Maya vale primeiro, preencha só se lá não tiver. O texto anterior vai ' +
+      'para o histórico (restaurar_prompt volta).',
     inputSchema: {
       agente_id: z.string().uuid().describe('id do agente (listar_agentes).'),
       versao: z.string().describe('Versão do prompt lida em ver_agente (ex.: 3f9a1c0b7d2e).'),
@@ -923,10 +943,12 @@ registrar(
             .describe('Tamanho das respostas: objetivo (fala pouco), equilibrado, detalhado (fala muito).'),
           saudacao_inicial: z.string().optional()
             .describe('Texto da primeira resposta da conversa, do jeito que vai. {nome} = primeiro nome do cliente; {resposta} = onde entra a resposta ao que ele perguntou.'),
-          endereco: z.string().optional().describe('Endereço completo.'),
-          horario_funcionamento: z.string().optional().describe('Só para quem NÃO usa Reserve Maya.'),
-          horarios_reserva: z.string().optional().describe('Só para quem NÃO usa Reserve Maya.'),
-          precos: z.string().optional().describe('Só para quem NÃO usa Reserve Maya.'),
+          endereco: z.string().optional()
+            .describe('Endereço completo. Em restaurante Reserve Maya, só vale quando o Reserve Maya não tiver o endereço.'),
+          horario_funcionamento: z.string().optional().describe('Só para quem NÃO usa Reserve Maya (lá é bloqueado).'),
+          horarios_reserva: z.string().optional().describe('Só para quem NÃO usa Reserve Maya (lá é bloqueado).'),
+          precos: z.string().optional()
+            .describe('Preço de entrada, couvert, consumação mínima, taxa de serviço: os preços da casa ficam aqui (o Reserve Maya só informa valores de eventos especiais).'),
           sobre_a_casa: z.string().optional().describe('A proposta e o jeito da casa. Perguntas e respostas vão na base de conhecimento.'),
           links: z.string().optional().describe('Um por linha: "Cardápio: https://...".'),
           limitacoes: z.string().optional().describe('O que a IA nunca diz nem faz, um por linha. Vale acima do resto do texto.'),
@@ -1125,10 +1147,12 @@ registrar(
     description:
       'Cria, edita ou apaga uma pergunta da base de conhecimento do Chat. A busca da IA é ' +
       'atualizada na hora (não precisa sincronizar). Uma pergunta por assunto; resposta pronta ' +
-      'para o cliente. Não cadastre horários, turnos, limites de reserva, preços de entrada nem ' +
-      'eventos especiais de restaurante Reserve Maya: vêm do sistema em tempo real. Sem ' +
-      'aplicar=true devolve a prévia. Editar e apagar exigem a versao de listar_base_conhecimento. ' +
-      'Para desligar sem apagar, edite com ativa=false.',
+      'para o cliente. Em restaurante Reserve Maya: horários, turnos, limites de reserva e eventos ' +
+      'especiais vêm só do sistema, em tempo real: não cadastre. Preços da casa (entrada, couvert, ' +
+      'consumação) podem ficar aqui ou no campo precos do prompt: o Reserve Maya só informa valores ' +
+      'de eventos especiais. Endereço: o Reserve Maya vale primeiro; cadastre aqui só se lá não ' +
+      'tiver. Sem aplicar=true devolve a prévia. Editar e apagar exigem a versao de ' +
+      'listar_base_conhecimento. Para desligar sem apagar, edite com ativa=false.',
     inputSchema: {
       acao: z.enum(['criar', 'editar', 'apagar']),
       id: z.string().uuid().optional().describe('editar/apagar: id da pergunta.'),
